@@ -22,3 +22,6 @@
 - `007-research-mcp-minimal-bridge.md`：MCP 最小接入骨架调研
 - `007-plan-mcp-minimal-bridge.md`：MCP 最小接入骨架实施计划
 - `007-summary-mcp-minimal-bridge.md`：MCP 最小接入骨架结果总结
+- `008-research-skills-minimal-skeleton.md`：Skills 最小骨架调研
+- `008-plan-skills-minimal-skeleton.md`：Skills 最小骨架实施计划
+- `008-summary-skills-minimal-skeleton.md`：Skills 最小骨架结果总结

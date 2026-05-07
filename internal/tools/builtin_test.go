@@ -116,3 +116,41 @@ func TestTerminalHardlineStillBlockedWithApproval(t *testing.T) {
 		t.Fatalf("expected hardline block, got %v", err)
 	}
 }
+
+func TestSkillListAndView(t *testing.T) {
+	workdir := t.TempDir()
+	skillDir := filepath.Join(workdir, "skills", "code-review")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "# Code Review\nCheck risk first."
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	b := &BuiltinTools{}
+	listRes, err := b.skillList(context.Background(), map[string]any{}, ToolContext{Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	skills, _ := listRes["skills"].([]map[string]any)
+	if len(skills) != 1 || skills[0]["name"] != "code-review" {
+		t.Fatalf("unexpected skill list result: %+v", listRes)
+	}
+
+	viewRes, err := b.skillView(context.Background(), map[string]any{"name": "code-review"}, ToolContext{Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(viewRes["content"].(string), "Check risk first.") {
+		t.Fatalf("unexpected skill view result: %+v", viewRes)
+	}
+}
+
+func TestSkillViewRejectsInvalidName(t *testing.T) {
+	b := &BuiltinTools{}
+	_, err := b.skillView(context.Background(), map[string]any{"name": "../escape"}, ToolContext{Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "invalid skill name") {
+		t.Fatalf("expected invalid skill name error, got %v", err)
+	}
+}

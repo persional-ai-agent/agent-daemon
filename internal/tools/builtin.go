@@ -36,6 +36,8 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "session_search", desc: "Search previous session messages", params: sessionSearchParams(), call: b.sessionSearch})
 	r.Register(toolDef{name: "web_fetch", desc: "Fetch URL content over HTTP", params: webFetchParams(), call: b.webFetch})
 	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
+	r.Register(toolDef{name: "skill_list", desc: "List available local skills", params: skillListParams(), call: b.skillList})
+	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
 }
 
 type toolFn func(context.Context, map[string]any, ToolContext) (map[string]any, error)
@@ -343,6 +345,59 @@ func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc
 	return delegateTaskSuccessResult(goal, res), nil
 }
 
+func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	root, err := resolveSkillsRoot(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]any{"path": root, "skills": []map[string]any{}}, nil
+		}
+		return nil, err
+	}
+	skills := make([]map[string]any, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		skillPath := filepath.Join(root, name, "SKILL.md")
+		desc := readSkillDescription(skillPath)
+		skills = append(skills, map[string]any{
+			"name":        name,
+			"description": desc,
+			"path":        skillPath,
+		})
+	}
+	return map[string]any{"path": root, "skills": skills, "count": len(skills)}, nil
+}
+
+func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	name := strings.TrimSpace(strArg(args, "name"))
+	if name == "" {
+		return nil, errors.New("name required")
+	}
+	root, err := resolveSkillsRoot(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	path, err := resolveSkillPath(root, name)
+	if err != nil {
+		return nil, err
+	}
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"name":    name,
+		"path":    path,
+		"content": string(bs),
+	}, nil
+}
+
 func statusFromDone(done bool) string {
 	if done {
 		return "done"
@@ -380,6 +435,12 @@ func webFetchParams() map[string]any {
 }
 func delegateTaskParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
+}
+func skillListParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}
+}
+func skillViewParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}}, "required": []string{"name"}}
 }
 
 func strArg(args map[string]any, key string) string {
@@ -516,4 +577,38 @@ func ParseJSONArgs(raw string) map[string]any {
 		return map[string]any{}
 	}
 	return out
+}
+
+func resolveSkillsRoot(workdir, customPath string) (string, error) {
+	if strings.TrimSpace(customPath) != "" {
+		return resolvePathWithinWorkdir(workdir, customPath)
+	}
+	return resolvePathWithinWorkdir(workdir, "skills")
+}
+
+func resolveSkillPath(root, name string) (string, error) {
+	clean := strings.TrimSpace(name)
+	if clean == "" {
+		return "", errors.New("name required")
+	}
+	if strings.Contains(clean, "..") || strings.ContainsAny(clean, `/\`) {
+		return "", fmt.Errorf("invalid skill name: %s", name)
+	}
+	path := filepath.Join(root, clean, "SKILL.md")
+	return path, nil
+}
+
+func readSkillDescription(path string) string {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(bs), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		if line != "" {
+			return line
+		}
+	}
+	return ""
 }
