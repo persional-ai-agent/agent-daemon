@@ -61,9 +61,12 @@
 - `delegate_started` / `delegate_finished` 事件的 `Data` 中会携带结构化状态与子任务结果，SSE 可直接透传
 - `tool_finished` 事件的 `Data` 中会携带结构化工具结果，避免客户端重复解析 JSON 字符串
 - `tool_started` / `tool_finished` 共享统一元数据字段，如 `tool_call_id`、`tool_name`、`arguments`、`status`
+- `assistant_message` / `completed` 也会携带统一元数据，如 `message_role`、`content_length`、`tool_call_count`
 - 正常完成、达到最大迭代、异常失败
 
 这让 HTTP 层可以直接把内部执行过程映射为 SSE 事件，而不需要侵入工具实现。
+
+事件字段与兼容性约定见 `docs/dev/001-events-hermes-agent-go-port.md`。
 
 ### 4. HTTP 会话取消
 

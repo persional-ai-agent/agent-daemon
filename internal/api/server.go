@@ -163,16 +163,35 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 	cancelledSeen := false
+	errorSeen := false
 
 	for {
 		select {
 		case <-ctx.Done():
+			for {
+				select {
+				case event := <-events:
+					if event.Type == "cancelled" {
+						cancelledSeen = true
+					}
+					if event.Type == "error" {
+						errorSeen = true
+					}
+					if err := writeSSE(w, event.Type, event); err != nil {
+						return
+					}
+					flusher.Flush()
+				default:
+					goto doneCtx
+				}
+			}
+		doneCtx:
 			if errors.Is(ctx.Err(), context.Canceled) {
 				if !cancelledSeen {
-					_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "reason": "request cancelled"})
+					_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "status": "cancelled", "reason": "request cancelled"})
 				}
-			} else {
-				_ = writeSSE(w, "error", map[string]any{"error": ctx.Err().Error(), "session_id": req.SessionID})
+			} else if !errorSeen {
+				_ = writeSSE(w, "error", map[string]any{"session_id": req.SessionID, "status": "error", "error": ctx.Err().Error()})
 			}
 			flusher.Flush()
 			return
@@ -180,18 +199,39 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			if event.Type == "cancelled" {
 				cancelledSeen = true
 			}
+			if event.Type == "error" {
+				errorSeen = true
+			}
 			if err := writeSSE(w, event.Type, event); err != nil {
 				return
 			}
 			flusher.Flush()
 		case res := <-done:
 			if res.Err != nil {
+				for {
+					select {
+					case event := <-events:
+						if event.Type == "cancelled" {
+							cancelledSeen = true
+						}
+						if event.Type == "error" {
+							errorSeen = true
+						}
+						if err := writeSSE(w, event.Type, event); err != nil {
+							return
+						}
+						flusher.Flush()
+					default:
+						goto doneErr
+					}
+				}
+			doneErr:
 				if errors.Is(res.Err, context.Canceled) {
 					if !cancelledSeen {
-						_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "reason": "request cancelled"})
+						_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "status": "cancelled", "reason": "request cancelled"})
 					}
-				} else {
-					_ = writeSSE(w, "error", map[string]any{"error": res.Err.Error(), "session_id": req.SessionID})
+				} else if !errorSeen {
+					_ = writeSSE(w, "error", map[string]any{"session_id": req.SessionID, "status": "error", "error": res.Err.Error()})
 				}
 				flusher.Flush()
 				return
@@ -201,6 +241,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				case event := <-events:
 					if event.Type == "cancelled" {
 						cancelledSeen = true
+					}
+					if event.Type == "error" {
+						errorSeen = true
 					}
 					if err := writeSSE(w, event.Type, event); err != nil {
 						return

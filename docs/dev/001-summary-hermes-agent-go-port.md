@@ -19,8 +19,10 @@
   - `web_fetch`
 - 实现 `delegate_task` 子 Agent 委派、批量并发执行、并发度控制、结构化状态返回，以及超时/失败策略
 - 实现 Agent 结构化事件流
+- 完成事件协议文档沉淀
 - 实现 `/v1/chat/stream` SSE 流式接口
 - 实现 `/v1/chat/cancel` 会话取消接口
+- 实现 `/v1/chat` 轻量 `summary`
 - 实现 SQLite 会话持久化
 - 实现 `MEMORY.md` / `USER.md` 记忆存储
 - 实现 CLI 与 HTTP API 双入口
@@ -28,10 +30,13 @@
 - 增加 Agent Loop 级委派事件测试
 - 增加 SSE 级委派事件透传测试
 - 增加 `tool_finished` 结构化事件测试
+- 增加错误类事件结构化测试
 
 ## 与原计划的偏差
 
 无重大偏差，整体按计划落地。
+
+实现过程中将无法通过工作区删除机制清理的历史文件 `internal/agent/types.go` 安全改名为 `internal/agent/types.go.legacy`，避免其继续参与 Go 源码路径。
 
 ## 当前能力边界
 
@@ -44,6 +49,7 @@
 - 文件与终端核心能力
 - Session / Memory / Todo 状态分层
 - CLI / HTTP 入口
+- 非流式摘要与 SSE 事件协议
 
 尚未覆盖的外围生态：
 

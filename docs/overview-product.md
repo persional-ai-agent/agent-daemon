@@ -25,8 +25,10 @@
 - 状态工具：todo、session_search、memory、delegate_task
 - 持久化：SQLite 会话历史与 Markdown 记忆文件
 - 双入口：交互式 CLI + HTTP API
+- 非流式摘要：`/v1/chat` 返回轻量 `summary`
 - 流式 API：基于 SSE 的 `/v1/chat/stream`
 - 中断控制：支持按 `session_id` 取消活动中的 HTTP 会话
+- 事件协议：已提供独立事件协议文档，便于前端或 SDK 对接
 
 ## 与 Hermes 的关系
 
@@ -39,5 +41,5 @@
 
 ## 本期范围
 
-- 已实现：核心闭环、常用内置工具、并发子 Agent 委派、事件流、持久化、CLI、HTTP API、SSE、关键测试
+- 已实现：核心闭环、常用内置工具、并发子 Agent 委派、结构化事件流、事件协议文档、持久化、CLI、HTTP API、`/v1/chat` 摘要、SSE、关键测试
 - 未完全覆盖：Hermes 的多平台网关、MCP、技能系统、上下文压缩、Provider 多模态适配

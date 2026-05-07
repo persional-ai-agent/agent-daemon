@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
@@ -46,6 +47,13 @@ func (c *scriptedClient) ChatCompletion(_ context.Context, _ []core.Message, _ [
 	msg := c.responses[0]
 	c.responses = c.responses[1:]
 	return msg, nil
+}
+
+type waitOnContextClient struct{}
+
+func (waitOnContextClient) ChatCompletion(ctx context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	<-ctx.Done()
+	return core.Message{}, ctx.Err()
 }
 
 func TestRunEmitsDelegateEvents(t *testing.T) {
@@ -270,5 +278,193 @@ func TestRunEmitsStructuredToolStartedEvent(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected tool_started event, got %+v", events)
+	}
+}
+
+func TestRunEmitsStructuredAssistantAndCompletedEvents(t *testing.T) {
+	client := &scriptedClient{
+		responses: []core.Message{
+			{
+				Role:    "assistant",
+				Content: "plain answer",
+			},
+		},
+	}
+
+	registry := tools.NewRegistry()
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:       client,
+		Registry:     registry,
+		SystemPrompt: DefaultSystemPrompt(),
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+
+	res, err := eng.Run(context.Background(), "assistant-session", "say hi", eng.SystemPrompt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FinalResponse != "plain answer" {
+		t.Fatalf("unexpected final response: %+v", res)
+	}
+
+	foundAssistant := false
+	foundCompleted := false
+	for _, evt := range events {
+		if evt.Type == "assistant_message" {
+			foundAssistant = true
+			if evt.Data["status"] != "completed" || evt.Data["message_role"] != "assistant" {
+				t.Fatalf("unexpected assistant_message data: %+v", evt)
+			}
+			if evt.Data["tool_call_count"] != 0 || evt.Data["has_tool_calls"] != false {
+				t.Fatalf("unexpected assistant_message tool metadata: %+v", evt)
+			}
+		}
+		if evt.Type == "completed" {
+			foundCompleted = true
+			if evt.Data["status"] != "completed" || evt.Data["finished_naturally"] != true {
+				t.Fatalf("unexpected completed data: %+v", evt)
+			}
+			if evt.Data["content_length"] != len("plain answer") {
+				t.Fatalf("unexpected completed content length: %+v", evt)
+			}
+		}
+	}
+	if !foundAssistant || !foundCompleted {
+		t.Fatalf("expected assistant_message and completed events, got %+v", events)
+	}
+}
+
+func TestRunEmitsStructuredCancelledEvent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:       waitOnContextClient{},
+		Registry:     tools.NewRegistry(),
+		SystemPrompt: DefaultSystemPrompt(),
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+
+	_, err := eng.Run(ctx, "cancel-session", "cancel me", eng.SystemPrompt, nil)
+	if err == nil {
+		t.Fatal("expected cancellation error")
+	}
+
+	found := false
+	for _, evt := range events {
+		if evt.Type != "cancelled" {
+			continue
+		}
+		found = true
+		if evt.Data["status"] != "cancelled" || evt.Data["turn"] != 1 || evt.Data["error"] == "" {
+			t.Fatalf("unexpected cancelled event: %+v", evt)
+		}
+	}
+	if !found {
+		t.Fatalf("expected cancelled event, got %+v", events)
+	}
+}
+
+func TestRunEmitsStructuredErrorEvent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:       waitOnContextClient{},
+		Registry:     tools.NewRegistry(),
+		SystemPrompt: DefaultSystemPrompt(),
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+
+	_, err := eng.Run(ctx, "error-session", "timeout me", eng.SystemPrompt, nil)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	found := false
+	for _, evt := range events {
+		if evt.Type != "error" {
+			continue
+		}
+		found = true
+		if evt.Data["status"] != "error" || evt.Data["turn"] != 1 || evt.Data["error"] == "" {
+			t.Fatalf("unexpected error event: %+v", evt)
+		}
+	}
+	if !found {
+		t.Fatalf("expected error event, got %+v", events)
+	}
+}
+
+func TestRunEmitsStructuredMaxIterationsEvent(t *testing.T) {
+	args, err := json.Marshal(map[string]any{"value": "ping"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := &scriptedClient{
+		responses: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{{
+					ID:   "call-1",
+					Type: "function",
+					Function: core.ToolFunction{
+						Name:      "echo_tool",
+						Arguments: string(args),
+					},
+				}},
+			},
+		},
+	}
+
+	registry := tools.NewRegistry()
+	registry.Register(testTool{
+		name: "echo_tool",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{"echo": args["value"]}, nil
+		},
+	})
+
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:        client,
+		Registry:      registry,
+		SystemPrompt:  DefaultSystemPrompt(),
+		MaxIterations: 1,
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+
+	res, err := eng.Run(context.Background(), "max-session", "loop", eng.SystemPrompt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FinishedNaturally {
+		t.Fatalf("expected unfinished result, got %+v", res)
+	}
+
+	found := false
+	for _, evt := range events {
+		if evt.Type != "max_iterations_reached" {
+			continue
+		}
+		found = true
+		if evt.Data["status"] != "max_iterations_reached" || evt.Data["max_iterations"] != 1 || evt.Data["finished"] != false {
+			t.Fatalf("unexpected max_iterations event: %+v", evt)
+		}
+	}
+	if !found {
+		t.Fatalf("expected max_iterations_reached event, got %+v", events)
 	}
 }

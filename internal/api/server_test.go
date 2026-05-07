@@ -73,6 +73,13 @@ func (b *blockingModelClient) ChatCompletion(ctx context.Context, _ []core.Messa
 	return core.Message{}, ctx.Err()
 }
 
+type waitOnContextModelClient struct{}
+
+func (waitOnContextModelClient) ChatCompletion(ctx context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	<-ctx.Done()
+	return core.Message{}, ctx.Err()
+}
+
 type stubSessionStore struct{}
 
 func (s *stubSessionStore) AppendMessage(string, core.Message) error {
@@ -406,6 +413,127 @@ func TestHandleChatStreamToolFinishedStructuredData(t *testing.T) {
 		`"status":"completed"`,
 		`"success":true`,
 		`"echo":"ping"`,
+	}
+	for _, part := range parts {
+		if !strings.Contains(body, part) {
+			t.Fatalf("expected stream body to contain %q, body=%s", part, body)
+		}
+	}
+}
+
+func TestHandleChatStreamAssistantAndCompletedStructuredData(t *testing.T) {
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "hello metadata"}},
+			Registry:     tools.NewRegistry(),
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/stream", bytes.NewBufferString(`{"session_id":"s-assistant-meta","message":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	parts := []string{
+		"event: assistant_message",
+		`"message_role":"assistant"`,
+		`"content_length":14`,
+		`"tool_call_count":0`,
+		`"has_tool_calls":false`,
+		"event: completed",
+		`"finished_naturally":true`,
+	}
+	for _, part := range parts {
+		if !strings.Contains(body, part) {
+			t.Fatalf("expected stream body to contain %q, body=%s", part, body)
+		}
+	}
+}
+
+func TestHandleChatStreamErrorStructuredData(t *testing.T) {
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       waitOnContextModelClient{},
+			Registry:     tools.NewRegistry(),
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+	}
+
+	reqCtx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/stream", bytes.NewBufferString(`{"session_id":"s-error-meta","message":"ping"}`)).WithContext(reqCtx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	parts := []string{
+		"event: error",
+		`"status":"error"`,
+		`"turn":1`,
+		`"error":"context deadline exceeded"`,
+	}
+	for _, part := range parts {
+		if !strings.Contains(body, part) {
+			t.Fatalf("expected stream body to contain %q, body=%s", part, body)
+		}
+	}
+}
+
+func TestHandleChatStreamMaxIterationsStructuredData(t *testing.T) {
+	client := &scriptedModelClient{
+		responses: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{{
+					ID:   "call-1",
+					Type: "function",
+					Function: core.ToolFunction{
+						Name:      "echo_tool",
+						Arguments: `{"value":"ping"}`,
+					},
+				}},
+			},
+		},
+	}
+	registry := tools.NewRegistry()
+	registry.Register(apiTestTool{
+		name: "echo_tool",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{"echo": args["value"]}, nil
+		},
+	})
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:        client,
+			Registry:      registry,
+			SessionStore:  &stubSessionStore{},
+			SystemPrompt:  agent.DefaultSystemPrompt(),
+			MaxIterations: 1,
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/stream", bytes.NewBufferString(`{"session_id":"s-max-meta","message":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	parts := []string{
+		"event: max_iterations_reached",
+		`"status":"max_iterations_reached"`,
+		`"max_iterations":1`,
+		`"finished":false`,
 	}
 	for _, part := range parts {
 		if !strings.Contains(body, part) {

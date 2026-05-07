@@ -56,18 +56,18 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 		assistant, err := e.callWithRetry(ctx, messages)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				e.emit(core.AgentEvent{Type: "cancelled", SessionID: sessionID, Turn: turn + 1, Content: err.Error()})
+				e.emit(core.AgentEvent{Type: "cancelled", SessionID: sessionID, Turn: turn + 1, Content: err.Error(), Data: terminalEventData("cancelled", err, turn+1)})
 				return nil, err
 			}
-			e.emit(core.AgentEvent{Type: "error", SessionID: sessionID, Turn: turn + 1, Content: err.Error()})
+			e.emit(core.AgentEvent{Type: "error", SessionID: sessionID, Turn: turn + 1, Content: err.Error(), Data: terminalEventData("error", err, turn+1)})
 			return nil, err
 		}
 		messages = append(messages, assistant)
 		_ = e.persist(sessionID, assistant)
-		e.emit(core.AgentEvent{Type: "assistant_message", SessionID: sessionID, Turn: turn + 1, Content: assistant.Content})
+		e.emit(core.AgentEvent{Type: "assistant_message", SessionID: sessionID, Turn: turn + 1, Content: assistant.Content, Data: assistantEventData(assistant)})
 
 		if len(assistant.ToolCalls) == 0 {
-			e.emit(core.AgentEvent{Type: "completed", SessionID: sessionID, Turn: turn + 1, Content: assistant.Content})
+			e.emit(core.AgentEvent{Type: "completed", SessionID: sessionID, Turn: turn + 1, Content: assistant.Content, Data: completedEventData(assistant)})
 			return &core.RunResult{SessionID: sessionID, FinalResponse: assistant.Content, Messages: messages, TurnsUsed: turn + 1, FinishedNaturally: true}, nil
 		}
 
@@ -88,7 +88,7 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 			e.emit(core.AgentEvent{Type: "tool_finished", SessionID: sessionID, Turn: turn + 1, ToolName: tc.Function.Name, Content: result, Data: toolFinishedEventData(tc.ID, tc.Function.Name, args, result)})
 		}
 	}
-	e.emit(core.AgentEvent{Type: "max_iterations_reached", SessionID: sessionID, Turn: e.MaxIterations})
+	e.emit(core.AgentEvent{Type: "max_iterations_reached", SessionID: sessionID, Turn: e.MaxIterations, Data: maxIterationsEventData(e.MaxIterations)})
 	return &core.RunResult{SessionID: sessionID, FinalResponse: "", Messages: messages, TurnsUsed: e.MaxIterations, FinishedNaturally: false}, nil
 }
 
@@ -189,5 +189,40 @@ func toolFinishedEventData(toolCallID, toolName string, args map[string]any, raw
 		"tool_name":    toolName,
 		"arguments":    args,
 		"result":       parsed,
+	}
+}
+
+func assistantEventData(msg core.Message) map[string]any {
+	return map[string]any{
+		"status":          "completed",
+		"message_role":    "assistant",
+		"content_length":  len(msg.Content),
+		"tool_call_count": len(msg.ToolCalls),
+		"has_tool_calls":  len(msg.ToolCalls) > 0,
+	}
+}
+
+func completedEventData(msg core.Message) map[string]any {
+	data := assistantEventData(msg)
+	data["finished_naturally"] = true
+	return data
+}
+
+func terminalEventData(status string, err error, turn int) map[string]any {
+	data := map[string]any{
+		"status": status,
+		"turn":   turn,
+	}
+	if err != nil {
+		data["error"] = err.Error()
+	}
+	return data
+}
+
+func maxIterationsEventData(limit int) map[string]any {
+	return map[string]any{
+		"status":         "max_iterations_reached",
+		"max_iterations": limit,
+		"finished":       false,
 	}
 }
