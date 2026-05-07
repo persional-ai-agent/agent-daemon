@@ -17,10 +17,17 @@
   - `memory`
   - `session_search`
   - `web_fetch`
+- 实现 `delegate_task` 子 Agent 委派、批量并发执行、并发度控制、结构化状态返回，以及超时/失败策略
+- 实现 Agent 结构化事件流
+- 实现 `/v1/chat/stream` SSE 流式接口
+- 实现 `/v1/chat/cancel` 会话取消接口
 - 实现 SQLite 会话持久化
 - 实现 `MEMORY.md` / `USER.md` 记忆存储
 - 实现 CLI 与 HTTP API 双入口
 - 增加关键单元测试并通过 `go test ./...`
+- 增加 Agent Loop 级委派事件测试
+- 增加 SSE 级委派事件透传测试
+- 增加 `tool_finished` 结构化事件测试
 
 ## 与原计划的偏差
 
@@ -44,15 +51,13 @@
 - MCP
 - 技能系统
 - Context Compression
-- delegate_task 子 Agent
 - 多 provider API mode
 - 审批系统与复杂安全护栏
 
 ## 后续建议
 
-- 增加流式输出与中断控制
+- 增加更细粒度的工具级中断控制
 - 抽象 provider，补 OpenAI/Anthropic/Codex 多模式
 - 为工具系统增加权限与审批
-- 增加 delegate_task
 - 为 `search_files` / `read_file` 增加更强分页与 glob 能力
 - 引入上下文压缩，支持长会话

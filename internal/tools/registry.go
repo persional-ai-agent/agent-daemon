@@ -18,12 +18,17 @@ type MemoryStore interface {
 	Manage(action, target, content, oldText string) (map[string]any, error)
 }
 
+type DelegateRunner interface {
+	RunSubtask(ctx context.Context, parentSessionID, goal, taskContext string, maxIterations int) (map[string]any, error)
+}
+
 type ToolContext struct {
-	SessionID    string
-	SessionStore SessionSearchStore
-	MemoryStore  MemoryStore
-	TodoStore    *TodoStore
-	Workdir      string
+	SessionID      string
+	SessionStore   SessionSearchStore
+	MemoryStore    MemoryStore
+	TodoStore      *TodoStore
+	DelegateRunner DelegateRunner
+	Workdir        string
 }
 
 type Tool interface {

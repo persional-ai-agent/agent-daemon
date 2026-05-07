@@ -32,6 +32,15 @@ type ToolSchemaDetail struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
+type AgentEvent struct {
+	Type      string         `json:"type"`
+	SessionID string         `json:"session_id,omitempty"`
+	Turn      int            `json:"turn,omitempty"`
+	ToolName  string         `json:"tool_name,omitempty"`
+	Content   string         `json:"content,omitempty"`
+	Data      map[string]any `json:"data,omitempty"`
+}
+
 type RunResult struct {
 	SessionID         string    `json:"session_id"`
 	FinalResponse     string    `json:"final_response"`

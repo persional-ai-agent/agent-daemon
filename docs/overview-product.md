@@ -19,11 +19,14 @@
 ## 核心能力
 
 - Agent Loop：模型响应若产生 `tool_calls`，则执行工具并将结果回灌到上下文，直到模型自然停止
+- 执行事件流：对外暴露用户消息、回合开始、工具执行、子任务委派、完成/失败等结构化事件
 - 工具系统：统一注册、统一 schema、统一 dispatch
 - 执行工具：终端命令、文件读写、文本搜索、网页抓取
-- 状态工具：todo、session_search、memory
+- 状态工具：todo、session_search、memory、delegate_task
 - 持久化：SQLite 会话历史与 Markdown 记忆文件
 - 双入口：交互式 CLI + HTTP API
+- 流式 API：基于 SSE 的 `/v1/chat/stream`
+- 中断控制：支持按 `session_id` 取消活动中的 HTTP 会话
 
 ## 与 Hermes 的关系
 
@@ -32,9 +35,9 @@
 - 保留 Hermes 的“模型回合 -> 工具调用 -> 结果回灌 -> 再次推理”主循环
 - 保留“工具注册中心 + schema 暴露 + handler 分发”模式
 - 保留“会话历史 + 长期记忆 + Todo 状态”的状态分层
-- 将多平台 Gateway、ACP、复杂插件、上下文压缩、并发子 Agent 作为后续扩展层
+- 将多平台 Gateway、ACP、复杂插件、上下文压缩作为后续扩展层
 
 ## 本期范围
 
-- 已实现：核心闭环、常用内置工具、持久化、CLI、HTTP API、关键测试
-- 未完全覆盖：Hermes 的多平台网关、MCP、技能系统、上下文压缩、Provider 多模态适配、并发 delegate_task
+- 已实现：核心闭环、常用内置工具、并发子 Agent 委派、事件流、持久化、CLI、HTTP API、SSE、关键测试
+- 未完全覆盖：Hermes 的多平台网关、MCP、技能系统、上下文压缩、Provider 多模态适配

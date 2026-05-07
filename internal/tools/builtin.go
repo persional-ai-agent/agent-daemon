@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
@@ -34,6 +35,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
 	r.Register(toolDef{name: "session_search", desc: "Search previous session messages", params: sessionSearchParams(), call: b.sessionSearch})
 	r.Register(toolDef{name: "web_fetch", desc: "Fetch URL content over HTTP", params: webFetchParams(), call: b.webFetch})
+	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
 }
 
 type toolFn func(context.Context, map[string]any, ToolContext) (map[string]any, error)
@@ -69,13 +71,7 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{
-			"output":      "background process started",
-			"session_id":  s.ID,
-			"output_file": s.OutputFile,
-			"status":      "running",
-			"exit_code":   0,
-		}, nil
+		return map[string]any{"output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0}, nil
 	}
 	out, code, err := RunForeground(ctx, command, cwd, timeout)
 	res := map[string]any{"output": out, "exit_code": code, "error": nil}
@@ -217,12 +213,7 @@ func (b *BuiltinTools) todo(_ context.Context, args map[string]any, tc ToolConte
 		if !ok {
 			continue
 		}
-		items = append(items, TodoItem{
-			ID:       strMap(m, "id"),
-			Content:  strMap(m, "content"),
-			Status:   strMap(m, "status"),
-			Priority: strMap(m, "priority"),
-		})
+		items = append(items, TodoItem{ID: strMap(m, "id"), Content: strMap(m, "content"), Status: strMap(m, "status"), Priority: strMap(m, "priority")})
 	}
 	return map[string]any{"todos": tc.TodoStore.Update(tc.SessionID, items, merge)}, nil
 }
@@ -266,6 +257,71 @@ func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ Tool
 	return map[string]any{"status": resp.StatusCode, "url": url, "content": string(body)}, nil
 }
 
+func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if tc.DelegateRunner == nil {
+		return nil, errors.New("delegate runner unavailable")
+	}
+	maxIterations := intArg(args, "max_iterations", 0)
+	timeoutSeconds := intArg(args, "timeout_seconds", 0)
+	failFast := boolArg(args, "fail_fast", false)
+	if tasks, ok := args["tasks"].([]any); ok && len(tasks) > 0 {
+		validTasks := make([]map[string]any, 0, len(tasks))
+		for _, item := range tasks {
+			taskMap, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			validTasks = append(validTasks, taskMap)
+		}
+		results := make([]map[string]any, len(validTasks))
+		maxConcurrency := intArg(args, "max_concurrency", len(validTasks))
+		if maxConcurrency <= 0 || maxConcurrency > len(validTasks) {
+			maxConcurrency = len(validTasks)
+		}
+		batchCtx, batchCancel := context.WithCancel(ctx)
+		defer batchCancel()
+		sem := make(chan struct{}, maxConcurrency)
+		var wg sync.WaitGroup
+		wg.Add(len(validTasks))
+		for i, taskMap := range validTasks {
+			go func(index int, task map[string]any) {
+				defer wg.Done()
+				select {
+				case sem <- struct{}{}:
+				case <-batchCtx.Done():
+					results[index] = delegateTaskErrorResult(strMap(task, "goal"), batchCtx.Err())
+					return
+				}
+				defer func() { <-sem }()
+				goal := strMap(task, "goal")
+				res, err := runDelegateSubtask(batchCtx, tc.DelegateRunner, tc.SessionID, goal, strMap(task, "context"), maxIterations, timeoutSeconds)
+				if err != nil {
+					results[index] = delegateTaskErrorResult(goal, err)
+					if failFast {
+						batchCancel()
+					}
+					return
+				}
+				results[index] = delegateTaskSuccessResult(goal, res)
+			}(i, taskMap)
+		}
+		wg.Wait()
+		summary := summarizeDelegateResults(results)
+		summary["results"] = results
+		summary["count"] = len(results)
+		return summary, nil
+	}
+	goal := strArg(args, "goal")
+	if strings.TrimSpace(goal) == "" {
+		return nil, errors.New("goal or tasks is required")
+	}
+	res, err := runDelegateSubtask(ctx, tc.DelegateRunner, tc.SessionID, goal, strArg(args, "context"), maxIterations, timeoutSeconds)
+	if err != nil {
+		return delegateTaskErrorResult(goal, err), nil
+	}
+	return delegateTaskSuccessResult(goal, res), nil
+}
+
 func statusFromDone(done bool) string {
 	if done {
 		return "done"
@@ -279,9 +335,7 @@ func terminalParams() map[string]any {
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
 }
-func stopProcessParams() map[string]any {
-	return processStatusParams()
-}
+func stopProcessParams() map[string]any { return processStatusParams() }
 func readFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}}, "required": []string{"path"}}
 }
@@ -302,6 +356,9 @@ func sessionSearchParams() map[string]any {
 }
 func webFetchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
+}
+func delegateTaskParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
 }
 
 func strArg(args map[string]any, key string) string {
@@ -350,6 +407,83 @@ func boolArg(args map[string]any, key string, d bool) bool {
 		}
 	}
 	return d
+}
+
+func runDelegateSubtask(ctx context.Context, runner DelegateRunner, sessionID, goal, taskContext string, maxIterations, timeoutSeconds int) (map[string]any, error) {
+	if timeoutSeconds <= 0 {
+		return runner.RunSubtask(ctx, sessionID, goal, taskContext, maxIterations)
+	}
+	taskCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	return runner.RunSubtask(taskCtx, sessionID, goal, taskContext, maxIterations)
+}
+
+func delegateTaskSuccessResult(goal string, res map[string]any) map[string]any {
+	out := make(map[string]any, len(res)+3)
+	for k, v := range res {
+		out[k] = v
+	}
+	if _, ok := out["goal"]; !ok {
+		out["goal"] = goal
+	}
+	out["status"] = "completed"
+	out["success"] = true
+	return out
+}
+
+func delegateTaskErrorResult(goal string, err error) map[string]any {
+	return map[string]any{
+		"goal":    goal,
+		"status":  delegateTaskStatusFromError(err),
+		"success": false,
+		"error":   err.Error(),
+	}
+}
+
+func delegateTaskStatusFromError(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "cancelled"
+	default:
+		return "failed"
+	}
+}
+
+func summarizeDelegateResults(results []map[string]any) map[string]any {
+	completed := 0
+	failed := 0
+	cancelled := 0
+	timeout := 0
+	for _, result := range results {
+		switch strMap(result, "status") {
+		case "completed":
+			completed++
+		case "cancelled":
+			cancelled++
+		case "timeout":
+			timeout++
+		default:
+			failed++
+		}
+	}
+	status := "completed"
+	if failed > 0 {
+		status = "failed"
+	} else if timeout > 0 {
+		status = "timeout"
+	} else if cancelled > 0 {
+		status = "cancelled"
+	}
+	return map[string]any{
+		"status":          status,
+		"success":         failed == 0 && timeout == 0 && cancelled == 0,
+		"completed_count": completed,
+		"failed_count":    failed,
+		"cancelled_count": cancelled,
+		"timeout_count":   timeout,
+	}
 }
 
 func ParseJSONArgs(raw string) map[string]any {

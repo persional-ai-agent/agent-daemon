@@ -28,7 +28,6 @@ func main() {
 		runChat(cfg, "")
 		return
 	}
-
 	switch os.Args[1] {
 	case "chat":
 		fs := flag.NewFlagSet("chat", flag.ExitOnError)
@@ -54,19 +53,14 @@ func runChat(cfg config.Config, first string, sessionID ...string) {
 	if len(sessionID) > 0 && sessionID[0] != "" {
 		id = sessionID[0]
 	}
-	ctx := context.Background()
-	if err := cli.RunChat(ctx, eng, id, first); err != nil {
+	if err := cli.RunChat(context.Background(), eng, id, first); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func runServe(cfg config.Config) {
 	eng := mustBuildEngine(cfg)
-	srv := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           (&api.Server{Engine: eng}).Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: (&api.Server{Engine: eng}).Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("agent-daemon listening on %s", cfg.ListenAddr)
 	log.Fatal(srv.ListenAndServe())
 }
@@ -87,14 +81,5 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
 	client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
-	return &agent.Engine{
-		Client:        client,
-		Registry:      registry,
-		SessionStore:  sessionStore,
-		SearchStore:   sessionStore,
-		MemoryStore:   memoryStore,
-		TodoStore:     tools.NewTodoStore(),
-		Workdir:       cfg.Workdir,
-		MaxIterations: cfg.MaxIterations,
-	}
+	return &agent.Engine{Client: client, Registry: registry, SessionStore: sessionStore, SearchStore: sessionStore, MemoryStore: memoryStore, TodoStore: tools.NewTodoStore(), Workdir: cfg.Workdir, SystemPrompt: agent.DefaultSystemPrompt(), MaxIterations: cfg.MaxIterations}
 }
