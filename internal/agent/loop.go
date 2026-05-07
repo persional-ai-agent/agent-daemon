@@ -21,6 +21,7 @@ type Engine struct {
 	SearchStore   tools.SessionSearchStore
 	MemoryStore   tools.MemoryStore
 	TodoStore     *tools.TodoStore
+	ApprovalStore *tools.ApprovalStore
 	Workdir       string
 	SystemPrompt  string
 	MaxIterations int
@@ -85,6 +86,7 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 				SessionStore:   e.SearchStore,
 				MemoryStore:    e.MemoryStore,
 				TodoStore:      e.TodoStore,
+				ApprovalStore:  e.ApprovalStore,
 				DelegateRunner: e,
 				Workdir:        e.Workdir,
 			})

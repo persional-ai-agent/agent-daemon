@@ -81,6 +81,7 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	registry := tools.NewRegistry()
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
+	approvalStore := tools.NewApprovalStore(time.Duration(cfg.ApprovalTTLSeconds) * time.Second)
 	if strings.TrimSpace(cfg.MCPEndpoint) != "" {
 		mcpClient := tools.NewMCPClient(cfg.MCPEndpoint, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
 		if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
@@ -97,6 +98,7 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 		SearchStore:             sessionStore,
 		MemoryStore:             memoryStore,
 		TodoStore:               tools.NewTodoStore(),
+		ApprovalStore:           approvalStore,
 		Workdir:                 cfg.Workdir,
 		SystemPrompt:            agent.DefaultSystemPrompt(),
 		MaxIterations:           cfg.MaxIterations,

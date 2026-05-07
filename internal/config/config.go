@@ -20,6 +20,7 @@ type Config struct {
 	AnthropicModel          string
 	MCPEndpoint             string
 	MCPTimeoutSeconds       int
+	ApprovalTTLSeconds      int
 	MaxIterations           int
 	MaxContextChars         int
 	CompressionTailMessages int
@@ -55,6 +56,12 @@ func Load() Config {
 			mcpTimeout = i
 		}
 	}
+	approvalTTL := 300
+	if v := os.Getenv("AGENT_APPROVAL_TTL_SECONDS"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			approvalTTL = i
+		}
+	}
 	wd, _ := os.Getwd()
 	return Config{
 		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
@@ -69,6 +76,7 @@ func Load() Config {
 		AnthropicModel:          getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest"),
 		MCPEndpoint:             strings.TrimSpace(os.Getenv("AGENT_MCP_ENDPOINT")),
 		MCPTimeoutSeconds:       mcpTimeout,
+		ApprovalTTLSeconds:      approvalTTL,
 		MaxIterations:           maxTurns,
 		MaxContextChars:         maxContextChars,
 		CompressionTailMessages: tailMessages,

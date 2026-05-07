@@ -28,6 +28,7 @@ type ToolContext struct {
 	SessionStore   SessionSearchStore
 	MemoryStore    MemoryStore
 	TodoStore      *TodoStore
+	ApprovalStore  *ApprovalStore
 	DelegateRunner DelegateRunner
 	Workdir        string
 }

@@ -36,8 +36,10 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "session_search", desc: "Search previous session messages", params: sessionSearchParams(), call: b.sessionSearch})
 	r.Register(toolDef{name: "web_fetch", desc: "Fetch URL content over HTTP", params: webFetchParams(), call: b.webFetch})
 	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
+	r.Register(toolDef{name: "approval", desc: "Manage session-level dangerous command approvals", params: approvalParams(), call: b.approval})
 	r.Register(toolDef{name: "skill_list", desc: "List available local skills", params: skillListParams(), call: b.skillList})
 	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
+	r.Register(toolDef{name: "skill_manage", desc: "Manage local skills (create/edit/patch/delete)", params: skillManageParams(), call: b.skillManage})
 }
 
 type toolFn func(context.Context, map[string]any, ToolContext) (map[string]any, error)
@@ -66,8 +68,15 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		return nil, fmt.Errorf("blocked dangerous command: %s", reason)
 	}
 	requiresApproval := boolArg(args, "requires_approval", false)
-	if reason, dangerous := detectDangerousCommand(command); dangerous && !requiresApproval {
-		return nil, fmt.Errorf("dangerous command requires approval: %s (set requires_approval=true)", reason)
+	if reason, dangerous := detectDangerousCommand(command); dangerous {
+		approved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
+		if !requiresApproval && !approved {
+			return nil, fmt.Errorf("dangerous command requires approval: %s (set requires_approval=true or grant session approval)", reason)
+		}
+		if requiresApproval && tc.ApprovalStore != nil {
+			ttlSeconds := intArg(args, "approval_ttl_seconds", 0)
+			tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
+		}
 	}
 	background := boolArg(args, "background", false)
 	timeout := intArg(args, "timeout", 120)
@@ -345,6 +354,39 @@ func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc
 	return delegateTaskSuccessResult(goal, res), nil
 }
 
+func (b *BuiltinTools) approval(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if tc.ApprovalStore == nil {
+		return nil, errors.New("approval store unavailable")
+	}
+	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
+	switch action {
+	case "", "status":
+		approved, expiresAt := tc.ApprovalStore.Status(tc.SessionID)
+		return map[string]any{
+			"session_id": tc.SessionID,
+			"approved":   approved,
+			"expires_at": expiresAt.Format(time.RFC3339),
+		}, nil
+	case "grant":
+		ttlSeconds := intArg(args, "ttl_seconds", 0)
+		expiresAt := tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
+		return map[string]any{
+			"session_id": tc.SessionID,
+			"approved":   true,
+			"expires_at": expiresAt.Format(time.RFC3339),
+		}, nil
+	case "revoke":
+		revoked := tc.ApprovalStore.Revoke(tc.SessionID)
+		return map[string]any{
+			"session_id": tc.SessionID,
+			"approved":   false,
+			"revoked":    revoked,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported approval action: %s", action)
+	}
+}
+
 func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	root, err := resolveSkillsRoot(tc.Workdir, strArg(args, "path"))
 	if err != nil {
@@ -398,6 +440,109 @@ func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc Tool
 	}, nil
 }
 
+func (b *BuiltinTools) skillManage(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
+	name := strings.TrimSpace(strArg(args, "name"))
+	if name == "" {
+		return nil, errors.New("name required")
+	}
+	if !skillNameRE.MatchString(name) {
+		return nil, fmt.Errorf("invalid skill name: %s", name)
+	}
+	root, err := resolveSkillsRoot(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	skillDir := filepath.Join(root, name)
+	skillMD := filepath.Join(skillDir, "SKILL.md")
+	switch action {
+	case "create":
+		content := strArg(args, "content")
+		if strings.TrimSpace(content) == "" {
+			return nil, errors.New("content required for create")
+		}
+		if _, err := os.Stat(skillMD); err == nil {
+			return nil, fmt.Errorf("skill already exists: %s", name)
+		}
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(skillMD, []byte(content), 0o644); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true}, nil
+	case "edit":
+		content := strArg(args, "content")
+		if strings.TrimSpace(content) == "" {
+			return nil, errors.New("content required for edit")
+		}
+		if _, err := os.Stat(skillMD); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill not found: %s", name)
+			}
+			return nil, err
+		}
+		if err := os.WriteFile(skillMD, []byte(content), 0o644); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true}, nil
+	case "patch":
+		oldString := strArg(args, "old_string")
+		if oldString == "" {
+			return nil, errors.New("old_string required for patch")
+		}
+		newString, hasNew := args["new_string"]
+		if !hasNew {
+			return nil, errors.New("new_string required for patch")
+		}
+		newText, ok := newString.(string)
+		if !ok {
+			return nil, errors.New("new_string must be a string")
+		}
+		bs, err := os.ReadFile(skillMD)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill not found: %s", name)
+			}
+			return nil, err
+		}
+		content := string(bs)
+		replaceAll := boolArg(args, "replace_all", false)
+		matchCount := strings.Count(content, oldString)
+		if matchCount == 0 {
+			return nil, fmt.Errorf("old_string not found in %s", name)
+		}
+		if !replaceAll && matchCount != 1 {
+			return nil, fmt.Errorf("old_string matched %d times; set replace_all=true for bulk replacement", matchCount)
+		}
+		var updated string
+		replacements := 1
+		if replaceAll {
+			updated = strings.ReplaceAll(content, oldString, newText)
+			replacements = matchCount
+		} else {
+			updated = strings.Replace(content, oldString, newText, 1)
+		}
+		if err := os.WriteFile(skillMD, []byte(updated), 0o644); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true, "replacements": replacements}, nil
+	case "delete":
+		if _, err := os.Stat(skillDir); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill not found: %s", name)
+			}
+			return nil, err
+		}
+		if err := os.RemoveAll(skillDir); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": skillDir, "success": true}, nil
+	default:
+		return nil, fmt.Errorf("unsupported skill_manage action: %s", action)
+	}
+}
+
 func statusFromDone(done bool) string {
 	if done {
 		return "done"
@@ -406,7 +551,7 @@ func statusFromDone(done bool) string {
 }
 
 func terminalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}}, "required": []string{"command"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}, "approval_ttl_seconds": map[string]any{"type": "integer"}}, "required": []string{"command"}}
 }
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
@@ -436,11 +581,29 @@ func webFetchParams() map[string]any {
 func delegateTaskParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
 }
+func approvalParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke"}}, "ttl_seconds": map[string]any{"type": "integer"}}}
+}
 func skillListParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}
 }
 func skillViewParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}}, "required": []string{"name"}}
+}
+func skillManageParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action":      map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete"}},
+			"name":        map[string]any{"type": "string"},
+			"content":     map[string]any{"type": "string"},
+			"old_string":  map[string]any{"type": "string"},
+			"new_string":  map[string]any{"type": "string"},
+			"replace_all": map[string]any{"type": "boolean"},
+			"path":        map[string]any{"type": "string"},
+		},
+		"required": []string{"action", "name"},
+	}
 }
 
 func strArg(args map[string]any, key string) string {
@@ -578,6 +741,8 @@ func ParseJSONArgs(raw string) map[string]any {
 	}
 	return out
 }
+
+var skillNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
 func resolveSkillsRoot(workdir, customPath string) (string, error) {
 	if strings.TrimSpace(customPath) != "" {

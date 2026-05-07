@@ -25,3 +25,9 @@
 - `008-research-skills-minimal-skeleton.md`：Skills 最小骨架调研
 - `008-plan-skills-minimal-skeleton.md`：Skills 最小骨架实施计划
 - `008-summary-skills-minimal-skeleton.md`：Skills 最小骨架结果总结
+- `009-research-session-approval-state.md`：会话级审批状态补齐调研
+- `009-plan-session-approval-state.md`：会话级审批状态补齐实施计划
+- `009-summary-session-approval-state.md`：会话级审批状态补齐结果总结
+- `010-research-skill-manage-minimal.md`：`skill_manage` 最小补齐调研
+- `010-plan-skill-manage-minimal.md`：`skill_manage` 最小补齐实施计划
+- `010-summary-skill-manage-minimal.md`：`skill_manage` 最小补齐结果总结
