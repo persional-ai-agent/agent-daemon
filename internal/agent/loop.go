@@ -24,6 +24,8 @@ type Engine struct {
 	Workdir       string
 	SystemPrompt  string
 	MaxIterations int
+	MaxContextChars int
+	CompressionTailMessages int
 	EventSink     func(core.AgentEvent)
 }
 
@@ -42,17 +44,21 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 	if strings.TrimSpace(systemPrompt) == "" {
 		systemPrompt = DefaultSystemPrompt()
 	}
+	systemPrompt = buildRuntimeSystemPrompt(systemPrompt, e.Workdir, e.MemoryStore)
 
 	messages := core.CloneMessages(existing)
-	if len(messages) == 0 && strings.TrimSpace(systemPrompt) != "" {
-		messages = append(messages, core.Message{Role: "system", Content: systemPrompt})
-	}
+	messages = withSystemPrompt(messages, systemPrompt)
 	messages = append(messages, core.Message{Role: "user", Content: userInput})
 	_ = e.persist(sessionID, core.Message{Role: "user", Content: userInput})
 	e.emit(core.AgentEvent{Type: "user_message", SessionID: sessionID, Content: userInput})
 
 	for turn := 0; turn < e.MaxIterations; turn++ {
 		e.emit(core.AgentEvent{Type: "turn_started", SessionID: sessionID, Turn: turn + 1})
+		var compressed map[string]any
+		messages, compressed = compressMessages(messages, e.MaxContextChars, e.CompressionTailMessages)
+		if compressed != nil {
+			e.emit(core.AgentEvent{Type: "context_compacted", SessionID: sessionID, Turn: turn + 1, Data: compressed})
+		}
 		assistant, err := e.callWithRetry(ctx, messages)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {

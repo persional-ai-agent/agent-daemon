@@ -16,6 +16,7 @@ type SessionSearchStore interface {
 
 type MemoryStore interface {
 	Manage(action, target, content, oldText string) (map[string]any, error)
+	Snapshot() (map[string]string, error)
 }
 
 type DelegateRunner interface {

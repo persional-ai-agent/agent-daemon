@@ -63,6 +63,37 @@ func (s *Store) Manage(action, target, content, oldText string) (map[string]any,
 	return map[string]any{"success": true, "target": target, "file": fullPath}, nil
 }
 
+func (s *Store) Snapshot() (map[string]string, error) {
+	out := map[string]string{
+		"memory": "",
+		"user":   "",
+	}
+	for target := range out {
+		content, err := s.readTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		out[target] = content
+	}
+	return out, nil
+}
+
+func (s *Store) readTarget(target string) (string, error) {
+	file := s.fileForTarget(target)
+	if file == "" {
+		return "", fmt.Errorf("unknown memory target: %s", target)
+	}
+	fullPath := filepath.Join(s.BaseDir, file)
+	b, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(b), nil
+}
+
 func (s *Store) fileForTarget(target string) string {
 	switch strings.ToLower(strings.TrimSpace(target)) {
 	case "memory", "memory.md":

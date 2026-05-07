@@ -3,11 +3,15 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/memory"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -54,6 +58,19 @@ type waitOnContextClient struct{}
 func (waitOnContextClient) ChatCompletion(ctx context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
 	<-ctx.Done()
 	return core.Message{}, ctx.Err()
+}
+
+type recordingClient struct {
+	mu       sync.Mutex
+	messages [][]core.Message
+	response core.Message
+}
+
+func (c *recordingClient) ChatCompletion(_ context.Context, messages []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.messages = append(c.messages, core.CloneMessages(messages))
+	return c.response, nil
 }
 
 func TestRunEmitsDelegateEvents(t *testing.T) {
@@ -466,5 +483,139 @@ func TestRunEmitsStructuredMaxIterationsEvent(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected max_iterations_reached event, got %+v", events)
+	}
+}
+
+func TestRunInjectsRuntimeSystemPromptWithMemoryAndWorkspaceRules(t *testing.T) {
+	workdir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workdir, "AGENTS.md"), []byte("project rule: keep tests focused"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	memStore, err := memory.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memStore.Manage("add", "memory", "user prefers concise output", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memStore.Manage("add", "user", "workspace uses Go", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &recordingClient{response: core.Message{Role: "assistant", Content: "done"}}
+	eng := &Engine{
+		Client:       client,
+		Registry:     tools.NewRegistry(),
+		MemoryStore:  memStore,
+		Workdir:      workdir,
+		SystemPrompt: "base system prompt",
+	}
+
+	_, err = eng.Run(context.Background(), "prompt-session", "hello", "ignored override", []core.Message{{Role: "user", Content: "older turn"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.messages) != 1 || len(client.messages[0]) == 0 {
+		t.Fatalf("expected recorded model call, got %+v", client.messages)
+	}
+	system := client.messages[0][0]
+	if system.Role != "system" {
+		t.Fatalf("expected first message to be system, got %+v", client.messages[0])
+	}
+	for _, want := range []string{
+		"ignored override",
+		"user prefers concise output",
+		"workspace uses Go",
+		"project rule: keep tests focused",
+	} {
+		if !strings.Contains(system.Content, want) {
+			t.Fatalf("expected system prompt to contain %q, got %q", want, system.Content)
+		}
+	}
+}
+
+func TestRunReplacesExistingSystemPromptInsteadOfDuplicating(t *testing.T) {
+	client := &recordingClient{response: core.Message{Role: "assistant", Content: "done"}}
+	eng := &Engine{
+		Client:       client,
+		Registry:     tools.NewRegistry(),
+		SystemPrompt: "fresh system prompt",
+		Workdir:      t.TempDir(),
+	}
+
+	existing := []core.Message{
+		{Role: "system", Content: "stale system prompt"},
+		{Role: "user", Content: "previous"},
+	}
+	_, err := eng.Run(context.Background(), "replace-system", "next", "", existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.messages) != 1 {
+		t.Fatalf("expected one model call, got %+v", client.messages)
+	}
+	msgs := client.messages[0]
+	if msgs[0].Role != "system" || !strings.Contains(msgs[0].Content, "fresh system prompt") {
+		t.Fatalf("expected fresh system prompt, got %+v", msgs[0])
+	}
+	systemCount := 0
+	for _, msg := range msgs {
+		if msg.Role == "system" {
+			systemCount++
+		}
+	}
+	if systemCount != 1 {
+		t.Fatalf("expected exactly one system message, got %+v", msgs)
+	}
+}
+
+func TestRunEmitsContextCompactedEvent(t *testing.T) {
+	client := &recordingClient{response: core.Message{Role: "assistant", Content: "done"}}
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:                  client,
+		Registry:                tools.NewRegistry(),
+		SystemPrompt:            "base prompt",
+		Workdir:                 t.TempDir(),
+		MaxContextChars:         600,
+		CompressionTailMessages: 2,
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+	existing := []core.Message{
+		{Role: "user", Content: strings.Repeat("u1 ", 200)},
+		{Role: "assistant", Content: strings.Repeat("a1 ", 200)},
+		{Role: "user", Content: strings.Repeat("u2 ", 200)},
+		{Role: "assistant", Content: strings.Repeat("a2 ", 200)},
+	}
+	_, err := eng.Run(context.Background(), "compact-session", "latest", "", existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.messages) != 1 {
+		t.Fatalf("expected single model call, got %+v", client.messages)
+	}
+	foundSummary := false
+	for _, msg := range client.messages[0] {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, contextSummaryPrefix) {
+			foundSummary = true
+			break
+		}
+	}
+	if !foundSummary {
+		t.Fatalf("expected compacted summary message in model input, got %+v", client.messages[0])
+	}
+	foundEvent := false
+	for _, evt := range events {
+		if evt.Type == "context_compacted" {
+			foundEvent = true
+			if evt.Data["before_chars"] == nil || evt.Data["after_chars"] == nil {
+				t.Fatalf("expected compaction event metadata, got %+v", evt)
+			}
+		}
+	}
+	if !foundEvent {
+		t.Fatalf("expected context_compacted event, got %+v", events)
 	}
 }

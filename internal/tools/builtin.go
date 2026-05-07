@@ -60,21 +60,38 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 	if strings.TrimSpace(command) == "" {
 		return nil, errors.New("command is required")
 	}
+	if reason, blocked := detectHardlineCommand(command); blocked {
+		return nil, fmt.Errorf("blocked dangerous command: %s", reason)
+	}
+	requiresApproval := boolArg(args, "requires_approval", false)
+	if reason, dangerous := detectDangerousCommand(command); dangerous && !requiresApproval {
+		return nil, fmt.Errorf("dangerous command requires approval: %s (set requires_approval=true)", reason)
+	}
 	background := boolArg(args, "background", false)
 	timeout := intArg(args, "timeout", 120)
-	cwd := strArg(args, "workdir")
-	if cwd == "" {
-		cwd = tc.Workdir
+	cwd := tc.Workdir
+	if v := strArg(args, "workdir"); strings.TrimSpace(v) != "" {
+		var err error
+		cwd, err = resolvePathWithinWorkdir(tc.Workdir, v)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		cwd, err = normalizedWorkdir(tc.Workdir)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if background {
 		s, err := b.proc.StartBackground(ctx, command, cwd)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0}, nil
+		return map[string]any{"output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
 	}
 	out, code, err := RunForeground(ctx, command, cwd, timeout)
-	res := map[string]any{"output": out, "exit_code": code, "error": nil}
+	res := map[string]any{"output": out, "exit_code": code, "error": nil, "requires_approval": requiresApproval}
 	if err != nil {
 		res["error"] = err.Error()
 	}
@@ -104,10 +121,10 @@ func (b *BuiltinTools) stopProcess(_ context.Context, args map[string]any, _ Too
 	return map[string]any{"session_id": id, "stopped": true}, nil
 }
 
-func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
-	path := strArg(args, "path")
-	if path == "" {
-		return nil, errors.New("path required")
+func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
 	}
 	offset := intArg(args, "offset", 1)
 	limit := intArg(args, "limit", 0)
@@ -136,11 +153,11 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, _ ToolCo
 	return map[string]any{"path": path, "content": strings.Join(out, "\n")}, nil
 }
 
-func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
-	path := strArg(args, "path")
+func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
 	content := strArg(args, "content")
-	if path == "" {
-		return nil, errors.New("path required")
+	if err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
@@ -151,10 +168,14 @@ func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, _ ToolC
 	return map[string]any{"path": path, "bytes": len(content), "written": true}, nil
 }
 
-func (b *BuiltinTools) searchFiles(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) searchFiles(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	root := strArg(args, "path")
-	if root == "" {
-		root = "."
+	if strings.TrimSpace(root) == "" {
+		root = tc.Workdir
+	}
+	root, err := resolvePathWithinWorkdir(tc.Workdir, root)
+	if err != nil {
+		return nil, err
 	}
 	pattern := strArg(args, "pattern")
 	glob := strArg(args, "glob")
@@ -330,7 +351,7 @@ func statusFromDone(done bool) string {
 }
 
 func terminalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}}, "required": []string{"command"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}}, "required": []string{"command"}}
 }
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}

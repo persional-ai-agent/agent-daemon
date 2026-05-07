@@ -5,7 +5,7 @@
 - `cmd/agentd`：程序入口，负责装配配置、存储、工具、模型客户端、CLI/API
 - `internal/core`：统一消息、工具 schema、运行结果等共享类型
 - `internal/agent`：Agent Loop，处理多轮推理、重试、tool call 执行、事件发射与结果回灌
-- `internal/model`：模型客户端，目前实现 OpenAI 兼容接口
+- `internal/model`：模型客户端，当前实现 OpenAI / Anthropic / Codex 三模式
 - `internal/tools`：工具注册中心、工具上下文、内置工具、后台进程管理、Todo 状态
 - `internal/store`：SQLite 会话存储与 session search
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
@@ -34,6 +34,16 @@
 - `tool`
 
 这样可以直接复用 OpenAI 兼容接口的 `tool_calls` 机制，并为后续兼容更多 provider 降低改造成本。
+
+### 1.1 运行时系统提示词重建
+
+每次 `Engine.Run()` 都会动态重建并注入 system prompt，而不是依赖首轮历史：
+
+- 基础 system prompt
+- `MEMORY.md` / `USER.md` 持久记忆
+- 工作目录向上查找到的最近 `AGENTS.md`
+
+这样即使同一 session 跨多次 CLI/API 请求继续运行，也不会丢失系统提示词，并且能始终读取最新记忆和仓库规则。
 
 ### 2. 工具注册中心
 
@@ -87,7 +97,7 @@
 ### 5. 状态分层
 
 - 会话消息：SQLite，适合历史加载与 session_search
-- 长期记忆：Markdown 文件，便于人工查看与维护
+- 长期记忆：Markdown 文件，便于人工查看与维护，并在运行时回灌到 system prompt
 - Todo：进程内 session 级状态，适合当前多轮执行周期
 
 ### 6. 终端执行分层
@@ -97,11 +107,35 @@
 
 这对应 Hermes 中 terminal/process registry 的核心思路，但当前只实现本地 Linux 后端。
 
+### 7. 工具安全基线
+
+对齐 Hermes 的基础护栏思路，当前 Go 版增加了两条最小安全边界：
+
+- 文件工具通过 `Workdir` 做路径收敛，阻止越界访问
+- terminal 对灾难性命令做硬阻断，如根目录递归删除、磁盘格式化、原始块设备写入、整机重启等
+- terminal 对危险但可恢复命令增加审批门禁：需显式 `requires_approval=true` 才执行
+
+交互式审批流程与审批状态持久化仍作为后续扩展项保留。
+
+### 8. Context Compression
+
+`internal/agent/compressor.go` 提供最小可用上下文压缩能力：
+
+- 在每轮模型调用前估算消息体积
+- 超过预算时保留 system + 最近 N 条消息
+- 将中段历史压缩成一条 assistant 摘要消息
+- 发出 `context_compacted` 事件，包含压缩前后体积和裁剪数量
+
+相关配置：
+
+- `AGENT_MAX_CONTEXT_CHARS`（默认 `120000`）
+- `AGENT_COMPRESSION_TAIL_MESSAGES`（默认 `14`）
+
 ## 扩展点
 
 后续可以继续增加：
 
-- provider 抽象与 Anthropic/Codex 模式
+- provider 级高级能力（重试策略、流式差异统一、故障切换）
 - MCP 工具接入
 - 技能系统
 - 上下文压缩

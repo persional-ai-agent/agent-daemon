@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,6 +81,29 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	registry := tools.NewRegistry()
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
-	client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
-	return &agent.Engine{Client: client, Registry: registry, SessionStore: sessionStore, SearchStore: sessionStore, MemoryStore: memoryStore, TodoStore: tools.NewTodoStore(), Workdir: cfg.Workdir, SystemPrompt: agent.DefaultSystemPrompt(), MaxIterations: cfg.MaxIterations}
+	client := buildModelClient(cfg)
+	return &agent.Engine{
+		Client:                  client,
+		Registry:                registry,
+		SessionStore:            sessionStore,
+		SearchStore:             sessionStore,
+		MemoryStore:             memoryStore,
+		TodoStore:               tools.NewTodoStore(),
+		Workdir:                 cfg.Workdir,
+		SystemPrompt:            agent.DefaultSystemPrompt(),
+		MaxIterations:           cfg.MaxIterations,
+		MaxContextChars:         cfg.MaxContextChars,
+		CompressionTailMessages: cfg.CompressionTailMessages,
+	}
+}
+
+func buildModelClient(cfg config.Config) model.Client {
+	switch strings.ToLower(strings.TrimSpace(cfg.ModelProvider)) {
+	case "anthropic":
+		return model.NewAnthropicClient(cfg.AnthropicBaseURL, cfg.AnthropicAPIKey, cfg.AnthropicModel)
+	case "codex":
+		return model.NewCodexClient(cfg.CodexBaseURL, cfg.CodexAPIKey, cfg.CodexModel)
+	default:
+		return model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
+	}
 }

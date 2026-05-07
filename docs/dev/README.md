@@ -4,3 +4,18 @@
 - `001-plan-hermes-agent-go-port.md`：Go 版 Agent 实施计划
 - `001-events-hermes-agent-go-port.md`：Agent 事件协议与结构化字段说明
 - `001-summary-hermes-agent-go-port.md`：实现总结与当前能力范围
+- `002-research-hermes-gap-closure.md`：Hermes 核心闭环剩余差异与补齐范围分析
+- `002-plan-hermes-gap-closure.md`：核心闭环差异补齐实施计划
+- `002-summary-hermes-gap-closure.md`：核心闭环差异补齐结果总结
+- `003-research-context-compression.md`：Context Compression 缺口调研与方案选择
+- `003-plan-context-compression.md`：Context Compression 实施计划
+- `003-summary-context-compression.md`：Context Compression 落地结果与边界
+- `004-research-approval-guardrails.md`：审批护栏缺口调研与最小补齐范围
+- `004-plan-approval-guardrails.md`：审批护栏补齐实施计划
+- `004-summary-approval-guardrails.md`：审批护栏补齐结果总结
+- `005-research-provider-modes.md`：Provider 多模式缺口调研与映射策略
+- `005-plan-provider-modes.md`：Provider 多模式补齐实施计划
+- `005-summary-provider-modes.md`：Provider 多模式补齐结果总结
+- `006-research-codex-responses-mode.md`：Codex Responses 模式缺口调研与映射策略
+- `006-plan-codex-responses-mode.md`：Codex Responses 模式补齐实施计划
+- `006-summary-codex-responses-mode.md`：Codex Responses 模式补齐结果总结

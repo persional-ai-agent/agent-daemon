@@ -31,3 +31,28 @@ func TestMemoryManageAddAndReplace(t *testing.T) {
 		t.Fatalf("replace failed: %s", string(b))
 	}
 }
+
+func TestMemorySnapshot(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Manage("add", "memory", "prefers concise answers", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Manage("add", "user", "project uses Go", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(snapshot["memory"], "prefers concise answers") {
+		t.Fatalf("missing memory snapshot: %+v", snapshot)
+	}
+	if !strings.Contains(snapshot["user"], "project uses Go") {
+		t.Fatalf("missing user snapshot: %+v", snapshot)
+	}
+}
