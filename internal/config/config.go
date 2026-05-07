@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -17,6 +18,8 @@ type Config struct {
 	AnthropicBaseURL        string
 	AnthropicAPIKey         string
 	AnthropicModel          string
+	MCPEndpoint             string
+	MCPTimeoutSeconds       int
 	MaxIterations           int
 	MaxContextChars         int
 	CompressionTailMessages int
@@ -46,6 +49,12 @@ func Load() Config {
 			tailMessages = i
 		}
 	}
+	mcpTimeout := 30
+	if v := os.Getenv("AGENT_MCP_TIMEOUT_SECONDS"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			mcpTimeout = i
+		}
+	}
 	wd, _ := os.Getwd()
 	return Config{
 		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
@@ -58,6 +67,8 @@ func Load() Config {
 		AnthropicBaseURL:        getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
 		AnthropicAPIKey:         os.Getenv("ANTHROPIC_API_KEY"),
 		AnthropicModel:          getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest"),
+		MCPEndpoint:             strings.TrimSpace(os.Getenv("AGENT_MCP_ENDPOINT")),
+		MCPTimeoutSeconds:       mcpTimeout,
 		MaxIterations:           maxTurns,
 		MaxContextChars:         maxContextChars,
 		CompressionTailMessages: tailMessages,

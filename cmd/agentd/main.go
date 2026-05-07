@@ -81,6 +81,14 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	registry := tools.NewRegistry()
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
+	if strings.TrimSpace(cfg.MCPEndpoint) != "" {
+		mcpClient := tools.NewMCPClient(cfg.MCPEndpoint, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
+		if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
+			log.Printf("mcp discovery failed: %v", err)
+		} else if len(names) > 0 {
+			log.Printf("registered %d mcp tools from %s", len(names), cfg.MCPEndpoint)
+		}
+	}
 	client := buildModelClient(cfg)
 	return &agent.Engine{
 		Client:                  client,

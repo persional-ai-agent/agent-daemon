@@ -19,3 +19,6 @@
 - `006-research-codex-responses-mode.md`：Codex Responses 模式缺口调研与映射策略
 - `006-plan-codex-responses-mode.md`：Codex Responses 模式补齐实施计划
 - `006-summary-codex-responses-mode.md`：Codex Responses 模式补齐结果总结
+- `007-research-mcp-minimal-bridge.md`：MCP 最小接入骨架调研
+- `007-plan-mcp-minimal-bridge.md`：MCP 最小接入骨架实施计划
+- `007-summary-mcp-minimal-bridge.md`：MCP 最小接入骨架结果总结
