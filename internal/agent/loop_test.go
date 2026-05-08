@@ -12,6 +12,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
+	"github.com/dingjingmaster/agent-daemon/internal/model"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -64,6 +65,85 @@ type recordingClient struct {
 	mu       sync.Mutex
 	messages [][]core.Message
 	response core.Message
+}
+
+type streamingClient struct {
+	resp core.Message
+}
+
+func (c streamingClient) ChatCompletion(_ context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	return c.resp, nil
+}
+
+func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Message, _ []core.ToolSchema, sink model.StreamEventSink) (core.Message, error) {
+	if sink != nil {
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type:     "message_start",
+			Data:     map[string]any{"id": "msg-1"},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type:     "text_delta",
+			Data:     map[string]any{"delta": "he"},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type: "tool_call_start",
+			Data: map[string]any{
+				"id":   "call-1",
+				"name": "read_file",
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type: "tool_arguments_start",
+			Data: map[string]any{
+				"call_id": "call-1",
+				"name":    "read_file",
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type:     "tool_arguments_delta",
+			Data: map[string]any{
+				"name":         "read_file",
+				"partial_json": "{\"path\":\"README.md\"}",
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type: "tool_arguments_done",
+			Data: map[string]any{
+				"call_id": "call-1",
+				"name":    "read_file",
+				"input":   "{\"path\":\"README.md\"}",
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type: "tool_call_done",
+			Data: map[string]any{
+				"call_id": "call-1",
+				"name":    "read_file",
+				"input":   "{\"path\":\"README.md\"}",
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type:     "usage",
+			Data: map[string]any{
+				"input_tokens":  12,
+				"output_tokens": 6,
+			},
+		})
+		sink(model.StreamEvent{
+			Provider: "openai",
+			Type:     "message_done",
+			Data:     map[string]any{"id": "msg-1"},
+		})
+	}
+	return c.resp, nil
 }
 
 func (c *recordingClient) ChatCompletion(_ context.Context, messages []core.Message, _ []core.ToolSchema) (core.Message, error) {
@@ -617,5 +697,109 @@ func TestRunEmitsContextCompactedEvent(t *testing.T) {
 	}
 	if !foundEvent {
 		t.Fatalf("expected context_compacted event, got %+v", events)
+	}
+}
+
+func TestRunEmitsModelStreamEvents(t *testing.T) {
+	events := make([]core.AgentEvent, 0)
+	eng := &Engine{
+		Client:       streamingClient{resp: core.Message{Role: "assistant", Content: "done"}},
+		Registry:     tools.NewRegistry(),
+		SystemPrompt: DefaultSystemPrompt(),
+		EventSink: func(evt core.AgentEvent) {
+			events = append(events, evt)
+		},
+	}
+	_, err := eng.Run(context.Background(), "stream-session", "hello", eng.SystemPrompt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	foundMessageStart := false
+	foundText := false
+	foundToolStart := false
+	foundToolArgsStart := false
+	foundToolArgs := false
+	foundToolArgsDone := false
+	foundToolDone := false
+	foundUsage := false
+	foundMessageDone := false
+	for _, evt := range events {
+		if evt.Type != "model_stream_event" {
+			continue
+		}
+		found++
+		if evt.Data["provider"] != "openai" {
+			t.Fatalf("unexpected model_stream_event: %+v", evt)
+		}
+		if evt.Data["event_type"] == "text_delta" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["text"] != "he" {
+				t.Fatalf("expected normalized text_delta payload, got %+v", evt)
+			}
+			foundText = true
+		}
+		if evt.Data["event_type"] == "message_start" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["message_id"] != "msg-1" {
+				t.Fatalf("expected normalized message_start payload, got %+v", evt)
+			}
+			foundMessageStart = true
+		}
+		if evt.Data["event_type"] == "tool_call_start" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["tool_name"] != "read_file" || data["tool_call_id"] != "call-1" {
+				t.Fatalf("expected normalized tool_call_start payload, got %+v", evt)
+			}
+			foundToolStart = true
+		}
+		if evt.Data["event_type"] == "tool_args_start" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["tool_name"] != "read_file" || data["tool_call_id"] != "call-1" {
+				t.Fatalf("expected normalized tool_args_start payload, got %+v", evt)
+			}
+			foundToolArgsStart = true
+		}
+		if evt.Data["event_type"] == "tool_args_delta" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["tool_name"] != "read_file" || data["arguments_delta"] != "{\"path\":\"README.md\"}" {
+				t.Fatalf("expected normalized tool_args_delta payload, got %+v", evt)
+			}
+			foundToolArgs = true
+		}
+		if evt.Data["event_type"] == "tool_args_done" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["tool_name"] != "read_file" || data["tool_call_id"] != "call-1" || data["arguments"] != "{\"path\":\"README.md\"}" {
+				t.Fatalf("expected normalized tool_args_done payload, got %+v", evt)
+			}
+			foundToolArgsDone = true
+		}
+		if evt.Data["event_type"] == "tool_call_done" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["tool_name"] != "read_file" || data["tool_call_id"] != "call-1" || data["arguments"] != "{\"path\":\"README.md\"}" {
+				t.Fatalf("expected normalized tool_call_done payload, got %+v", evt)
+			}
+			foundToolDone = true
+		}
+		if evt.Data["event_type"] == "message_done" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["message_id"] != "msg-1" || data["finish_reason"] != "stop" {
+				t.Fatalf("expected normalized message_done payload, got %+v", evt)
+			}
+			foundMessageDone = true
+		}
+		if evt.Data["event_type"] == "usage" {
+			data, _ := evt.Data["event_data"].(map[string]any)
+			if data["prompt_tokens"] != 12 || data["completion_tokens"] != 6 || data["total_tokens"] != 18 {
+				t.Fatalf("expected normalized usage payload, got %+v", evt)
+			}
+			foundUsage = true
+		}
+	}
+	if found != 9 {
+		t.Fatalf("expected 9 model_stream_event events, got %d (%+v)", found, events)
+	}
+	if !foundMessageStart || !foundText || !foundToolStart || !foundToolArgsStart || !foundToolArgs || !foundToolArgsDone || !foundToolDone || !foundUsage || !foundMessageDone {
+		t.Fatalf("expected normalized v2 stream event set with args lifecycle, got %+v", events)
 	}
 }

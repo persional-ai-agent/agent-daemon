@@ -9,6 +9,8 @@ import (
 
 type Config struct {
 	ModelProvider           string
+	ModelFallbackProvider   string
+	ModelUseStreaming       bool
 	ModelBaseURL            string
 	ModelAPIKey             string
 	ModelName               string
@@ -71,6 +73,8 @@ func Load() Config {
 	wd, _ := os.Getwd()
 	return Config{
 		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
+		ModelFallbackProvider:   strings.TrimSpace(os.Getenv("AGENT_MODEL_FALLBACK_PROVIDER")),
+		ModelUseStreaming:       getenv("AGENT_MODEL_USE_STREAMING", "") == "1" || strings.EqualFold(getenv("AGENT_MODEL_USE_STREAMING", ""), "true"),
 		ModelBaseURL:            getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		ModelAPIKey:             os.Getenv("OPENAI_API_KEY"),
 		ModelName:               getenv("OPENAI_MODEL", "gpt-4o-mini"),

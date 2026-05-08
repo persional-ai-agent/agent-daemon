@@ -128,12 +128,37 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 }
 
 func buildModelClient(cfg config.Config) model.Client {
-	switch strings.ToLower(strings.TrimSpace(cfg.ModelProvider)) {
+	primaryProvider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+	primary := buildProviderClient(cfg, primaryProvider)
+	fallbackProvider := strings.ToLower(strings.TrimSpace(cfg.ModelFallbackProvider))
+	if fallbackProvider == "" || fallbackProvider == primaryProvider {
+		return primary
+	}
+	fallback := buildProviderClient(cfg, fallbackProvider)
+	if fallback == nil {
+		return primary
+	}
+	log.Printf("model fallback enabled: primary=%s fallback=%s", primaryProvider, fallbackProvider)
+	return model.NewFallbackClient(primary, primaryProvider, fallback, fallbackProvider)
+}
+
+func buildProviderClient(cfg config.Config, provider string) model.Client {
+	switch provider {
 	case "anthropic":
-		return model.NewAnthropicClient(cfg.AnthropicBaseURL, cfg.AnthropicAPIKey, cfg.AnthropicModel)
+		client := model.NewAnthropicClient(cfg.AnthropicBaseURL, cfg.AnthropicAPIKey, cfg.AnthropicModel)
+		client.UseStreaming = cfg.ModelUseStreaming
+		return client
 	case "codex":
-		return model.NewCodexClient(cfg.CodexBaseURL, cfg.CodexAPIKey, cfg.CodexModel)
+		client := model.NewCodexClient(cfg.CodexBaseURL, cfg.CodexAPIKey, cfg.CodexModel)
+		client.UseStreaming = cfg.ModelUseStreaming
+		return client
+	case "openai", "":
+		client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
+		client.UseStreaming = cfg.ModelUseStreaming
+		return client
 	default:
-		return model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
+		client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
+		client.UseStreaming = cfg.ModelUseStreaming
+		return client
 	}
 }

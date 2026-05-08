@@ -45,7 +45,11 @@ export OPENAI_API_KEY=your_key
 export OPENAI_MODEL=gpt-4o-mini
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export AGENT_MODEL_PROVIDER=openai
+export AGENT_MODEL_FALLBACK_PROVIDER=anthropic
+export AGENT_MODEL_USE_STREAMING=true
 ```
+
+说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。
 
 Anthropic 模式：
 
@@ -133,6 +137,7 @@ curl -s http://127.0.0.1:8080/v1/chat/cancel \
 - `assistant_message`
 - `tool_started`
 - `tool_finished`
+- `model_stream_event`
 - `delegate_started`
 - `delegate_finished`
 - `delegate_failed`
@@ -141,6 +146,18 @@ curl -s http://127.0.0.1:8080/v1/chat/cancel \
 - `max_iterations_reached`
 - `error`
 - `result`
+
+`model_stream_event` 最小标准字段（v2）：
+
+- `event_type=text_delta` 时，`event_data.text`
+- `event_type=tool_args_start` 时，`event_data.tool_call_id`、`event_data.tool_name`
+- `event_type=tool_args_delta` 时，`event_data.tool_name`、`event_data.arguments_delta`
+- `event_type=tool_args_done` 时，`event_data.tool_call_id`、`event_data.tool_name`、`event_data.arguments`
+- `event_type=message_start` 时，`event_data.message_id`（可为空）
+- `event_type=message_done` 时，`event_data.message_id`（可为空）、`event_data.finish_reason`
+- `event_type=usage` 时，`event_data.prompt_tokens`、`event_data.completion_tokens`、`event_data.total_tokens`
+- `event_type=tool_call_start` 时，`event_data.tool_call_id`、`event_data.tool_name`
+- `event_type=tool_call_done` 时，`event_data.tool_call_id`、`event_data.tool_name`、`event_data.arguments`
 
 ## 文档
 

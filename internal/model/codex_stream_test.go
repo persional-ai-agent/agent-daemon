@@ -1,0 +1,104 @@
+package model
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/dingjingmaster/agent-daemon/internal/core"
+)
+
+func TestCodexClientStreamingText(t *testing.T) {
+	var seenStream bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		stream, _ := req["stream"].(bool)
+		seenStream = stream
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\"}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"delta\":\"hello \"}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"delta\":\"codex\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewCodexClient(srv.URL, "", "gpt-5-codex")
+	client.UseStreaming = true
+	msg, err := client.ChatCompletion(context.Background(), []core.Message{
+		{Role: "user", Content: "say hi"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenStream {
+		t.Fatal("expected stream=true in codex request")
+	}
+	if msg.Content != "hello codex" {
+		t.Fatalf("unexpected streamed content: %+v", msg)
+	}
+}
+
+func TestCodexClientStreamingFunctionCall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"call_1\",\"type\":\"function_call\",\"name\":\"read_file\"}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"path\\\":\\\"REA\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"DME.md\\\"}\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewCodexClient(srv.URL, "", "gpt-5-codex")
+	client.UseStreaming = true
+	msg, err := client.ChatCompletion(context.Background(), []core.Message{
+		{Role: "user", Content: "read readme"},
+	}, []core.ToolSchema{
+		{Type: "function", Function: core.ToolSchemaDetail{Name: "read_file", Parameters: map[string]any{"type": "object"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msg.ToolCalls) != 1 {
+		t.Fatalf("expected one streamed tool call, got %+v", msg.ToolCalls)
+	}
+	tc := msg.ToolCalls[0]
+	if tc.Function.Name != "read_file" {
+		t.Fatalf("unexpected tool call name: %+v", tc)
+	}
+	if !strings.Contains(tc.Function.Arguments, "README.md") {
+		t.Fatalf("unexpected tool call args: %+v", tc.Function.Arguments)
+	}
+}
+
+func TestCodexClientStreamingUsageEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"input_tokens\":8,\"output_tokens\":4,\"total_tokens\":12},\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewCodexClient(srv.URL, "", "gpt-5-codex")
+	client.UseStreaming = true
+	seenUsage := false
+	_, err := client.ChatCompletionWithEvents(context.Background(), []core.Message{
+		{Role: "user", Content: "hello"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "usage" {
+			seenUsage = true
+			if evt.Data["input_tokens"] != float64(8) {
+				t.Fatalf("unexpected usage payload: %+v", evt)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenUsage {
+		t.Fatal("expected usage stream event")
+	}
+}

@@ -1,12 +1,15 @@
 package model
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,11 +17,12 @@ import (
 )
 
 type AnthropicClient struct {
-	BaseURL    string
-	APIKey     string
-	Model      string
-	HTTPClient *http.Client
-	MaxTokens  int
+	BaseURL      string
+	APIKey       string
+	Model        string
+	HTTPClient   *http.Client
+	MaxTokens    int
+	UseStreaming bool
 }
 
 type anthropicRequest struct {
@@ -27,6 +31,7 @@ type anthropicRequest struct {
 	System    string          `json:"system,omitempty"`
 	Messages  []anthropicTurn `json:"messages"`
 	Tools     []anthropicTool `json:"tools,omitempty"`
+	Stream    bool            `json:"stream,omitempty"`
 }
 
 type anthropicTurn struct {
@@ -71,6 +76,13 @@ func NewAnthropicClient(baseURL, apiKey, modelName string) *AnthropicClient {
 }
 
 func (c *AnthropicClient) ChatCompletion(ctx context.Context, messages []core.Message, tools []core.ToolSchema) (core.Message, error) {
+	return c.ChatCompletionWithEvents(ctx, messages, tools, nil)
+}
+
+func (c *AnthropicClient) ChatCompletionWithEvents(ctx context.Context, messages []core.Message, tools []core.ToolSchema, sink StreamEventSink) (core.Message, error) {
+	if c.UseStreaming {
+		return c.chatCompletionStream(ctx, messages, tools, sink)
+	}
 	systemText, turns := toAnthropicTurns(messages)
 	reqBody := anthropicRequest{
 		Model:     c.Model,
@@ -107,6 +119,246 @@ func (c *AnthropicClient) ChatCompletion(ctx context.Context, messages []core.Me
 		return core.Message{}, err
 	}
 	return fromAnthropicResponse(out), nil
+}
+
+type anthropicStreamBlockBuilder struct {
+	Type  string
+	ID    string
+	Name  string
+	Text  strings.Builder
+	Input strings.Builder
+}
+
+func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []core.Message, tools []core.ToolSchema, sink StreamEventSink) (core.Message, error) {
+	systemText, turns := toAnthropicTurns(messages)
+	reqBody := anthropicRequest{
+		Model:     c.Model,
+		MaxTokens: c.MaxTokens,
+		System:    systemText,
+		Messages:  turns,
+		Tools:     toAnthropicTools(tools),
+		Stream:    true,
+	}
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return core.Message{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BaseURL, "/")+"/messages", bytes.NewReader(b))
+	if err != nil {
+		return core.Message{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	if c.APIKey != "" {
+		req.Header.Set("x-api-key", c.APIKey)
+	}
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return core.Message{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return core.Message{}, fmt.Errorf("anthropic api error (%d): %s", resp.StatusCode, string(data))
+	}
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		data, _ := io.ReadAll(resp.Body)
+		var out anthropicResponse
+		if err := json.Unmarshal(data, &out); err != nil {
+			return core.Message{}, err
+		}
+		return fromAnthropicResponse(out), nil
+	}
+	emitStreamEvent(sink, StreamEvent{
+		Provider: "anthropic",
+		Type:     "message_start",
+		Data:     map[string]any{},
+	})
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
+	blocks := map[int]*anthropicStreamBlockBuilder{}
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(payload), &event); err != nil {
+			continue
+		}
+		if errObj, ok := event["error"].(map[string]any); ok {
+			return core.Message{}, fmt.Errorf("anthropic stream error: %s", asString(errObj["message"]))
+		}
+		index := intFromAny(event["index"])
+		typ := strings.ToLower(strings.TrimSpace(asString(event["type"])))
+		switch typ {
+		case "content_block_start":
+			block, _ := event["content_block"].(map[string]any)
+			b := &anthropicStreamBlockBuilder{
+				Type: strings.ToLower(strings.TrimSpace(asString(block["type"]))),
+				ID:   asString(block["id"]),
+				Name: asString(block["name"]),
+			}
+			if input, ok := block["input"].(map[string]any); ok {
+				raw, _ := json.Marshal(input)
+				b.Input.Write(raw)
+			}
+			if text := asString(block["text"]); text != "" {
+				b.Text.WriteString(text)
+			}
+			blocks[index] = b
+			if b.Type == "tool_use" {
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "tool_call_start",
+					Data: map[string]any{
+						"tool_call_id": b.ID,
+						"tool_name":    b.Name,
+					},
+				})
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "tool_args_start",
+					Data: map[string]any{
+						"tool_call_id": b.ID,
+						"tool_name":    b.Name,
+					},
+				})
+			}
+		case "content_block_delta":
+			b := blocks[index]
+			if b == nil {
+				b = &anthropicStreamBlockBuilder{}
+				blocks[index] = b
+			}
+			delta, _ := event["delta"].(map[string]any)
+			deltaType := strings.ToLower(strings.TrimSpace(asString(delta["type"])))
+			switch deltaType {
+			case "text_delta":
+				b.Type = "text"
+				b.Text.WriteString(asString(delta["text"]))
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "text_delta",
+					Data:     map[string]any{"text": asString(delta["text"])},
+				})
+			case "input_json_delta":
+				if b.Type == "" {
+					b.Type = "tool_use"
+				}
+				b.Input.WriteString(asString(delta["partial_json"]))
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "tool_args_delta",
+					Data: map[string]any{
+						"tool_name":       b.Name,
+						"arguments_delta": asString(delta["partial_json"]),
+					},
+				})
+			}
+		case "message_delta":
+			usage, _ := event["usage"].(map[string]any)
+			if len(usage) > 0 {
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "usage",
+					Data:     usage,
+				})
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return core.Message{}, err
+	}
+
+	indexes := make([]int, 0, len(blocks))
+	for idx := range blocks {
+		indexes = append(indexes, idx)
+	}
+	sort.Ints(indexes)
+	texts := make([]string, 0, len(indexes))
+	calls := make([]core.ToolCall, 0, len(indexes))
+	for _, idx := range indexes {
+		b := blocks[idx]
+		switch b.Type {
+		case "text":
+			if t := strings.TrimSpace(b.Text.String()); t != "" {
+				texts = append(texts, t)
+			}
+		case "tool_use":
+			if strings.TrimSpace(b.Name) == "" {
+				continue
+			}
+			callID := b.ID
+			if callID == "" {
+				callID = "toolu_stream_" + strconv.Itoa(idx)
+			}
+			args := strings.TrimSpace(b.Input.String())
+			if args == "" {
+				args = "{}"
+			}
+			calls = append(calls, core.ToolCall{
+				ID:   callID,
+				Type: "function",
+				Function: core.ToolFunction{
+					Name:      b.Name,
+					Arguments: args,
+				},
+			})
+			emitStreamEvent(sink, StreamEvent{
+				Provider: "anthropic",
+				Type:     "tool_call_done",
+				Data: map[string]any{
+					"tool_call_id": callID,
+					"tool_name":    b.Name,
+					"arguments":    args,
+				},
+			})
+			emitStreamEvent(sink, StreamEvent{
+				Provider: "anthropic",
+				Type:     "tool_args_done",
+				Data: map[string]any{
+					"tool_call_id": callID,
+					"tool_name":    b.Name,
+					"arguments":    args,
+				},
+			})
+		}
+	}
+	finishReason := "stop"
+	if len(calls) > 0 {
+		finishReason = "tool_calls"
+	}
+	emitStreamEvent(sink, StreamEvent{
+		Provider: "anthropic",
+		Type:     "message_done",
+		Data: map[string]any{
+			"text":            strings.Join(texts, "\n"),
+			"tool_call_count": len(calls),
+			"finish_reason":   finishReason,
+		},
+	})
+	return core.Message{
+		Role:      "assistant",
+		Content:   strings.Join(texts, "\n"),
+		ToolCalls: calls,
+	}, nil
+}
+
+func intFromAny(v any) int {
+	switch x := v.(type) {
+	case float64:
+		return int(x)
+	case int:
+		return x
+	default:
+		return 0
+	}
 }
 
 func toAnthropicTools(tools []core.ToolSchema) []anthropicTool {

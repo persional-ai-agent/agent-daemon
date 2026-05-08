@@ -43,3 +43,30 @@
 - `014-research-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容调研
 - `014-plan-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容实施计划
 - `014-summary-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容结果总结
+- `015-research-provider-fallback-minimal.md`：Provider 故障切换最小补齐调研
+- `015-plan-provider-fallback-minimal.md`：Provider 故障切换最小补齐实施计划
+- `015-summary-provider-fallback-minimal.md`：Provider 故障切换最小补齐结果总结
+- `016-research-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）调研
+- `016-plan-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）实施计划
+- `016-summary-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）结果总结
+- `017-research-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）调研
+- `017-plan-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）实施计划
+- `017-summary-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）结果总结
+- `018-research-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）调研
+- `018-plan-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）实施计划
+- `018-summary-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）结果总结
+- `019-research-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）调研
+- `019-plan-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）实施计划
+- `019-summary-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）结果总结
+- `020-research-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）调研
+- `020-plan-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）实施计划
+- `020-summary-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）结果总结
+- `021-research-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）调研
+- `021-plan-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）实施计划
+- `021-summary-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）结果总结
+- `022-research-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐调研
+- `022-plan-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐实施计划
+- `022-summary-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐结果总结
+- `023-research-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐调研
+- `023-plan-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐实施计划
+- `023-summary-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐结果总结

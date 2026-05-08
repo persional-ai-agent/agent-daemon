@@ -60,7 +60,7 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 		if compressed != nil {
 			e.emit(core.AgentEvent{Type: "context_compacted", SessionID: sessionID, Turn: turn + 1, Data: compressed})
 		}
-		assistant, err := e.callWithRetry(ctx, messages)
+		assistant, err := e.callWithRetry(ctx, messages, turn+1, sessionID)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				e.emit(core.AgentEvent{Type: "cancelled", SessionID: sessionID, Turn: turn + 1, Content: err.Error(), Data: terminalEventData("cancelled", err, turn+1)})
@@ -122,10 +122,21 @@ func (e *Engine) RunSubtask(ctx context.Context, parentSessionID, goal, taskCont
 	return result, nil
 }
 
-func (e *Engine) callWithRetry(ctx context.Context, messages []core.Message) (core.Message, error) {
+func (e *Engine) callWithRetry(ctx context.Context, messages []core.Message, turn int, sessionID string) (core.Message, error) {
 	var lastErr error
 	for i := 0; i < 3; i++ {
-		msg, err := e.Client.ChatCompletion(ctx, messages, e.Registry.Schemas())
+		msg, err := model.CompleteWithEvents(ctx, e.Client, messages, e.Registry.Schemas(), func(evt model.StreamEvent) {
+			e.emit(core.AgentEvent{
+				Type:      "model_stream_event",
+				SessionID: sessionID,
+				Turn:      turn,
+				Data: map[string]any{
+					"provider":   evt.Provider,
+					"event_type": evt.Type,
+					"event_data": evt.Data,
+				},
+			})
+		})
 		if err == nil {
 			return msg, nil
 		}
