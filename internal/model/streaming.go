@@ -213,6 +213,7 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 			}
 		}
 	case "usage":
+		usageStatus := ""
 		if _, ok := evt.Data["prompt_tokens"]; !ok {
 			if n, ok := asAnyInt(evt.Data["input_tokens"]); ok {
 				evt.Data["prompt_tokens"] = n
@@ -234,6 +235,7 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		if _, ok := evt.Data["total_tokens"]; !ok {
 			if hasDerivedTotal {
 				evt.Data["total_tokens"] = derivedTotal
+				usageStatus = "derived"
 			} else if n, ok := asAnyInt(evt.Data["tokens"]); ok {
 				evt.Data["total_tokens"] = n
 			}
@@ -243,6 +245,9 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 			if total, ok := asAnyInt(evt.Data["total_tokens"]); ok && total < derivedTotal {
 				evt.Data["total_tokens"] = derivedTotal
 				evt.Data["total_tokens_adjusted"] = true
+				usageStatus = "adjusted"
+			} else if usageStatus == "" {
+				usageStatus = "ok"
 			}
 		}
 		// Prompt cache read tokens:
@@ -284,6 +289,14 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 					evt.Data["reasoning_tokens"] = n
 				}
 			}
+		}
+		if usageStatus == "" {
+			if _, ok := evt.Data["total_tokens"]; ok {
+				usageStatus = "source_only"
+			}
+		}
+		if usageStatus != "" {
+			evt.Data["usage_consistency_status"] = usageStatus
 		}
 	}
 	return evt

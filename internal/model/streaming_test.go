@@ -145,6 +145,9 @@ func TestNormalizeStreamEventUsage(t *testing.T) {
 	if evt.Data["prompt_tokens"] != 10 || evt.Data["completion_tokens"] != 7 || evt.Data["total_tokens"] != 17 {
 		t.Fatalf("expected normalized usage payload, got %+v", evt)
 	}
+	if evt.Data["usage_consistency_status"] != "derived" {
+		t.Fatalf("expected usage_consistency_status=derived, got %+v", evt)
+	}
 }
 
 func TestNormalizeStreamEventUsagePromptCacheTokens(t *testing.T) {
@@ -226,6 +229,9 @@ func TestNormalizeStreamEventUsageTotalTokensDerivedWhenMissing(t *testing.T) {
 	if evt.Data["total_tokens"] != 20 {
 		t.Fatalf("expected derived total_tokens=20, got %+v", evt)
 	}
+	if evt.Data["usage_consistency_status"] != "derived" {
+		t.Fatalf("expected usage_consistency_status=derived, got %+v", evt)
+	}
 }
 
 func TestNormalizeStreamEventUsageTotalTokensAdjustedWhenTooSmall(t *testing.T) {
@@ -243,6 +249,24 @@ func TestNormalizeStreamEventUsageTotalTokensAdjustedWhenTooSmall(t *testing.T) 
 	}
 	if evt.Data["total_tokens_adjusted"] != true {
 		t.Fatalf("expected total_tokens_adjusted=true, got %+v", evt)
+	}
+	if evt.Data["usage_consistency_status"] != "adjusted" {
+		t.Fatalf("expected usage_consistency_status=adjusted, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageTotalTokensKeepsConsistentSource(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     6,
+			"completion_tokens": 5,
+			"total_tokens":      11,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "ok" {
+		t.Fatalf("expected usage_consistency_status=ok, got %+v", evt)
 	}
 }
 

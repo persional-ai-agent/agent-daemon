@@ -91,3 +91,6 @@
 - `030-research-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐调研
 - `030-plan-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐实施计划
 - `030-summary-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐结果总结
+- `031-research-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐调研
+- `031-plan-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐实施计划
+- `031-summary-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐结果总结
