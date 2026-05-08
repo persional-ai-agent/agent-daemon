@@ -102,3 +102,28 @@ func TestCodexClientStreamingUsageEvent(t *testing.T) {
 		t.Fatal("expected usage stream event")
 	}
 }
+
+func TestCodexClientStreamingCompletedEnvelopeCarriesResponseID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"response\":{\"id\":\"resp_777\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewCodexClient(srv.URL, "", "gpt-5-codex")
+	client.UseStreaming = true
+	seenDoneWithResponseID := false
+	_, err := client.ChatCompletionWithEvents(context.Background(), []core.Message{
+		{Role: "user", Content: "hello"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "message_done" && evt.Data["response_id"] == "resp_777" {
+			seenDoneWithResponseID = true
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenDoneWithResponseID {
+		t.Fatal("expected message_done response_id from completed envelope")
+	}
+}

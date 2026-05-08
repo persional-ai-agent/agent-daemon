@@ -89,7 +89,7 @@ func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Me
 		})
 		sink(model.StreamEvent{
 			Provider: "openai",
-			Type: "tool_call_start",
+			Type:     "tool_call_start",
 			Data: map[string]any{
 				"id":   "call-1",
 				"name": "read_file",
@@ -97,7 +97,7 @@ func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Me
 		})
 		sink(model.StreamEvent{
 			Provider: "openai",
-			Type: "tool_arguments_start",
+			Type:     "tool_arguments_start",
 			Data: map[string]any{
 				"call_id": "call-1",
 				"name":    "read_file",
@@ -113,7 +113,7 @@ func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Me
 		})
 		sink(model.StreamEvent{
 			Provider: "openai",
-			Type: "tool_arguments_done",
+			Type:     "tool_arguments_done",
 			Data: map[string]any{
 				"call_id": "call-1",
 				"name":    "read_file",
@@ -122,7 +122,7 @@ func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Me
 		})
 		sink(model.StreamEvent{
 			Provider: "openai",
-			Type: "tool_call_done",
+			Type:     "tool_call_done",
 			Data: map[string]any{
 				"call_id": "call-1",
 				"name":    "read_file",
@@ -140,7 +140,10 @@ func (c streamingClient) ChatCompletionWithEvents(_ context.Context, _ []core.Me
 		sink(model.StreamEvent{
 			Provider: "openai",
 			Type:     "message_done",
-			Data:     map[string]any{"id": "msg-1"},
+			Data: map[string]any{
+				"id":     "msg-1",
+				"reason": "end_turn",
+			},
 		})
 	}
 	return c.resp, nil

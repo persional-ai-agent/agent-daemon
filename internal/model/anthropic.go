@@ -178,6 +178,8 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 	blocks := map[int]*anthropicStreamBlockBuilder{}
+	messageID := ""
+	finishReasonRaw := ""
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -197,6 +199,16 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 		index := intFromAny(event["index"])
 		typ := strings.ToLower(strings.TrimSpace(asString(event["type"])))
 		switch typ {
+		case "message_start":
+			msg, _ := event["message"].(map[string]any)
+			if msgID := asString(msg["id"]); msgID != "" {
+				messageID = msgID
+				emitStreamEvent(sink, StreamEvent{
+					Provider: "anthropic",
+					Type:     "message_start",
+					Data:     map[string]any{"message_id": msgID},
+				})
+			}
 		case "content_block_start":
 			block, _ := event["content_block"].(map[string]any)
 			b := &anthropicStreamBlockBuilder{
@@ -262,6 +274,9 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 				})
 			}
 		case "message_delta":
+			if stopReason := asString(event["stop_reason"]); stopReason != "" {
+				finishReasonRaw = stopReason
+			}
 			usage, _ := event["usage"].(map[string]any)
 			if len(usage) > 0 {
 				emitStreamEvent(sink, StreamEvent{
@@ -330,18 +345,25 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 			})
 		}
 	}
-	finishReason := "stop"
-	if len(calls) > 0 {
-		finishReason = "tool_calls"
+	finishReason := finishReasonRaw
+	if strings.TrimSpace(finishReason) == "" {
+		finishReason = "stop"
+		if len(calls) > 0 {
+			finishReason = "tool_calls"
+		}
+	}
+	doneData := map[string]any{
+		"text":            strings.Join(texts, "\n"),
+		"tool_call_count": len(calls),
+		"finish_reason":   finishReason,
+	}
+	if strings.TrimSpace(messageID) != "" {
+		doneData["message_id"] = messageID
 	}
 	emitStreamEvent(sink, StreamEvent{
 		Provider: "anthropic",
 		Type:     "message_done",
-		Data: map[string]any{
-			"text":            strings.Join(texts, "\n"),
-			"tool_call_count": len(calls),
-			"finish_reason":   finishReason,
-		},
+		Data:     doneData,
 	})
 	return core.Message{
 		Role:      "assistant",

@@ -53,12 +53,24 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		if _, ok := evt.Data["message_id"]; !ok {
 			if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["message_id"] = s
+			} else if s := asAnyString(evt.Data["response_id"]); s != "" {
+				evt.Data["message_id"] = s
+			} else if msg := asAnyMap(evt.Data["message"]); msg != nil {
+				if s := asAnyString(msg["id"]); s != "" {
+					evt.Data["message_id"] = s
+				}
 			}
 		}
 	case "message_done":
 		if _, ok := evt.Data["message_id"]; !ok {
 			if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["message_id"] = s
+			} else if s := asAnyString(evt.Data["response_id"]); s != "" {
+				evt.Data["message_id"] = s
+			} else if msg := asAnyMap(evt.Data["message"]); msg != nil {
+				if s := asAnyString(msg["id"]); s != "" {
+					evt.Data["message_id"] = s
+				}
 			}
 		}
 		if _, ok := evt.Data["finish_reason"]; !ok {
@@ -68,6 +80,7 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				evt.Data["finish_reason"] = "stop"
 			}
 		}
+		evt.Data["finish_reason"] = canonicalFinishReason(asAnyString(evt.Data["finish_reason"]))
 	case "text_delta":
 		if _, ok := evt.Data["text"]; !ok {
 			if s := asAnyString(evt.Data["delta"]); s != "" {
@@ -100,6 +113,12 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		if _, ok := evt.Data["tool_call_id"]; !ok {
 			if s := asAnyString(evt.Data["call_id"]); s != "" {
 				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["tool_use_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["output_item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
 			} else if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["tool_call_id"] = s
 			}
@@ -112,6 +131,12 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		}
 		if _, ok := evt.Data["tool_call_id"]; !ok {
 			if s := asAnyString(evt.Data["call_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["tool_use_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["output_item_id"]); s != "" {
 				evt.Data["tool_call_id"] = s
 			} else if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["tool_call_id"] = s
@@ -131,6 +156,12 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		if _, ok := evt.Data["tool_call_id"]; !ok {
 			if s := asAnyString(evt.Data["call_id"]); s != "" {
 				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["tool_use_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["output_item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
 			} else if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["tool_call_id"] = s
 			}
@@ -143,6 +174,12 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		}
 		if _, ok := evt.Data["tool_call_id"]; !ok {
 			if s := asAnyString(evt.Data["call_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["tool_use_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["item_id"]); s != "" {
+				evt.Data["tool_call_id"] = s
+			} else if s := asAnyString(evt.Data["output_item_id"]); s != "" {
 				evt.Data["tool_call_id"] = s
 			} else if s := asAnyString(evt.Data["id"]); s != "" {
 				evt.Data["tool_call_id"] = s
@@ -182,6 +219,11 @@ func asAnyString(v any) string {
 	return strings.TrimSpace(s)
 }
 
+func asAnyMap(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
+}
+
 func asAnyInt(v any) (int, bool) {
 	switch x := v.(type) {
 	case int:
@@ -210,5 +252,18 @@ func asAnyInt(v any) (int, bool) {
 		return n, true
 	default:
 		return 0, false
+	}
+}
+
+func canonicalFinishReason(reason string) string {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "", "stop", "end_turn":
+		return "stop"
+	case "tool_calls", "tool_use":
+		return "tool_calls"
+	case "max_tokens", "max_output_tokens", "length":
+		return "length"
+	default:
+		return strings.ToLower(strings.TrimSpace(reason))
 	}
 }

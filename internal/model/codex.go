@@ -171,6 +171,7 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 		}
 		// Completed envelope may already contain full response.
 		if respObj, ok := event["response"].(map[string]any); ok {
+			responseID := asString(respObj["id"])
 			if usage, ok := respObj["usage"].(map[string]any); ok && len(usage) > 0 {
 				emitStreamEvent(sink, StreamEvent{
 					Provider: "codex",
@@ -181,17 +182,24 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 			if output, ok := respObj["output"].([]any); ok {
 				msg := fromCodexResponse(codexResponse{Output: toMapSlice(output)})
 				finishReason := "stop"
+				if reason := asString(respObj["finish_reason"]); reason != "" {
+					finishReason = reason
+				}
 				if len(msg.ToolCalls) > 0 {
 					finishReason = "tool_calls"
+				}
+				doneData := map[string]any{
+					"text":            msg.Content,
+					"tool_call_count": len(msg.ToolCalls),
+					"finish_reason":   finishReason,
+				}
+				if responseID != "" {
+					doneData["response_id"] = responseID
 				}
 				emitStreamEvent(sink, StreamEvent{
 					Provider: "codex",
 					Type:     "message_done",
-					Data: map[string]any{
-						"text":            msg.Content,
-						"tool_call_count": len(msg.ToolCalls),
-						"finish_reason":   finishReason,
-					},
+					Data:     doneData,
 				})
 				return msg, nil
 			}

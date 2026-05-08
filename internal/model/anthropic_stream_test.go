@@ -94,3 +94,30 @@ func TestAnthropicClientStreamingUsageEvent(t *testing.T) {
 		t.Fatal("expected usage stream event")
 	}
 }
+
+func TestAnthropicClientStreamingMessageDeltaStopReason(t *testing.T) {
+	client := NewAnthropicClient("", "k", "claude-test")
+	client.UseStreaming = true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"stop_reason\":\"tool_use\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+	client.BaseURL = srv.URL
+
+	seenToolUseReason := false
+	_, err := client.ChatCompletionWithEvents(context.Background(), []core.Message{
+		{Role: "user", Content: "count"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "message_done" && evt.Data["finish_reason"] == "tool_use" {
+			seenToolUseReason = true
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenToolUseReason {
+		t.Fatal("expected message_done with stop_reason from message_delta")
+	}
+}
