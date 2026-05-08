@@ -193,6 +193,11 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 					"tool_call_count": len(msg.ToolCalls),
 					"finish_reason":   finishReason,
 				}
+				if incomplete, ok := respObj["incomplete_details"].(map[string]any); ok {
+					if s := asString(incomplete["reason"]); s != "" {
+						doneData["incomplete_reason"] = s
+					}
+				}
 				if responseID != "" {
 					doneData["response_id"] = responseID
 				}

@@ -81,6 +81,20 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 			}
 		}
 		evt.Data["finish_reason"] = canonicalFinishReason(asAnyString(evt.Data["finish_reason"]))
+		if _, ok := evt.Data["stop_sequence"]; !ok {
+			if s := asAnyString(evt.Data["stop"]); s != "" {
+				evt.Data["stop_sequence"] = s
+			}
+		}
+		if _, ok := evt.Data["incomplete_reason"]; !ok {
+			if s := asAnyString(evt.Data["reason_detail"]); s != "" {
+				evt.Data["incomplete_reason"] = s
+			} else if details := asAnyMap(evt.Data["incomplete_details"]); details != nil {
+				if s := asAnyString(details["reason"]); s != "" {
+					evt.Data["incomplete_reason"] = s
+				}
+			}
+		}
 	case "text_delta":
 		if _, ok := evt.Data["text"]; !ok {
 			if s := asAnyString(evt.Data["delta"]); s != "" {

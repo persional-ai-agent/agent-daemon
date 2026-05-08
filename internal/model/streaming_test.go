@@ -196,3 +196,31 @@ func TestNormalizeStreamEventToolCallIDAliasesFromItems(t *testing.T) {
 		t.Fatalf("expected tool_call_id from output_item_id, got %+v", evt)
 	}
 }
+
+func TestNormalizeStreamEventMessageDoneTerminationMetadata(t *testing.T) {
+	done := normalizeStreamEvent(StreamEvent{
+		Provider: "Anthropic",
+		Type:     "message_done",
+		Data: map[string]any{
+			"id":   "msg-7",
+			"stop": "</END>",
+		},
+	})
+	if done.Data["stop_sequence"] != "</END>" {
+		t.Fatalf("expected stop_sequence from stop alias, got %+v", done)
+	}
+
+	done = normalizeStreamEvent(StreamEvent{
+		Provider: "Codex",
+		Type:     "message_done",
+		Data: map[string]any{
+			"id": "msg-8",
+			"incomplete_details": map[string]any{
+				"reason": "max_output_tokens",
+			},
+		},
+	})
+	if done.Data["incomplete_reason"] != "max_output_tokens" {
+		t.Fatalf("expected incomplete_reason from incomplete_details.reason, got %+v", done)
+	}
+}

@@ -76,3 +76,6 @@
 - `025-research-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐调研
 - `025-plan-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐实施计划
 - `025-summary-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐结果总结
+- `026-research-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐调研
+- `026-plan-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐实施计划
+- `026-summary-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐结果总结

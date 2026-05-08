@@ -180,6 +180,7 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 	blocks := map[int]*anthropicStreamBlockBuilder{}
 	messageID := ""
 	finishReasonRaw := ""
+	stopSequenceRaw := ""
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -277,6 +278,9 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 			if stopReason := asString(event["stop_reason"]); stopReason != "" {
 				finishReasonRaw = stopReason
 			}
+			if stopSequence := asString(event["stop_sequence"]); stopSequence != "" {
+				stopSequenceRaw = stopSequence
+			}
 			usage, _ := event["usage"].(map[string]any)
 			if len(usage) > 0 {
 				emitStreamEvent(sink, StreamEvent{
@@ -356,6 +360,9 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 		"text":            strings.Join(texts, "\n"),
 		"tool_call_count": len(calls),
 		"finish_reason":   finishReason,
+	}
+	if strings.TrimSpace(stopSequenceRaw) != "" {
+		doneData["stop_sequence"] = stopSequenceRaw
 	}
 	if strings.TrimSpace(messageID) != "" {
 		doneData["message_id"] = messageID
