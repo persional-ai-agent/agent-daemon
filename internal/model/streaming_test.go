@@ -147,6 +147,39 @@ func TestNormalizeStreamEventUsage(t *testing.T) {
 	}
 }
 
+func TestNormalizeStreamEventUsagePromptCacheTokens(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Anthropic",
+		Type:     "usage",
+		Data: map[string]any{
+			"input_tokens":               20,
+			"output_tokens":              4,
+			"cache_creation_input_tokens": 12,
+			"cache_read_input_tokens":     7,
+		},
+	})
+	if evt.Data["prompt_cache_write_tokens"] != 12 || evt.Data["prompt_cache_read_tokens"] != 7 {
+		t.Fatalf("expected normalized prompt cache tokens, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsagePromptCacheTokensFromNestedDetails(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     10,
+			"completion_tokens": 3,
+			"prompt_tokens_details": map[string]any{
+				"cached_tokens": 5,
+			},
+		},
+	})
+	if evt.Data["prompt_cache_read_tokens"] != 5 {
+		t.Fatalf("expected prompt_cache_read_tokens from prompt_tokens_details.cached_tokens, got %+v", evt)
+	}
+}
+
 func TestNormalizeStreamEventToolCallIDFromToolUseID(t *testing.T) {
 	evt := normalizeStreamEvent(StreamEvent{
 		Provider: "Anthropic",

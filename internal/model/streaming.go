@@ -232,6 +232,31 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				evt.Data["total_tokens"] = n
 			}
 		}
+		// Prompt cache read tokens:
+		// - Anthropic: cache_read_input_tokens
+		// - OpenAI/Codex (nested): prompt_tokens_details.cached_tokens / input_tokens_details.cached_tokens
+		if _, ok := evt.Data["prompt_cache_read_tokens"]; !ok {
+			if n, ok := asAnyInt(evt.Data["cache_read_input_tokens"]); ok {
+				evt.Data["prompt_cache_read_tokens"] = n
+			} else if n, ok := asAnyInt(evt.Data["cached_tokens"]); ok {
+				evt.Data["prompt_cache_read_tokens"] = n
+			} else if details := asAnyMap(evt.Data["prompt_tokens_details"]); details != nil {
+				if n, ok := asAnyInt(details["cached_tokens"]); ok {
+					evt.Data["prompt_cache_read_tokens"] = n
+				}
+			} else if details := asAnyMap(evt.Data["input_tokens_details"]); details != nil {
+				if n, ok := asAnyInt(details["cached_tokens"]); ok {
+					evt.Data["prompt_cache_read_tokens"] = n
+				}
+			}
+		}
+		// Prompt cache write tokens:
+		// - Anthropic: cache_creation_input_tokens
+		if _, ok := evt.Data["prompt_cache_write_tokens"]; !ok {
+			if n, ok := asAnyInt(evt.Data["cache_creation_input_tokens"]); ok {
+				evt.Data["prompt_cache_write_tokens"] = n
+			}
+		}
 	}
 	return evt
 }

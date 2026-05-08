@@ -5,7 +5,7 @@
 - `cmd/agentd`：程序入口，负责装配配置、存储、工具、模型客户端、CLI/API
 - `internal/core`：统一消息、工具 schema、运行结果等共享类型
 - `internal/agent`：Agent Loop，处理多轮推理、重试、tool call 执行、事件发射与结果回灌
-- `internal/model`：模型客户端，当前实现 OpenAI / Anthropic / Codex 三模式，并支持主备 provider 故障切换、三 provider 流式聚合、增量事件最小透传与 `model_stream_event` v2+ 最小标准字典（含 `tool_args_start/delta/done`、`message_done.finish_reason` 归一到 `stop/tool_calls/length` 与 `stop_sequence/incomplete_reason`（`length` 场景自动补齐）、`usage.prompt_tokens/completion_tokens/total_tokens`、`message_id/tool_call_id` 多来源别名归一）
+- `internal/model`：模型客户端，当前实现 OpenAI / Anthropic / Codex 三模式，并支持主备 provider 故障切换、三 provider 流式聚合、增量事件最小透传与 `model_stream_event` v2+ 最小标准字典（含 `tool_args_start/delta/done`、`message_done.finish_reason` 归一到 `stop/tool_calls/length` 与 `stop_sequence/incomplete_reason`（`length` 场景自动补齐）、`usage.prompt_tokens/completion_tokens/total_tokens` + `prompt_cache_write_tokens/prompt_cache_read_tokens`、`message_id/tool_call_id` 多来源别名归一）
 - `internal/tools`：工具注册中心、工具上下文、内置工具、审批状态工具、技能发现/管理工具、MCP HTTP/stdio 代理工具（含 OAuth client_credentials 与 `/call` 流式兼容）、后台进程管理、Todo 状态
 - `internal/store`：SQLite 会话存储与 session search
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理

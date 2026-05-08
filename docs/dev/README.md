@@ -82,3 +82,6 @@
 - `027-research-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐调研
 - `027-plan-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐实施计划
 - `027-summary-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐结果总结
+- `028-research-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐调研
+- `028-plan-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐实施计划
+- `028-summary-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐结果总结
