@@ -85,3 +85,6 @@
 - `028-research-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐调研
 - `028-plan-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐实施计划
 - `028-summary-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐结果总结
+- `029-research-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐调研
+- `029-plan-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐实施计划
+- `029-summary-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐结果总结

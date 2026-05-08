@@ -180,6 +180,40 @@ func TestNormalizeStreamEventUsagePromptCacheTokensFromNestedDetails(t *testing.
 	}
 }
 
+func TestNormalizeStreamEventUsageReasoningTokens(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     10,
+			"completion_tokens": 8,
+			"completion_tokens_details": map[string]any{
+				"reasoning_tokens": 6,
+			},
+		},
+	})
+	if evt.Data["reasoning_tokens"] != 6 {
+		t.Fatalf("expected reasoning_tokens from completion_tokens_details.reasoning_tokens, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageReasoningTokensAliases(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Codex",
+		Type:     "usage",
+		Data: map[string]any{
+			"input_tokens":  5,
+			"output_tokens": 4,
+			"output_tokens_details": map[string]any{
+				"reasoning_tokens": 3,
+			},
+		},
+	})
+	if evt.Data["reasoning_tokens"] != 3 {
+		t.Fatalf("expected reasoning_tokens from output_tokens_details.reasoning_tokens, got %+v", evt)
+	}
+}
+
 func TestNormalizeStreamEventToolCallIDFromToolUseID(t *testing.T) {
 	evt := normalizeStreamEvent(StreamEvent{
 		Provider: "Anthropic",

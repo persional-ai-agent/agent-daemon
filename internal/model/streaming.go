@@ -257,6 +257,21 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				evt.Data["prompt_cache_write_tokens"] = n
 			}
 		}
+		// Reasoning tokens:
+		// - OpenAI/Codex: completion_tokens_details.reasoning_tokens / output_tokens_details.reasoning_tokens
+		if _, ok := evt.Data["reasoning_tokens"]; !ok {
+			if n, ok := asAnyInt(evt.Data["reasoning_tokens_count"]); ok {
+				evt.Data["reasoning_tokens"] = n
+			} else if details := asAnyMap(evt.Data["completion_tokens_details"]); details != nil {
+				if n, ok := asAnyInt(details["reasoning_tokens"]); ok {
+					evt.Data["reasoning_tokens"] = n
+				}
+			} else if details := asAnyMap(evt.Data["output_tokens_details"]); details != nil {
+				if n, ok := asAnyInt(details["reasoning_tokens"]); ok {
+					evt.Data["reasoning_tokens"] = n
+				}
+			}
+		}
 	}
 	return evt
 }
