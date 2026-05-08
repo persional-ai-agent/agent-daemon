@@ -220,7 +220,39 @@ func TestNormalizeStreamEventMessageDoneTerminationMetadata(t *testing.T) {
 			},
 		},
 	})
-	if done.Data["incomplete_reason"] != "max_output_tokens" {
-		t.Fatalf("expected incomplete_reason from incomplete_details.reason, got %+v", done)
+	if done.Data["incomplete_reason"] != "length" {
+		t.Fatalf("expected canonical incomplete_reason=length from incomplete_details.reason, got %+v", done)
+	}
+}
+
+func TestNormalizeStreamEventMessageDoneLengthCompletesIncompleteReason(t *testing.T) {
+	done := normalizeStreamEvent(StreamEvent{
+		Provider: "Codex",
+		Type:     "message_done",
+		Data: map[string]any{
+			"id":            "msg-9",
+			"finish_reason": "max_output_tokens",
+		},
+	})
+	if done.Data["finish_reason"] != "length" {
+		t.Fatalf("expected canonical finish_reason=length, got %+v", done)
+	}
+	if done.Data["incomplete_reason"] != "length" {
+		t.Fatalf("expected inferred incomplete_reason=length, got %+v", done)
+	}
+}
+
+func TestNormalizeStreamEventMessageDoneCanonicalIncompleteReason(t *testing.T) {
+	done := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "message_done",
+		Data: map[string]any{
+			"id":                "msg-10",
+			"finish_reason":     "length",
+			"incomplete_reason": "max_tokens",
+		},
+	})
+	if done.Data["incomplete_reason"] != "length" {
+		t.Fatalf("expected canonical incomplete_reason=length, got %+v", done)
 	}
 }

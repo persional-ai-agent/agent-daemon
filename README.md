@@ -154,7 +154,7 @@ curl -s http://127.0.0.1:8080/v1/chat/cancel \
 - `event_type=tool_args_delta` 时，`event_data.tool_name`、`event_data.arguments_delta`
 - `event_type=tool_args_done` 时，`event_data.tool_call_id`、`event_data.tool_name`、`event_data.arguments`
 - `event_type=message_start` 时，`event_data.message_id`（可为空，统一兼容 `id/response_id/message.id`）
-- `event_type=message_done` 时，`event_data.message_id`（可为空，统一兼容 `id/response_id/message.id`）、`event_data.finish_reason`（标准值：`stop`/`tool_calls`/`length`）、`event_data.stop_sequence`（可选）、`event_data.incomplete_reason`（可选）
+- `event_type=message_done` 时，`event_data.message_id`（可为空，统一兼容 `id/response_id/message.id`）、`event_data.finish_reason`（标准值：`stop`/`tool_calls`/`length`）、`event_data.stop_sequence`（可选）、`event_data.incomplete_reason`（可选；`finish_reason=length` 时归一为 `length`）
 - `event_type=usage` 时，`event_data.prompt_tokens`、`event_data.completion_tokens`、`event_data.total_tokens`
 - `event_type=tool_call_start` 时，`event_data.tool_call_id`、`event_data.tool_name`（`tool_call_id` 统一兼容 `call_id/tool_use_id/item_id/output_item_id`）
 - `event_type=tool_call_done` 时，`event_data.tool_call_id`、`event_data.tool_name`、`event_data.arguments`（`tool_call_id` 同上）

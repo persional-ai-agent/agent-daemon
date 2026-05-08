@@ -79,3 +79,6 @@
 - `026-research-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐调研
 - `026-plan-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐实施计划
 - `026-summary-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐结果总结
+- `027-research-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐调研
+- `027-plan-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐实施计划
+- `027-summary-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐结果总结

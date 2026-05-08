@@ -95,6 +95,14 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				}
 			}
 		}
+		if s := asAnyString(evt.Data["incomplete_reason"]); s != "" {
+			evt.Data["incomplete_reason"] = canonicalIncompleteReason(s)
+		}
+		if evt.Data["finish_reason"] == "length" {
+			if s := asAnyString(evt.Data["incomplete_reason"]); s == "" {
+				evt.Data["incomplete_reason"] = "length"
+			}
+		}
 	case "text_delta":
 		if _, ok := evt.Data["text"]; !ok {
 			if s := asAnyString(evt.Data["delta"]); s != "" {
@@ -275,6 +283,17 @@ func canonicalFinishReason(reason string) string {
 		return "stop"
 	case "tool_calls", "tool_use":
 		return "tool_calls"
+	case "max_tokens", "max_output_tokens", "length":
+		return "length"
+	default:
+		return strings.ToLower(strings.TrimSpace(reason))
+	}
+}
+
+func canonicalIncompleteReason(reason string) string {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "", "none":
+		return ""
 	case "max_tokens", "max_output_tokens", "length":
 		return "length"
 	default:
