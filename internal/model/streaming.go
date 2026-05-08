@@ -214,6 +214,10 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 		}
 	case "usage":
 		usageStatus := ""
+		hasTokenSignal := hasAnyKey(evt.Data,
+			"prompt_tokens", "completion_tokens", "total_tokens", "tokens",
+			"input_tokens", "output_tokens", "reasoning_tokens_count",
+		)
 		if _, ok := evt.Data["prompt_tokens"]; !ok {
 			if n, ok := asAnyInt(evt.Data["input_tokens"]); ok {
 				evt.Data["prompt_tokens"] = n
@@ -295,6 +299,9 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				usageStatus = "source_only"
 			}
 		}
+		if usageStatus == "" && hasTokenSignal {
+			usageStatus = "invalid"
+		}
 		if usageStatus != "" {
 			evt.Data["usage_consistency_status"] = usageStatus
 		}
@@ -310,6 +317,15 @@ func asAnyString(v any) string {
 func asAnyMap(v any) map[string]any {
 	m, _ := v.(map[string]any)
 	return m
+}
+
+func hasAnyKey(m map[string]any, keys ...string) bool {
+	for _, k := range keys {
+		if _, ok := m[k]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func asAnyInt(v any) (int, bool) {

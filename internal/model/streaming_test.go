@@ -270,6 +270,188 @@ func TestNormalizeStreamEventUsageTotalTokensKeepsConsistentSource(t *testing.T)
 	}
 }
 
+func TestNormalizeStreamEventUsageStringNumbers(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     "6",
+			"completion_tokens": "4",
+		},
+	})
+	if evt.Data["total_tokens"] != 10 {
+		t.Fatalf("expected total_tokens=10 from string numbers, got %+v", evt)
+	}
+	if evt.Data["usage_consistency_status"] != "derived" {
+		t.Fatalf("expected usage_consistency_status=derived, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageInvalidNumbers(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     "abc",
+			"completion_tokens": "4x",
+		},
+	})
+	if _, ok := evt.Data["total_tokens"]; ok {
+		t.Fatalf("did not expect total_tokens for invalid numeric fields, got %+v", evt)
+	}
+	if evt.Data["usage_consistency_status"] != "invalid" {
+		t.Fatalf("expected usage_consistency_status=invalid, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusOpenAIOk(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     8,
+			"completion_tokens": 2,
+			"total_tokens":      10,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "ok" {
+		t.Fatalf("expected usage_consistency_status=ok for openai, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusAnthropicDerived(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Anthropic",
+		Type:     "usage",
+		Data: map[string]any{
+			"input_tokens":  14,
+			"output_tokens": 3,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "derived" {
+		t.Fatalf("expected usage_consistency_status=derived for anthropic, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusCodexInvalid(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Codex",
+		Type:     "usage",
+		Data: map[string]any{
+			"tokens": "NaN",
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "invalid" {
+		t.Fatalf("expected usage_consistency_status=invalid for codex, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusOpenAISourceOnly(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"total_tokens": 21,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "source_only" {
+		t.Fatalf("expected usage_consistency_status=source_only for openai, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusAnthropicSourceOnly(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Anthropic",
+		Type:     "usage",
+		Data: map[string]any{
+			"total_tokens": 17,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "source_only" {
+		t.Fatalf("expected usage_consistency_status=source_only for anthropic, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusCodexSourceOnly(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "Codex",
+		Type:     "usage",
+		Data: map[string]any{
+			"total_tokens": 9,
+		},
+	})
+	if evt.Data["usage_consistency_status"] != "source_only" {
+		t.Fatalf("expected usage_consistency_status=source_only for codex, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageConsistencyStatusTableDriven(t *testing.T) {
+	cases := []struct {
+		name           string
+		provider       string
+		data           map[string]any
+		wantStatus     string
+		wantAdjusted   bool
+		wantTotalToken int
+	}{
+		{
+			name:           "openai-ok",
+			provider:       "openai",
+			data:           map[string]any{"prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7},
+			wantStatus:     "ok",
+			wantAdjusted:   false,
+			wantTotalToken: 7,
+		},
+		{
+			name:           "anthropic-derived",
+			provider:       "anthropic",
+			data:           map[string]any{"input_tokens": 5, "output_tokens": 2},
+			wantStatus:     "derived",
+			wantAdjusted:   false,
+			wantTotalToken: 7,
+		},
+		{
+			name:           "codex-source-only",
+			provider:       "codex",
+			data:           map[string]any{"total_tokens": 9},
+			wantStatus:     "source_only",
+			wantAdjusted:   false,
+			wantTotalToken: 9,
+		},
+		{
+			name:           "openai-adjusted",
+			provider:       "openai",
+			data:           map[string]any{"prompt_tokens": 8, "completion_tokens": 4, "total_tokens": 5},
+			wantStatus:     "adjusted",
+			wantAdjusted:   true,
+			wantTotalToken: 12,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			evt := normalizeStreamEvent(StreamEvent{
+				Provider: tc.provider,
+				Type:     "usage",
+				Data:     tc.data,
+			})
+			gotStatus, _ := evt.Data["usage_consistency_status"].(string)
+			if gotStatus != tc.wantStatus {
+				t.Fatalf("unexpected usage_consistency_status: got=%q want=%q evt=%+v", gotStatus, tc.wantStatus, evt)
+			}
+			if tc.wantAdjusted {
+				if b, _ := evt.Data["total_tokens_adjusted"].(bool); !b {
+					t.Fatalf("expected total_tokens_adjusted=true, got evt=%+v", evt)
+				}
+			}
+			if tc.wantTotalToken > 0 {
+				if n, ok := evt.Data["total_tokens"].(int); !ok || n != tc.wantTotalToken {
+					t.Fatalf("unexpected total_tokens: got=%v want=%d evt=%+v", evt.Data["total_tokens"], tc.wantTotalToken, evt)
+				}
+			}
+		})
+	}
+}
+
 func TestNormalizeStreamEventToolCallIDFromToolUseID(t *testing.T) {
 	evt := normalizeStreamEvent(StreamEvent{
 		Provider: "Anthropic",

@@ -111,3 +111,70 @@ func TestOpenAIChatCompletionStreamingUsageEvent(t *testing.T) {
 		t.Fatal("expected usage stream event")
 	}
 }
+
+func TestOpenAIStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"usage\":{\"total_tokens\":9},\"choices\":[]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewOpenAIClient(srv.URL, "", "gpt-test")
+	client.UseStreaming = true
+	gotStatus := ""
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "hi"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "usage" {
+			if s, _ := evt.Data["usage_consistency_status"].(string); s != "" {
+				gotStatus = s
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotStatus != "source_only" {
+		t.Fatalf("expected normalized usage_consistency_status=source_only, got %q", gotStatus)
+	}
+}
+
+func TestOpenAIStreamingUsageStatusAdjustedE2E(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":5,\"total_tokens\":9},\"choices\":[]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewOpenAIClient(srv.URL, "", "gpt-test")
+	client.UseStreaming = true
+	gotStatus := ""
+	gotAdjusted := false
+	gotTotal := 0
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "hi"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "usage" {
+			if s, _ := evt.Data["usage_consistency_status"].(string); s != "" {
+				gotStatus = s
+			}
+			if b, _ := evt.Data["total_tokens_adjusted"].(bool); b {
+				gotAdjusted = true
+			}
+			if n, ok := evt.Data["total_tokens"].(int); ok {
+				gotTotal = n
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotStatus != "adjusted" {
+		t.Fatalf("expected normalized usage_consistency_status=adjusted, got %q", gotStatus)
+	}
+	if !gotAdjusted || gotTotal != 13 {
+		t.Fatalf("expected total_tokens_adjusted=true and total_tokens=13, got adjusted=%v total=%d", gotAdjusted, gotTotal)
+	}
+}

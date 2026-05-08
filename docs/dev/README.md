@@ -94,3 +94,24 @@
 - `031-research-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐调研
 - `031-plan-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐实施计划
 - `031-summary-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐结果总结
+- `032-research-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐调研
+- `032-plan-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐实施计划
+- `032-summary-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐结果总结
+- `033-research-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试调研
+- `033-plan-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试实施计划
+- `033-summary-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试结果总结
+- `034-research-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试调研
+- `034-plan-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试实施计划
+- `034-summary-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试结果总结
+- `035-research-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖调研
+- `035-plan-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖实施计划
+- `035-summary-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖结果总结
+- `036-research-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖调研
+- `036-plan-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖实施计划
+- `036-summary-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖结果总结
+- `037-research-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐调研
+- `037-plan-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐实施计划
+- `037-summary-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐结果总结
+- `038-research-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐调研
+- `038-plan-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐实施计划
+- `038-summary-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐结果总结

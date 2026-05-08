@@ -128,3 +128,72 @@ func TestAnthropicClientStreamingMessageDeltaStopReason(t *testing.T) {
 		t.Fatal("expected message_done with stop_sequence from message_delta")
 	}
 }
+
+func TestAnthropicStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
+	client := NewAnthropicClient("", "k", "claude-test")
+	client.UseStreaming = true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"usage\":{\"total_tokens\":13}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+	client.BaseURL = srv.URL
+
+	gotStatus := ""
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "count"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "usage" {
+			if s, _ := evt.Data["usage_consistency_status"].(string); s != "" {
+				gotStatus = s
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotStatus != "source_only" {
+		t.Fatalf("expected normalized usage_consistency_status=source_only, got %q", gotStatus)
+	}
+}
+
+func TestAnthropicStreamingUsageStatusAdjustedE2E(t *testing.T) {
+	client := NewAnthropicClient("", "k", "claude-test")
+	client.UseStreaming = true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":9,\"output_tokens\":4,\"total_tokens\":10}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+	client.BaseURL = srv.URL
+
+	gotStatus := ""
+	gotAdjusted := false
+	gotTotal := 0
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "count"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "usage" {
+			if s, _ := evt.Data["usage_consistency_status"].(string); s != "" {
+				gotStatus = s
+			}
+			if b, _ := evt.Data["total_tokens_adjusted"].(bool); b {
+				gotAdjusted = true
+			}
+			if n, ok := evt.Data["total_tokens"].(int); ok {
+				gotTotal = n
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotStatus != "adjusted" {
+		t.Fatalf("expected normalized usage_consistency_status=adjusted, got %q", gotStatus)
+	}
+	if !gotAdjusted || gotTotal != 13 {
+		t.Fatalf("expected total_tokens_adjusted=true and total_tokens=13, got adjusted=%v total=%d", gotAdjusted, gotTotal)
+	}
+}
