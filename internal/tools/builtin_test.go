@@ -307,3 +307,80 @@ func TestSkillManageRejectsInvalidNameAndAmbiguousPatch(t *testing.T) {
 		t.Fatalf("expected ambiguous patch error, got %v", err)
 	}
 }
+
+func TestSkillManageWriteAndRemoveSupportingFile(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir}
+
+	if _, err := b.skillManage(context.Background(), map[string]any{
+		"action":  "create",
+		"name":    "ops-playbook",
+		"content": "# Ops Playbook\n",
+	}, tc); err != nil {
+		t.Fatal(err)
+	}
+
+	writeRes, err := b.skillManage(context.Background(), map[string]any{
+		"action":       "write_file",
+		"name":         "ops-playbook",
+		"file_path":    "references/restart.md",
+		"file_content": "restart procedure",
+	}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writtenPath, _ := writeRes["path"].(string)
+	bs, err := os.ReadFile(writtenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bs) != "restart procedure" {
+		t.Fatalf("unexpected file content: %q", string(bs))
+	}
+
+	if _, err := b.skillManage(context.Background(), map[string]any{
+		"action":    "remove_file",
+		"name":      "ops-playbook",
+		"file_path": "references/restart.md",
+	}, tc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(writtenPath); !os.IsNotExist(err) {
+		t.Fatalf("expected file removed, stat err=%v", err)
+	}
+}
+
+func TestSkillManageRejectsInvalidSupportingFilePath(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir}
+
+	if _, err := b.skillManage(context.Background(), map[string]any{
+		"action":  "create",
+		"name":    "ops-playbook",
+		"content": "# Ops Playbook\n",
+	}, tc); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := b.skillManage(context.Background(), map[string]any{
+		"action":       "write_file",
+		"name":         "ops-playbook",
+		"file_path":    "../../escape.txt",
+		"file_content": "x",
+	}, tc)
+	if err == nil || !strings.Contains(err.Error(), "escapes skill directory") {
+		t.Fatalf("expected traversal rejection, got %v", err)
+	}
+
+	_, err = b.skillManage(context.Background(), map[string]any{
+		"action":       "write_file",
+		"name":         "ops-playbook",
+		"file_path":    "notes.md",
+		"file_content": "x",
+	}, tc)
+	if err == nil || !strings.Contains(err.Error(), "allowed subdirectories") {
+		t.Fatalf("expected allowed-subdir rejection, got %v", err)
+	}
+}

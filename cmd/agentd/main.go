@@ -82,12 +82,32 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
 	approvalStore := tools.NewApprovalStore(time.Duration(cfg.ApprovalTTLSeconds) * time.Second)
-	if strings.TrimSpace(cfg.MCPEndpoint) != "" {
-		mcpClient := tools.NewMCPClient(cfg.MCPEndpoint, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
-		if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
-			log.Printf("mcp discovery failed: %v", err)
-		} else if len(names) > 0 {
-			log.Printf("registered %d mcp tools from %s", len(names), cfg.MCPEndpoint)
+	switch strings.ToLower(strings.TrimSpace(cfg.MCPTransport)) {
+	case "stdio":
+		if strings.TrimSpace(cfg.MCPStdioCommand) != "" {
+			mcpClient := tools.NewMCPStdioClient(cfg.MCPStdioCommand, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
+			if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
+				log.Printf("mcp stdio discovery failed: %v", err)
+			} else if len(names) > 0 {
+				log.Printf("registered %d mcp tools via stdio command", len(names))
+			}
+		}
+	default:
+		if strings.TrimSpace(cfg.MCPEndpoint) != "" {
+			mcpClient := tools.NewMCPClient(cfg.MCPEndpoint, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
+			if strings.TrimSpace(cfg.MCPOAuthTokenURL) != "" {
+				mcpClient.ConfigureOAuthClientCredentials(tools.MCPOAuthConfig{
+					TokenURL:     cfg.MCPOAuthTokenURL,
+					ClientID:     cfg.MCPOAuthClientID,
+					ClientSecret: cfg.MCPOAuthClientSecret,
+					Scopes:       cfg.MCPOAuthScopes,
+				})
+			}
+			if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
+				log.Printf("mcp discovery failed: %v", err)
+			} else if len(names) > 0 {
+				log.Printf("registered %d mcp tools from %s", len(names), cfg.MCPEndpoint)
+			}
 		}
 	}
 	client := buildModelClient(cfg)

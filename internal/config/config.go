@@ -19,6 +19,12 @@ type Config struct {
 	AnthropicAPIKey         string
 	AnthropicModel          string
 	MCPEndpoint             string
+	MCPTransport            string
+	MCPStdioCommand         string
+	MCPOAuthTokenURL        string
+	MCPOAuthClientID        string
+	MCPOAuthClientSecret    string
+	MCPOAuthScopes          string
 	MCPTimeoutSeconds       int
 	ApprovalTTLSeconds      int
 	MaxIterations           int
@@ -75,6 +81,12 @@ func Load() Config {
 		AnthropicAPIKey:         os.Getenv("ANTHROPIC_API_KEY"),
 		AnthropicModel:          getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest"),
 		MCPEndpoint:             strings.TrimSpace(os.Getenv("AGENT_MCP_ENDPOINT")),
+		MCPTransport:            getenv("AGENT_MCP_TRANSPORT", "http"),
+		MCPStdioCommand:         strings.TrimSpace(os.Getenv("AGENT_MCP_STDIO_COMMAND")),
+		MCPOAuthTokenURL:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_TOKEN_URL")),
+		MCPOAuthClientID:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_CLIENT_ID")),
+		MCPOAuthClientSecret:    os.Getenv("AGENT_MCP_OAUTH_CLIENT_SECRET"),
+		MCPOAuthScopes:          strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_SCOPES")),
 		MCPTimeoutSeconds:       mcpTimeout,
 		ApprovalTTLSeconds:      approvalTTL,
 		MaxIterations:           maxTurns,

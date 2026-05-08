@@ -31,3 +31,15 @@
 - `010-research-skill-manage-minimal.md`：`skill_manage` 最小补齐调研
 - `010-plan-skill-manage-minimal.md`：`skill_manage` 最小补齐实施计划
 - `010-summary-skill-manage-minimal.md`：`skill_manage` 最小补齐结果总结
+- `011-research-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐调研
+- `011-plan-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐实施计划
+- `011-summary-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐结果总结
+- `012-research-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接调研
+- `012-plan-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接实施计划
+- `012-summary-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接结果总结
+- `013-research-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐调研
+- `013-plan-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐实施计划
+- `013-summary-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐结果总结
+- `014-research-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容调研
+- `014-plan-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容实施计划
+- `014-summary-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容结果总结

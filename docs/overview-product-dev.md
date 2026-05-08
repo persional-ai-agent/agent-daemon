@@ -6,7 +6,7 @@
 - `internal/core`：统一消息、工具 schema、运行结果等共享类型
 - `internal/agent`：Agent Loop，处理多轮推理、重试、tool call 执行、事件发射与结果回灌
 - `internal/model`：模型客户端，当前实现 OpenAI / Anthropic / Codex 三模式
-- `internal/tools`：工具注册中心、工具上下文、内置工具、审批状态工具、技能发现/管理工具、MCP HTTP 代理工具、后台进程管理、Todo 状态
+- `internal/tools`：工具注册中心、工具上下文、内置工具、审批状态工具、技能发现/管理工具、MCP HTTP/stdio 代理工具（含 OAuth client_credentials 与 `/call` 流式兼容）、后台进程管理、Todo 状态
 - `internal/store`：SQLite 会话存储与 session search
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
 - `internal/cli`：CLI 交互层
@@ -136,9 +136,8 @@
 后续可以继续增加：
 
 - provider 级高级能力（重试策略、流式差异统一、故障切换）
-- MCP 高级能力（stdio、OAuth、流式与会话绑定）
-- MCP 工具接入
-- 技能高级能力（支撑文件管理、同步与自动触发）
+- MCP 高级能力（OAuth 授权码/刷新、流式事件透传与会话绑定）
+- 技能高级能力（同步与自动触发）
 - 上下文压缩
 - WebSocket
 - 多平台网关

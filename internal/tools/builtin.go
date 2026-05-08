@@ -538,6 +538,63 @@ func (b *BuiltinTools) skillManage(_ context.Context, args map[string]any, tc To
 			return nil, err
 		}
 		return map[string]any{"action": action, "name": name, "path": skillDir, "success": true}, nil
+	case "write_file":
+		filePath := strArg(args, "file_path")
+		if strings.TrimSpace(filePath) == "" {
+			return nil, errors.New("file_path required for write_file")
+		}
+		relativePath, err := validateSkillFilePath(filePath)
+		if err != nil {
+			return nil, err
+		}
+		fileContent, ok := args["file_content"]
+		if !ok {
+			return nil, errors.New("file_content required for write_file")
+		}
+		content, ok := fileContent.(string)
+		if !ok {
+			return nil, errors.New("file_content must be a string")
+		}
+		if _, err := os.Stat(skillDir); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill not found: %s", name)
+			}
+			return nil, err
+		}
+		targetPath, err := resolvePathWithinWorkdir(skillDir, relativePath)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(targetPath, []byte(content), 0o644); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true}, nil
+	case "remove_file":
+		filePath := strArg(args, "file_path")
+		if strings.TrimSpace(filePath) == "" {
+			return nil, errors.New("file_path required for remove_file")
+		}
+		relativePath, err := validateSkillFilePath(filePath)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(skillDir); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("skill not found: %s", name)
+			}
+			return nil, err
+		}
+		targetPath, err := resolvePathWithinWorkdir(skillDir, relativePath)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.Remove(targetPath); err != nil {
+			return nil, err
+		}
+		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true}, nil
 	default:
 		return nil, fmt.Errorf("unsupported skill_manage action: %s", action)
 	}
@@ -594,13 +651,15 @@ func skillManageParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":      map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete"}},
-			"name":        map[string]any{"type": "string"},
-			"content":     map[string]any{"type": "string"},
-			"old_string":  map[string]any{"type": "string"},
-			"new_string":  map[string]any{"type": "string"},
-			"replace_all": map[string]any{"type": "boolean"},
-			"path":        map[string]any{"type": "string"},
+			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file"}},
+			"name":         map[string]any{"type": "string"},
+			"content":      map[string]any{"type": "string"},
+			"old_string":   map[string]any{"type": "string"},
+			"new_string":   map[string]any{"type": "string"},
+			"replace_all":  map[string]any{"type": "boolean"},
+			"file_path":    map[string]any{"type": "string"},
+			"file_content": map[string]any{"type": "string"},
+			"path":         map[string]any{"type": "string"},
 		},
 		"required": []string{"action", "name"},
 	}
@@ -743,6 +802,37 @@ func ParseJSONArgs(raw string) map[string]any {
 }
 
 var skillNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+var skillManageAllowedSubdirs = map[string]struct{}{
+	"references": {},
+	"templates":  {},
+	"scripts":    {},
+	"assets":     {},
+}
+
+func validateSkillFilePath(filePath string) (string, error) {
+	clean := filepath.Clean(strings.TrimSpace(filePath))
+	if clean == "." || clean == "" {
+		return "", errors.New("file_path required")
+	}
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("file_path must be relative: %s", filePath)
+	}
+	if strings.HasPrefix(clean, ".."+string(os.PathSeparator)) || clean == ".." {
+		return "", fmt.Errorf("file_path escapes skill directory: %s", filePath)
+	}
+	parts := strings.Split(clean, string(os.PathSeparator))
+	if len(parts) < 2 {
+		return "", fmt.Errorf("file_path must be under allowed subdirectories (%s): %s", strings.Join(skillManageAllowedSubdirNames(), ", "), filePath)
+	}
+	if _, ok := skillManageAllowedSubdirs[parts[0]]; !ok {
+		return "", fmt.Errorf("file_path must be under allowed subdirectories (%s): %s", strings.Join(skillManageAllowedSubdirNames(), ", "), filePath)
+	}
+	return clean, nil
+}
+
+func skillManageAllowedSubdirNames() []string {
+	return []string{"references", "templates", "scripts", "assets"}
+}
 
 func resolveSkillsRoot(workdir, customPath string) (string, error) {
 	if strings.TrimSpace(customPath) != "" {
