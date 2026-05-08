@@ -197,3 +197,32 @@ func TestAnthropicStreamingUsageStatusAdjustedE2E(t *testing.T) {
 		t.Fatalf("expected total_tokens_adjusted=true and total_tokens=13, got adjusted=%v total=%d", gotAdjusted, gotTotal)
 	}
 }
+
+func TestAnthropicStreamingMaxTokensIncompleteReason(t *testing.T) {
+	client := NewAnthropicClient("", "k", "claude-test")
+	client.UseStreaming = true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"stop_reason\":\"max_tokens\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+	client.BaseURL = srv.URL
+
+	seenIncompleteReason := false
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "count"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "message_done" {
+			if s, _ := evt.Data["incomplete_reason"].(string); s == "length" {
+				seenIncompleteReason = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenIncompleteReason {
+		t.Fatal("expected message_done with incomplete_reason=length when stop_reason=max_tokens")
+	}
+}

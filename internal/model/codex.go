@@ -153,6 +153,7 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 	builders := map[string]*codexStreamBuilder{}
 	order := make([]string, 0)
+	responseID := ""
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -211,6 +212,12 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 		}
 		typ := strings.ToLower(strings.TrimSpace(asString(event["type"])))
 		switch typ {
+		case "response.created":
+			if respObj, ok := event["response"].(map[string]any); ok {
+				if id := asString(respObj["id"]); id != "" {
+					responseID = id
+				}
+			}
 		case "response.output_item.added":
 			item, _ := event["item"].(map[string]any)
 			id := asString(item["id"])
@@ -302,19 +309,23 @@ func (c *CodexClient) chatCompletionStream(ctx context.Context, messages []core.
 		return core.Message{}, err
 	}
 	msg := buildCodexMessageFromStream(builders, order, sink)
+	doneData := map[string]any{
+		"text":            msg.Content,
+		"tool_call_count": len(msg.ToolCalls),
+		"finish_reason": func() string {
+			if len(msg.ToolCalls) > 0 {
+				return "tool_calls"
+			}
+			return "stop"
+		}(),
+	}
+	if responseID != "" {
+		doneData["message_id"] = responseID
+	}
 	emitStreamEvent(sink, StreamEvent{
 		Provider: "codex",
 		Type:     "message_done",
-		Data: map[string]any{
-			"text":            msg.Content,
-			"tool_call_count": len(msg.ToolCalls),
-			"finish_reason": func() string {
-				if len(msg.ToolCalls) > 0 {
-					return "tool_calls"
-				}
-				return "stop"
-			}(),
-		},
+		Data:     doneData,
 	})
 	return msg, nil
 }

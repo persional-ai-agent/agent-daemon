@@ -199,3 +199,33 @@ func TestCodexStreamingUsageStatusAdjustedE2E(t *testing.T) {
 		t.Fatalf("expected total_tokens_adjusted=true and total_tokens=10, got adjusted=%v total=%d", gotAdjusted, gotTotal)
 	}
 }
+
+func TestCodexStreamingMessageDoneWithResponseID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_abc123\"}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\"}}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"delta\":\"hello\"}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewCodexClient(srv.URL, "", "gpt-5-codex")
+	client.UseStreaming = true
+	seenMessageID := false
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "hello"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "message_done" {
+			if s, _ := evt.Data["message_id"].(string); s == "resp_abc123" {
+				seenMessageID = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenMessageID {
+		t.Fatal("expected message_done with message_id from response.created event")
+	}
+}

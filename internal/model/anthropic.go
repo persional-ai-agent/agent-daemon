@@ -367,6 +367,9 @@ func (c *AnthropicClient) chatCompletionStream(ctx context.Context, messages []c
 	if strings.TrimSpace(messageID) != "" {
 		doneData["message_id"] = messageID
 	}
+	if finishReason == "max_tokens" {
+		doneData["incomplete_reason"] = "length"
+	}
 	emitStreamEvent(sink, StreamEvent{
 		Provider: "anthropic",
 		Type:     "message_done",

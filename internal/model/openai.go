@@ -94,7 +94,8 @@ func (c *OpenAIClient) ChatCompletionWithEvents(ctx context.Context, messages []
 type openAIStreamChunk struct {
 	Usage   map[string]any `json:"usage,omitempty"`
 	Choices []struct {
-		Delta struct {
+		FinishReason *string `json:"finish_reason,omitempty"`
+		Delta        struct {
 			Content   string `json:"content,omitempty"`
 			ToolCalls []struct {
 				Index    int    `json:"index"`
@@ -167,6 +168,7 @@ func (c *OpenAIClient) chatCompletionStream(ctx context.Context, messages []core
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 	content := strings.Builder{}
 	toolBuilders := map[int]*streamToolCallBuilder{}
+	var streamFinishReason string
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -191,6 +193,9 @@ func (c *OpenAIClient) chatCompletionStream(ctx context.Context, messages []core
 			})
 		}
 		for _, choice := range chunk.Choices {
+			if choice.FinishReason != nil && *choice.FinishReason != "" {
+				streamFinishReason = *choice.FinishReason
+			}
 			if choice.Delta.Content != "" {
 				content.WriteString(choice.Delta.Content)
 				emitStreamEvent(sink, StreamEvent{
@@ -302,14 +307,21 @@ func (c *OpenAIClient) chatCompletionStream(ctx context.Context, messages []core
 	if len(calls) > 0 {
 		finishReason = "tool_calls"
 	}
+	if streamFinishReason != "" {
+		finishReason = streamFinishReason
+	}
+	doneData := map[string]any{
+		"text":            content.String(),
+		"tool_call_count": len(calls),
+		"finish_reason":   finishReason,
+	}
+	if finishReason == "length" {
+		doneData["incomplete_reason"] = "length"
+	}
 	emitStreamEvent(sink, StreamEvent{
 		Provider: "openai",
 		Type:     "message_done",
-		Data: map[string]any{
-			"text":            content.String(),
-			"tool_call_count": len(calls),
-			"finish_reason":   finishReason,
-		},
+		Data:     doneData,
 	})
 	return core.Message{
 		Role:      "assistant",

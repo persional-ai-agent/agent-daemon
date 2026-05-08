@@ -178,3 +178,32 @@ func TestOpenAIStreamingUsageStatusAdjustedE2E(t *testing.T) {
 		t.Fatalf("expected total_tokens_adjusted=true and total_tokens=13, got adjusted=%v total=%d", gotAdjusted, gotTotal)
 	}
 }
+
+func TestOpenAIStreamingLengthIncompleteReason(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":null}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	client := NewOpenAIClient(srv.URL, "", "gpt-test")
+	client.UseStreaming = true
+	seenIncompleteReason := false
+	_, err := CompleteWithEvents(context.Background(), client, []core.Message{
+		{Role: "user", Content: "hi"},
+	}, nil, func(evt StreamEvent) {
+		if evt.Type == "message_done" {
+			if s, _ := evt.Data["incomplete_reason"].(string); s == "length" {
+				seenIncompleteReason = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seenIncompleteReason {
+		t.Fatal("expected message_done with incomplete_reason=length when finish_reason=length")
+	}
+}

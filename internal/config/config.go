@@ -11,6 +11,10 @@ type Config struct {
 	ModelProvider           string
 	ModelFallbackProvider   string
 	ModelUseStreaming       bool
+	ModelRaceEnabled        bool
+	ModelCircuitThreshold   int
+	ModelCircuitRecoverySec int
+	ModelCircuitHalfOpenMax int
 	ModelBaseURL            string
 	ModelAPIKey             string
 	ModelName               string
@@ -70,11 +74,34 @@ func Load() Config {
 			approvalTTL = i
 		}
 	}
+	raceEnabled := strings.EqualFold(os.Getenv("AGENT_MODEL_RACE_ENABLED"), "true") || os.Getenv("AGENT_MODEL_RACE_ENABLED") == "1"
+	circuitThreshold := 3
+	if v := os.Getenv("AGENT_MODEL_CIRCUIT_FAILURE_THRESHOLD"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			circuitThreshold = i
+		}
+	}
+	circuitRecoverySec := 60
+	if v := os.Getenv("AGENT_MODEL_CIRCUIT_RECOVERY_TIMEOUT_SECONDS"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			circuitRecoverySec = i
+		}
+	}
+	circuitHalfOpenMax := 1
+	if v := os.Getenv("AGENT_MODEL_CIRCUIT_HALF_OPEN_MAX_REQUESTS"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			circuitHalfOpenMax = i
+		}
+	}
 	wd, _ := os.Getwd()
 	return Config{
 		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
 		ModelFallbackProvider:   strings.TrimSpace(os.Getenv("AGENT_MODEL_FALLBACK_PROVIDER")),
 		ModelUseStreaming:       getenv("AGENT_MODEL_USE_STREAMING", "") == "1" || strings.EqualFold(getenv("AGENT_MODEL_USE_STREAMING", ""), "true"),
+		ModelRaceEnabled:        raceEnabled,
+		ModelCircuitThreshold:   circuitThreshold,
+		ModelCircuitRecoverySec: circuitRecoverySec,
+		ModelCircuitHalfOpenMax: circuitHalfOpenMax,
 		ModelBaseURL:            getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		ModelAPIKey:             os.Getenv("OPENAI_API_KEY"),
 		ModelName:               getenv("OPENAI_MODEL", "gpt-4o-mini"),

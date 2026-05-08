@@ -138,8 +138,18 @@ func buildModelClient(cfg config.Config) model.Client {
 	if fallback == nil {
 		return primary
 	}
+
+	circuitThreshold := cfg.ModelCircuitThreshold
+	circuitRecovery := time.Duration(cfg.ModelCircuitRecoverySec) * time.Second
+	circuitHalfOpenMax := cfg.ModelCircuitHalfOpenMax
+
+	if cfg.ModelRaceEnabled {
+		log.Printf("model race enabled: primary=%s fallback=%s", primaryProvider, fallbackProvider)
+		return model.NewRaceClient(primary, primaryProvider, fallback, fallbackProvider, circuitThreshold, circuitRecovery, circuitHalfOpenMax)
+	}
+
 	log.Printf("model fallback enabled: primary=%s fallback=%s", primaryProvider, fallbackProvider)
-	return model.NewFallbackClient(primary, primaryProvider, fallback, fallbackProvider)
+	return model.NewFallbackClientWithCircuit(primary, primaryProvider, fallback, fallbackProvider, circuitThreshold, circuitRecovery, circuitHalfOpenMax)
 }
 
 func buildProviderClient(cfg config.Config, provider string) model.Client {

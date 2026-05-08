@@ -115,3 +115,9 @@
 - `038-research-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐调研
 - `038-plan-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐实施计划
 - `038-summary-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐结果总结
+- `039-research-provider-race-circuit.md`：Provider 并行竞速与熔断补齐调研
+- `039-plan-provider-race-circuit.md`：Provider 并行竞速与熔断补齐实施计划
+- `039-summary-provider-race-circuit.md`：Provider 并行竞速与熔断补齐结果总结
+- `040-research-provider-event-coverage.md`：Provider 完整事件字典覆盖调研
+- `040-plan-provider-event-coverage.md`：Provider 完整事件字典覆盖实施计划
+- `040-summary-provider-event-coverage.md`：Provider 完整事件字典覆盖结果总结
