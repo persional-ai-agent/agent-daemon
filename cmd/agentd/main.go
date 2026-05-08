@@ -38,8 +38,9 @@ func main() {
 		fs := flag.NewFlagSet("chat", flag.ExitOnError)
 		message := fs.String("message", "", "first message to send")
 		sessionID := fs.String("session", uuid.NewString(), "session id")
+		skills := fs.String("skills", "", "comma-separated skill names to preload")
 		_ = fs.Parse(os.Args[2:])
-		runChat(cfg, *message, *sessionID)
+		runChat(cfg, *message, *sessionID, *skills)
 	case "serve":
 		runServe(cfg)
 	case "tools":
@@ -55,10 +56,14 @@ func main() {
 func runChat(cfg config.Config, first string, sessionID ...string) {
 	eng := mustBuildEngine(cfg)
 	id := uuid.NewString()
+	skills := ""
 	if len(sessionID) > 0 && sessionID[0] != "" {
 		id = sessionID[0]
 	}
-	if err := cli.RunChat(context.Background(), eng, id, first); err != nil {
+	if len(sessionID) > 1 && sessionID[1] != "" {
+		skills = sessionID[1]
+	}
+	if err := cli.RunChat(context.Background(), eng, id, first, skills); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -78,7 +83,17 @@ func runServe(cfg config.Config) {
 
 		adapters := buildGatewayAdapters(cfg)
 		if len(adapters) > 0 {
-			runner := gateway.NewRunner(adapters, eng, cfg.TelegramAllowed)
+			runner := gateway.NewRunner(adapters, eng, func(platform string) string {
+			switch platform {
+			case "telegram":
+				return cfg.TelegramAllowed
+			case "discord":
+				return cfg.DiscordAllowed
+			case "slack":
+				return cfg.SlackAllowed
+			}
+			return ""
+		})
 			if err := runner.Start(gatewayCtx); err != nil {
 				log.Printf("gateway start failed: %v", err)
 			}
@@ -108,6 +123,24 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, ta)
 			log.Printf("telegram adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.DiscordToken) != "" {
+		da, err := platforms.NewDiscordAdapter(cfg.DiscordToken)
+		if err != nil {
+			log.Printf("discord adapter: %v", err)
+		} else {
+			adapters = append(adapters, da)
+			log.Printf("discord adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.SlackBotToken) != "" && strings.TrimSpace(cfg.SlackAppToken) != "" {
+		sa, err := platforms.NewSlackAdapter(cfg.SlackBotToken, cfg.SlackAppToken)
+		if err != nil {
+			log.Printf("slack adapter: %v", err)
+		} else {
+			adapters = append(adapters, sa)
+			log.Printf("slack adapter configured")
 		}
 	}
 	return adapters
@@ -201,6 +234,10 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 }
 
 func buildModelClient(cfg config.Config) model.Client {
+	if strings.TrimSpace(cfg.ModelCascade) != "" {
+		return buildCascadeClient(cfg)
+	}
+
 	primaryProvider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
 	primary := buildProviderClient(cfg, primaryProvider)
 	fallbackProvider := strings.ToLower(strings.TrimSpace(cfg.ModelFallbackProvider))
@@ -244,4 +281,29 @@ func buildProviderClient(cfg config.Config, provider string) model.Client {
 		client.UseStreaming = cfg.ModelUseStreaming
 		return client
 	}
+}
+
+func buildCascadeClient(cfg config.Config) model.Client {
+	builder := func(name string) (model.Client, string, error) {
+		client := buildProviderClient(cfg, name)
+		if client == nil {
+			return nil, "", fmt.Errorf("unknown provider: %s", name)
+		}
+		return client, name, nil
+	}
+	entries, err := model.ParseCascadeProviders(cfg.ModelCascade, builder)
+	if err != nil {
+		log.Printf("cascade parse error: %v, falling back to single provider", err)
+		return buildProviderClient(cfg, cfg.ModelProvider)
+	}
+	circuitThreshold := cfg.ModelCircuitThreshold
+	circuitRecovery := time.Duration(cfg.ModelCircuitRecoverySec) * time.Second
+	circuitHalfOpenMax := cfg.ModelCircuitHalfOpenMax
+
+	if cfg.ModelCostAware {
+		log.Printf("model cascade (cost-aware): %d providers", len(entries))
+	} else {
+		log.Printf("model cascade (ordered): %d providers", len(entries))
+	}
+	return model.NewCascadeClientWithCircuit(entries, cfg.ModelCostAware, circuitThreshold, circuitRecovery, circuitHalfOpenMax)
 }

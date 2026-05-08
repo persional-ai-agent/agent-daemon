@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
@@ -53,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/v1/chat", s.handleChat)
 	mux.HandleFunc("/v1/chat/stream", s.handleChatStream)
+	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	return mux
 }
@@ -281,6 +284,108 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"session_id": req.SessionID, "cancelled": true})
+}
+
+var wsUpgrader = websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+
+func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil {
+		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		return
+	}
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("ws upgrade: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	var req chatRequest
+	if err := conn.ReadJSON(&req); err != nil {
+		_ = conn.WriteJSON(map[string]any{"type": "error", "error": "invalid request: " + err.Error()})
+		return
+	}
+	if req.SessionID == "" {
+		req.SessionID = uuid.NewString()
+	}
+
+	history, err := s.loadHistory(req.SessionID)
+	if err != nil {
+		_ = conn.WriteJSON(map[string]any{"type": "error", "error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	token := s.registerActiveRun(req.SessionID, cancel)
+	defer func() {
+		s.unregisterActiveRun(req.SessionID, token)
+		cancel()
+	}()
+
+	events := make(chan core.AgentEvent, 64)
+	type runResponse struct {
+		Result *core.RunResult
+		Err    error
+	}
+	done := make(chan runResponse, 1)
+
+	eng := *s.Engine
+	eng.EventSink = func(event core.AgentEvent) {
+		select {
+		case events <- event:
+		case <-ctx.Done():
+		}
+	}
+
+	_ = conn.WriteJSON(map[string]any{"type": "session", "session_id": req.SessionID})
+
+	go func() {
+		res, runErr := eng.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
+		done <- runResponse{Result: res, Err: runErr}
+	}()
+
+	cancelled := false
+	for {
+		select {
+		case <-ctx.Done():
+			if !cancelled {
+				_ = conn.WriteJSON(map[string]any{"type": "cancelled", "session_id": req.SessionID, "reason": "request cancelled"})
+			}
+			return
+		case event := <-events:
+			_ = conn.WriteJSON(event)
+			if event.Type == "cancelled" {
+				cancelled = true
+			}
+		case res := <-done:
+			close(done)
+			for {
+				select {
+				case event := <-events:
+					_ = conn.WriteJSON(event)
+					if event.Type == "cancelled" {
+						cancelled = true
+					}
+				default:
+					if res.Err != nil {
+						if !cancelled {
+							_ = conn.WriteJSON(map[string]any{"type": "error", "session_id": req.SessionID, "error": res.Err.Error()})
+						}
+						return
+					}
+					_ = conn.WriteJSON(map[string]any{
+						"type":               "result",
+						"session_id":         res.Result.SessionID,
+						"final_response":     res.Result.FinalResponse,
+						"turns_used":         res.Result.TurnsUsed,
+						"finished_naturally": res.Result.FinishedNaturally,
+						"summary":            summarizeRunResult(res.Result),
+					})
+					return
+				}
+			}
+		}
+	}
 }
 
 func (s *Server) loadHistory(sessionID string) ([]core.Message, error) {

@@ -46,6 +46,13 @@ type Config struct {
 	GatewayEnabled          bool
 	TelegramToken           string
 	TelegramAllowed         string
+	DiscordToken            string
+	DiscordAllowed          string
+	SlackBotToken           string
+	SlackAppToken           string
+	SlackAllowed            string
+	ModelCascade            string
+	ModelCostAware          bool
 }
 
 func Load() Config {
@@ -88,6 +95,7 @@ func Load() Config {
 		}
 	}
 	raceEnabled := strings.EqualFold(os.Getenv("AGENT_MODEL_RACE_ENABLED"), "true") || os.Getenv("AGENT_MODEL_RACE_ENABLED") == "1"
+	costAware := strings.EqualFold(os.Getenv("AGENT_MODEL_COST_AWARE"), "true") || os.Getenv("AGENT_MODEL_COST_AWARE") == "1"
 	circuitThreshold := 3
 	if v := os.Getenv("AGENT_MODEL_CIRCUIT_FAILURE_THRESHOLD"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil && i > 0 {
@@ -147,6 +155,13 @@ func Load() Config {
 		GatewayEnabled:          gatewayEnabled,
 		TelegramToken:           strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_BOT_TOKEN")),
 		TelegramAllowed:         strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_ALLOWED_USERS")),
+		DiscordToken:            strings.TrimSpace(os.Getenv("AGENT_DISCORD_BOT_TOKEN")),
+		DiscordAllowed:          strings.TrimSpace(os.Getenv("AGENT_DISCORD_ALLOWED_USERS")),
+		SlackBotToken:           strings.TrimSpace(os.Getenv("AGENT_SLACK_BOT_TOKEN")),
+		SlackAppToken:           strings.TrimSpace(os.Getenv("AGENT_SLACK_APP_TOKEN")),
+		SlackAllowed:            strings.TrimSpace(os.Getenv("AGENT_SLACK_ALLOWED_USERS")),
+		ModelCascade:            strings.TrimSpace(os.Getenv("AGENT_MODEL_CASCADE")),
+		ModelCostAware:          costAware,
 	}
 }
 

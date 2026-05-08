@@ -133,3 +133,13 @@
 - `044-research-gateway-minimal.md`：多平台消息网关最小落地调研
 - `044-plan-gateway-minimal.md`：多平台消息网关最小落地实施计划
 - `044-summary-gateway-minimal.md`：多平台消息网关最小落地结果总结
+- `045-research-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）调研
+- `045-plan-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）实施计划
+- `045-summary-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）结果总结
+- `046-summary-approval-interactive-confirm.md`：审批交互确认（pending approval + confirm）结果总结
+- `047-summary-gateway-discord.md`：Discord 网关适配器结果总结
+- `048-summary-websocket.md`：WebSocket 端点结果总结
+- `049-summary-provider-cascade.md`：Provider 多级级联 + 成本感知结果总结
+- `050-summary-gateway-slack.md`：Slack 网关适配器结果总结
+- `051-summary-skills-filter-preload.md`：技能条件过滤 + 预加载结果总结
+- `052-summary-skill-search-hub.md`：技能多源搜索（skill_search）结果总结

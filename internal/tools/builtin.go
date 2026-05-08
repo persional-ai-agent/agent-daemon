@@ -17,10 +17,44 @@ import (
 	"time"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/google/uuid"
 )
 
 type BuiltinTools struct {
-	proc *ProcessRegistry
+	proc             *ProcessRegistry
+	pendingApprovals map[string]pendingApproval
+	pendingMu        sync.Mutex
+}
+
+type pendingApproval struct {
+	ID         string
+	Command    string
+	CWD        string
+	Category   string
+	Reason     string
+	Background bool
+	Timeout    int
+	Args       map[string]any
+	ToolCtx    ToolContext
+}
+
+func (b *BuiltinTools) storePending(pa pendingApproval) {
+	b.pendingMu.Lock()
+	defer b.pendingMu.Unlock()
+	if b.pendingApprovals == nil {
+		b.pendingApprovals = make(map[string]pendingApproval)
+	}
+	b.pendingApprovals[pa.ID] = pa
+}
+
+func (b *BuiltinTools) retrievePending(id string) (pendingApproval, bool) {
+	b.pendingMu.Lock()
+	defer b.pendingMu.Unlock()
+	pa, ok := b.pendingApprovals[id]
+	if ok {
+		delete(b.pendingApprovals, id)
+	}
+	return pa, ok
 }
 
 func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
@@ -38,6 +72,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
 	r.Register(toolDef{name: "approval", desc: "Manage session-level dangerous command approvals", params: approvalParams(), call: b.approval})
 	r.Register(toolDef{name: "skill_list", desc: "List available local skills", params: skillListParams(), call: b.skillList})
+	r.Register(toolDef{name: "skill_search", desc: "Search for skills from GitHub repositories (e.g. anthropics/skills)", params: skillSearchParams(), call: b.skillSearch})
 	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
 	r.Register(toolDef{name: "skill_manage", desc: "Manage local skills (create/edit/patch/delete)", params: skillManageParams(), call: b.skillManage})
 }
@@ -67,18 +102,7 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 	if reason, blocked := detectHardlineCommand(command); blocked {
 		return nil, fmt.Errorf("blocked dangerous command: %s", reason)
 	}
-	requiresApproval := boolArg(args, "requires_approval", false)
-	if category, reason, dangerous := detectDangerousCommand(command); dangerous {
-		sessionApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
-		patternApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApprovedPattern(tc.SessionID, category)
-		if !requiresApproval && !sessionApproved && !patternApproved {
-			return nil, fmt.Errorf("dangerous command requires approval: %s (category: %s; set requires_approval=true or grant approval)", reason, category)
-		}
-		if requiresApproval && tc.ApprovalStore != nil {
-			ttlSeconds := intArg(args, "approval_ttl_seconds", 0)
-			tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
-		}
-	}
+
 	background := boolArg(args, "background", false)
 	timeout := intArg(args, "timeout", 120)
 	cwd := tc.Workdir
@@ -93,6 +117,38 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		cwd, err = normalizedWorkdir(tc.Workdir)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	requiresApproval := boolArg(args, "requires_approval", false)
+	if category, reason, dangerous := detectDangerousCommand(command); dangerous {
+		sessionApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
+		patternApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApprovedPattern(tc.SessionID, category)
+		if !requiresApproval && !sessionApproved && !patternApproved {
+			approvalID := uuid.NewString()
+			b.storePending(pendingApproval{
+				ID:         approvalID,
+				Command:    command,
+				CWD:        cwd,
+				Category:   category,
+				Reason:     reason,
+				Background: background,
+				Timeout:    timeout,
+				Args:       args,
+				ToolCtx:    tc,
+			})
+			return map[string]any{
+				"status":      "pending_approval",
+				"approval_id": approvalID,
+				"command":     command,
+				"category":    category,
+				"reason":      reason,
+				"instruction": "Use approval action=confirm with this approval_id to approve or deny",
+			}, nil
+		}
+		if requiresApproval && tc.ApprovalStore != nil {
+			ttlSeconds := intArg(args, "approval_ttl_seconds", 0)
+			tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
 		}
 	}
 	if background {
@@ -355,7 +411,7 @@ func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc
 	return delegateTaskSuccessResult(goal, res), nil
 }
 
-func (b *BuiltinTools) approval(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	if tc.ApprovalStore == nil {
 		return nil, errors.New("approval store unavailable")
 	}
@@ -423,6 +479,59 @@ func (b *BuiltinTools) approval(_ context.Context, args map[string]any, tc ToolC
 			"approved":   false,
 			"revoked":    revoked,
 		}, nil
+	case "confirm":
+		approvalID := strings.TrimSpace(strArg(args, "approval_id"))
+		if approvalID == "" {
+			return nil, errors.New("approval_id required for confirm")
+		}
+		approved := boolArg(args, "approve", false)
+		pa, ok := b.retrievePending(approvalID)
+		if !ok {
+			return nil, fmt.Errorf("pending approval not found: %s", approvalID)
+		}
+		if !approved {
+			return map[string]any{
+				"action":      "confirm",
+				"approval_id": approvalID,
+				"approved":    false,
+				"command":     pa.Command,
+			}, nil
+		}
+		if tc.ApprovalStore != nil {
+			ttl := intArg(pa.Args, "approval_ttl_seconds", 0)
+			tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttl)*time.Second)
+		}
+		if pa.Background {
+			s, err := b.proc.StartBackground(ctx, pa.Command, pa.CWD)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{
+				"action":      "confirm",
+				"approval_id": approvalID,
+				"approved":    true,
+				"command":     pa.Command,
+				"output":      "background process started",
+				"session_id":  s.ID,
+				"output_file": s.OutputFile,
+				"status":      "running",
+				"exit_code":   0,
+			}, nil
+		}
+		out, code, err := RunForeground(ctx, pa.Command, pa.CWD, pa.Timeout)
+		res := map[string]any{
+			"action":      "confirm",
+			"approval_id": approvalID,
+			"approved":    true,
+			"command":     pa.Command,
+			"output":      out,
+			"exit_code":   code,
+			"error":       nil,
+		}
+		if err != nil {
+			res["error"] = err.Error()
+		}
+		return res, nil
 	default:
 		return nil, fmt.Errorf("unsupported approval action: %s", action)
 	}
@@ -481,7 +590,74 @@ func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc Tool
 	}, nil
 }
 
-func (b *BuiltinTools) skillManage(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) skillSearch(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	query := strings.TrimSpace(strArg(args, "query"))
+	repo := strings.TrimSpace(strArg(args, "repo"))
+	if repo == "" {
+		repo = "anthropics/skills"
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("repo must be owner/name format")
+	}
+	searchURL := fmt.Sprintf("https://api.github.com/search/code?q=%s+in:file+language:markdown+repo:%s/%s", query, parts[0], parts[1])
+	bs, err := fetchHTTPBytes(ctx, searchURL)
+	if err != nil {
+		return nil, fmt.Errorf("github search: %w", err)
+	}
+	var result struct {
+		Items []struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+			Repo struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(bs, &result); err != nil {
+		return nil, fmt.Errorf("parse search results: %w", err)
+	}
+	skills := make([]map[string]any, 0)
+	for _, item := range result.Items {
+		if !strings.HasSuffix(item.Path, "SKILL.md") && !strings.HasSuffix(item.Path, "skill.md") {
+			continue
+		}
+		name := filepath.Base(filepath.Dir(item.Path))
+		descURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/main/%s", item.Repo.FullName, item.Path)
+		desc := fetchSkillDescription(ctx, descURL)
+
+		skills = append(skills, map[string]any{
+			"name":        name,
+			"description": desc,
+			"repo":        item.Repo.FullName,
+			"path":        item.Path,
+		})
+		if len(skills) >= 20 {
+			break
+		}
+	}
+	return map[string]any{"query": query, "repo": repo, "skills": skills, "count": len(skills)}, nil
+}
+
+func fetchSkillDescription(ctx context.Context, rawURL string) string {
+	bs, err := fetchHTTPBytes(ctx, rawURL)
+	if err != nil {
+		return "(fetch failed)"
+	}
+	lines := strings.Split(string(bs), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		if line != "" && !strings.HasPrefix(line, "---") {
+			if len(line) > 120 {
+				line = line[:120] + "..."
+			}
+			return line
+		}
+	}
+	return "(no description)"
+}
+
+func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	name := strings.TrimSpace(strArg(args, "name"))
 	if name == "" {
@@ -636,6 +812,42 @@ func (b *BuiltinTools) skillManage(_ context.Context, args map[string]any, tc To
 			return nil, err
 		}
 		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true}, nil
+	case "sync":
+		source := strings.ToLower(strings.TrimSpace(strArg(args, "source")))
+		if source == "" {
+			return nil, errors.New("source required for sync (github or url)")
+		}
+		switch source {
+		case "url":
+			skillURL := strings.TrimSpace(strArg(args, "url"))
+			if skillURL == "" {
+				return nil, errors.New("url required for source=url sync")
+			}
+			bs, err := fetchHTTPBytes(ctx, skillURL)
+			if err != nil {
+				return nil, fmt.Errorf("fetch skill: %w", err)
+			}
+			if err := os.MkdirAll(skillDir, 0o755); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(skillMD, bs, 0o644); err != nil {
+				return nil, err
+			}
+			return map[string]any{"action": "sync", "source": "url", "name": name, "path": skillMD, "success": true}, nil
+		case "github":
+			repo := strings.TrimSpace(strArg(args, "repo"))
+			if repo == "" {
+				return nil, errors.New("repo required for source=github sync (owner/name)")
+			}
+			subPath := strings.TrimSpace(strArg(args, "path"))
+			synced, err := syncGitHubSkill(ctx, root, repo, subPath)
+			if err != nil {
+				return nil, fmt.Errorf("sync github: %w", err)
+			}
+			return map[string]any{"action": "sync", "source": "github", "repo": repo, "path": subPath, "synced_skills": synced, "success": true}, nil
+		default:
+			return nil, fmt.Errorf("unsupported sync source: %s (use github or url)", source)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported skill_manage action: %s", action)
 	}
@@ -680,19 +892,29 @@ func delegateTaskParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
 }
 func approvalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke"}}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke", "confirm"}}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer"}, "approval_id": map[string]any{"type": "string", "description": "Pending approval ID for action=confirm"}, "approve": map[string]any{"type": "boolean", "description": "Approve (true) or deny (false) for action=confirm"}}}
 }
 func skillListParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}
+}
+func skillSearchParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"query": map[string]any{"type": "string", "description": "Search query for skills"},
+			"repo":  map[string]any{"type": "string", "description": "GitHub repo (owner/name), default: anthropics/skills"},
+		},
+		"required": []string{"query"},
+	}
 }
 func skillViewParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}}, "required": []string{"name"}}
 }
 func skillManageParams() map[string]any {
-	return map[string]any{
+		return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file"}},
+			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file", "sync"}},
 			"name":         map[string]any{"type": "string"},
 			"content":      map[string]any{"type": "string"},
 			"old_string":   map[string]any{"type": "string"},
@@ -701,6 +923,9 @@ func skillManageParams() map[string]any {
 			"file_path":    map[string]any{"type": "string"},
 			"file_content": map[string]any{"type": "string"},
 			"path":         map[string]any{"type": "string"},
+			"source":       map[string]any{"type": "string", "enum": []string{"github", "url"}, "description": "Sync source: github (GitHub repo) or url (direct URL)"},
+			"url":          map[string]any{"type": "string", "description": "URL for source=url sync"},
+			"repo":         map[string]any{"type": "string", "description": "GitHub repo (owner/name) for source=github sync"},
 		},
 		"required": []string{"action", "name"},
 	}
@@ -907,4 +1132,86 @@ func readSkillDescription(path string) string {
 		}
 	}
 	return ""
+}
+
+func fetchHTTPBytes(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func syncGitHubSkill(ctx context.Context, localRoot, repo, subPath string) ([]string, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("repo must be owner/name")
+	}
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", parts[0], parts[1], subPath)
+	bs, err := fetchHTTPBytes(ctx, apiURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []map[string]any
+	if err := json.Unmarshal(bs, &entries); err != nil {
+		var single map[string]any
+		if err2 := json.Unmarshal(bs, &single); err2 != nil {
+			return nil, fmt.Errorf("unexpected github response: %w", err)
+		}
+		entries = []map[string]any{single}
+	}
+
+	var synced []string
+	for _, entry := range entries {
+		entryName, _ := entry["name"].(string)
+		entryType, _ := entry["type"].(string)
+		if entryType != "dir" {
+			continue
+		}
+		if strings.TrimSpace(entryName) == "" {
+			continue
+		}
+		skillSubPath := subPath + "/" + entryName
+		skillMDURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s/SKILL.md", parts[0], parts[1], skillSubPath)
+		skillBS, err := fetchHTTPBytes(ctx, skillMDURL)
+		if err != nil {
+			continue
+		}
+		var fileInfo map[string]any
+		if err := json.Unmarshal(skillBS, &fileInfo); err != nil {
+			continue
+		}
+		downloadURL, _ := fileInfo["download_url"].(string)
+		if downloadURL == "" {
+			continue
+		}
+		content, err := fetchHTTPBytes(ctx, downloadURL)
+		if err != nil {
+			continue
+		}
+		skillDir := filepath.Join(localRoot, entryName)
+		skillMD := filepath.Join(skillDir, "SKILL.md")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			continue
+		}
+		if err := os.WriteFile(skillMD, content, 0o644); err != nil {
+			continue
+		}
+		synced = append(synced, entryName)
+	}
+	return synced, nil
 }

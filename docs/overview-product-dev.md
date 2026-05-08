@@ -10,8 +10,8 @@
 - `internal/store`：SQLite 会话存储与 session search
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
 - `internal/cli`：CLI 交互层
-- `internal/api`：HTTP 服务层，提供同步与 SSE 流式接口
-- `internal/gateway`：多平台消息网关层，定义 `PlatformAdapter` 接口和 `GatewayRunner`；`platforms/telegram.go` 为 Telegram 适配器
+- `internal/api`：HTTP 服务层，提供同步、SSE 流式与 WebSocket 接口
+- `internal/gateway`：多平台消息网关层，`PlatformAdapter` 接口 + `GatewayRunner`；含 Telegram、Discord、Slack 三平台适配器
 - `internal/config`：环境变量配置
 
 ## Hermes 到 Go 的映射
@@ -117,7 +117,7 @@
 - terminal 对灾难性命令做硬阻断，如根目录递归删除、磁盘格式化、原始块设备写入、整机重启等
 - terminal 对危险但可恢复命令增加审批门禁：需显式 `requires_approval=true` 才执行
 
-交互式审批流程与审批状态持久化仍作为后续扩展项保留。
+交互式审批流程：已实现 `pending_approval` + `approval confirm` 交互确认闭环（危险命令未被预授权时返回待审批状态，用户可通过 `approval confirm` 批准并自动重新执行）。
 
 ### 8. Context Compression
 
@@ -135,10 +135,7 @@
 
 ## 扩展点
 
-后续可以继续增加：
+核心能力已对齐 Hermes。后续可选扩展：
 
-- provider 级高级能力（完整事件字典覆盖、并行竞速与熔断已实现，后续可扩展多级级联与成本感知）
-- MCP 高级能力（OAuth 授权码/刷新、流式事件透传与会话绑定）
-- 技能高级能力（同步与自动触发）
-- 多平台网关扩展（Telegram 已实现，后续扩展 Discord/Slack/WebSocket 等平台适配器）
-- WebSocket
+- Slack 等更多消息平台适配器（`PlatformAdapter` 接口可直接实现）
+- Skills Hub 多源适配器（skills.sh API、GitHub tap 等）

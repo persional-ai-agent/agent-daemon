@@ -11,18 +11,18 @@ import (
 )
 
 type Runner struct {
-	adapters     []PlatformAdapter
-	engine       *agent.Engine
-	allowedUsers string
-	mu           sync.Mutex
-	wg           sync.WaitGroup
+	adapters        []PlatformAdapter
+	engine          *agent.Engine
+	allowedFor      func(platform string) string
+	mu              sync.Mutex
+	wg              sync.WaitGroup
 }
 
-func NewRunner(adapters []PlatformAdapter, engine *agent.Engine, allowedUsers string) *Runner {
+func NewRunner(adapters []PlatformAdapter, engine *agent.Engine, allowedFor func(platform string) string) *Runner {
 	return &Runner{
-		adapters:     adapters,
-		engine:       engine,
-		allowedUsers: allowedUsers,
+		adapters:   adapters,
+		engine:     engine,
+		allowedFor: allowedFor,
 	}
 }
 
@@ -58,7 +58,11 @@ func (r *Runner) Stop() {
 }
 
 func (r *Runner) handleMessage(ctx context.Context, adapter PlatformAdapter, event MessageEvent) {
-	if !CheckAuthorization(r.allowedUsers, event.UserID) {
+	allowed := ""
+	if r.allowedFor != nil {
+		allowed = r.allowedFor(adapter.Name())
+	}
+	if !CheckAuthorization(allowed, event.UserID) {
 		_, _ = adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 		return
 	}

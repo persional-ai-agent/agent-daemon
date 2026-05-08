@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,11 +75,18 @@ func TestTerminalRequiresApprovalForDangerousCommand(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := b.terminal(context.Background(), map[string]any{
+	res, err := b.terminal(context.Background(), map[string]any{
 		"command": "rm -rf tmp-dir",
 	}, ToolContext{Workdir: workdir})
-	if err == nil || !strings.Contains(err.Error(), "requires approval") {
-		t.Fatalf("expected approval required error, got %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, _ := res["status"].(string)
+	if status != "pending_approval" {
+		t.Fatalf("expected pending_approval status, got %q", status)
+	}
+	if id, _ := res["approval_id"].(string); id == "" {
+		t.Fatal("expected approval_id in pending result")
 	}
 }
 
@@ -265,11 +274,99 @@ func TestTerminalPatternApprovalBlocksDifferentCategory(t *testing.T) {
 
 	store.GrantPattern("s-pattern", "recursive_delete", time.Minute)
 
-	_, err := b.terminal(context.Background(), map[string]any{
+	res, err := b.terminal(context.Background(), map[string]any{
 		"command": "chmod 777 somefile",
 	}, ToolContext{SessionID: "s-pattern", ApprovalStore: store, Workdir: workdir})
-	if err == nil || !strings.Contains(err.Error(), "requires approval") {
-		t.Fatalf("expected different category to be blocked, got %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, _ := res["status"].(string)
+	if status != "pending_approval" {
+		t.Fatalf("expected pending_approval status for different category, got %q", status)
+	}
+}
+
+func TestApprovalConfirmApproveAndExecute(t *testing.T) {
+	b := &BuiltinTools{}
+	workdir := t.TempDir()
+	target := filepath.Join(workdir, "tmp-dir")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := b.terminal(context.Background(), map[string]any{
+		"command": "rm -rf tmp-dir",
+	}, ToolContext{SessionID: "s-confirm", Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalID, _ := res["approval_id"].(string)
+	if approvalID == "" {
+		t.Fatal("expected approval_id")
+	}
+
+	store := NewApprovalStore(time.Minute)
+	confirmRes, err := b.approval(context.Background(), map[string]any{
+		"action":      "confirm",
+		"approval_id": approvalID,
+		"approve":     true,
+	}, ToolContext{SessionID: "s-confirm", ApprovalStore: store, Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := confirmRes["approved"].(bool); !v {
+		t.Fatal("expected approved=true")
+	}
+	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+		t.Fatalf("expected target directory removed after confirm, stat err=%v", statErr)
+	}
+}
+
+func TestApprovalConfirmDeny(t *testing.T) {
+	b := &BuiltinTools{}
+	workdir := t.TempDir()
+
+	res, err := b.terminal(context.Background(), map[string]any{
+		"command": "rm -rf tmp-dir",
+	}, ToolContext{SessionID: "s-deny", Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalID, _ := res["approval_id"].(string)
+
+	store := NewApprovalStore(time.Minute)
+	confirmRes, err := b.approval(context.Background(), map[string]any{
+		"action":      "confirm",
+		"approval_id": approvalID,
+		"approve":     false,
+	}, ToolContext{SessionID: "s-deny", ApprovalStore: store, Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := confirmRes["approved"].(bool); v {
+		t.Fatal("expected approved=false")
+	}
+}
+
+func TestApprovalConfirmMissingID(t *testing.T) {
+	b := &BuiltinTools{}
+	_, err := b.approval(context.Background(), map[string]any{
+		"action": "confirm",
+	}, ToolContext{SessionID: "x", ApprovalStore: NewApprovalStore(time.Minute), Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "approval_id required") {
+		t.Fatalf("expected approval_id required error, got %v", err)
+	}
+}
+
+func TestApprovalConfirmUnknownID(t *testing.T) {
+	b := &BuiltinTools{}
+	_, err := b.approval(context.Background(), map[string]any{
+		"action":      "confirm",
+		"approval_id": "nonexistent",
+		"approve":     true,
+	}, ToolContext{SessionID: "x", ApprovalStore: NewApprovalStore(time.Minute), Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "pending approval not found") {
+		t.Fatalf("expected not found error, got %v", err)
 	}
 }
 
@@ -490,5 +587,70 @@ func TestSkillManageRejectsInvalidSupportingFilePath(t *testing.T) {
 	}, tc)
 	if err == nil || !strings.Contains(err.Error(), "allowed subdirectories") {
 		t.Fatalf("expected allowed-subdir rejection, got %v", err)
+	}
+}
+
+func TestSkillManageSyncURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("# My Synced Skill\nThis is a synced skill."))
+	}))
+	defer srv.Close()
+
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir}
+
+	res, err := b.skillManage(context.Background(), map[string]any{
+		"action": "sync",
+		"source": "url",
+		"url":    srv.URL,
+		"name":   "synced-skill",
+	}, tc)
+	if err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	if v, _ := res["success"].(bool); !v {
+		t.Fatal("expected success=true")
+	}
+	content, err := os.ReadFile(filepath.Join(workdir, "skills", "synced-skill", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "My Synced Skill") {
+		t.Fatalf("unexpected content: %s", content)
+	}
+}
+
+func TestSkillManageSyncGitHub(t *testing.T) {
+	t.Skip("github sync requires real GitHub API; tested manually")
+}
+
+func TestSkillManageSyncMissingSource(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir}
+
+	_, err := b.skillManage(context.Background(), map[string]any{
+		"action": "sync",
+		"name":   "some-skill",
+	}, tc)
+	if err == nil || !strings.Contains(err.Error(), "source required") {
+		t.Fatalf("expected source required error, got %v", err)
+	}
+}
+
+func TestSkillManageSyncUnsupportedSource(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir}
+
+	_, err := b.skillManage(context.Background(), map[string]any{
+		"action": "sync",
+		"source": "unknown",
+		"name":   "some-skill",
+	}, tc)
+	if err == nil || !strings.Contains(err.Error(), "unsupported sync source") {
+		t.Fatalf("expected unsupported source error, got %v", err)
 	}
 }
