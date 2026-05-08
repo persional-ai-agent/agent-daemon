@@ -25,6 +25,7 @@
 - 状态工具：todo、session_search、memory、delegate_task
 - 持久化：SQLite 会话历史与 Markdown 记忆文件
 - 双入口：交互式 CLI + HTTP API
+- 消息网关：最小落地支持 Telegram 适配器，`PlatformAdapter` 接口可扩展 Discord/Slack 等平台
 - 非流式摘要：`/v1/chat` 返回轻量 `summary`
 - 流式 API：基于 SSE 的 `/v1/chat/stream`
 - 中断控制：支持按 `session_id` 取消活动中的 HTTP 会话
@@ -46,4 +47,4 @@
 ## 本期范围
 
 - 已实现：核心闭环、system prompt 跨请求装配、记忆回灌、工作区规则注入、上下文压缩、常用内置工具、并发子 Agent 委派、结构化事件流、事件协议文档、持久化、CLI、HTTP API、`/v1/chat` 摘要、SSE、关键测试、基础安全护栏、危险命令审批门禁、MCP（http/stdio/OAuth client_credentials/`/call` 流式兼容与事件透传）、Provider（主备故障切换、熔断器、并行竞速、OpenAI/Anthropic/Codex 流式聚合、增量事件最小透传、`model_stream_event` v2+ 最小标准字典：`tool_args_start/delta/done`、`message_done.finish_reason`（`stop/tool_calls/length`）+ `stop_sequence/incomplete_reason`（`length` 场景自动补齐）、`usage.prompt_tokens/completion_tokens/total_tokens`（含缺失补齐与偏小校正标记）+ `usage_consistency_status`（`ok/derived/adjusted/source_only/invalid`）+ `prompt_cache_write_tokens/prompt_cache_read_tokens/reasoning_tokens`，并兼容多来源 `message_id/tool_call_id`）
-- 未完全覆盖：Hermes 的多平台网关、MCP 高级能力（OAuth 授权码/刷新、流式事件透传已实现）、技能高级能力（同步/自动触发）、Provider 高级能力（并行竞速与熔断已实现；完整事件字典覆盖已补齐 `message_done.message_id`（Codex/Anthropic）、`message_done.incomplete_reason`（OpenAI/Anthropic/Codex）；OpenAI 的 `message_id` 和 `stop_sequence` 属于上游 API 限制暂不补齐）、审批状态持久化与细粒度审批策略（已实现：SQLite 持久化 + pattern 级细粒度授权；未实现：用户侧交互确认 UI）
+- 未完全覆盖：Hermes 的多平台网关（已实现最小骨架 + Telegram 适配器，后续扩展 Discord/Slack 等平台）、MCP 高级能力（OAuth 授权码/刷新、流式事件透传已实现）、技能高级能力（同步/自动触发已实现 skill_manage 基础 + 支撑文件）、Provider 高级能力（并行竞速与熔断已实现；完整事件字典覆盖已补齐 `message_done.message_id`（Codex/Anthropic）、`message_done.incomplete_reason`（OpenAI/Anthropic/Codex）；OpenAI 的 `message_id` 和 `stop_sequence` 属于上游 API 限制暂不补齐）、审批状态持久化与细粒度审批策略（已实现：SQLite 持久化 + pattern 级细粒度授权；未实现：用户侧交互确认 UI）

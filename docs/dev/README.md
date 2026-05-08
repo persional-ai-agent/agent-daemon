@@ -130,3 +130,6 @@
 - `043-research-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌调研
 - `043-plan-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌实施计划
 - `043-summary-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌结果总结
+- `044-research-gateway-minimal.md`：多平台消息网关最小落地调研
+- `044-plan-gateway-minimal.md`：多平台消息网关最小落地实施计划
+- `044-summary-gateway-minimal.md`：多平台消息网关最小落地结果总结

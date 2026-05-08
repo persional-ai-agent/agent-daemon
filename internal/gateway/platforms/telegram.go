@@ -1,0 +1,137 @@
+package platforms
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+)
+
+type TelegramAdapter struct {
+	bot     *tgbotapi.BotAPI
+	handler gateway.MessageHandler
+}
+
+func NewTelegramAdapter(token string) (*TelegramAdapter, error) {
+	bot, err := tgbotapi.NewBotAPI(token)
+	if err != nil {
+		return nil, fmt.Errorf("telegram: create bot: %w", err)
+	}
+	return &TelegramAdapter{bot: bot}, nil
+}
+
+func (t *TelegramAdapter) Name() string { return "telegram" }
+
+func (t *TelegramAdapter) Connect(ctx context.Context) error {
+	log.Printf("[gateway:telegram] connected as @%s", t.bot.Self.UserName)
+
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates := t.bot.GetUpdatesChan(u)
+
+	go func() {
+		defer log.Printf("[gateway:telegram] update loop stopped")
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case update, ok := <-updates:
+				if !ok {
+					return
+				}
+				if update.Message == nil || t.handler == nil {
+					continue
+				}
+				msg := update.Message
+				chatID := fmt.Sprintf("%d", msg.Chat.ID)
+				chatType := "dm"
+				if msg.Chat.IsGroup() || msg.Chat.IsSuperGroup() {
+					chatType = "group"
+				}
+				event := gateway.MessageEvent{
+					Text:      msg.Text,
+					MessageID: fmt.Sprintf("%d", msg.MessageID),
+					ChatID:    chatID,
+					ChatType:  chatType,
+					UserID:    fmt.Sprintf("%d", msg.From.ID),
+					UserName:  msg.From.UserName,
+					IsCommand: msg.IsCommand(),
+				}
+			if msg.ReplyToMessage != nil {
+				event.ReplyToID = fmt.Sprintf("%d", msg.ReplyToMessage.MessageID)
+			}
+				t.handler(ctx, event)
+			}
+		}
+	}()
+	return nil
+}
+
+func (t *TelegramAdapter) Disconnect(_ context.Context) error {
+	t.bot.StopReceivingUpdates()
+	return nil
+}
+
+func (t *TelegramAdapter) Send(_ context.Context, chatID, content, replyTo string) (gateway.SendResult, error) {
+	chatIDInt, err := parseChatID(chatID)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+	msg := tgbotapi.NewMessage(chatIDInt, content)
+	msg.ParseMode = tgbotapi.ModeMarkdown
+	if replyTo != "" {
+		if id, err2 := parseChatID(replyTo); err2 == nil {
+			msg.ReplyToMessageID = int(id)
+		}
+	}
+	sent, err := t.bot.Send(msg)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+	return gateway.SendResult{Success: true, MessageID: fmt.Sprintf("%d", sent.MessageID)}, nil
+}
+
+func (t *TelegramAdapter) EditMessage(_ context.Context, chatID, messageID, content string) error {
+	chatIDInt, err := parseChatID(chatID)
+	if err != nil {
+		return err
+	}
+	msgIDInt, err := parseChatID(messageID)
+	if err != nil {
+		return err
+	}
+	edit := tgbotapi.NewEditMessageText(chatIDInt, int(msgIDInt), content)
+	edit.ParseMode = tgbotapi.ModeMarkdown
+	_, err = t.bot.Send(edit)
+	if err != nil && strings.Contains(err.Error(), "message is not modified") {
+		return nil
+	}
+	return err
+}
+
+func (t *TelegramAdapter) SendTyping(_ context.Context, chatID string) error {
+	chatIDInt, err := parseChatID(chatID)
+	if err != nil {
+		return err
+	}
+	action := tgbotapi.NewChatAction(chatIDInt, tgbotapi.ChatTyping)
+	_, err = t.bot.Send(action)
+	return err
+}
+
+func (t *TelegramAdapter) OnMessage(_ context.Context, handler gateway.MessageHandler) {
+	t.handler = handler
+}
+
+func parseChatID(s string) (int64, error) {
+	var id int64
+	_, err := fmt.Sscanf(strings.TrimSpace(s), "%d", &id)
+	if err != nil {
+		return 0, fmt.Errorf("invalid chat id %q: %w", s, err)
+	}
+	return id, nil
+}

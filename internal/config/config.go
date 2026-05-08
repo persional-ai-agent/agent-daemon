@@ -43,6 +43,9 @@ type Config struct {
 	DataDir                 string
 	ListenAddr              string
 	Workdir                 string
+	GatewayEnabled          bool
+	TelegramToken           string
+	TelegramAllowed         string
 }
 
 func Load() Config {
@@ -103,6 +106,7 @@ func Load() Config {
 			circuitHalfOpenMax = i
 		}
 	}
+	gatewayEnabled := strings.EqualFold(os.Getenv("AGENT_GATEWAY_ENABLED"), "true") || os.Getenv("AGENT_GATEWAY_ENABLED") == "1"
 	wd, _ := os.Getwd()
 	return Config{
 		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
@@ -140,6 +144,9 @@ func Load() Config {
 		DataDir:                 dataDir,
 		ListenAddr:              getenv("AGENT_DAEMON_ADDR", ":8080"),
 		Workdir:                 getenv("AGENT_WORKDIR", wd),
+		GatewayEnabled:          gatewayEnabled,
+		TelegramToken:           strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_BOT_TOKEN")),
+		TelegramAllowed:         strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_ALLOWED_USERS")),
 	}
 }
 

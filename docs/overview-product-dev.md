@@ -11,6 +11,7 @@
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
 - `internal/cli`：CLI 交互层
 - `internal/api`：HTTP 服务层，提供同步与 SSE 流式接口
+- `internal/gateway`：多平台消息网关层，定义 `PlatformAdapter` 接口和 `GatewayRunner`；`platforms/telegram.go` 为 Telegram 适配器
 - `internal/config`：环境变量配置
 
 ## Hermes 到 Go 的映射
@@ -18,6 +19,7 @@
 - `run_agent.py / AIAgent` -> `internal/agent/loop.go`
 - `model_tools.py` -> `internal/tools/registry.go` + `internal/tools/builtin.go`
 - `tools/terminal_tool.py` -> `internal/tools/process.go` + `terminal`/`process_status`/`stop_process`
+- `gateway/run.py` + `gateway/platforms/` -> `internal/gateway/runner.go` + `internal/gateway/platforms/`
 - `hermes_state.py / session storage` -> `internal/store/session_store.go`
 - `memory_tool.py` -> `internal/memory/store.go`
 - CLI / API 入口 -> `internal/cli/chat.go`、`internal/api/server.go`、`cmd/agentd/main.go`
@@ -138,6 +140,5 @@
 - provider 级高级能力（完整事件字典覆盖、并行竞速与熔断已实现，后续可扩展多级级联与成本感知）
 - MCP 高级能力（OAuth 授权码/刷新、流式事件透传与会话绑定）
 - 技能高级能力（同步与自动触发）
-- 上下文压缩
+- 多平台网关扩展（Telegram 已实现，后续扩展 Discord/Slack/WebSocket 等平台适配器）
 - WebSocket
-- 多平台网关

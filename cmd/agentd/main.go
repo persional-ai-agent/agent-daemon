@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +19,8 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/api"
 	"github.com/dingjingmaster/agent-daemon/internal/cli"
 	"github.com/dingjingmaster/agent-daemon/internal/config"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway/platforms"
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
 	"github.com/dingjingmaster/agent-daemon/internal/model"
 	"github.com/dingjingmaster/agent-daemon/internal/store"
@@ -60,10 +64,53 @@ func runChat(cfg config.Config, first string, sessionID ...string) {
 }
 
 func runServe(cfg config.Config) {
+	if cfg.GatewayEnabled {
+		cfg.ModelUseStreaming = true
+	}
 	eng := mustBuildEngine(cfg)
 	srv := &http.Server{Addr: cfg.ListenAddr, Handler: (&api.Server{Engine: eng}).Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("agent-daemon listening on %s", cfg.ListenAddr)
+
+	if cfg.GatewayEnabled {
+		log.Printf("gateway enabled")
+		gatewayCtx, gatewayCancel := context.WithCancel(context.Background())
+		defer gatewayCancel()
+
+		adapters := buildGatewayAdapters(cfg)
+		if len(adapters) > 0 {
+			runner := gateway.NewRunner(adapters, eng, cfg.TelegramAllowed)
+			if err := runner.Start(gatewayCtx); err != nil {
+				log.Printf("gateway start failed: %v", err)
+			}
+		} else {
+			log.Printf("gateway enabled but no platform adapters configured")
+		}
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			log.Printf("shutting down...")
+			gatewayCancel()
+			_ = srv.Shutdown(context.Background())
+		}()
+	}
+
 	log.Fatal(srv.ListenAndServe())
+}
+
+func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
+	var adapters []gateway.PlatformAdapter
+	if strings.TrimSpace(cfg.TelegramToken) != "" {
+		ta, err := platforms.NewTelegramAdapter(cfg.TelegramToken)
+		if err != nil {
+			log.Printf("telegram adapter: %v", err)
+		} else {
+			adapters = append(adapters, ta)
+			log.Printf("telegram adapter configured")
+		}
+	}
+	return adapters
 }
 
 func mustBuildEngine(cfg config.Config) *agent.Engine {
