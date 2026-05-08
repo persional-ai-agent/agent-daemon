@@ -223,13 +223,26 @@ func normalizeStreamEvent(evt StreamEvent) StreamEvent {
 				evt.Data["completion_tokens"] = n
 			}
 		}
+		prompt, hasPrompt := asAnyInt(evt.Data["prompt_tokens"])
+		completion, hasCompletion := asAnyInt(evt.Data["completion_tokens"])
+		derivedTotal := 0
+		hasDerivedTotal := false
+		if hasPrompt && hasCompletion {
+			derivedTotal = prompt + completion
+			hasDerivedTotal = true
+		}
 		if _, ok := evt.Data["total_tokens"]; !ok {
-			prompt, hasPrompt := asAnyInt(evt.Data["prompt_tokens"])
-			completion, hasCompletion := asAnyInt(evt.Data["completion_tokens"])
-			if hasPrompt && hasCompletion {
-				evt.Data["total_tokens"] = prompt + completion
+			if hasDerivedTotal {
+				evt.Data["total_tokens"] = derivedTotal
 			} else if n, ok := asAnyInt(evt.Data["tokens"]); ok {
 				evt.Data["total_tokens"] = n
+			}
+		}
+		// Keep total_tokens consistent with prompt+completion when both are available.
+		if hasDerivedTotal {
+			if total, ok := asAnyInt(evt.Data["total_tokens"]); ok && total < derivedTotal {
+				evt.Data["total_tokens"] = derivedTotal
+				evt.Data["total_tokens_adjusted"] = true
 			}
 		}
 		// Prompt cache read tokens:

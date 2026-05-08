@@ -214,6 +214,38 @@ func TestNormalizeStreamEventUsageReasoningTokensAliases(t *testing.T) {
 	}
 }
 
+func TestNormalizeStreamEventUsageTotalTokensDerivedWhenMissing(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     11,
+			"completion_tokens": 9,
+		},
+	})
+	if evt.Data["total_tokens"] != 20 {
+		t.Fatalf("expected derived total_tokens=20, got %+v", evt)
+	}
+}
+
+func TestNormalizeStreamEventUsageTotalTokensAdjustedWhenTooSmall(t *testing.T) {
+	evt := normalizeStreamEvent(StreamEvent{
+		Provider: "OpenAI",
+		Type:     "usage",
+		Data: map[string]any{
+			"prompt_tokens":     10,
+			"completion_tokens": 7,
+			"total_tokens":      12,
+		},
+	})
+	if evt.Data["total_tokens"] != 17 {
+		t.Fatalf("expected adjusted total_tokens=17, got %+v", evt)
+	}
+	if evt.Data["total_tokens_adjusted"] != true {
+		t.Fatalf("expected total_tokens_adjusted=true, got %+v", evt)
+	}
+}
+
 func TestNormalizeStreamEventToolCallIDFromToolUseID(t *testing.T) {
 	evt := normalizeStreamEvent(StreamEvent{
 		Provider: "Anthropic",

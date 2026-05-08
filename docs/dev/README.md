@@ -88,3 +88,6 @@
 - `029-research-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐调研
 - `029-plan-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐实施计划
 - `029-summary-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐结果总结
+- `030-research-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐调研
+- `030-plan-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐实施计划
+- `030-summary-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐结果总结
