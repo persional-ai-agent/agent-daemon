@@ -24,16 +24,27 @@ type MCPClient struct {
 	StdioCommand string
 	OAuth        MCPOAuthConfig
 
-	mu                sync.Mutex
-	cachedAccessToken string
-	cachedExpiry      time.Time
+	mu                 sync.Mutex
+	cachedAccessToken  string
+	cachedRefreshToken string
+	cachedExpiry       time.Time
+	TokenStore         OAuthTokenStore
+}
+
+type OAuthTokenStore interface {
+	SaveOAuthToken(provider, accessToken, refreshToken string, expiresAt time.Time) error
+	LoadOAuthToken(provider string) (accessToken, refreshToken string, expiresAt time.Time, err error)
+	DeleteOAuthToken(provider string) error
 }
 
 type MCPOAuthConfig struct {
 	TokenURL     string
+	AuthURL      string
+	RedirectURL  string
 	ClientID     string
 	ClientSecret string
 	Scopes       string
+	GrantType    string
 }
 
 type mcpDiscoveryResponse struct {
@@ -84,6 +95,19 @@ func (c *MCPClient) ConfigureOAuthClientCredentials(cfg MCPOAuthConfig) {
 		ClientID:     strings.TrimSpace(cfg.ClientID),
 		ClientSecret: cfg.ClientSecret,
 		Scopes:       strings.TrimSpace(cfg.Scopes),
+		GrantType:    "client_credentials",
+	}
+}
+
+func (c *MCPClient) ConfigureOAuthAuthCode(cfg MCPOAuthConfig) {
+	c.OAuth = MCPOAuthConfig{
+		TokenURL:     strings.TrimSpace(cfg.TokenURL),
+		AuthURL:      strings.TrimSpace(cfg.AuthURL),
+		RedirectURL:  strings.TrimSpace(cfg.RedirectURL),
+		ClientID:     strings.TrimSpace(cfg.ClientID),
+		ClientSecret: cfg.ClientSecret,
+		Scopes:       strings.TrimSpace(cfg.Scopes),
+		GrantType:    "authorization_code",
 	}
 }
 
@@ -199,6 +223,9 @@ func (m *mcpToolProxy) Call(ctx context.Context, args map[string]any, tc ToolCon
 	}
 	defer resp.Body.Close()
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		if tc.ToolEventSink != nil {
+			return parseMCPCallSSEWithCallback(resp.Body, tc.ToolEventSink)
+		}
 		return parseMCPCallSSE(resp.Body)
 	}
 	data, _ := io.ReadAll(resp.Body)
@@ -528,6 +555,81 @@ func parseMCPCallSSE(body io.Reader) (map[string]any, error) {
 	return final, nil
 }
 
+func parseMCPCallSSEWithCallback(body io.Reader, sink ToolEventSink) (map[string]any, error) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
+	var dataLines []string
+	final := map[string]any{}
+	textChunks := make([]string, 0)
+	flushEvent := func() error {
+		if len(dataLines) == 0 {
+			return nil
+		}
+		payload := strings.Join(dataLines, "\n")
+		dataLines = dataLines[:0]
+		payload = strings.TrimSpace(payload)
+		if payload == "" {
+			return nil
+		}
+		if payload == "[DONE]" {
+			return nil
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(payload), &event); err != nil {
+			textChunks = append(textChunks, payload)
+			return nil
+		}
+		if errObj, ok := event["error"].(map[string]any); ok {
+			return fmt.Errorf("mcp stream error: %s", strMap(errObj, "message"))
+		}
+		if sink != nil {
+			eventType := "mcp_event"
+			if t, ok := event["type"].(string); ok && strings.TrimSpace(t) != "" {
+				eventType = t
+			}
+			sink(eventType, event)
+		}
+		if result, ok := event["result"].(map[string]any); ok {
+			final = result
+			return nil
+		}
+		if structured, ok := event["structuredContent"].(map[string]any); ok {
+			final = structured
+			return nil
+		}
+		if content, ok := event["content"]; ok {
+			final["content"] = content
+		}
+		final["last_event"] = event
+		return nil
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if err := flushEvent(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if err := flushEvent(); err != nil {
+		return nil, err
+	}
+	if len(final) == 0 && len(textChunks) > 0 {
+		return map[string]any{"content": strings.Join(textChunks, "\n")}, nil
+	}
+	if len(final) == 0 {
+		return map[string]any{}, nil
+	}
+	return final, nil
+}
+
 func (c *MCPClient) injectAuthHeader(ctx context.Context, req *http.Request) error {
 	token, err := c.oauthAccessToken(ctx)
 	if err != nil {
@@ -552,6 +654,78 @@ func (c *MCPClient) oauthAccessToken(ctx context.Context) (string, error) {
 	}
 	c.mu.Unlock()
 
+	if err := c.loadTokenFromStore(); err == nil {
+		c.mu.Lock()
+		if c.cachedAccessToken != "" && now.Before(c.cachedExpiry.Add(-10*time.Second)) {
+			token := c.cachedAccessToken
+			c.mu.Unlock()
+			return token, nil
+		}
+		if c.cachedRefreshToken != "" {
+			rt := c.cachedRefreshToken
+			c.mu.Unlock()
+			token, err := c.refreshOAuthToken(ctx, rt)
+			if err == nil {
+				return token, nil
+			}
+		} else {
+			c.mu.Unlock()
+		}
+	} else {
+		c.mu.Lock()
+		if c.cachedRefreshToken != "" {
+			rt := c.cachedRefreshToken
+			c.mu.Unlock()
+			token, err := c.refreshOAuthToken(ctx, rt)
+			if err == nil {
+				return token, nil
+			}
+		} else {
+			c.mu.Unlock()
+		}
+	}
+
+	grantType := strings.TrimSpace(c.OAuth.GrantType)
+	if grantType == "" {
+		grantType = "client_credentials"
+	}
+
+	switch grantType {
+	case "authorization_code":
+		return "", fmt.Errorf("mcp oauth: no valid token available; complete authorization code flow first")
+	default:
+		return c.requestTokenClientCredentials(ctx)
+	}
+}
+
+func (c *MCPClient) loadTokenFromStore() error {
+	if c.TokenStore == nil {
+		return fmt.Errorf("no token store")
+	}
+	provider := c.oauthProviderKey()
+	accessToken, refreshToken, expiresAt, err := c.TokenStore.LoadOAuthToken(provider)
+	if err != nil {
+		return err
+	}
+	if accessToken == "" {
+		return fmt.Errorf("no stored token")
+	}
+	c.mu.Lock()
+	c.cachedAccessToken = accessToken
+	c.cachedRefreshToken = refreshToken
+	c.cachedExpiry = expiresAt
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *MCPClient) oauthProviderKey() string {
+	if strings.TrimSpace(c.Endpoint) != "" {
+		return c.Endpoint
+	}
+	return "mcp-stdio"
+}
+
+func (c *MCPClient) requestTokenClientCredentials(ctx context.Context) (string, error) {
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 	if strings.TrimSpace(c.OAuth.Scopes) != "" {
@@ -563,6 +737,26 @@ func (c *MCPClient) oauthAccessToken(ctx context.Context) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(c.OAuth.ClientID, c.OAuth.ClientSecret)
+	return c.doTokenRequest(ctx, req)
+}
+
+func (c *MCPClient) refreshOAuthToken(ctx context.Context, refreshToken string) (string, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	if strings.TrimSpace(c.OAuth.Scopes) != "" {
+		form.Set("scope", c.OAuth.Scopes)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.OAuth.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(c.OAuth.ClientID, c.OAuth.ClientSecret)
+	return c.doTokenRequest(ctx, req)
+}
+
+func (c *MCPClient) doTokenRequest(ctx context.Context, req *http.Request) (string, error) {
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
@@ -573,8 +767,9 @@ func (c *MCPClient) oauthAccessToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("mcp oauth token request failed (%d): %s", resp.StatusCode, string(body))
 	}
 	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return "", err
@@ -585,10 +780,85 @@ func (c *MCPClient) oauthAccessToken(ctx context.Context) (string, error) {
 	if tokenResp.ExpiresIn <= 0 {
 		tokenResp.ExpiresIn = 3600
 	}
+	now := time.Now()
 	expiry := now.Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 	c.mu.Lock()
 	c.cachedAccessToken = tokenResp.AccessToken
 	c.cachedExpiry = expiry
+	if strings.TrimSpace(tokenResp.RefreshToken) != "" {
+		c.cachedRefreshToken = tokenResp.RefreshToken
+	}
+	rt := c.cachedRefreshToken
 	c.mu.Unlock()
+
+	if c.TokenStore != nil {
+		_ = c.TokenStore.SaveOAuthToken(c.oauthProviderKey(), tokenResp.AccessToken, rt, expiry)
+	}
 	return tokenResp.AccessToken, nil
+}
+
+func (c *MCPClient) ExchangeAuthCode(ctx context.Context, code string) (string, error) {
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	if strings.TrimSpace(c.OAuth.RedirectURL) != "" {
+		form.Set("redirect_uri", c.OAuth.RedirectURL)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.OAuth.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(c.OAuth.ClientID, c.OAuth.ClientSecret)
+	return c.doTokenRequest(ctx, req)
+}
+
+func (c *MCPClient) BuildAuthURL(state string) string {
+	u, err := url.Parse(c.OAuth.AuthURL)
+	if err != nil {
+		return ""
+	}
+	q := u.Query()
+	q.Set("client_id", c.OAuth.ClientID)
+	q.Set("response_type", "code")
+	if strings.TrimSpace(c.OAuth.RedirectURL) != "" {
+		q.Set("redirect_uri", c.OAuth.RedirectURL)
+	}
+	if strings.TrimSpace(c.OAuth.Scopes) != "" {
+		q.Set("scope", c.OAuth.Scopes)
+	}
+	if strings.TrimSpace(state) != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func (c *MCPClient) StartOAuthCallbackServer(port int, done chan<- string) error {
+	if port <= 0 {
+		port = 9876
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			http.Error(w, "missing authorization code", http.StatusBadRequest)
+			return
+		}
+		token, err := c.ExchangeAuthCode(r.Context(), code)
+		if err != nil {
+			http.Error(w, "token exchange failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("Authorization successful. You can close this page."))
+		if done != nil {
+			done <- token
+		}
+	})
+	srv := &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		_ = srv.ListenAndServe()
+	}()
+	return nil
 }

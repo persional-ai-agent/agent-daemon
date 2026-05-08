@@ -89,6 +89,19 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 				ApprovalStore:  e.ApprovalStore,
 				DelegateRunner: e,
 				Workdir:        e.Workdir,
+				ToolEventSink: func(eventType string, data map[string]any) {
+					e.emit(core.AgentEvent{
+						Type:      "mcp_stream_event",
+						SessionID: sessionID,
+						Turn:      turn + 1,
+						ToolName:  tc.Function.Name,
+						Data: map[string]any{
+							"tool_name":  tc.Function.Name,
+							"event_type": eventType,
+							"event_data": data,
+						},
+					})
+				},
 			})
 			toolMsg := core.Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: result}
 			messages = append(messages, toolMsg)

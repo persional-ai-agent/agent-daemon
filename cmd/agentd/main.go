@@ -81,7 +81,7 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	registry := tools.NewRegistry()
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
-	approvalStore := tools.NewApprovalStore(time.Duration(cfg.ApprovalTTLSeconds) * time.Second)
+	approvalStore := tools.NewPersistentApprovalStore(time.Duration(cfg.ApprovalTTLSeconds)*time.Second, sessionStore)
 	switch strings.ToLower(strings.TrimSpace(cfg.MCPTransport)) {
 	case "stdio":
 		if strings.TrimSpace(cfg.MCPStdioCommand) != "" {
@@ -95,13 +95,39 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	default:
 		if strings.TrimSpace(cfg.MCPEndpoint) != "" {
 			mcpClient := tools.NewMCPClient(cfg.MCPEndpoint, time.Duration(cfg.MCPTimeoutSeconds)*time.Second)
+			mcpClient.TokenStore = sessionStore
 			if strings.TrimSpace(cfg.MCPOAuthTokenURL) != "" {
-				mcpClient.ConfigureOAuthClientCredentials(tools.MCPOAuthConfig{
-					TokenURL:     cfg.MCPOAuthTokenURL,
-					ClientID:     cfg.MCPOAuthClientID,
-					ClientSecret: cfg.MCPOAuthClientSecret,
-					Scopes:       cfg.MCPOAuthScopes,
-				})
+				grantType := strings.ToLower(strings.TrimSpace(cfg.MCPOAuthGrantType))
+				if grantType == "authorization_code" {
+					mcpClient.ConfigureOAuthAuthCode(tools.MCPOAuthConfig{
+						TokenURL:     cfg.MCPOAuthTokenURL,
+						AuthURL:      cfg.MCPOAuthAuthURL,
+						RedirectURL:  cfg.MCPOAuthRedirectURL,
+						ClientID:     cfg.MCPOAuthClientID,
+						ClientSecret: cfg.MCPOAuthClientSecret,
+						Scopes:       cfg.MCPOAuthScopes,
+					})
+					done := make(chan string, 1)
+					if err := mcpClient.StartOAuthCallbackServer(cfg.MCPOAuthCallbackPort, done); err != nil {
+						log.Printf("mcp oauth callback server failed: %v", err)
+					} else {
+						authURL := mcpClient.BuildAuthURL("mcp-auth")
+						log.Printf("mcp oauth: open this URL to authorize: %s", authURL)
+						select {
+						case <-done:
+							log.Printf("mcp oauth: authorization successful")
+						case <-time.After(5 * time.Minute):
+							log.Printf("mcp oauth: authorization timed out")
+						}
+					}
+				} else {
+					mcpClient.ConfigureOAuthClientCredentials(tools.MCPOAuthConfig{
+						TokenURL:     cfg.MCPOAuthTokenURL,
+						ClientID:     cfg.MCPOAuthClientID,
+						ClientSecret: cfg.MCPOAuthClientSecret,
+						Scopes:       cfg.MCPOAuthScopes,
+					})
+				}
 			}
 			if names, err := tools.RegisterMCPTools(context.Background(), registry, mcpClient); err != nil {
 				log.Printf("mcp discovery failed: %v", err)

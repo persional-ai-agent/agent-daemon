@@ -35,26 +35,32 @@ var hardlineCommandPatterns = []struct {
 }
 
 var dangerousCommandPatterns = []struct {
+	category    string
 	re          *regexp.Regexp
 	description string
 }{
 	{
+		category:    "recursive_delete",
 		re:          regexp.MustCompile(`(?i)\brm\s+(-[^\s]*\s+)*(?:--recursive\b|-[^\s]*r[^\s]*\b)`),
 		description: "recursive delete command",
 	},
 	{
+		category:    "world_writable",
 		re:          regexp.MustCompile(`(?i)\bchmod\s+(-[^\s]*\s+)*(?:777|666|a\+w|o\+w)\b`),
 		description: "world writable permission change",
 	},
 	{
+		category:    "root_ownership",
 		re:          regexp.MustCompile(`(?i)\b(chown)\s+(-[^\s]*\s+)*(?:root|0:0)\b`),
 		description: "ownership change to root",
 	},
 	{
+		category:    "remote_pipe_shell",
 		re:          regexp.MustCompile(`(?i)\b(curl|wget)\b[^\n]*\|\s*(?:bash|sh)\b`),
 		description: "remote content piped to shell",
 	},
 	{
+		category:    "service_lifecycle",
 		re:          regexp.MustCompile(`(?i)\b(systemctl)\s+(-[^\s]*\s+)*(?:stop|restart|disable|mask)\b`),
 		description: "system service lifecycle command",
 	},
@@ -69,13 +75,13 @@ func detectHardlineCommand(command string) (string, bool) {
 	return "", false
 }
 
-func detectDangerousCommand(command string) (string, bool) {
+func detectDangerousCommand(command string) (category string, description string, dangerous bool) {
 	for _, item := range dangerousCommandPatterns {
 		if item.re.MatchString(command) {
-			return item.description, true
+			return item.category, item.description, true
 		}
 	}
-	return "", false
+	return "", "", false
 }
 
 func resolvePathWithinWorkdir(workdir, input string) (string, error) {

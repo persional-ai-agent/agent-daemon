@@ -23,6 +23,8 @@ type DelegateRunner interface {
 	RunSubtask(ctx context.Context, parentSessionID, goal, taskContext string, maxIterations int) (map[string]any, error)
 }
 
+type ToolEventSink func(eventType string, data map[string]any)
+
 type ToolContext struct {
 	SessionID      string
 	SessionStore   SessionSearchStore
@@ -31,6 +33,7 @@ type ToolContext struct {
 	ApprovalStore  *ApprovalStore
 	DelegateRunner DelegateRunner
 	Workdir        string
+	ToolEventSink  ToolEventSink
 }
 
 type Tool interface {

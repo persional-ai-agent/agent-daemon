@@ -68,10 +68,11 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		return nil, fmt.Errorf("blocked dangerous command: %s", reason)
 	}
 	requiresApproval := boolArg(args, "requires_approval", false)
-	if reason, dangerous := detectDangerousCommand(command); dangerous {
-		approved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
-		if !requiresApproval && !approved {
-			return nil, fmt.Errorf("dangerous command requires approval: %s (set requires_approval=true or grant session approval)", reason)
+	if category, reason, dangerous := detectDangerousCommand(command); dangerous {
+		sessionApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
+		patternApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApprovedPattern(tc.SessionID, category)
+		if !requiresApproval && !sessionApproved && !patternApproved {
+			return nil, fmt.Errorf("dangerous command requires approval: %s (category: %s; set requires_approval=true or grant approval)", reason, category)
 		}
 		if requiresApproval && tc.ApprovalStore != nil {
 			ttlSeconds := intArg(args, "approval_ttl_seconds", 0)
@@ -361,21 +362,61 @@ func (b *BuiltinTools) approval(_ context.Context, args map[string]any, tc ToolC
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	switch action {
 	case "", "status":
-		approved, expiresAt := tc.ApprovalStore.Status(tc.SessionID)
+		approvals := tc.ApprovalStore.ListApprovals(tc.SessionID)
+		sessionApproved := false
+		var sessionExpiresAt string
+		for _, a := range approvals {
+			if a["scope"] == "session" {
+				sessionApproved = true
+				sessionExpiresAt, _ = a["expires_at"].(string)
+			}
+		}
 		return map[string]any{
 			"session_id": tc.SessionID,
-			"approved":   approved,
-			"expires_at": expiresAt.Format(time.RFC3339),
+			"approved":   sessionApproved,
+			"expires_at": sessionExpiresAt,
+			"approvals":  approvals,
 		}, nil
 	case "grant":
+		scope := strings.ToLower(strings.TrimSpace(strArg(args, "scope")))
+		if scope == "" {
+			scope = "session"
+		}
+		pattern := strings.ToLower(strings.TrimSpace(strArg(args, "pattern")))
 		ttlSeconds := intArg(args, "ttl_seconds", 0)
+		if scope == "pattern" {
+			if pattern == "" {
+				return nil, errors.New("pattern is required when scope=pattern")
+			}
+			expiresAt := tc.ApprovalStore.GrantPattern(tc.SessionID, pattern, time.Duration(ttlSeconds)*time.Second)
+			return map[string]any{
+				"session_id": tc.SessionID,
+				"scope":      "pattern",
+				"pattern":    pattern,
+				"approved":   true,
+				"expires_at": expiresAt.Format(time.RFC3339),
+			}, nil
+		}
 		expiresAt := tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
 		return map[string]any{
 			"session_id": tc.SessionID,
+			"scope":      "session",
 			"approved":   true,
 			"expires_at": expiresAt.Format(time.RFC3339),
 		}, nil
 	case "revoke":
+		scope := strings.ToLower(strings.TrimSpace(strArg(args, "scope")))
+		pattern := strings.ToLower(strings.TrimSpace(strArg(args, "pattern")))
+		if scope == "pattern" && pattern != "" {
+			revoked := tc.ApprovalStore.RevokePattern(tc.SessionID, pattern)
+			return map[string]any{
+				"session_id": tc.SessionID,
+				"scope":      "pattern",
+				"pattern":    pattern,
+				"approved":   false,
+				"revoked":    revoked,
+			}, nil
+		}
 		revoked := tc.ApprovalStore.Revoke(tc.SessionID)
 		return map[string]any{
 			"session_id": tc.SessionID,
@@ -639,7 +680,7 @@ func delegateTaskParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
 }
 func approvalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke"}}, "ttl_seconds": map[string]any{"type": "integer"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke"}}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer"}}}
 }
 func skillListParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}

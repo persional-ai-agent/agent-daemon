@@ -179,6 +179,114 @@ func TestApprovalToolStatusAndRevoke(t *testing.T) {
 	}
 }
 
+func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
+	b := &BuiltinTools{}
+	store := NewApprovalStore(time.Minute)
+	tc := ToolContext{SessionID: "s-pattern", ApprovalStore: store, Workdir: t.TempDir()}
+
+	grantRes, err := b.approval(context.Background(), map[string]any{
+		"action":  "grant",
+		"scope":   "pattern",
+		"pattern": "recursive_delete",
+	}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grantRes["scope"] != "pattern" || grantRes["pattern"] != "recursive_delete" {
+		t.Fatalf("expected pattern grant, got %+v", grantRes)
+	}
+
+	statusRes, err := b.approval(context.Background(), map[string]any{"action": "status"}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvals, _ := statusRes["approvals"].([]map[string]any)
+	found := false
+	for _, a := range approvals {
+		if a["scope"] == "pattern" && a["pattern"] == "recursive_delete" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected pattern approval in status, got %+v", statusRes)
+	}
+}
+
+func TestApprovalToolPatternRevoke(t *testing.T) {
+	b := &BuiltinTools{}
+	store := NewApprovalStore(time.Minute)
+	tc := ToolContext{SessionID: "s-revoke-pattern", ApprovalStore: store, Workdir: t.TempDir()}
+
+	b.approval(context.Background(), map[string]any{
+		"action":  "grant",
+		"scope":   "pattern",
+		"pattern": "recursive_delete",
+	}, tc)
+
+	revokedRes, err := b.approval(context.Background(), map[string]any{
+		"action":  "revoke",
+		"scope":   "pattern",
+		"pattern": "recursive_delete",
+	}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revokedRes["revoked"] != true {
+		t.Fatalf("expected pattern revoked=true, got %+v", revokedRes)
+	}
+}
+
+func TestTerminalPatternApprovalAllowsMatchingCategory(t *testing.T) {
+	b := &BuiltinTools{}
+	workdir := t.TempDir()
+	store := NewApprovalStore(time.Minute)
+	target := filepath.Join(workdir, "tmp-dir")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	store.GrantPattern("s-pattern", "recursive_delete", time.Minute)
+
+	_, err := b.terminal(context.Background(), map[string]any{
+		"command": "rm -rf tmp-dir",
+	}, ToolContext{SessionID: "s-pattern", ApprovalStore: store, Workdir: workdir})
+	if err != nil {
+		t.Fatalf("expected pattern-approved command to run, got %v", err)
+	}
+	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+		t.Fatalf("expected target directory removed, stat err=%v", statErr)
+	}
+}
+
+func TestTerminalPatternApprovalBlocksDifferentCategory(t *testing.T) {
+	b := &BuiltinTools{}
+	workdir := t.TempDir()
+	store := NewApprovalStore(time.Minute)
+
+	store.GrantPattern("s-pattern", "recursive_delete", time.Minute)
+
+	_, err := b.terminal(context.Background(), map[string]any{
+		"command": "chmod 777 somefile",
+	}, ToolContext{SessionID: "s-pattern", ApprovalStore: store, Workdir: workdir})
+	if err == nil || !strings.Contains(err.Error(), "requires approval") {
+		t.Fatalf("expected different category to be blocked, got %v", err)
+	}
+}
+
+func TestApprovalToolPatternGrantRequiresPattern(t *testing.T) {
+	b := &BuiltinTools{}
+	store := NewApprovalStore(time.Minute)
+	tc := ToolContext{SessionID: "s-no-pattern", ApprovalStore: store, Workdir: t.TempDir()}
+
+	_, err := b.approval(context.Background(), map[string]any{
+		"action": "grant",
+		"scope":  "pattern",
+	}, tc)
+	if err == nil || !strings.Contains(err.Error(), "pattern is required") {
+		t.Fatalf("expected error for missing pattern, got %v", err)
+	}
+}
+
 func TestSkillListAndView(t *testing.T) {
 	workdir := t.TempDir()
 	skillDir := filepath.Join(workdir, "skills", "code-review")

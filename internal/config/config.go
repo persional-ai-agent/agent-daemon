@@ -28,9 +28,13 @@ type Config struct {
 	MCPTransport            string
 	MCPStdioCommand         string
 	MCPOAuthTokenURL        string
+	MCPOAuthAuthURL         string
+	MCPOAuthRedirectURL     string
 	MCPOAuthClientID        string
 	MCPOAuthClientSecret    string
 	MCPOAuthScopes          string
+	MCPOAuthGrantType       string
+	MCPOAuthCallbackPort    int
 	MCPTimeoutSeconds       int
 	ApprovalTTLSeconds      int
 	MaxIterations           int
@@ -66,6 +70,12 @@ func Load() Config {
 	if v := os.Getenv("AGENT_MCP_TIMEOUT_SECONDS"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil && i > 0 {
 			mcpTimeout = i
+		}
+	}
+	mcpCallbackPort := 9876
+	if v := os.Getenv("AGENT_MCP_OAUTH_CALLBACK_PORT"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			mcpCallbackPort = i
 		}
 	}
 	approvalTTL := 300
@@ -115,9 +125,13 @@ func Load() Config {
 		MCPTransport:            getenv("AGENT_MCP_TRANSPORT", "http"),
 		MCPStdioCommand:         strings.TrimSpace(os.Getenv("AGENT_MCP_STDIO_COMMAND")),
 		MCPOAuthTokenURL:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_TOKEN_URL")),
+		MCPOAuthAuthURL:         strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_AUTH_URL")),
+		MCPOAuthRedirectURL:     strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_REDIRECT_URL")),
 		MCPOAuthClientID:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_CLIENT_ID")),
 		MCPOAuthClientSecret:    os.Getenv("AGENT_MCP_OAUTH_CLIENT_SECRET"),
 		MCPOAuthScopes:          strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_SCOPES")),
+		MCPOAuthGrantType:       strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_GRANT_TYPE")),
+		MCPOAuthCallbackPort:    mcpCallbackPort,
 		MCPTimeoutSeconds:       mcpTimeout,
 		ApprovalTTLSeconds:      approvalTTL,
 		MaxIterations:           maxTurns,

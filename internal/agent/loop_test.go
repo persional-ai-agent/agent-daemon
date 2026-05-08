@@ -806,3 +806,55 @@ func TestRunEmitsModelStreamEvents(t *testing.T) {
 		t.Fatalf("expected normalized v2 stream event set with args lifecycle, got %+v", events)
 	}
 }
+
+func TestRunEmitsMCPStreamEvents(t *testing.T) {
+	var mcpEvents []core.AgentEvent
+	registry := tools.NewRegistry()
+	registry.Register(testTool{
+		name: "mcp_tool",
+		call: func(_ context.Context, _ map[string]any, tc tools.ToolContext) (map[string]any, error) {
+			if tc.ToolEventSink != nil {
+				tc.ToolEventSink("progress", map[string]any{"percent": 50})
+				tc.ToolEventSink("progress", map[string]any{"percent": 100})
+			}
+			return map[string]any{"result": "ok"}, nil
+		},
+	})
+	eng := &Engine{
+		Client: &scriptedClient{responses: []core.Message{
+			{Role: "assistant", ToolCalls: []core.ToolCall{{ID: "c1", Type: "function", Function: core.ToolFunction{Name: "mcp_tool", Arguments: "{}"}}}},
+			{Role: "assistant", Content: "done"},
+		}},
+		Registry:      registry,
+		SystemPrompt:  DefaultSystemPrompt(),
+		MaxIterations: 2,
+		EventSink: func(evt core.AgentEvent) {
+			if evt.Type == "mcp_stream_event" {
+				mcpEvents = append(mcpEvents, evt)
+			}
+		},
+	}
+	_, err := eng.Run(context.Background(), "mcp-session", "run mcp", eng.SystemPrompt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mcpEvents) != 2 {
+		t.Fatalf("expected 2 mcp_stream_event events, got %d", len(mcpEvents))
+	}
+	if mcpEvents[0].Type != "mcp_stream_event" {
+		t.Fatalf("expected mcp_stream_event, got %s", mcpEvents[0].Type)
+	}
+	data0 := mcpEvents[0].Data
+	if data0["tool_name"] != "mcp_tool" || data0["event_type"] != "progress" {
+		t.Fatalf("unexpected first mcp_stream_event data: %+v", data0)
+	}
+	eventData0, _ := data0["event_data"].(map[string]any)
+	if eventData0["percent"] != 50 {
+		t.Fatalf("expected first event percent=50, got %v", eventData0["percent"])
+	}
+	data1 := mcpEvents[1].Data
+	eventData1, _ := data1["event_data"].(map[string]any)
+	if eventData1["percent"] != 100 {
+		t.Fatalf("expected second event percent=100, got %v", eventData1["percent"])
+	}
+}

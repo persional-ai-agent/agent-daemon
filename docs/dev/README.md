@@ -121,3 +121,12 @@
 - `040-research-provider-event-coverage.md`：Provider 完整事件字典覆盖调研
 - `040-plan-provider-event-coverage.md`：Provider 完整事件字典覆盖实施计划
 - `040-summary-provider-event-coverage.md`：Provider 完整事件字典覆盖结果总结
+- `041-research-approval-persistence.md`：审批状态持久化与细粒度审批策略调研
+- `041-plan-approval-persistence.md`：审批状态持久化与细粒度审批策略实施计划
+- `041-summary-approval-persistence.md`：审批状态持久化与细粒度审批策略结果总结
+- `042-research-mcp-streaming-passthrough.md`：MCP 流式事件透传调研
+- `042-plan-mcp-streaming-passthrough.md`：MCP 流式事件透传实施计划
+- `042-summary-mcp-streaming-passthrough.md`：MCP 流式事件透传结果总结
+- `043-research-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌调研
+- `043-plan-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌实施计划
+- `043-summary-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌结果总结
