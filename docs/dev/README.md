@@ -149,3 +149,6 @@
 - `054-research-cli-config-management.md`：CLI 配置管理最小对齐调研
 - `054-plan-cli-config-management.md`：CLI 配置管理最小实现计划
 - `054-summary-cli-config-management.md`：CLI 配置管理最小对齐总结
+- `055-research-cli-model-management.md`：CLI 模型管理最小对齐调研
+- `055-plan-cli-model-management.md`：CLI 模型管理最小实现计划
+- `055-summary-cli-model-management.md`：CLI 模型管理最小对齐总结

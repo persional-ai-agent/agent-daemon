@@ -164,3 +164,21 @@ func TestLoadUsesAgentConfigFile(t *testing.T) {
 		t.Fatalf("ModelName = %q, want custom", cfg.ModelName)
 	}
 }
+
+func TestLoadFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.ini")
+	if err := os.WriteFile(path, []byte("[api]\ntype = anthropic\n[api.anthropic]\nmodel = claude-test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ModelProvider != "anthropic" {
+		t.Fatalf("ModelProvider = %q, want anthropic", cfg.ModelProvider)
+	}
+	if cfg.AnthropicModel != "claude-test" {
+		t.Fatalf("AnthropicModel = %q, want claude-test", cfg.AnthropicModel)
+	}
+}

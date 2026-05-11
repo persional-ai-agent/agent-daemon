@@ -141,6 +141,9 @@
 - `agentd config list`：列出配置文件中的键值，默认隐藏 `api_key/token/secret/password` 等敏感值。
 - `agentd config get section.key`：读取单个配置项。
 - `agentd config set section.key value`：写入单个配置项。
+- `agentd model show`：展示当前运行时 provider、model 与 base URL。
+- `agentd model providers`：列出内置 provider：OpenAI、Anthropic、Codex。
+- `agentd model set provider model` / `agentd model set provider:model`：写入 provider 选择与对应 provider 的 model 配置。
 
 默认读写 `config/config.ini`，也可通过 `AGENT_CONFIG_FILE` 或 `-file` 指定路径。运行时优先级仍为：环境变量 > 配置文件 > 内置默认值。
 
@@ -148,7 +151,7 @@
 
 核心 Agent daemon 能力已对齐 Hermes 的主干设计。后续可选扩展：
 
-- 配置与 CLI 管理面：已具备最小 `config list|get|set`；后续补齐模型切换、工具启停、Gateway 配置、setup/doctor 等命令入口。
+- 配置与 CLI 管理面：已具备最小 `config list|get|set` 与 `model show|providers|set`；后续补齐工具启停、Gateway 配置、setup/doctor 等命令入口。
 - Toolset 与插件系统：从固定内置工具列表演进为 toolset 解析、可用性检查、插件发现与动态 schema 过滤。
 - Gateway 完整体验：补齐 DM pairing、slash command、运行中断/队列、delivery、hooks、token lock，再扩展更多平台。
 - 执行环境：在 `internal/tools/process.go` 之外抽象本地、Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox 等后端。
@@ -168,7 +171,7 @@
 | Context compression | `agent/context_compressor.py`、context engine plugins | `internal/agent/compressor.go` | 核心对齐 | 后续可加可替换 context engine |
 | MCP | `tools/mcp_tool.py` | `internal/tools/mcp.go` | 核心对齐 | 继续补更完整的服务器能力与错误分类 |
 | Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
-| CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 最小覆盖 | 已补最小 config；后续补 model/tools/gateway/setup/doctor，再评估 TUI |
+| CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 最小覆盖 | 已补最小 config/model；后续补 tools/gateway/setup/doctor，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
 | Gateway | `gateway/run.py`、`gateway/platforms/*` | `internal/gateway` + Telegram/Discord/Slack | 最小覆盖 | 先补授权配对、slash command、中断/队列，再扩平台 |
 | Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 无通用插件框架 | 未覆盖 | 明确插件边界后再引入，避免过早复杂化 |

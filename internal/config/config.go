@@ -119,8 +119,18 @@ func iniInt(iv iniValues, section, key, envVar string, def int) int {
 }
 
 func Load() Config {
-	iv := loadConfigINI()
+	return loadFromINIValues(loadConfigINI())
+}
 
+func LoadFile(path string) (Config, error) {
+	f, err := LoadConfigFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+	return loadFromINIValues(iniValues{file: f, found: true}), nil
+}
+
+func loadFromINIValues(iv iniValues) Config {
 	home, _ := os.UserHomeDir()
 	dataDir := iniStr(iv, "agent", "data_dir", "AGENT_DAEMON_HOME", filepath.Join(home, ".agent-daemon"))
 

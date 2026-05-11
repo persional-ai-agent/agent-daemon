@@ -125,6 +125,16 @@ go run ./cmd/agentd config set provider.fallback anthropic
 
 默认读写 `config/config.ini`。也可以通过 `AGENT_CONFIG_FILE=/path/to/config.ini` 或 `-file /path/to/config.ini` 指定配置文件；环境变量仍优先于配置文件。
 
+模型切换：
+
+```bash
+go run ./cmd/agentd model show
+go run ./cmd/agentd model providers
+go run ./cmd/agentd model set openai gpt-4o-mini
+go run ./cmd/agentd model set anthropic:claude-3-5-haiku-latest
+go run ./cmd/agentd model set -base-url https://api.openai.com/v1 codex gpt-5-codex
+```
+
 请求示例：
 
 ```bash

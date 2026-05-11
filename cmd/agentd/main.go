@@ -50,6 +50,8 @@ func main() {
 		}
 	case "config":
 		runConfig(os.Args[2:])
+	case "model":
+		runModel(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
@@ -114,6 +116,144 @@ func printConfigUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd config list [-file path] [-show-secrets]")
 	fmt.Fprintln(os.Stderr, "  agentd config get [-file path] section.key")
 	fmt.Fprintln(os.Stderr, "  agentd config set [-file path] section.key value")
+}
+
+func runModel(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printModelUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "show", "current":
+		fs := flag.NewFlagSet("model show", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd model show [-file path]")
+		}
+		showCfg := cfg
+		if strings.TrimSpace(*path) != "" {
+			var err error
+			showCfg, err = config.LoadFile(*path)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		provider := strings.ToLower(strings.TrimSpace(showCfg.ModelProvider))
+		if provider == "" {
+			provider = "openai"
+		}
+		modelName, baseURL := currentModelConfig(showCfg, provider)
+		fmt.Printf("provider=%s\n", provider)
+		fmt.Printf("model=%s\n", modelName)
+		fmt.Printf("base_url=%s\n", baseURL)
+	case "providers":
+		for _, provider := range supportedModelProviders() {
+			fmt.Println(provider)
+		}
+	case "set":
+		fs := flag.NewFlagSet("model set", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		baseURL := fs.String("base-url", "", "provider base URL")
+		_ = fs.Parse(args[1:])
+		provider, modelName, err := parseModelSetArgs(fs.Args())
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := saveModelSelection(*path, provider, modelName, *baseURL); err != nil {
+			log.Fatal(err)
+		}
+		if strings.TrimSpace(*baseURL) == "" {
+			fmt.Printf("updated model to %s:%s in %s\n", provider, modelName, config.ConfigFilePath(*path))
+		} else {
+			fmt.Printf("updated model to %s:%s (%s) in %s\n", provider, modelName, *baseURL, config.ConfigFilePath(*path))
+		}
+	default:
+		printModelUsage()
+		os.Exit(2)
+	}
+}
+
+func printModelUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd model show [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd model providers")
+	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider model")
+	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider:model")
+}
+
+func supportedModelProviders() []string {
+	return []string{"openai", "anthropic", "codex"}
+}
+
+func currentModelConfig(cfg config.Config, provider string) (string, string) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic":
+		return cfg.AnthropicModel, cfg.AnthropicBaseURL
+	case "codex":
+		return cfg.CodexModel, cfg.CodexBaseURL
+	default:
+		return cfg.ModelName, cfg.ModelBaseURL
+	}
+}
+
+func parseModelSetArgs(args []string) (string, string, error) {
+	if len(args) == 1 {
+		parts := strings.SplitN(args[0], ":", 2)
+		if len(parts) != 2 {
+			return "", "", fmt.Errorf("usage: agentd model set provider model or provider:model")
+		}
+		return normalizeModelSelection(parts[0], parts[1])
+	}
+	if len(args) == 2 {
+		return normalizeModelSelection(args[0], args[1])
+	}
+	return "", "", fmt.Errorf("usage: agentd model set provider model or provider:model")
+}
+
+func normalizeModelSelection(provider, modelName string) (string, string, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return "", "", fmt.Errorf("model is required")
+	}
+	for _, supported := range supportedModelProviders() {
+		if provider == supported {
+			return provider, modelName, nil
+		}
+	}
+	return "", "", fmt.Errorf("unsupported provider %q (supported: openai, anthropic, codex)", provider)
+}
+
+func saveModelSelection(path, provider, modelName, baseURL string) error {
+	provider, modelName, err := normalizeModelSelection(provider, modelName)
+	if err != nil {
+		return err
+	}
+	if err := config.SaveConfigValue(path, "api.type", provider); err != nil {
+		return err
+	}
+	modelKey, baseURLKey := modelConfigKeys(provider)
+	if err := config.SaveConfigValue(path, modelKey, modelName); err != nil {
+		return err
+	}
+	if strings.TrimSpace(baseURL) != "" {
+		if err := config.SaveConfigValue(path, baseURLKey, strings.TrimSpace(baseURL)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func modelConfigKeys(provider string) (string, string) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic":
+		return "api.anthropic.model", "api.anthropic.base_url"
+	case "codex":
+		return "api.codex.model", "api.codex.base_url"
+	default:
+		return "api.model", "api.base_url"
+	}
 }
 
 func runChat(cfg config.Config, first string, sessionID ...string) {

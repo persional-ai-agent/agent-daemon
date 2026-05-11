@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/config"
@@ -86,5 +87,55 @@ func TestBuildModelClientCodexStreamingEnabled(t *testing.T) {
 	}
 	if !cc.UseStreaming {
 		t.Fatalf("expected UseStreaming=true")
+	}
+}
+
+func TestParseModelSetArgs(t *testing.T) {
+	provider, modelName, err := parseModelSetArgs([]string{"anthropic:claude-3-5-haiku-latest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "anthropic" || modelName != "claude-3-5-haiku-latest" {
+		t.Fatalf("parsed %s %s", provider, modelName)
+	}
+
+	provider, modelName, err = parseModelSetArgs([]string{"codex", "gpt-5-codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "codex" || modelName != "gpt-5-codex" {
+		t.Fatalf("parsed %s %s", provider, modelName)
+	}
+
+	if _, _, err := parseModelSetArgs([]string{"unknown", "model"}); err == nil {
+		t.Fatal("expected unsupported provider error")
+	}
+}
+
+func TestSaveModelSelectionWritesProviderSpecificKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.ini")
+	if err := saveModelSelection(path, "anthropic", "claude-test", "https://anthropic.example/v1"); err != nil {
+		t.Fatal(err)
+	}
+
+	assertConfigValue(t, path, "api.type", "anthropic")
+	assertConfigValue(t, path, "api.anthropic.model", "claude-test")
+	assertConfigValue(t, path, "api.anthropic.base_url", "https://anthropic.example/v1")
+
+	if err := saveModelSelection(path, "openai", "gpt-test", ""); err != nil {
+		t.Fatal(err)
+	}
+	assertConfigValue(t, path, "api.type", "openai")
+	assertConfigValue(t, path, "api.model", "gpt-test")
+}
+
+func assertConfigValue(t *testing.T, path, key, want string) {
+	t.Helper()
+	got, ok, err := config.ReadConfigValue(path, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != want {
+		t.Fatalf("%s = %q, %v; want %q, true", key, got, ok, want)
 	}
 }
