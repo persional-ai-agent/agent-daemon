@@ -169,7 +169,7 @@
 |----------------|-----------------|-------------|----------|--------------|
 | Agent Loop | `run_agent.py`、`agent/prompt_builder.py` | `internal/agent` | 已对齐核心 | 保持事件协议稳定，避免把 UI 逻辑塞入 loop |
 | Provider runtime | `hermes_cli/runtime_provider.py`、`plugins/model-providers/` | `internal/model`、`internal/config` | 部分对齐 | 先抽象 provider profile，再增加更多 provider |
-| Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go` | 已对齐最小核心 | 补 toolset、availability check、动态 schema patch |
+| Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go`、`toolsets.go` | 部分对齐 | 已补最小 toolsets 解析与 registry 过滤；后续补 availability check、动态 schema patch 与插件发现 |
 | Built-in tools | `tools/*`，Hermes 文档列出 68 个工具 | terminal、process、file、todo、memory、session_search、web_fetch、delegate、approval、skills、MCP | 最小覆盖 | 按场景优先补 browser/web/code/cron/vision/messaging |
 | Terminal environments | `tools/environments/*` | `internal/tools/process.go` | 最小覆盖 | 抽象 Environment 接口后接 Docker/SSH 等后端 |
 | Session storage | `hermes_state.py`、`gateway/session.py` | `internal/store/session_store.go` | 部分对齐 | 如需高质量检索，补 FTS5 与摘要层 |
@@ -179,8 +179,8 @@
 | Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
 | CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 最小覆盖 | 已补最小 config/model/tools 查看与启停/doctor/gateway 开关；后续补 gateway setup、setup wizard，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
-| Gateway | `gateway/run.py`、`gateway/platforms/*` | `internal/gateway` + Telegram/Discord/Slack | 最小覆盖 | 先补授权配对、slash command、中断/队列，再扩平台 |
+| Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack + `send_message` | 部分对齐 | 已补最小 send_message（基于运行时 adapter registry）；后续补 delivery、配对、slash command、中断/队列 |
 | Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 无通用插件框架 | 未覆盖 | 明确插件边界后再引入，避免过早复杂化 |
 | ACP/IDE | `acp_adapter/` | 无 | 未覆盖 | 仅在 IDE 场景明确时补齐 |
-| Cron | `cron/`、`tools/cronjob_tools.py` | 无 | 未覆盖 | 需任务存储、调度器、投递目标一起设计 |
+| Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 当前先覆盖 interval/one-shot 作业存储与调度；后续补 cron expr 计算、平台投递与链式上下文 |
 | Research/RL/trajectory | `batch_runner.py`、`environments/`、`trajectory_compressor.py` | 无 | 未覆盖 | 与 daemon 主路径解耦，作为独立扩展 |

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestCodexClientParsesFunctionCall(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/responses" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -38,7 +37,7 @@ func TestCodexClientParsesFunctionCall(t *testing.T) {
 
 func TestCodexClientBuildsFunctionCallOutputInput(t *testing.T) {
 	var reqBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 			t.Fatalf("decode request failed: %v", err)
 		}

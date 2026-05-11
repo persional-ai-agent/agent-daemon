@@ -226,3 +226,83 @@ func TestSessionStoreOAuthTokenLoadMissing(t *testing.T) {
 		t.Fatalf("expected empty for missing provider, got access=%s refresh=%s", accessToken, refreshToken)
 	}
 }
+
+func TestSessionStoreListRecentSessions(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendMessage("s2", core.Message{Role: "user", Content: "two"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendMessage("s1", core.Message{Role: "assistant", Content: "three"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := s.ListRecentSessions(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 sessions, got %d: %#v", len(rows), rows)
+	}
+	if rows[0]["session_id"] != "s1" {
+		t.Fatalf("expected most recent session s1, got %#v", rows[0])
+	}
+}
+
+func TestSessionStoreLoadMessagesPage(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	for i := 0; i < 5; i++ {
+		if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "m" + string(rune('0'+i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	msgs, err := s.LoadMessagesPage("s1", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d: %#v", len(msgs), msgs)
+	}
+	if msgs[0].Content != "m2" || msgs[1].Content != "m3" {
+		t.Fatalf("unexpected messages: %#v", msgs)
+	}
+}
+
+func TestSessionStoreSessionStats(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendMessage("s1", core.Message{Role: "assistant", Content: "ok"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := s.SessionStats("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats["session_id"] != "s1" {
+		t.Fatalf("expected session_id s1, got %#v", stats["session_id"])
+	}
+	if stats["message_count"] != int64(2) {
+		t.Fatalf("expected message_count=2, got %#v", stats["message_count"])
+	}
+}

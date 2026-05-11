@@ -56,6 +56,10 @@ type Config struct {
 	ModelCascade            string
 	ModelCostAware          bool
 	DisabledTools           string
+	CronEnabled             bool
+	CronTickSeconds         int
+	CronMaxConcurrency      int
+	EnabledToolsets         string
 }
 
 type iniValues struct {
@@ -194,6 +198,15 @@ func loadFromINIValues(iv iniValues) Config {
 	raceEnabled := iniBool(iv, "provider", "race_enabled", "AGENT_MODEL_RACE_ENABLED")
 	costAware := iniBool(iv, "provider", "cost_aware", "AGENT_MODEL_COST_AWARE")
 	gatewayEnabled := iniBool(iv, "gateway", "enabled", "AGENT_GATEWAY_ENABLED")
+	cronEnabled := iniBool(iv, "cron", "enabled", "AGENT_CRON_ENABLED")
+	cronTickSeconds := iniInt(iv, "cron", "tick_seconds", "AGENT_CRON_TICK_SECONDS", 5)
+	if cronTickSeconds <= 0 {
+		cronTickSeconds = 5
+	}
+	cronMaxConc := iniInt(iv, "cron", "max_concurrency", "AGENT_CRON_MAX_CONCURRENCY", 1)
+	if cronMaxConc <= 0 {
+		cronMaxConc = 1
+	}
 
 	return Config{
 		ModelProvider:           apiType,
@@ -242,5 +255,9 @@ func loadFromINIValues(iv iniValues) Config {
 		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
 		ModelCostAware:          costAware,
 		DisabledTools:           iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),
+		EnabledToolsets:         iniStr(iv, "tools", "enabled_toolsets", "AGENT_ENABLED_TOOLSETS", ""),
+		CronEnabled:             cronEnabled,
+		CronTickSeconds:         cronTickSeconds,
+		CronMaxConcurrency:      cronMaxConc,
 	}
 }

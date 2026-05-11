@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -17,7 +16,7 @@ import (
 
 func TestRegisterMCPToolsAndDispatch(t *testing.T) {
 	var callPayload map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tools":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -80,7 +79,7 @@ func TestRegisterMCPToolsAndDispatch(t *testing.T) {
 }
 
 func TestRegisterMCPToolsHandlesDiscoveryFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/tools" {
 			http.Error(w, "unavailable", http.StatusBadGateway)
 			return
@@ -99,7 +98,7 @@ func TestRegisterMCPToolsAndDispatchWithOAuthClientCredentials(t *testing.T) {
 	var tokenRequests int32
 	var toolsAuthHeader string
 	var callAuthHeader string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token":
 			atomic.AddInt32(&tokenRequests, 1)
@@ -186,7 +185,7 @@ func TestRegisterMCPToolsAndDispatchWithOAuthClientCredentials(t *testing.T) {
 }
 
 func TestRegisterMCPToolsAndDispatchSSECall(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tools":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -381,7 +380,7 @@ func readMCPTestFrame(r *bufio.Reader) ([]byte, error) {
 }
 
 func TestRegisterMCPToolsAndDispatchSSECallWithCallback(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tools":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -459,7 +458,7 @@ func TestRegisterMCPToolsAndDispatchSSECallWithCallback(t *testing.T) {
 }
 
 func TestRegisterMCPToolsSSECallbackNoSinkFallsBackToAggregated(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tools":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -506,7 +505,7 @@ func TestRegisterMCPToolsSSECallbackNoSinkFallsBackToAggregated(t *testing.T) {
 
 func TestMCPClientOAuthRefreshToken(t *testing.T) {
 	var tokenRequests int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token":
 			atomic.AddInt32(&tokenRequests, 1)
@@ -571,7 +570,7 @@ func TestMCPClientOAuthRefreshToken(t *testing.T) {
 }
 
 func TestMCPClientOAuthAuthCodeExchange(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token":
 			_ = r.ParseForm()
@@ -685,7 +684,7 @@ func (m *mockTokenStore) DeleteOAuthToken(provider string) error {
 }
 
 func TestMCPClientOAuthTokenPersistence(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token":
 			_ = json.NewEncoder(w).Encode(map[string]any{

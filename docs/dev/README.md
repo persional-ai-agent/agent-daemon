@@ -164,3 +164,18 @@
 - `059-research-tool-disable-config.md`：工具禁用配置最小对齐调研
 - `059-plan-tool-disable-config.md`：工具禁用配置最小实现计划
 - `059-summary-tool-disable-config.md`：工具禁用配置最小对齐总结
+- `060-research-cli-sessions.md`：CLI 会话列表与检索调研
+- `060-plan-cli-sessions.md`：CLI 会话列表与检索计划
+- `060-summary-cli-sessions.md`：CLI 会话列表与检索总结
+- `061-research-cli-session-show-stats.md`：CLI 会话详情查看与统计调研
+- `061-plan-cli-session-show-stats.md`：CLI 会话详情查看与统计计划
+- `061-summary-cli-session-show-stats.md`：CLI 会话详情查看与统计总结
+- `062-research-hermes-cron-alignment.md`：Hermes Cron 能力差异与最小对齐路径
+- `062-plan-hermes-cron-alignment.md`：Hermes Cron 最小对齐（interval/one-shot）
+- `062-summary-hermes-cron-alignment.md`：Hermes Cron 最小对齐总结与边界
+- `063-research-hermes-toolsets-alignment.md`：Hermes Toolsets 与 Go 版最小对齐
+- `063-plan-hermes-toolsets-alignment.md`：Hermes Toolsets 最小对齐计划
+- `063-summary-hermes-toolsets-alignment.md`：Hermes Toolsets 最小对齐总结与边界
+- `064-research-hermes-send-message-alignment.md`：Hermes send_message 与 Go 版最小对齐
+- `064-plan-hermes-send-message-alignment.md`：Hermes send_message 最小对齐计划
+- `064-summary-hermes-send-message-alignment.md`：Hermes send_message 最小对齐总结与边界

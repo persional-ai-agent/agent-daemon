@@ -53,7 +53,7 @@
 | 能力域 | 当前状态 | 说明 |
 |--------|----------|------|
 | Agent Loop | 已对齐 | 支持多轮推理、工具调用、工具结果回灌与最大迭代控制 |
-| 工具注册与分发 | 已对齐 | 统一 schema、registry、dispatch、JSON 结果 |
+| 工具注册与分发 | 部分对齐 | 统一 schema、registry、dispatch、JSON 结果；已补最小 toolsets 过滤（可缩减 schema 面） |
 | 模型 API 模式 | 部分对齐 | 内置 OpenAI、Anthropic、Codex；未覆盖 Hermes 的 provider 插件生态 |
 | Provider 韧性 | 已对齐核心能力 | 已有 fallback、熔断、竞速、cascade、成本感知与流式事件标准化 |
 | 会话与记忆 | 部分对齐 | SQLite 会话、Markdown 记忆、session search；未实现 Hermes 的 FTS5 + LLM 摘要式检索和 memory provider 插件 |
@@ -61,11 +61,11 @@
 | MCP | 已对齐核心能力 | 支持 HTTP、stdio、OAuth client credentials、OAuth authorization code 与流式事件透传 |
 | Skills | 已对齐核心能力 | 支持本地列表/查看/管理、条件过滤、预加载、同步与 GitHub 搜索 |
 | API 服务 | 已对齐核心能力 | HTTP、SSE、WebSocket、取消接口 |
-| Gateway | 最小对齐 | 支持 Telegram、Discord、Slack；未覆盖 Hermes 的完整平台矩阵、配对、slash command、队列/中断、delivery、hooks |
+| Gateway | 最小对齐 | 支持 Telegram、Discord、Slack；已补最小 `send_message`（依赖 gateway 运行时适配器）；未覆盖 Hermes 的完整平台矩阵、配对、slash command、队列/中断、delivery、hooks |
 | CLI/TUI | 最小覆盖 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、gateway；未实现 Hermes 全屏 TUI 与完整命令体系 |
-| 工具全集 | 最小覆盖 | 当前内置核心工具；未覆盖 browser、code execution、cron、vision、tts、messaging、Home Assistant、Feishu、Spotify、RL 等 Hermes 工具集 |
+| 工具全集 | 最小覆盖 | 当前内置核心工具 + `cronjob`（interval/one-shot）；未覆盖 browser、code execution、vision、tts、messaging、Home Assistant、Feishu、Spotify、RL 等 Hermes 工具集 |
 | 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
-| 插件/ACP/Cron/训练 | 未覆盖 | 暂无通用插件系统、ACP adapter、cron scheduler、batch/RL/trajectory 链路 |
+| 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；暂无通用插件系统、ACP adapter、batch/RL/trajectory 链路 |
 
 ## 暂未覆盖能力
 
@@ -77,7 +77,7 @@
 - browser、browser-cdp、code execution、cronjob、vision、tts、messaging、Home Assistant、Feishu、Spotify、Yuanbao、RL 等工具域
 - Docker、SSH、Singularity、Modal、Daytona、Vercel Sandbox 等终端后端
 - 多平台 Gateway 的 DM pairing、运行中断/队列、跨平台 delivery、hooks、token lock 和更多平台适配器
-- 通用插件系统、ACP/IDE 集成、Cron 自动化、Web/TUI dashboard、研究/训练数据链路
+- 通用插件系统、ACP/IDE 集成、Cron 的平台投递/脚本/链式上下文等高级能力、Web/TUI dashboard、研究/训练数据链路
 
 ## 当前范围
 

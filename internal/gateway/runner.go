@@ -8,6 +8,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/platform"
 )
 
 type Runner struct {
@@ -43,8 +44,10 @@ func (r *Runner) Start(ctx context.Context) error {
 				log.Printf("[gateway:%s] connect failed: %v", adapter.Name(), err)
 				return
 			}
+			platform.Register(adapter)
 
 			<-adapterCtx.Done()
+			platform.Unregister(adapter.Name())
 			if err := adapter.Disconnect(context.Background()); err != nil {
 				log.Printf("[gateway:%s] disconnect error: %v", adapter.Name(), err)
 			}

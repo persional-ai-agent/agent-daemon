@@ -64,6 +64,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "stop_process", desc: "Stop a background process", params: stopProcessParams(), call: b.stopProcess})
 	r.Register(toolDef{name: "read_file", desc: "Read file from filesystem", params: readFileParams(), call: b.readFile})
 	r.Register(toolDef{name: "write_file", desc: "Write content to file", params: writeFileParams(), call: b.writeFile})
+	r.Register(toolDef{name: "patch", desc: "Patch file by replacing old_string with new_string", params: patchParams(), call: b.patch})
 	r.Register(toolDef{name: "search_files", desc: "Search text in files", params: searchFilesParams(), call: b.searchFiles})
 	r.Register(toolDef{name: "todo", desc: "Maintain per-session todo list", params: todoParams(), call: b.todo})
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
@@ -75,6 +76,50 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "skill_search", desc: "Search for skills from GitHub repositories (e.g. anthropics/skills)", params: skillSearchParams(), call: b.skillSearch})
 	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
 	r.Register(toolDef{name: "skill_manage", desc: "Manage local skills (create/edit/patch/delete)", params: skillManageParams(), call: b.skillManage})
+}
+
+func (b *BuiltinTools) patch(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	oldString := strArg(args, "old_string")
+	if oldString == "" {
+		return nil, errors.New("old_string required")
+	}
+	newString, hasNew := args["new_string"]
+	if !hasNew {
+		return nil, errors.New("new_string required")
+	}
+	newText, ok := newString.(string)
+	if !ok {
+		return nil, errors.New("new_string must be a string")
+	}
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	content := string(bs)
+	replaceAll := boolArg(args, "replace_all", false)
+	matchCount := strings.Count(content, oldString)
+	if matchCount == 0 {
+		return nil, fmt.Errorf("old_string not found in %s", path)
+	}
+	if !replaceAll && matchCount != 1 {
+		return nil, fmt.Errorf("old_string matched %d times; set replace_all=true for bulk replacement", matchCount)
+	}
+	var updated string
+	replacements := 1
+	if replaceAll {
+		updated = strings.ReplaceAll(content, oldString, newText)
+		replacements = matchCount
+	} else {
+		updated = strings.Replace(content, oldString, newText, 1)
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		return nil, err
+	}
+	return map[string]any{"success": true, "path": path, "replacements": replacements}, nil
 }
 
 type toolFn func(context.Context, map[string]any, ToolContext) (map[string]any, error)
@@ -872,6 +917,9 @@ func readFileParams() map[string]any {
 }
 func writeFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}
+}
+func patchParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "old_string": map[string]any{"type": "string"}, "new_string": map[string]any{"type": "string"}, "replace_all": map[string]any{"type": "boolean"}}, "required": []string{"path", "old_string", "new_string"}}
 }
 func searchFilesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "pattern": map[string]any{"type": "string"}, "glob": map[string]any{"type": "string"}}, "required": []string{"pattern"}}

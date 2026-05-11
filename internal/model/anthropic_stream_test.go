@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestAnthropicClientStreamingText(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"hello\"}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" world\"}}\n\n")
@@ -34,7 +33,7 @@ func TestAnthropicClientStreamingText(t *testing.T) {
 }
 
 func TestAnthropicClientStreamingToolUse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"read_file\"}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"path\\\":\\\"REA\"}}\n\n")
@@ -68,7 +67,7 @@ func TestAnthropicClientStreamingToolUse(t *testing.T) {
 func TestAnthropicClientStreamingUsageEvent(t *testing.T) {
 	client := NewAnthropicClient("", "k", "claude-test")
 	client.UseStreaming = true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":11,\"output_tokens\":5}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
@@ -98,7 +97,7 @@ func TestAnthropicClientStreamingUsageEvent(t *testing.T) {
 func TestAnthropicClientStreamingMessageDeltaStopReason(t *testing.T) {
 	client := NewAnthropicClient("", "k", "claude-test")
 	client.UseStreaming = true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"stop_reason\":\"tool_use\",\"stop_sequence\":\"</END>\"}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
@@ -132,7 +131,7 @@ func TestAnthropicClientStreamingMessageDeltaStopReason(t *testing.T) {
 func TestAnthropicStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
 	client := NewAnthropicClient("", "k", "claude-test")
 	client.UseStreaming = true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"usage\":{\"total_tokens\":13}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
@@ -161,7 +160,7 @@ func TestAnthropicStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
 func TestAnthropicStreamingUsageStatusAdjustedE2E(t *testing.T) {
 	client := NewAnthropicClient("", "k", "claude-test")
 	client.UseStreaming = true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":9,\"output_tokens\":4,\"total_tokens\":10}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")
@@ -201,7 +200,7 @@ func TestAnthropicStreamingUsageStatusAdjustedE2E(t *testing.T) {
 func TestAnthropicStreamingMaxTokensIncompleteReason(t *testing.T) {
 	client := NewAnthropicClient("", "k", "claude-test")
 	client.UseStreaming = true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_delta\",\"stop_reason\":\"max_tokens\"}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"message_stop\"}\n\n")

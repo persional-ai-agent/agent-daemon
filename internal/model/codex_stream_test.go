@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 
 func TestCodexClientStreamingText(t *testing.T) {
 	var seenStream bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		stream, _ := req["stream"].(bool)
@@ -44,7 +43,7 @@ func TestCodexClientStreamingText(t *testing.T) {
 }
 
 func TestCodexClientStreamingFunctionCall(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"call_1\",\"type\":\"function_call\",\"name\":\"read_file\"}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"path\\\":\\\"REA\"}\n\n")
@@ -76,7 +75,7 @@ func TestCodexClientStreamingFunctionCall(t *testing.T) {
 }
 
 func TestCodexClientStreamingUsageEvent(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"input_tokens\":8,\"output_tokens\":4,\"total_tokens\":12},\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
 	}))
@@ -104,7 +103,7 @@ func TestCodexClientStreamingUsageEvent(t *testing.T) {
 }
 
 func TestCodexClientStreamingCompletedEnvelopeCarriesResponseID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"response\":{\"id\":\"resp_777\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
 	}))
@@ -136,7 +135,7 @@ func TestCodexClientStreamingCompletedEnvelopeCarriesResponseID(t *testing.T) {
 }
 
 func TestCodexStreamingUsageStatusInvalidE2E(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"tokens\":\"NaN\"},\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
 	}))
@@ -163,7 +162,7 @@ func TestCodexStreamingUsageStatusInvalidE2E(t *testing.T) {
 }
 
 func TestCodexStreamingUsageStatusAdjustedE2E(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"response\":{\"usage\":{\"input_tokens\":6,\"output_tokens\":4,\"total_tokens\":7},\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"ok\"}]}}\n\n")
 	}))
@@ -201,7 +200,7 @@ func TestCodexStreamingUsageStatusAdjustedE2E(t *testing.T) {
 }
 
 func TestCodexStreamingMessageDoneWithResponseID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_abc123\"}}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\"}}\n\n")

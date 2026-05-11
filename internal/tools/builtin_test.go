@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -591,7 +590,7 @@ func TestSkillManageRejectsInvalidSupportingFilePath(t *testing.T) {
 }
 
 func TestSkillManageSyncURL(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("# My Synced Skill\nThis is a synced skill."))
 	}))

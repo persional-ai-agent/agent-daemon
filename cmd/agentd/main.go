@@ -22,6 +22,7 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/cli"
 	"github.com/dingjingmaster/agent-daemon/internal/config"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/cronrunner"
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 	"github.com/dingjingmaster/agent-daemon/internal/gateway/platforms"
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
@@ -48,6 +49,8 @@ func main() {
 		runServe(cfg)
 	case "tools":
 		runTools(cfg, os.Args[2:])
+	case "toolsets":
+		runToolsets(os.Args[2:])
 	case "config":
 		runConfig(os.Args[2:])
 	case "model":
@@ -56,6 +59,8 @@ func main() {
 		runDoctor(cfg, os.Args[2:])
 	case "gateway":
 		runGateway(cfg, os.Args[2:])
+	case "sessions":
+		runSessions(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
@@ -112,6 +117,38 @@ func runConfig(args []string) {
 	default:
 		printConfigUsage()
 		os.Exit(2)
+	}
+}
+
+func runToolsets(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage:")
+		fmt.Fprintln(os.Stderr, "  agentd toolsets list")
+		fmt.Fprintln(os.Stderr, "  agentd toolsets resolve name[,name...]")
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "list":
+		printJSON(tools.ListToolsets())
+	case "resolve":
+		fs := flag.NewFlagSet("toolsets resolve", flag.ExitOnError)
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd toolsets resolve name[,name...]")
+		}
+		names := parseNameList(fs.Arg(0))
+		allowed, err := tools.ResolveToolset(names)
+		if err != nil {
+			log.Fatal(err)
+		}
+		out := make([]string, 0, len(allowed))
+		for name := range allowed {
+			out = append(out, name)
+		}
+		sort.Strings(out)
+		printToolNames(out)
+	default:
+		log.Fatal("usage: agentd toolsets list | agentd toolsets resolve name[,name...]")
 	}
 }
 
@@ -188,7 +225,7 @@ func printModelUsage() {
 
 func runTools(cfg config.Config, args []string) {
 	if len(args) == 0 {
-		eng := mustBuildEngine(cfg)
+		eng, _ := mustBuildEngine(cfg)
 		printToolNames(eng.Registry.Names())
 		return
 	}
@@ -199,7 +236,7 @@ func runTools(cfg config.Config, args []string) {
 		if fs.NArg() != 0 {
 			log.Fatal("usage: agentd tools list")
 		}
-		eng := mustBuildEngine(cfg)
+		eng, _ := mustBuildEngine(cfg)
 		printToolNames(eng.Registry.Names())
 	case "show":
 		fs := flag.NewFlagSet("tools show", flag.ExitOnError)
@@ -207,7 +244,7 @@ func runTools(cfg config.Config, args []string) {
 		if fs.NArg() != 1 {
 			log.Fatal("usage: agentd tools show tool_name")
 		}
-		eng := mustBuildEngine(cfg)
+		eng, _ := mustBuildEngine(cfg)
 		schema, ok := findToolSchema(eng.Registry.Schemas(), fs.Arg(0))
 		if !ok {
 			log.Fatalf("unknown tool: %s", fs.Arg(0))
@@ -219,7 +256,7 @@ func runTools(cfg config.Config, args []string) {
 		if fs.NArg() != 0 {
 			log.Fatal("usage: agentd tools schemas")
 		}
-		eng := mustBuildEngine(cfg)
+		eng, _ := mustBuildEngine(cfg)
 		printJSON(eng.Registry.Schemas())
 	case "disabled":
 		fs := flag.NewFlagSet("tools disabled", flag.ExitOnError)
@@ -635,6 +672,108 @@ func configuredGatewayPlatforms(cfg config.Config) []string {
 	return out
 }
 
+func runSessions(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printSessionsUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("sessions list", flag.ExitOnError)
+		dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir (contains sessions.db)")
+		limit := fs.Int("limit", 20, "result limit")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd sessions list [-data-dir dir] [-limit N]")
+		}
+		ss, err := store.NewSessionStore(filepath.Join(strings.TrimSpace(*dataDir), "sessions.db"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ss.Close()
+		rows, err := ss.ListRecentSessions(*limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(rows)
+	case "search":
+		fs := flag.NewFlagSet("sessions search", flag.ExitOnError)
+		dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir (contains sessions.db)")
+		limit := fs.Int("limit", 20, "result limit")
+		exclude := fs.String("exclude", "", "exclude session_id")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd sessions search [-data-dir dir] [-limit N] [-exclude session_id] query")
+		}
+		query := fs.Arg(0)
+		ss, err := store.NewSessionStore(filepath.Join(strings.TrimSpace(*dataDir), "sessions.db"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ss.Close()
+		rows, err := ss.Search(query, *limit, *exclude)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(rows)
+	case "show":
+		fs := flag.NewFlagSet("sessions show", flag.ExitOnError)
+		dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir (contains sessions.db)")
+		offset := fs.Int("offset", 0, "message offset (0-based)")
+		limit := fs.Int("limit", 200, "message limit")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd sessions show [-data-dir dir] [-offset N] [-limit N] session_id")
+		}
+		sessionID := fs.Arg(0)
+		ss, err := store.NewSessionStore(filepath.Join(strings.TrimSpace(*dataDir), "sessions.db"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ss.Close()
+		msgs, err := ss.LoadMessagesPage(sessionID, *offset, *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		payload := map[string]any{
+			"session_id": sessionID,
+			"offset":     *offset,
+			"limit":      *limit,
+			"messages":   msgs,
+		}
+		printJSON(payload)
+	case "stats":
+		fs := flag.NewFlagSet("sessions stats", flag.ExitOnError)
+		dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir (contains sessions.db)")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd sessions stats [-data-dir dir] session_id")
+		}
+		sessionID := fs.Arg(0)
+		ss, err := store.NewSessionStore(filepath.Join(strings.TrimSpace(*dataDir), "sessions.db"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ss.Close()
+		stats, err := ss.SessionStats(sessionID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(stats)
+	default:
+		printSessionsUsage()
+		os.Exit(2)
+	}
+}
+
+func printSessionsUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd sessions list [-data-dir dir] [-limit N]")
+	fmt.Fprintln(os.Stderr, "  agentd sessions search [-data-dir dir] [-limit N] [-exclude session_id] query")
+	fmt.Fprintln(os.Stderr, "  agentd sessions show [-data-dir dir] [-offset N] [-limit N] session_id")
+	fmt.Fprintln(os.Stderr, "  agentd sessions stats [-data-dir dir] session_id")
+}
+
 func supportedModelProviders() []string {
 	return []string{"openai", "anthropic", "codex"}
 }
@@ -710,7 +849,7 @@ func modelConfigKeys(provider string) (string, string) {
 }
 
 func runChat(cfg config.Config, first string, sessionID ...string) {
-	eng := mustBuildEngine(cfg)
+	eng, cronStore := mustBuildEngine(cfg)
 	id := uuid.NewString()
 	skills := ""
 	if len(sessionID) > 0 && sessionID[0] != "" {
@@ -719,7 +858,22 @@ func runChat(cfg config.Config, first string, sessionID ...string) {
 	if len(sessionID) > 1 && sessionID[1] != "" {
 		skills = sessionID[1]
 	}
-	if err := cli.RunChat(context.Background(), eng, id, first, skills); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if cfg.CronEnabled && cronStore != nil {
+		s := &cronrunner.Scheduler{
+			Store:          cronStore,
+			Engine:         eng,
+			Tick:           time.Duration(cfg.CronTickSeconds) * time.Second,
+			MaxConcurrency: cfg.CronMaxConcurrency,
+		}
+		if err := s.Start(ctx); err != nil {
+			log.Printf("cron scheduler start failed: %v", err)
+		} else {
+			log.Printf("cron scheduler enabled (tick=%ds max_concurrency=%d)", cfg.CronTickSeconds, cfg.CronMaxConcurrency)
+		}
+	}
+	if err := cli.RunChat(ctx, eng, id, first, skills); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -728,9 +882,25 @@ func runServe(cfg config.Config) {
 	if cfg.GatewayEnabled {
 		cfg.ModelUseStreaming = true
 	}
-	eng := mustBuildEngine(cfg)
+	eng, cronStore := mustBuildEngine(cfg)
 	srv := &http.Server{Addr: cfg.ListenAddr, Handler: (&api.Server{Engine: eng}).Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("agent-daemon listening on %s", cfg.ListenAddr)
+
+	cronCtx, cronCancel := context.WithCancel(context.Background())
+	defer cronCancel()
+	if cfg.CronEnabled && cronStore != nil {
+		s := &cronrunner.Scheduler{
+			Store:          cronStore,
+			Engine:         eng,
+			Tick:           time.Duration(cfg.CronTickSeconds) * time.Second,
+			MaxConcurrency: cfg.CronMaxConcurrency,
+		}
+		if err := s.Start(cronCtx); err != nil {
+			log.Printf("cron scheduler start failed: %v", err)
+		} else {
+			log.Printf("cron scheduler enabled (tick=%ds max_concurrency=%d)", cfg.CronTickSeconds, cfg.CronMaxConcurrency)
+		}
+	}
 
 	if cfg.GatewayEnabled {
 		log.Printf("gateway enabled")
@@ -763,6 +933,7 @@ func runServe(cfg config.Config) {
 			<-sigCh
 			log.Printf("shutting down...")
 			gatewayCancel()
+			cronCancel()
 			_ = srv.Shutdown(context.Background())
 		}()
 	}
@@ -806,13 +977,38 @@ func applyDisabledTools(registry *tools.Registry, disabled string) {
 	registry.Disable(parseNameList(disabled)...)
 }
 
-func mustBuildEngine(cfg config.Config) *agent.Engine {
+func applyEnabledToolsets(registry *tools.Registry, enabled string) error {
+	names := parseNameList(enabled)
+	if len(names) == 0 {
+		return nil
+	}
+	allowed, err := tools.ResolveToolset(names)
+	if err != nil {
+		return err
+	}
+	all := registry.Names()
+	disable := make([]string, 0, len(all))
+	for _, toolName := range all {
+		if _, ok := allowed[toolName]; !ok {
+			disable = append(disable, toolName)
+		}
+	}
+	registry.Disable(disable...)
+	return nil
+}
+
+func mustBuildEngine(cfg config.Config) (*agent.Engine, *store.CronStore) {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		log.Fatal(err)
 	}
 	sessionStore, err := store.NewSessionStore(filepath.Join(cfg.DataDir, "sessions.db"))
 	if err != nil {
 		log.Fatal(err)
+	}
+	cronStore, err := store.NewCronStore(sessionStore.DB())
+	if err != nil {
+		log.Printf("cron store init failed: %v", err)
+		cronStore = nil
 	}
 	memoryStore, err := memory.NewStore(cfg.DataDir)
 	if err != nil {
@@ -821,6 +1017,10 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 	registry := tools.NewRegistry()
 	proc := tools.NewProcessRegistry(filepath.Join(cfg.DataDir, "processes"))
 	tools.RegisterBuiltins(registry, proc)
+	if cronStore != nil {
+		registry.Register(tools.NewCronJobTool(cronStore))
+	}
+	registry.Register(tools.NewSendMessageTool())
 	approvalStore := tools.NewPersistentApprovalStore(time.Duration(cfg.ApprovalTTLSeconds)*time.Second, sessionStore)
 	switch strings.ToLower(strings.TrimSpace(cfg.MCPTransport)) {
 	case "stdio":
@@ -876,6 +1076,9 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 			}
 		}
 	}
+	if err := applyEnabledToolsets(registry, cfg.EnabledToolsets); err != nil {
+		log.Printf("enabled_toolsets ignored: %v", err)
+	}
 	applyDisabledTools(registry, cfg.DisabledTools)
 	client := buildModelClient(cfg)
 	return &agent.Engine{
@@ -891,7 +1094,7 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 		MaxIterations:           cfg.MaxIterations,
 		MaxContextChars:         cfg.MaxContextChars,
 		CompressionTailMessages: cfg.CompressionTailMessages,
-	}
+	}, cronStore
 }
 
 func buildModelClient(cfg config.Config) model.Client {

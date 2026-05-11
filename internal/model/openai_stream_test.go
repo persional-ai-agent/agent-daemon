@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 
 func TestOpenAIChatCompletionStreamingText(t *testing.T) {
 	var seenStream bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		stream, _ := req["stream"].(bool)
@@ -43,7 +42,7 @@ func TestOpenAIChatCompletionStreamingText(t *testing.T) {
 }
 
 func TestOpenAIChatCompletionStreamingToolCalls(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"REA\"}}]}}]}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"DME.md\\\"}\"}}]}}]}\n\n")
@@ -75,7 +74,7 @@ func TestOpenAIChatCompletionStreamingToolCalls(t *testing.T) {
 
 func TestOpenAIChatCompletionStreamingUsageEvent(t *testing.T) {
 	var includeUsage bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if opts, ok := req["stream_options"].(map[string]any); ok {
@@ -113,7 +112,7 @@ func TestOpenAIChatCompletionStreamingUsageEvent(t *testing.T) {
 }
 
 func TestOpenAIStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"usage\":{\"total_tokens\":9},\"choices\":[]}\n\n")
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
@@ -141,7 +140,7 @@ func TestOpenAIStreamingUsageStatusSourceOnlyE2E(t *testing.T) {
 }
 
 func TestOpenAIStreamingUsageStatusAdjustedE2E(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":5,\"total_tokens\":9},\"choices\":[]}\n\n")
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
@@ -180,7 +179,7 @@ func TestOpenAIStreamingUsageStatusAdjustedE2E(t *testing.T) {
 }
 
 func TestOpenAIStreamingLengthIncompleteReason(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":null}]}\n\n")
 		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestAnthropicClientParsesToolUse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/messages" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -44,7 +43,7 @@ func TestAnthropicClientParsesToolUse(t *testing.T) {
 
 func TestAnthropicClientBuildsToolResultTurn(t *testing.T) {
 	var reqBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 			t.Fatalf("decode request failed: %v", err)
 		}

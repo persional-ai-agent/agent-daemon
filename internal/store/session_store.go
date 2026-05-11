@@ -32,8 +32,75 @@ func NewSessionStore(dbPath string) (*SessionStore, error) {
 	return s, nil
 }
 
+func (s *SessionStore) DB() *sql.DB { return s.db }
+
 func (s *SessionStore) init() error {
 	schema := `
+CREATE TABLE IF NOT EXISTS messages (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+session_id TEXT NOT NULL,
+role TEXT NOT NULL,
+content TEXT,
+name TEXT,
+tool_call_id TEXT,
+tool_calls_json TEXT,
+created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+
+-- Full-text search index for message content.
+-- If FTS5 is unavailable in the SQLite build, these statements will fail and we fall back to LIKE queries.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+  content,
+  session_id UNINDEXED,
+  role UNINDEXED,
+  created_at UNINDEXED,
+  content='messages',
+  content_rowid='id'
+);
+
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts(rowid, content, session_id, role, created_at)
+  VALUES (new.id, COALESCE(new.content, ''), new.session_id, new.role, new.created_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, content, session_id, role, created_at)
+  VALUES('delete', old.id, COALESCE(old.content, ''), old.session_id, old.role, old.created_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, content, session_id, role, created_at)
+  VALUES('delete', old.id, COALESCE(old.content, ''), old.session_id, old.role, old.created_at);
+  INSERT INTO messages_fts(rowid, content, session_id, role, created_at)
+  VALUES (new.id, COALESCE(new.content, ''), new.session_id, new.role, new.created_at);
+END;
+
+CREATE TABLE IF NOT EXISTS approvals (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+session_id TEXT NOT NULL,
+scope TEXT NOT NULL DEFAULT 'session',
+pattern TEXT NOT NULL DEFAULT '',
+granted_at TEXT NOT NULL,
+expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_session_id ON approvals(session_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_expires_at ON approvals(expires_at);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+provider TEXT NOT NULL,
+access_token TEXT NOT NULL,
+refresh_token TEXT NOT NULL DEFAULT '',
+expires_at TEXT NOT NULL,
+created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider);
+`
+	if _, err := s.db.Exec(schema); err != nil {
+		// FTS5 might be unavailable; fall back to the core tables only.
+		coreSchema := `
 CREATE TABLE IF NOT EXISTS messages (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 session_id TEXT NOT NULL,
@@ -68,11 +135,74 @@ created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider);
 `
-	_, err := s.db.Exec(schema)
-	return err
+		_, coreErr := s.db.Exec(coreSchema)
+		if coreErr != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *SessionStore) Close() error { return s.db.Close() }
+
+func (s *SessionStore) ListRecentSessions(limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := s.db.Query(`
+SELECT session_id, MAX(id) AS last_id, MAX(created_at) AS last_seen
+FROM messages
+GROUP BY session_id
+ORDER BY last_id DESC
+LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]map[string]any, 0)
+	for rows.Next() {
+		var sessionID string
+		var lastID int64
+		var lastSeen string
+		if err := rows.Scan(&sessionID, &lastID, &lastSeen); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{
+			"session_id": sessionID,
+			"last_id":    lastID,
+			"last_seen":  lastSeen,
+		})
+	}
+	return out, rows.Err()
+}
+
+func (s *SessionStore) LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.db.Query(`SELECT role, content, name, tool_call_id, tool_calls_json FROM messages WHERE session_id = ? ORDER BY id ASC LIMIT ? OFFSET ?`, sessionID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]core.Message, 0)
+	for rows.Next() {
+		var m core.Message
+		var tcJSON string
+		if err := rows.Scan(&m.Role, &m.Content, &m.Name, &m.ToolCallID, &tcJSON); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(tcJSON) != "" {
+			_ = json.Unmarshal([]byte(tcJSON), &m.ToolCalls)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
 
 func (s *SessionStore) AppendMessage(sessionID string, msg core.Message) error {
 	callsJSON := ""
@@ -108,10 +238,70 @@ func (s *SessionStore) LoadMessages(sessionID string, limit int) ([]core.Message
 	return out, rows.Err()
 }
 
+func (s *SessionStore) SessionStats(sessionID string) (map[string]any, error) {
+	if strings.TrimSpace(sessionID) == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+	var messageCount int64
+	var toolCallCount int64
+	var firstSeen string
+	var lastSeen string
+	err := s.db.QueryRow(`
+SELECT
+  COUNT(*) AS message_count,
+  SUM(CASE WHEN tool_calls_json IS NOT NULL AND tool_calls_json <> '' THEN 1 ELSE 0 END) AS tool_call_messages,
+  MIN(created_at) AS first_seen,
+  MAX(created_at) AS last_seen
+FROM messages
+WHERE session_id = ?`, sessionID).Scan(&messageCount, &toolCallCount, &firstSeen, &lastSeen)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"session_id":          sessionID,
+		"message_count":       messageCount,
+		"tool_call_messages":  toolCallCount,
+		"first_seen":          firstSeen,
+		"last_seen":           lastSeen,
+	}, nil
+}
+
 func (s *SessionStore) Search(query string, limit int, sessionID string) ([]map[string]any, error) {
 	if limit <= 0 {
 		limit = 5
 	}
+	if s.hasFTS() {
+		return s.searchFTS(query, limit, sessionID)
+	}
+	return s.searchLike(query, limit, sessionID)
+}
+
+func (s *SessionStore) hasFTS() bool {
+	var count int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='messages_fts'`).Scan(&count)
+	return count > 0
+}
+
+func (s *SessionStore) searchFTS(query string, limit int, sessionID string) ([]map[string]any, error) {
+	baseSQL := `SELECT session_id, role, content, created_at FROM messages_fts WHERE messages_fts MATCH ?`
+	args := []any{query}
+	if strings.TrimSpace(sessionID) != "" {
+		baseSQL += ` AND session_id <> ?`
+		args = append(args, sessionID)
+	}
+	baseSQL += ` ORDER BY rowid DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(baseSQL, args...)
+	if err != nil {
+		// If the build doesn't support MATCH, fall back.
+		return s.searchLike(query, limit, sessionID)
+	}
+	defer rows.Close()
+	return scanSearchRows(rows)
+}
+
+func (s *SessionStore) searchLike(query string, limit int, sessionID string) ([]map[string]any, error) {
 	like := "%" + query + "%"
 	baseSQL := `SELECT session_id, role, content, created_at FROM messages WHERE content LIKE ?`
 	args := []any{like}
@@ -127,6 +317,10 @@ func (s *SessionStore) Search(query string, limit int, sessionID string) ([]map[
 		return nil, fmt.Errorf("search query failed: %w", err)
 	}
 	defer rows.Close()
+	return scanSearchRows(rows)
+}
+
+func scanSearchRows(rows *sql.Rows) ([]map[string]any, error) {
 	results := make([]map[string]any, 0)
 	for rows.Next() {
 		var sid, role, content, createdAt string
