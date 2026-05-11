@@ -728,7 +728,7 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"telegram", "discord", "slack"}
+	return []string{"telegram", "discord", "slack", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
@@ -741,6 +741,9 @@ func configuredGatewayPlatforms(cfg config.Config) []string {
 	}
 	if strings.TrimSpace(cfg.SlackBotToken) != "" && strings.TrimSpace(cfg.SlackAppToken) != "" {
 		out = append(out, "slack")
+	}
+	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
+		out = append(out, "yuanbao")
 	}
 	return out
 }
@@ -990,6 +993,8 @@ func runServe(cfg config.Config) {
 					return cfg.DiscordAllowed
 				case "slack":
 					return cfg.SlackAllowed
+				case "yuanbao":
+					return cfg.YuanbaoAllowed
 				}
 				return ""
 			})
@@ -1041,6 +1046,15 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, sa)
 			log.Printf("slack adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
+		ya, err := platforms.NewYuanbaoAdapterFromEnv()
+		if err != nil {
+			log.Printf("yuanbao adapter: %v", err)
+		} else {
+			adapters = append(adapters, ya)
+			log.Printf("yuanbao adapter configured")
 		}
 	}
 	return adapters

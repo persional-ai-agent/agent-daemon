@@ -145,7 +145,8 @@ go run ./cmd/agentd toolsets resolve core
 Gateway + `send_message`（最小对齐 Hermes messaging tool）：
 
 - 需要 `agentd serve` 启用 gateway（`AGENT_GATEWAY_ENABLED=true`）并配置平台 token。
-- `send_message(action='list')` 会返回当前已连接的 platform adapter（如 `telegram`/`discord`/`slack`）。
+- `send_message(action='list')` 会返回当前已连接的 platform adapter（如 `telegram`/`discord`/`slack`/`yuanbao`）。
+- Yuanbao：设置 `YUANBAO_TOKEN`（或 `YUANBAO_APP_ID` + `YUANBAO_APP_SECRET`）后，可使用 `yb_send_dm` / `yb_send_sticker` / `yb_query_group_info` / `yb_query_group_members`。
 
 默认读写 `config/config.ini`。也可以通过 `AGENT_CONFIG_FILE=/path/to/config.ini` 或 `-file /path/to/config.ini` 指定配置文件；环境变量仍优先于配置文件。
 

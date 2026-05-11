@@ -53,6 +53,10 @@ type Config struct {
 	SlackBotToken           string
 	SlackAppToken           string
 	SlackAllowed            string
+	YuanbaoToken            string
+	YuanbaoAppID            string
+	YuanbaoAppSecret        string
+	YuanbaoAllowed          string
 	ModelCascade            string
 	ModelCostAware          bool
 	DisabledTools           string
@@ -252,6 +256,10 @@ func loadFromINIValues(iv iniValues) Config {
 		SlackBotToken:           iniStr(iv, "gateway.slack", "bot_token", "AGENT_SLACK_BOT_TOKEN", ""),
 		SlackAppToken:           iniStr(iv, "gateway.slack", "app_token", "AGENT_SLACK_APP_TOKEN", ""),
 		SlackAllowed:            iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
+		YuanbaoToken:            iniStr(iv, "gateway.yuanbao", "token", "YUANBAO_TOKEN", ""),
+		YuanbaoAppID:            iniStr(iv, "gateway.yuanbao", "app_id", "YUANBAO_APP_ID", ""),
+		YuanbaoAppSecret:        iniStr(iv, "gateway.yuanbao", "app_secret", "YUANBAO_APP_SECRET", ""),
+		YuanbaoAllowed:          iniStr(iv, "gateway.yuanbao", "allowed_users", "AGENT_YUANBAO_ALLOWED_USERS", ""),
 		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
 		ModelCostAware:          costAware,
 		DisabledTools:           iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),

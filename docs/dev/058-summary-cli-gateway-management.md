@@ -16,6 +16,8 @@ agentd gateway disable
 
 `enable/disable` 只写入 `gateway.enabled`；平台 token 继续通过 `agentd config set` 管理。
 
+当前 `gateway platforms` 输出包含：Telegram、Discord、Slack、Yuanbao（Yuanbao 凭证来自 `YUANBAO_TOKEN` 或 `YUANBAO_APP_ID/YUANBAO_APP_SECRET`）。
+
 ## 修改文件
 
 | 文件 | 变更 |

@@ -291,7 +291,7 @@ func TestGatewayStatus(t *testing.T) {
 			t.Fatalf("configured platforms = %#v, want %#v", status.ConfiguredPlatforms, want)
 		}
 	}
-	if len(status.SupportedPlatforms) != 3 {
+	if len(status.SupportedPlatforms) != 4 {
 		t.Fatalf("supported platforms = %#v", status.SupportedPlatforms)
 	}
 }

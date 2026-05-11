@@ -84,7 +84,7 @@ var Toolsets = map[string]Toolset{
 		},
 	},
 	"yuanbao": {
-		Description: "Yuanbao tools (requires YUANBAO_TOKEN; placeholder)",
+		Description: "Yuanbao tools (requires gateway + YUANBAO_TOKEN or YUANBAO_APP_ID/YUANBAO_APP_SECRET)",
 		Tools: []string{
 			"yb_send_dm", "yb_send_sticker", "yb_search_sticker", "yb_query_group_info", "yb_query_group_members",
 		},
