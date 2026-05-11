@@ -1021,6 +1021,7 @@ func mustBuildEngine(cfg config.Config) (*agent.Engine, *store.CronStore) {
 		registry.Register(tools.NewCronJobTool(cronStore))
 	}
 	registry.Register(tools.NewSendMessageTool())
+	registry.Register(tools.NewExecuteCodeTool())
 	approvalStore := tools.NewPersistentApprovalStore(time.Duration(cfg.ApprovalTTLSeconds)*time.Second, sessionStore)
 	switch strings.ToLower(strings.TrimSpace(cfg.MCPTransport)) {
 	case "stdio":

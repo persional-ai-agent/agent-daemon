@@ -69,6 +69,23 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "write_file", desc: "Write content to file", params: writeFileParams(), call: b.writeFile})
 	r.Register(toolDef{name: "patch", desc: "Patch file by replacing old_string with new_string", params: patchParams(), call: b.patch})
 	r.Register(toolDef{name: "search_files", desc: "Search text in files", params: searchFilesParams(), call: b.searchFiles})
+	// Hermes-compatible stubs (interface-alignment only)
+	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (not implemented in agent-daemon)", params: stubParams(), call: stubCall("vision_analyze")})
+	r.Register(toolDef{name: "image_generate", desc: "Image generation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("image_generate")})
+	r.Register(toolDef{name: "text_to_speech", desc: "Text-to-speech (not implemented in agent-daemon)", params: stubParams(), call: stubCall("text_to_speech")})
+	r.Register(toolDef{name: "browser_navigate", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_navigate")})
+	r.Register(toolDef{name: "browser_snapshot", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_snapshot")})
+	r.Register(toolDef{name: "browser_click", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_click")})
+	r.Register(toolDef{name: "browser_type", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_type")})
+	r.Register(toolDef{name: "browser_scroll", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_scroll")})
+	r.Register(toolDef{name: "browser_back", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_back")})
+	r.Register(toolDef{name: "browser_press", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_press")})
+	r.Register(toolDef{name: "browser_get_images", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_get_images")})
+	r.Register(toolDef{name: "browser_vision", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_vision")})
+	r.Register(toolDef{name: "browser_console", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_console")})
+	r.Register(toolDef{name: "browser_cdp", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_cdp")})
+	r.Register(toolDef{name: "browser_dialog", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_dialog")})
+
 	r.Register(toolDef{name: "todo", desc: "Maintain per-session todo list", params: todoParams(), call: b.todo})
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
 	r.Register(toolDef{name: "session_search", desc: "Search previous session messages", params: sessionSearchParams(), call: b.sessionSearch})
@@ -79,9 +96,22 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
 	r.Register(toolDef{name: "approval", desc: "Manage session-level dangerous command approvals", params: approvalParams(), call: b.approval})
 	r.Register(toolDef{name: "skill_list", desc: "List available local skills", params: skillListParams(), call: b.skillList})
+	r.Register(toolDef{name: "skills_list", desc: "Alias of skill_list (Hermes-compatible)", params: skillListParams(), call: b.skillList})
 	r.Register(toolDef{name: "skill_search", desc: "Search for skills from GitHub repositories (e.g. anthropics/skills)", params: skillSearchParams(), call: b.skillSearch})
 	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
 	r.Register(toolDef{name: "skill_manage", desc: "Manage local skills (create/edit/patch/delete)", params: skillManageParams(), call: b.skillManage})
+}
+
+func stubCall(name string) func(context.Context, map[string]any, ToolContext) (map[string]any, error) {
+	return func(_ context.Context, _ map[string]any, _ ToolContext) (map[string]any, error) {
+		return map[string]any{
+			"success":   false,
+			"tool":      name,
+			"error":     "not implemented in agent-daemon",
+			"hint":      "This tool exists as an interface-alignment stub. Use other tools or extend agent-daemon to implement it.",
+			"available": false,
+		}, nil
+	}
 }
 
 func (b *BuiltinTools) patch(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -262,6 +292,14 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 	}
 	offset := intArg(args, "offset", 1)
 	limit := intArg(args, "limit", 0)
+	withLineNumbers := boolArg(args, "with_line_numbers", false)
+	maxChars := intArg(args, "max_chars", 100_000)
+	if maxChars <= 0 {
+		maxChars = 100_000
+	}
+	if maxChars > 200_000 {
+		maxChars = 200_000
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -269,22 +307,65 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 	defer f.Close()
 
 	s := bufio.NewScanner(f)
+	// Allow longer lines than bufio.Scanner's default 64K token limit.
+	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	lineNo := 0
 	out := make([]string, 0)
+	totalChars := 0
+	truncated := false
 	for s.Scan() {
 		lineNo++
 		if lineNo < offset {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%d→%s", lineNo, s.Text()))
+		// Enforce size guard (approximate by rune count in line + newline).
+		line := s.Text()
+		remaining := maxChars - totalChars
+		if remaining <= 0 {
+			truncated = true
+			break
+		}
+		if withLineNumbers {
+			prefixed := fmt.Sprintf("%d→%s", lineNo, line)
+			if len(prefixed) > remaining {
+				prefixed = prefixed[:remaining]
+				truncated = true
+			}
+			out = append(out, prefixed)
+			totalChars += len(prefixed) + 1
+		} else {
+			if len(line) > remaining {
+				line = line[:remaining]
+				truncated = true
+			}
+			out = append(out, line)
+			totalChars += len(line) + 1
+		}
 		if limit > 0 && len(out) >= limit {
+			break
+		}
+		if truncated {
 			break
 		}
 	}
 	if err := s.Err(); err != nil {
 		return nil, err
 	}
-	return map[string]any{"path": path, "content": strings.Join(out, "\n")}, nil
+	startLine := offset
+	endLine := offset + len(out) - 1
+	if len(out) == 0 {
+		endLine = offset - 1
+	}
+	return map[string]any{
+		"success":           true,
+		"path":              path,
+		"content":           strings.Join(out, "\n"),
+		"start_line":        startLine,
+		"end_line":          endLine,
+		"with_line_numbers": withLineNumbers,
+		"max_chars":         maxChars,
+		"truncated":         truncated,
+	}, nil
 }
 
 func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -299,7 +380,7 @@ func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, tc Tool
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
-	return map[string]any{"path": path, "bytes": len(content), "written": true}, nil
+	return map[string]any{"success": true, "path": path, "bytes": len(content), "written": true}, nil
 }
 
 func (b *BuiltinTools) searchFiles(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -350,7 +431,7 @@ func (b *BuiltinTools) searchFiles(_ context.Context, args map[string]any, tc To
 		}
 		return nil
 	})
-	return map[string]any{"count": len(matches), "matches": matches}, nil
+	return map[string]any{"success": true, "count": len(matches), "matches": matches}, nil
 }
 
 func (b *BuiltinTools) todo(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -1025,7 +1106,7 @@ func processStatusParams() map[string]any {
 }
 func stopProcessParams() map[string]any { return processStatusParams() }
 func readFileParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}}, "required": []string{"path"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}, "with_line_numbers": map[string]any{"type": "boolean"}, "max_chars": map[string]any{"type": "integer"}}, "required": []string{"path"}}
 }
 func writeFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}
@@ -1053,6 +1134,10 @@ func webSearchParams() map[string]any {
 }
 func webExtractParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer"}}, "required": []string{"url"}}
+}
+func stubParams() map[string]any {
+	// Keep schema footprint minimal while still being callable by name.
+	return map[string]any{"type": "object", "properties": map[string]any{}}
 }
 func clarifyParams() map[string]any {
 	return map[string]any{

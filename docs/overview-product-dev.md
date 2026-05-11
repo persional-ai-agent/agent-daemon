@@ -176,7 +176,7 @@
 | Memory | `agent/memory_manager.py`、`plugins/memory/*` | `internal/memory/store.go` | 最小覆盖 | 先定义 memory provider 接口，再接外部插件 |
 | Context compression | `agent/context_compressor.py`、context engine plugins | `internal/agent/compressor.go` | 核心对齐 | 后续可加可替换 context engine |
 | MCP | `tools/mcp_tool.py` | `internal/tools/mcp.go` | 核心对齐 | 继续补更完整的服务器能力与错误分类 |
-| Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
+| Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`（含别名 `skills_list`）、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
 | CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 最小覆盖 | 已补最小 config/model/tools 查看与启停/doctor/gateway 开关；后续补 gateway setup、setup wizard，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
 | Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack + `send_message` | 部分对齐 | 已补最小 send_message（基于运行时 adapter registry）；后续补 delivery、配对、slash command、中断/队列 |

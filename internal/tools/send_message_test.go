@@ -37,8 +37,7 @@ func TestSendMessageListAndSend(t *testing.T) {
 
 	res, err = tool.Call(context.Background(), map[string]any{
 		"action":   "send",
-		"platform": "telegram",
-		"chat_id":  "1",
+		"target":   "telegram:1",
 		"message":  "hi",
 	}, ToolContext{})
 	if err != nil {
@@ -48,4 +47,3 @@ func TestSendMessageListAndSend(t *testing.T) {
 		t.Fatalf("expected success: %v", res)
 	}
 }
-

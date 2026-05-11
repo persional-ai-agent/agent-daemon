@@ -188,3 +188,10 @@
 - `067-research-hermes-clarify-tool-alignment.md`：Hermes clarify 工具与 Go 版最小对齐
 - `067-plan-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐计划
 - `067-summary-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐总结
+- `068-research-hermes-execute-code-alignment.md`：Hermes execute_code 与 Go 版最小对齐
+- `068-plan-hermes-execute-code-alignment.md`：Hermes execute_code 最小对齐计划
+- `068-summary-hermes-execute-code-alignment.md`：Hermes execute_code 最小对齐总结
+- `069-research-hermes-read-file-alignment.md`：Hermes read_file 输出格式与 Go 版对齐
+- `070-summary-tool-result-success-field.md`：补齐工具结果 success 字段（兼容性增强）
+- `071-summary-hermes-core-tool-stubs.md`：Hermes core 工具缺口的 stub 对齐
+- `072-summary-read-file-max-chars.md`：read_file 增加 max_chars 防护（Hermes 风格）

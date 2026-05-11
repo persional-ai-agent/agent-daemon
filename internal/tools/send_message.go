@@ -31,6 +31,10 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 						"description": "Action to perform",
 						"enum":        []string{"send", "list"},
 					},
+					"target": map[string]any{
+						"type":        "string",
+						"description": "Hermes-style target string like 'telegram:123', 'discord:channel_id', or 'slack:channel_id'. If set, overrides platform/chat_id.",
+					},
 					"platform": map[string]any{
 						"type":        "string",
 						"description": "Platform name (telegram/discord/slack)",
@@ -66,12 +70,20 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, _ ToolC
 		return map[string]any{"success": true, "platforms": names}, nil
 	case "send":
 		p := strings.ToLower(strings.TrimSpace(strArg(args, "platform")))
-		if p == "" {
-			return nil, errors.New("platform required")
-		}
 		chatID := strings.TrimSpace(strArg(args, "chat_id"))
+		if target := strings.TrimSpace(strArg(args, "target")); target != "" {
+			parts := strings.SplitN(target, ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid target %q (expected platform:chat_id)", target)
+			}
+			p = strings.ToLower(strings.TrimSpace(parts[0]))
+			chatID = strings.TrimSpace(parts[1])
+		}
+		if p == "" {
+			return nil, errors.New("platform required (or set target)")
+		}
 		if chatID == "" {
-			return nil, errors.New("chat_id required")
+			return nil, errors.New("chat_id required (or set target)")
 		}
 		msg := strArg(args, "message")
 		if strings.TrimSpace(msg) == "" {
@@ -97,4 +109,3 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, _ ToolC
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
 }
-

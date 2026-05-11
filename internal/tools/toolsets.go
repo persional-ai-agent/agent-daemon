@@ -43,9 +43,34 @@ var Toolsets = map[string]Toolset{
 		Description: "Web research tools (search + extract)",
 		Tools:       []string{"web_search", "web_extract"},
 	},
+	"vision": {
+		Description: "Vision analysis tools (stub)",
+		Tools:       []string{"vision_analyze"},
+	},
+	"image_gen": {
+		Description: "Image generation tools (stub)",
+		Tools:       []string{"image_generate"},
+	},
+	"browser": {
+		Description: "Browser automation tools (stub)",
+		Tools: []string{
+			"browser_navigate", "browser_snapshot", "browser_click",
+			"browser_type", "browser_scroll", "browser_back",
+			"browser_press", "browser_get_images",
+			"browser_vision", "browser_console", "browser_cdp", "browser_dialog",
+		},
+	},
+	"tts": {
+		Description: "Text-to-speech tools (stub)",
+		Tools:       []string{"text_to_speech"},
+	},
 	"delegation": {
 		Description: "Spawn subagent(s) for subtasks",
 		Tools:       []string{"delegate_task"},
+	},
+	"code_execution": {
+		Description: "Execute short scripts (python)",
+		Tools:       []string{"execute_code"},
 	},
 	"approval": {
 		Description: "Dangerous command approvals",
@@ -53,7 +78,7 @@ var Toolsets = map[string]Toolset{
 	},
 	"skills": {
 		Description: "List/view/manage skills",
-		Tools:       []string{"skill_list", "skill_view", "skill_manage", "skill_search"},
+		Tools:       []string{"skill_list", "skills_list", "skill_view", "skill_manage", "skill_search"},
 	},
 	"cronjob": {
 		Description: "Cronjob management",
@@ -66,7 +91,7 @@ var Toolsets = map[string]Toolset{
 	"core": {
 		Description: "Default core toolset (terminal + file + memory + web + skills + approvals + delegation + cronjob + messaging)",
 		Tools:       []string{},
-		Includes:    []string{"terminal", "file", "planning", "memory", "session_search", "web", "skills", "approval", "delegation", "cronjob", "messaging", "clarify"},
+		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "delegation", "cronjob", "messaging"},
 	},
 }
 
