@@ -26,6 +26,15 @@ type BuiltinTools struct {
 	proc             *ProcessRegistry
 	pendingApprovals map[string]pendingApproval
 	pendingMu        sync.Mutex
+
+	readDedupMu sync.Mutex
+	readDedup   map[string]readDedupEntry
+
+	readStampMu sync.Mutex
+	readStamp   map[string]int64 // key: sessionID|absPath -> modUnixNano
+
+	readLoopMu sync.Mutex
+	readLoop   map[string]readLoopState // key: sessionID
 }
 
 type pendingApproval struct {
@@ -73,6 +82,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (not implemented in agent-daemon)", params: stubParams(), call: stubCall("vision_analyze")})
 	r.Register(toolDef{name: "image_generate", desc: "Image generation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("image_generate")})
 	r.Register(toolDef{name: "text_to_speech", desc: "Text-to-speech (not implemented in agent-daemon)", params: stubParams(), call: stubCall("text_to_speech")})
+	r.Register(toolDef{name: "mixture_of_agents", desc: "Mixture-of-agents (not implemented in agent-daemon)", params: stubParams(), call: stubCall("mixture_of_agents")})
 	r.Register(toolDef{name: "browser_navigate", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_navigate")})
 	r.Register(toolDef{name: "browser_snapshot", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_snapshot")})
 	r.Register(toolDef{name: "browser_click", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_click")})
@@ -119,6 +129,16 @@ func (b *BuiltinTools) patch(_ context.Context, args map[string]any, tc ToolCont
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectSymlinkEscape(tc.Workdir, path); err != nil {
+		return nil, err
+	}
+	if err := rejectNonRegularFile(path); err != nil {
+		return nil, err
+	}
+	staleWarning, warnErr := b.checkStaleSinceRead(tc.SessionID, path)
+	if warnErr != nil {
+		return nil, warnErr
+	}
 	oldString := strArg(args, "old_string")
 	if oldString == "" {
 		return nil, errors.New("old_string required")
@@ -155,7 +175,141 @@ func (b *BuiltinTools) patch(_ context.Context, args map[string]any, tc ToolCont
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return nil, err
 	}
-	return map[string]any{"success": true, "path": path, "replacements": replacements}, nil
+	res := map[string]any{"success": true, "path": path, "replacements": replacements}
+	if staleWarning != "" {
+		res["_warning"] = staleWarning
+	}
+	if info, err := os.Stat(path); err == nil {
+		b.recordReadStamp(tc.SessionID, path, info.ModTime().UnixNano())
+	}
+	return res, nil
+}
+
+const readFileDedupStatusMessage = "File unchanged since last read. Refer to the earlier read_file result in this conversation instead of re-reading."
+
+type readDedupEntry struct {
+	size        int64
+	modUnixNano int64
+}
+
+type readLoopState struct {
+	lastKey     string
+	consecutive int
+}
+
+func readDedupKey(sessionID, path string, offset, limit int, withLineNumbers bool, maxChars int) string {
+	return fmt.Sprintf("%s|%s|%d|%d|%t|%d", sessionID, path, offset, limit, withLineNumbers, maxChars)
+}
+
+func readLoopKey(path string, offset, limit int) string {
+	return fmt.Sprintf("%s|%d|%d", path, offset, limit)
+}
+
+func (b *BuiltinTools) isUnchangedRead(key string, entry readDedupEntry) bool {
+	b.readDedupMu.Lock()
+	defer b.readDedupMu.Unlock()
+	if b.readDedup == nil {
+		return false
+	}
+	prev, ok := b.readDedup[key]
+	if !ok {
+		return false
+	}
+	return prev.size == entry.size && prev.modUnixNano == entry.modUnixNano
+}
+
+func (b *BuiltinTools) rememberRead(key string, entry readDedupEntry) {
+	b.readDedupMu.Lock()
+	defer b.readDedupMu.Unlock()
+	if b.readDedup == nil {
+		b.readDedup = make(map[string]readDedupEntry)
+	}
+	if len(b.readDedup) > 1000 {
+		// Best-effort bound: drop everything (simple and predictable).
+		b.readDedup = make(map[string]readDedupEntry)
+	}
+	b.readDedup[key] = entry
+}
+
+func (b *BuiltinTools) bumpReadLoop(sessionID, key string) int {
+	if sessionID == "" || key == "" {
+		return 1
+	}
+	b.readLoopMu.Lock()
+	defer b.readLoopMu.Unlock()
+	if b.readLoop == nil {
+		b.readLoop = make(map[string]readLoopState)
+	}
+	st := b.readLoop[sessionID]
+	if st.lastKey == key {
+		st.consecutive++
+	} else {
+		st.lastKey = key
+		st.consecutive = 1
+	}
+	b.readLoop[sessionID] = st
+	return st.consecutive
+}
+
+func (b *BuiltinTools) resetReadLoop(sessionID, key string) {
+	if sessionID == "" {
+		return
+	}
+	b.readLoopMu.Lock()
+	defer b.readLoopMu.Unlock()
+	if b.readLoop == nil {
+		return
+	}
+	st := b.readLoop[sessionID]
+	if st.lastKey == key {
+		st.consecutive = 0
+		b.readLoop[sessionID] = st
+	}
+}
+
+func readStampKey(sessionID, path string) string {
+	return sessionID + "|" + path
+}
+
+func (b *BuiltinTools) recordReadStamp(sessionID, path string, modUnixNano int64) {
+	if sessionID == "" || path == "" || modUnixNano == 0 {
+		return
+	}
+	key := readStampKey(sessionID, path)
+	b.readStampMu.Lock()
+	defer b.readStampMu.Unlock()
+	if b.readStamp == nil {
+		b.readStamp = make(map[string]int64)
+	}
+	if len(b.readStamp) > 1000 {
+		b.readStamp = make(map[string]int64)
+	}
+	b.readStamp[key] = modUnixNano
+}
+
+func (b *BuiltinTools) checkStaleSinceRead(sessionID, path string) (string, error) {
+	if sessionID == "" || path == "" {
+		return "", nil
+	}
+	key := readStampKey(sessionID, path)
+	b.readStampMu.Lock()
+	readStamp := int64(0)
+	if b.readStamp != nil {
+		readStamp = b.readStamp[key]
+	}
+	b.readStampMu.Unlock()
+	if readStamp == 0 {
+		return "", nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	now := info.ModTime().UnixNano()
+	if now != readStamp {
+		return fmt.Sprintf("Warning: %s was modified since you last read it (external edit or concurrent agent). The content you read may be stale. Consider re-reading before writing.", path), nil
+	}
+	return "", nil
 }
 
 type toolFn func(context.Context, map[string]any, ToolContext) (map[string]any, error)
@@ -219,8 +373,11 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 				ToolCtx:    tc,
 			})
 			return map[string]any{
+				"success":     false,
+				"action":      "terminal",
 				"status":      "pending_approval",
 				"approval_id": approvalID,
+				"approved":    false,
 				"command":     command,
 				"category":    category,
 				"reason":      reason,
@@ -237,10 +394,10 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
+		return map[string]any{"success": true, "output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
 	}
 	out, code, err := RunForeground(ctx, command, cwd, timeout)
-	res := map[string]any{"output": out, "exit_code": code, "error": nil, "requires_approval": requiresApproval}
+	res := map[string]any{"success": err == nil && code == 0, "output": out, "exit_code": code, "error": nil, "requires_approval": requiresApproval}
 	if err != nil {
 		res["error"] = err.Error()
 	}
@@ -256,7 +413,7 @@ func (b *BuiltinTools) processStatus(_ context.Context, args map[string]any, _ T
 	if !ok {
 		return nil, fmt.Errorf("process not found: %s", id)
 	}
-	return map[string]any{"session_id": id, "status": statusFromDone(s.Done), "exit_code": s.ExitCode, "error": s.Err, "output_file": s.OutputFile}, nil
+	return map[string]any{"success": true, "session_id": id, "status": statusFromDone(s.Done), "exit_code": s.ExitCode, "error": s.Err, "output_file": s.OutputFile}, nil
 }
 
 func (b *BuiltinTools) stopProcess(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -267,7 +424,7 @@ func (b *BuiltinTools) stopProcess(_ context.Context, args map[string]any, _ Too
 	if err := b.proc.Stop(id); err != nil {
 		return nil, err
 	}
-	return map[string]any{"session_id": id, "stopped": true}, nil
+	return map[string]any{"success": true, "session_id": id, "stopped": true}, nil
 }
 
 func (b *BuiltinTools) process(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -276,12 +433,32 @@ func (b *BuiltinTools) process(ctx context.Context, args map[string]any, tc Tool
 		action = "status"
 	}
 	switch action {
+	case "list":
+		includeDone := boolArg(args, "include_done", false)
+		limit := intArg(args, "limit", 50)
+		if b.proc == nil {
+			return nil, errors.New("process registry unavailable")
+		}
+		items := b.proc.List(includeDone, limit)
+		out := make([]map[string]any, 0, len(items))
+		for _, s := range items {
+			out = append(out, map[string]any{
+				"session_id":  s.ID,
+				"command":     s.Command,
+				"started_at":  s.StartedAt.Format(time.RFC3339),
+				"status":      statusFromDone(s.Done),
+				"exit_code":   s.ExitCode,
+				"output_file": s.OutputFile,
+				"error":       s.Err,
+			})
+		}
+		return map[string]any{"success": true, "count": len(out), "processes": out}, nil
 	case "status":
 		return b.processStatus(ctx, args, tc)
 	case "stop":
 		return b.stopProcess(ctx, args, tc)
 	default:
-		return nil, fmt.Errorf("unsupported process action: %s (use status or stop)", action)
+		return nil, fmt.Errorf("unsupported process action: %s (use list, status, or stop)", action)
 	}
 }
 
@@ -290,10 +467,24 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectSymlinkEscape(tc.Workdir, path); err != nil {
+		return nil, err
+	}
+	if err := rejectNonRegularFile(path); err != nil {
+		return nil, err
+	}
 	offset := intArg(args, "offset", 1)
 	limit := intArg(args, "limit", 0)
 	withLineNumbers := boolArg(args, "with_line_numbers", false)
 	maxChars := intArg(args, "max_chars", 100_000)
+	dedup := boolArg(args, "dedup", true)
+	rejectOnTruncate := boolArg(args, "reject_on_truncate", true)
+	loopKey := ""
+	loopCount := 1
+	if tc.SessionID != "" {
+		loopKey = readLoopKey(path, offset, limit)
+		loopCount = b.bumpReadLoop(tc.SessionID, loopKey)
+	}
 	if maxChars <= 0 {
 		maxChars = 100_000
 	}
@@ -305,6 +496,39 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 		return nil, err
 	}
 	defer f.Close()
+
+	if tc.SessionID != "" {
+		if stat, statErr := os.Stat(path); statErr == nil {
+			entry := readDedupEntry{size: stat.Size(), modUnixNano: stat.ModTime().UnixNano()}
+			b.recordReadStamp(tc.SessionID, path, entry.modUnixNano)
+			if dedup {
+				key := readDedupKey(tc.SessionID, path, offset, limit, withLineNumbers, maxChars)
+				if b.isUnchangedRead(key, entry) {
+					if loopCount >= 4 {
+						return map[string]any{
+							"success":      false,
+							"error":        fmt.Sprintf("BLOCKED: You have read this exact file region %d times in a row and the content has NOT changed. Stop re-reading and proceed.", loopCount),
+							"path":         path,
+							"already_read": loopCount,
+						}, nil
+					}
+					res := map[string]any{
+						"success":          true,
+						"path":             path,
+						"dedup":            true,
+						"status":           "unchanged",
+						"message":          readFileDedupStatusMessage,
+						"content_returned": false,
+					}
+					if loopCount >= 3 {
+						res["_warning"] = fmt.Sprintf("You have read this exact file region %d times consecutively and it has not changed. Use the information you already have.", loopCount)
+					}
+					return res, nil
+				}
+				b.rememberRead(key, entry)
+			}
+		}
+	}
 
 	s := bufio.NewScanner(f)
 	// Allow longer lines than bufio.Scanner's default 64K token limit.
@@ -356,6 +580,30 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 	if len(out) == 0 {
 		endLine = offset - 1
 	}
+	if truncated && rejectOnTruncate {
+		fileSize := int64(0)
+		if info, err := os.Stat(path); err == nil {
+			fileSize = info.Size()
+		}
+		totalLines := 0
+		if f2, err := os.Open(path); err == nil {
+			defer f2.Close()
+			s2 := bufio.NewScanner(f2)
+			s2.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+			for s2.Scan() {
+				totalLines++
+			}
+		}
+		return map[string]any{
+			"success":     false,
+			"error":       fmt.Sprintf("Read produced more than %d characters (max_chars safety limit). Use offset/limit or increase max_chars (<=200000) to read a smaller range.", maxChars),
+			"path":        path,
+			"file_size":   fileSize,
+			"total_lines": totalLines,
+			"offset":      offset,
+			"limit":       limit,
+		}, nil
+	}
 	return map[string]any{
 		"success":           true,
 		"path":              path,
@@ -365,6 +613,7 @@ func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolC
 		"with_line_numbers": withLineNumbers,
 		"max_chars":         maxChars,
 		"truncated":         truncated,
+		"dedup":             false,
 	}, nil
 }
 
@@ -374,13 +623,48 @@ func (b *BuiltinTools) writeFile(_ context.Context, args map[string]any, tc Tool
 	if err != nil {
 		return nil, err
 	}
+	if isInternalReadFileStatusText(content) {
+		return nil, errors.New("refusing to write internal read_file status text as file content; re-read the file or reconstruct the intended contents before writing")
+	}
+	if err := rejectSymlinkEscape(tc.Workdir, path); err != nil {
+		return nil, err
+	}
+	if err := rejectNonRegularFile(path); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	staleWarning := ""
+	if _, statErr := os.Stat(path); statErr == nil {
+		w, warnErr := b.checkStaleSinceRead(tc.SessionID, path)
+		if warnErr != nil {
+			return nil, warnErr
+		}
+		staleWarning = w
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
-	return map[string]any{"success": true, "path": path, "bytes": len(content), "written": true}, nil
+	res := map[string]any{"success": true, "path": path, "bytes": len(content), "written": true}
+	if staleWarning != "" {
+		res["_warning"] = staleWarning
+	}
+	if info, err := os.Stat(path); err == nil {
+		b.recordReadStamp(tc.SessionID, path, info.ModTime().UnixNano())
+	}
+	return res, nil
+}
+
+func isInternalReadFileStatusText(content string) bool {
+	stripped := strings.TrimSpace(content)
+	if stripped == readFileDedupStatusMessage {
+		return true
+	}
+	if strings.Contains(stripped, readFileDedupStatusMessage) && len(stripped) <= 2*len(readFileDedupStatusMessage) {
+		return true
+	}
+	return false
 }
 
 func (b *BuiltinTools) searchFiles(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -441,7 +725,7 @@ func (b *BuiltinTools) todo(_ context.Context, args map[string]any, tc ToolConte
 	merge := boolArg(args, "merge", false)
 	val, ok := args["todos"].([]any)
 	if !ok {
-		return map[string]any{"todos": tc.TodoStore.List(tc.SessionID)}, nil
+		return map[string]any{"success": true, "todos": tc.TodoStore.List(tc.SessionID)}, nil
 	}
 	items := make([]TodoItem, 0, len(val))
 	for _, x := range val {
@@ -451,14 +735,22 @@ func (b *BuiltinTools) todo(_ context.Context, args map[string]any, tc ToolConte
 		}
 		items = append(items, TodoItem{ID: strMap(m, "id"), Content: strMap(m, "content"), Status: strMap(m, "status"), Priority: strMap(m, "priority")})
 	}
-	return map[string]any{"todos": tc.TodoStore.Update(tc.SessionID, items, merge)}, nil
+	return map[string]any{"success": true, "todos": tc.TodoStore.Update(tc.SessionID, items, merge)}, nil
 }
 
 func (b *BuiltinTools) memory(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	if tc.MemoryStore == nil {
 		return nil, errors.New("memory store unavailable")
 	}
-	return tc.MemoryStore.Manage(strArg(args, "action"), strArg(args, "target"), strArg(args, "content"), strArg(args, "old_text"))
+	res, err := tc.MemoryStore.Manage(strArg(args, "action"), strArg(args, "target"), strArg(args, "content"), strArg(args, "old_text"))
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		res = map[string]any{}
+	}
+	res["success"] = true
+	return res, nil
 }
 
 func (b *BuiltinTools) sessionSearch(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -467,11 +759,19 @@ func (b *BuiltinTools) sessionSearch(_ context.Context, args map[string]any, tc 
 	}
 	query := strArg(args, "query")
 	limit := intArg(args, "limit", 5)
-	rows, err := tc.SessionStore.Search(query, limit, tc.SessionID)
+	exclude := strings.TrimSpace(strArg(args, "exclude_session_id"))
+	includeCurrent := boolArg(args, "include_current_session", false)
+	if includeCurrent {
+		exclude = ""
+	}
+	if exclude == "" && !includeCurrent {
+		exclude = tc.SessionID
+	}
+	rows, err := tc.SessionStore.Search(query, limit, exclude)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"query": query, "results": rows}, nil
+	return map[string]any{"success": true, "query": query, "results": rows, "exclude_session_id": exclude}, nil
 }
 
 func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -490,7 +790,7 @@ func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ Tool
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 200_000))
-	return map[string]any{"status": resp.StatusCode, "url": url, "content": string(body)}, nil
+	return map[string]any{"success": true, "status": resp.StatusCode, "url": url, "content": string(body)}, nil
 }
 
 func (b *BuiltinTools) webSearch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -521,7 +821,7 @@ func (b *BuiltinTools) webSearch(ctx context.Context, args map[string]any, _ Too
 		return nil, fmt.Errorf("fetch search: %w", err)
 	}
 	results := parseDuckDuckGoHTMLResults(string(bs), limit)
-	return map[string]any{"query": query, "count": len(results), "results": results}, nil
+	return map[string]any{"success": true, "query": query, "count": len(results), "results": results}, nil
 }
 
 func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -541,7 +841,7 @@ func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ To
 	if len(text) > maxChars {
 		text = text[:maxChars]
 	}
-	return map[string]any{"url": rawURL, "content": text, "truncated": len(text) == maxChars}, nil
+	return map[string]any{"success": true, "url": rawURL, "content": text, "truncated": len(text) == maxChars}, nil
 }
 
 func (b *BuiltinTools) clarify(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -663,6 +963,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 			}
 		}
 		return map[string]any{
+			"success":    true,
 			"session_id": tc.SessionID,
 			"approved":   sessionApproved,
 			"expires_at": sessionExpiresAt,
@@ -681,6 +982,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 			}
 			expiresAt := tc.ApprovalStore.GrantPattern(tc.SessionID, pattern, time.Duration(ttlSeconds)*time.Second)
 			return map[string]any{
+				"success":    true,
 				"session_id": tc.SessionID,
 				"scope":      "pattern",
 				"pattern":    pattern,
@@ -690,6 +992,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 		}
 		expiresAt := tc.ApprovalStore.Grant(tc.SessionID, time.Duration(ttlSeconds)*time.Second)
 		return map[string]any{
+			"success":    true,
 			"session_id": tc.SessionID,
 			"scope":      "session",
 			"approved":   true,
@@ -701,6 +1004,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 		if scope == "pattern" && pattern != "" {
 			revoked := tc.ApprovalStore.RevokePattern(tc.SessionID, pattern)
 			return map[string]any{
+				"success":    true,
 				"session_id": tc.SessionID,
 				"scope":      "pattern",
 				"pattern":    pattern,
@@ -710,6 +1014,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 		}
 		revoked := tc.ApprovalStore.Revoke(tc.SessionID)
 		return map[string]any{
+			"success":    true,
 			"session_id": tc.SessionID,
 			"approved":   false,
 			"revoked":    revoked,
@@ -726,6 +1031,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 		}
 		if !approved {
 			return map[string]any{
+				"success":     true,
 				"action":      "confirm",
 				"approval_id": approvalID,
 				"approved":    false,
@@ -742,6 +1048,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 				return nil, err
 			}
 			return map[string]any{
+				"success":     true,
 				"action":      "confirm",
 				"approval_id": approvalID,
 				"approved":    true,
@@ -755,6 +1062,7 @@ func (b *BuiltinTools) approval(ctx context.Context, args map[string]any, tc Too
 		}
 		out, code, err := RunForeground(ctx, pa.Command, pa.CWD, pa.Timeout)
 		res := map[string]any{
+			"success":     err == nil && code == 0,
 			"action":      "confirm",
 			"approval_id": approvalID,
 			"approved":    true,
@@ -780,7 +1088,7 @@ func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc Tool
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]any{"path": root, "skills": []map[string]any{}}, nil
+			return map[string]any{"success": true, "path": root, "skills": []map[string]any{}, "count": 0}, nil
 		}
 		return nil, err
 	}
@@ -798,7 +1106,7 @@ func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc Tool
 			"path":        skillPath,
 		})
 	}
-	return map[string]any{"path": root, "skills": skills, "count": len(skills)}, nil
+	return map[string]any{"success": true, "path": root, "skills": skills, "count": len(skills)}, nil
 }
 
 func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -819,6 +1127,7 @@ func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc Tool
 		return nil, err
 	}
 	return map[string]any{
+		"success": true,
 		"name":    name,
 		"path":    path,
 		"content": string(bs),
@@ -871,7 +1180,7 @@ func (b *BuiltinTools) skillSearch(ctx context.Context, args map[string]any, tc 
 			break
 		}
 	}
-	return map[string]any{"query": query, "repo": repo, "skills": skills, "count": len(skills)}, nil
+	return map[string]any{"success": true, "query": query, "repo": repo, "skills": skills, "count": len(skills)}, nil
 }
 
 func fetchSkillDescription(ctx context.Context, rawURL string) string {
@@ -1099,14 +1408,14 @@ func terminalParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}, "approval_ttl_seconds": map[string]any{"type": "integer"}}, "required": []string{"command"}}
 }
 func processParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "stop"}}, "session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"list", "status", "stop"}}, "session_id": map[string]any{"type": "string"}, "include_done": map[string]any{"type": "boolean"}, "limit": map[string]any{"type": "integer"}}, "required": []string{}}
 }
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
 }
 func stopProcessParams() map[string]any { return processStatusParams() }
 func readFileParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}, "with_line_numbers": map[string]any{"type": "boolean"}, "max_chars": map[string]any{"type": "integer"}}, "required": []string{"path"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}, "with_line_numbers": map[string]any{"type": "boolean"}, "max_chars": map[string]any{"type": "integer"}, "dedup": map[string]any{"type": "boolean", "description": "Return a lightweight stub when the file is unchanged since the previous read in the same session (default true)"}, "reject_on_truncate": map[string]any{"type": "boolean", "description": "When true (default), return an error if the read would exceed max_chars instead of returning truncated content"}}, "required": []string{"path"}}
 }
 func writeFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}
@@ -1124,7 +1433,7 @@ func memoryParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string"}, "target": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "old_text": map[string]any{"type": "string"}}, "required": []string{"action", "target"}}
 }
 func sessionSearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}, "required": []string{"query"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean"}}, "required": []string{"query"}}
 }
 func webFetchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}

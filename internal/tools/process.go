@@ -104,6 +104,36 @@ func (r *ProcessRegistry) Stop(id string) error {
 	return s.cmd.Process.Kill()
 }
 
+func (r *ProcessRegistry) List(includeDone bool, limit int) []ProcessSession {
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]ProcessSession, 0, len(r.procs))
+	for _, s := range r.procs {
+		if s == nil {
+			continue
+		}
+		if !includeDone && s.Done {
+			continue
+		}
+		out = append(out, ProcessSession{
+			ID:         s.ID,
+			Command:    s.Command,
+			StartedAt:  s.StartedAt,
+			Done:       s.Done,
+			ExitCode:   s.ExitCode,
+			OutputFile: s.OutputFile,
+			Err:        s.Err,
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
 func RunForeground(ctx context.Context, command, cwd string, timeoutSec int) (string, int, error) {
 	if timeoutSec <= 0 {
 		timeoutSec = 120

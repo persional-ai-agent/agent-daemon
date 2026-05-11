@@ -27,6 +27,80 @@ func TestWriteFileResolvesRelativePathWithinWorkdir(t *testing.T) {
 	}
 }
 
+func TestWriteFileWarnsWhenFileChangedSinceRead(t *testing.T) {
+	workdir := t.TempDir()
+	p := filepath.Join(workdir, "a.txt")
+	if err := os.WriteFile(p, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir, SessionID: "s-stale"}
+
+	if _, err := b.readFile(context.Background(), map[string]any{"path": "a.txt"}, tc); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(p, []byte("external"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := b.writeFile(context.Background(), map[string]any{
+		"path":    "a.txt",
+		"content": "new",
+	}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := res["_warning"]; !ok {
+		t.Fatalf("expected _warning for stale file, got %+v", res)
+	}
+}
+
+func TestWriteFileRejectsInternalReadFileDedupStatusText(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+
+	_, err := b.writeFile(context.Background(), map[string]any{
+		"path":    "a.txt",
+		"content": readFileDedupStatusMessage,
+	}, ToolContext{Workdir: workdir})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "internal read_file status text") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestWriteFileRejectsSymlinkPathEscape(t *testing.T) {
+	workdir := t.TempDir()
+	outside := t.TempDir()
+	outsideTarget := filepath.Join(outside, "x.txt")
+	if err := os.WriteFile(outsideTarget, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	linkDir := filepath.Join(workdir, "out")
+	if err := os.Symlink(outside, linkDir); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	b := &BuiltinTools{}
+	_, err := b.writeFile(context.Background(), map[string]any{
+		"path":    "out/created.txt",
+		"content": "hello",
+	}, ToolContext{Workdir: workdir})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink rejection, got %v", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(outside, "created.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no write outside workdir; stat err=%v", statErr)
+	}
+}
+
 func TestReadFileRejectsPathOutsideWorkdir(t *testing.T) {
 	workdir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "secret.txt")

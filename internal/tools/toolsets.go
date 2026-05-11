@@ -68,6 +68,10 @@ var Toolsets = map[string]Toolset{
 		Description: "Spawn subagent(s) for subtasks",
 		Tools:       []string{"delegate_task"},
 	},
+	"moa": {
+		Description: "Mixture-of-agents reasoning tool (stub)",
+		Tools:       []string{"mixture_of_agents"},
+	},
 	"code_execution": {
 		Description: "Execute short scripts (python)",
 		Tools:       []string{"execute_code"},
@@ -91,7 +95,7 @@ var Toolsets = map[string]Toolset{
 	"core": {
 		Description: "Default core toolset (terminal + file + memory + web + skills + approvals + delegation + cronjob + messaging)",
 		Tools:       []string{},
-		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "delegation", "cronjob", "messaging"},
+		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "code_execution", "delegation", "cronjob", "messaging"},
 	},
 }
 
@@ -112,6 +116,20 @@ func ListToolsets() []map[string]any {
 		})
 	}
 	return out
+}
+
+func GetToolset(name string) (map[string]any, bool) {
+	name = strings.TrimSpace(name)
+	ts, ok := Toolsets[name]
+	if !ok {
+		return nil, false
+	}
+	return map[string]any{
+		"name":        name,
+		"description": ts.Description,
+		"tools":       append([]string{}, ts.Tools...),
+		"includes":    append([]string{}, ts.Includes...),
+	}, true
 }
 
 func ResolveToolset(names []string) (map[string]struct{}, error) {

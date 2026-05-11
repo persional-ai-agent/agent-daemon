@@ -117,3 +117,53 @@ func normalizedWorkdir(workdir string) (string, error) {
 	}
 	return filepath.Abs(filepath.Clean(base))
 }
+
+func rejectNonRegularFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	mode := info.Mode()
+	// Reject device files, named pipes, sockets, and other special files.
+	if mode&os.ModeDevice != 0 || mode&os.ModeCharDevice != 0 || mode&os.ModeNamedPipe != 0 || mode&os.ModeSocket != 0 {
+		return fmt.Errorf("refusing to access non-regular file: %s", path)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("path is a directory: %s", path)
+	}
+	return nil
+}
+
+func rejectSymlinkEscape(workdir, resolvedPath string) error {
+	root, err := normalizedWorkdir(workdir)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, resolvedPath)
+	if err != nil {
+		return err
+	}
+	if rel == "." {
+		return nil
+	}
+	parts := strings.Split(rel, string(os.PathSeparator))
+	cur := root
+	for _, part := range parts {
+		if part == "" || part == "." {
+			continue
+		}
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Remaining components do not exist yet (e.g., write_file creating new paths).
+				break
+			}
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to access path with symlink component: %s", cur)
+		}
+	}
+	return nil
+}

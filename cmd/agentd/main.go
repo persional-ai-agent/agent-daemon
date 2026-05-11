@@ -124,12 +124,25 @@ func runToolsets(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage:")
 		fmt.Fprintln(os.Stderr, "  agentd toolsets list")
+		fmt.Fprintln(os.Stderr, "  agentd toolsets show name")
 		fmt.Fprintln(os.Stderr, "  agentd toolsets resolve name[,name...]")
 		os.Exit(2)
 	}
 	switch args[0] {
 	case "list":
 		printJSON(tools.ListToolsets())
+	case "show":
+		fs := flag.NewFlagSet("toolsets show", flag.ExitOnError)
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd toolsets show name")
+		}
+		name := strings.TrimSpace(fs.Arg(0))
+		ts, ok := tools.GetToolset(name)
+		if !ok {
+			log.Fatalf("unknown toolset: %s", name)
+		}
+		printJSON(ts)
 	case "resolve":
 		fs := flag.NewFlagSet("toolsets resolve", flag.ExitOnError)
 		_ = fs.Parse(args[1:])
@@ -148,7 +161,7 @@ func runToolsets(args []string) {
 		sort.Strings(out)
 		printToolNames(out)
 	default:
-		log.Fatal("usage: agentd toolsets list | agentd toolsets resolve name[,name...]")
+		log.Fatal("usage: agentd toolsets list | show | resolve")
 	}
 }
 
@@ -428,6 +441,8 @@ func buildDoctorChecks(cfg config.Config) []doctorCheck {
 		checkProviderCredentials(cfg),
 		checkMCPConfig(cfg),
 		checkGatewayConfig(cfg),
+		checkToolsetsConfig(cfg),
+		checkStubTools(cfg),
 		checkRegisteredTools(),
 	}
 	return checks
@@ -540,6 +555,64 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 		return doctorCheck{Name: "gateway", Status: "warn", Detail: "enabled but no platform tokens are configured"}
 	}
 	return doctorCheck{Name: "gateway", Status: "ok", Detail: "configured platforms: " + strings.Join(configured, ",")}
+}
+
+func checkToolsetsConfig(cfg config.Config) doctorCheck {
+	names := parseNameList(cfg.EnabledToolsets)
+	if len(names) == 0 {
+		return doctorCheck{Name: "toolsets", Status: "ok", Detail: "disabled (full tool registry enabled)"}
+	}
+	allowed, err := tools.ResolveToolset(names)
+	if err != nil {
+		return doctorCheck{Name: "toolsets", Status: "error", Detail: err.Error()}
+	}
+	return doctorCheck{Name: "toolsets", Status: "ok", Detail: fmt.Sprintf("enabled=%s (resolved_tools=%d)", strings.Join(names, ","), len(allowed))}
+}
+
+func checkStubTools(cfg config.Config) doctorCheck {
+	enabledToolsets := parseNameList(cfg.EnabledToolsets)
+	allowed := map[string]struct{}{}
+	if len(enabledToolsets) > 0 {
+		resolved, err := tools.ResolveToolset(enabledToolsets)
+		if err != nil {
+			return doctorCheck{Name: "stub_tools", Status: "warn", Detail: "cannot resolve toolsets: " + err.Error()}
+		}
+		allowed = resolved
+	}
+	// These tools exist as interface-alignment stubs only.
+	stubs := []string{
+		"vision_analyze",
+		"image_generate",
+		"text_to_speech",
+		"mixture_of_agents",
+		"browser_navigate",
+		"browser_snapshot",
+		"browser_click",
+		"browser_type",
+		"browser_scroll",
+		"browser_back",
+		"browser_press",
+		"browser_get_images",
+		"browser_vision",
+		"browser_console",
+		"browser_cdp",
+		"browser_dialog",
+	}
+	var present []string
+	if len(allowed) == 0 {
+		// toolsets disabled: stubs are registered, but that does not mean usable.
+		present = stubs
+	} else {
+		for _, name := range stubs {
+			if _, ok := allowed[name]; ok {
+				present = append(present, name)
+			}
+		}
+	}
+	if len(present) == 0 {
+		return doctorCheck{Name: "stub_tools", Status: "ok", Detail: "none enabled"}
+	}
+	return doctorCheck{Name: "stub_tools", Status: "warn", Detail: "not implemented: " + strings.Join(present, ",")}
 }
 
 func checkRegisteredTools() doctorCheck {

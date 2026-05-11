@@ -15,4 +15,4 @@
 ## 边界
 
 - 不做 Hermes 的 check_fn 可用性 gating；也不对 MCP tools 做独立分组过滤（仍会被 registry 过滤逻辑影响，取决于工具名是否在解析集合内）。
-
+- `core` toolset 当前倾向对齐 Hermes 的 core 工具名集合，可能包含尚未能力对齐的 stub 工具与最小实现（例如 browser/vision/tts/execute_code）。

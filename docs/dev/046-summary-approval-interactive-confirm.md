@@ -18,7 +18,7 @@
 ```
 Agent 调用 terminal("rm -rf /tmp/xxx")
   → 检测到危险命令，无预授权
-  → 返回: {"status":"pending_approval", "approval_id":"xxx", "command":"...", "reason":"..."}
+  → 返回: {"success":false, "status":"pending_approval", "approval_id":"xxx", "command":"...", "reason":"..."}
 
 LLM 收到 pending_approval 结果
   → 展示给用户: "需要运行: rm -rf /tmp/xxx。是否批准？"

@@ -29,16 +29,17 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 		Type: "function",
 		Function: core.ToolSchemaDetail{
 			Name:        t.Name(),
-			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, pause, resume, remove, trigger.",
+			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, update, pause, resume, remove, trigger.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"action": map[string]any{
 						"type":        "string",
 						"description": "Action to perform",
-						"enum":        []string{"create", "list", "get", "pause", "resume", "remove", "trigger"},
+						"enum":        []string{"create", "list", "get", "update", "pause", "resume", "remove", "trigger", "runs", "run_get"},
 					},
 					"job_id": map[string]any{"type": "string", "description": "Cron job id"},
+					"run_id": map[string]any{"type": "string", "description": "Cron run id (for run_get)"},
 					"name":   map[string]any{"type": "string", "description": "Optional job name"},
 					"prompt": map[string]any{"type": "string", "description": "Prompt to run when the job fires"},
 					"schedule": map[string]any{
@@ -49,6 +50,8 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 						"type":        "integer",
 						"description": "How many times to run (omit for forever). For one-shot schedules, default is 1.",
 					},
+					"paused": map[string]any{"type": "boolean", "description": "Pause/resume the job (update only)"},
+					"limit":  map[string]any{"type": "integer", "description": "Limit for runs listing"},
 				},
 				"required": []string{"action"},
 			},
@@ -136,6 +139,95 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			return map[string]any{"success": false, "error": "not_found"}, nil
 		}
 		return map[string]any{"success": true, "job": job}, nil
+	case "update":
+		id := strings.TrimSpace(strArg(args, "job_id"))
+		if id == "" {
+			return nil, errors.New("job_id required")
+		}
+		cur, ok, err := t.Store.GetJob(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"success": false, "error": "not_found"}, nil
+		}
+
+		var upd store.UpdateCronJobParams
+		if name := strings.TrimSpace(strArg(args, "name")); name != "" {
+			upd.Name = &name
+		}
+		if prompt := strings.TrimSpace(strArg(args, "prompt")); prompt != "" {
+			upd.Prompt = &prompt
+		}
+
+		if v, ok := args["paused"]; ok {
+			if b, ok := v.(bool); ok {
+				upd.Paused = &b
+			}
+		}
+
+		if schedRaw := strings.TrimSpace(strArg(args, "schedule")); schedRaw != "" {
+			now := time.Now().UTC()
+			sched, err := cron.ParseSchedule(now, schedRaw)
+			if err != nil {
+				return nil, err
+			}
+			if sched.Kind == "cron" {
+				return nil, fmt.Errorf("cron expressions are stored but not yet executed by agent-daemon scheduler: %q", schedRaw)
+			}
+			upd.ScheduleKind = &sched.Kind
+			if sched.Expr != "" {
+				expr := sched.Expr
+				upd.ScheduleExpr = &expr
+			}
+			if sched.Kind == "interval" {
+				mins := sched.IntervalMins
+				upd.IntervalMins = &mins
+			} else {
+				zero := 0
+				upd.IntervalMins = &zero
+			}
+
+			// reset run_at/next_run_at
+			runAt := sched.RunAt
+			nextRunAt := sched.RunAt
+			if sched.Kind == "interval" {
+				tm := now.Add(time.Duration(sched.IntervalMins) * time.Minute).UTC()
+				nextRunAt = &tm
+			}
+			upd.RunAt = &runAt
+			upd.NextRunAt = &nextRunAt
+
+			// schedule changed -> reset completion counter
+			zero := 0
+			upd.RepeatCompleted = &zero
+		}
+
+		if repeat := intArg(args, "repeat", -1); repeat >= 0 {
+			var rptr *int
+			if repeat > 0 {
+				rptr = &repeat
+			}
+			// If existing is once and repeat omitted, keep existing; but here repeat was set explicitly.
+			upd.RepeatTimes = &rptr
+		}
+
+		// Default: ensure next_run_at exists for interval jobs if missing.
+		if cur.ScheduleKind == "interval" && cur.NextRunAt == nil {
+			now := time.Now().UTC()
+			tm := now.Add(time.Duration(cur.IntervalMins) * time.Minute).UTC()
+			next := &tm
+			upd.NextRunAt = &next
+		}
+
+		job, ok2, err := t.Store.UpdateJob(ctx, id, upd)
+		if err != nil {
+			return nil, err
+		}
+		if !ok2 {
+			return map[string]any{"success": false, "error": "not_found"}, nil
+		}
+		return map[string]any{"success": true, "job": job}, nil
 	case "pause":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
@@ -172,6 +264,27 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			return nil, err
 		}
 		return map[string]any{"success": true, "job_id": id, "triggered": true}, nil
+	case "runs":
+		id := strings.TrimSpace(strArg(args, "job_id"))
+		limit := intArg(args, "limit", 50)
+		runs, err := t.Store.ListRuns(ctx, id, limit)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"success": true, "job_id": id, "count": len(runs), "runs": runs}, nil
+	case "run_get":
+		runID := strings.TrimSpace(strArg(args, "run_id"))
+		if runID == "" {
+			return nil, errors.New("run_id required")
+		}
+		run, ok, err := t.Store.GetRun(ctx, runID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"success": false, "error": "not_found"}, nil
+		}
+		return map[string]any{"success": true, "run": run}, nil
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}

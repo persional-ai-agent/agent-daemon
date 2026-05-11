@@ -138,6 +138,7 @@ Toolsets（缩减工具 schema 面，类似 Hermes toolsets）：
 ```bash
 export AGENT_ENABLED_TOOLSETS=core
 go run ./cmd/agentd toolsets list
+go run ./cmd/agentd toolsets show core
 go run ./cmd/agentd toolsets resolve core
 ```
 

@@ -18,7 +18,7 @@ type CronJob struct {
 	IntervalMins   int        `json:"interval_mins,omitempty"`
 	RunAt          *time.Time `json:"run_at,omitempty"`
 	NextRunAt      *time.Time `json:"next_run_at,omitempty"`
-	RepeatTimes    *int       `json:"repeat_times,omitempty"`    // nil = forever
+	RepeatTimes    *int       `json:"repeat_times,omitempty"`     // nil = forever
 	RepeatComplete int        `json:"repeat_completed,omitempty"` // runs completed
 	Paused         bool       `json:"paused"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -100,6 +100,19 @@ type CreateCronJobParams struct {
 	RepeatTimes  *int
 }
 
+type UpdateCronJobParams struct {
+	Name            *string
+	Prompt          *string
+	ScheduleKind    *string
+	ScheduleExpr    *string
+	IntervalMins    *int
+	RunAt           **time.Time
+	NextRunAt       **time.Time
+	RepeatTimes     **int
+	Paused          *bool
+	RepeatCompleted *int
+}
+
 func (s *CronStore) CreateJob(ctx context.Context, p CreateCronJobParams) (CronJob, error) {
 	if strings.TrimSpace(p.ID) == "" {
 		return CronJob{}, errors.New("id required")
@@ -153,6 +166,85 @@ INSERT INTO cron_jobs(
 		return CronJob{}, err
 	}
 	return job, nil
+}
+
+func (s *CronStore) UpdateJob(ctx context.Context, id string, p UpdateCronJobParams) (CronJob, bool, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return CronJob{}, false, errors.New("id required")
+	}
+	cur, ok, err := s.GetJob(ctx, id)
+	if err != nil || !ok {
+		return CronJob{}, ok, err
+	}
+
+	next := cur
+	if p.Name != nil {
+		next.Name = strings.TrimSpace(*p.Name)
+	}
+	if p.Prompt != nil {
+		next.Prompt = strings.TrimSpace(*p.Prompt)
+	}
+	if p.ScheduleKind != nil {
+		next.ScheduleKind = strings.TrimSpace(*p.ScheduleKind)
+	}
+	if p.ScheduleExpr != nil {
+		next.ScheduleExpr = strings.TrimSpace(*p.ScheduleExpr)
+	}
+	if p.IntervalMins != nil {
+		next.IntervalMins = *p.IntervalMins
+	}
+	if p.RunAt != nil {
+		next.RunAt = *p.RunAt
+	}
+	if p.NextRunAt != nil {
+		next.NextRunAt = *p.NextRunAt
+	}
+	if p.RepeatTimes != nil {
+		next.RepeatTimes = *p.RepeatTimes
+	}
+	if p.Paused != nil {
+		next.Paused = *p.Paused
+	}
+	if p.RepeatCompleted != nil {
+		next.RepeatComplete = *p.RepeatCompleted
+	}
+
+	if strings.TrimSpace(next.Name) == "" {
+		next.Name = next.ID
+	}
+	if strings.TrimSpace(next.Prompt) == "" {
+		return CronJob{}, true, errors.New("prompt required")
+	}
+	if strings.TrimSpace(next.ScheduleKind) == "" {
+		return CronJob{}, true, errors.New("schedule_kind required")
+	}
+
+	now := time.Now().UTC()
+	_, err = s.db.ExecContext(ctx, `
+UPDATE cron_jobs
+SET name = ?, prompt = ?, schedule_kind = ?, schedule_expr = ?, interval_mins = ?, run_at = ?, next_run_at = ?,
+    repeat_times = ?, repeat_completed = ?, paused = ?, updated_at = ?
+WHERE id = ?
+`,
+		next.Name,
+		next.Prompt,
+		next.ScheduleKind,
+		next.ScheduleExpr,
+		next.IntervalMins,
+		formatTimePtr(next.RunAt),
+		formatTimePtr(next.NextRunAt),
+		next.RepeatTimes,
+		next.RepeatComplete,
+		boolToInt(next.Paused),
+		now.Format(time.RFC3339),
+		next.ID,
+	)
+	if err != nil {
+		return CronJob{}, true, err
+	}
+	updated, ok2, err := s.GetJob(ctx, id)
+	return updated, ok2, err
 }
 
 func (s *CronStore) ListJobs(ctx context.Context) ([]CronJob, error) {
@@ -266,6 +358,81 @@ WHERE id = ?
 	return err
 }
 
+func (s *CronStore) ListRuns(ctx context.Context, jobID string, limit int) ([]CronRun, error) {
+	jobID = strings.TrimSpace(jobID)
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	baseSQL := `SELECT id, job_id, session_id, status, started_at, finished_at, output, error FROM cron_runs`
+	args := []any{}
+	if jobID != "" {
+		baseSQL += ` WHERE job_id = ?`
+		args = append(args, jobID)
+	}
+	baseSQL += ` ORDER BY started_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, baseSQL, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]CronRun, 0)
+	for rows.Next() {
+		var r CronRun
+		var startedAt, finishedAt string
+		if err := rows.Scan(&r.ID, &r.JobID, &r.SessionID, &r.Status, &startedAt, &finishedAt, &r.Output, &r.Error); err != nil {
+			return nil, err
+		}
+		sa, err := time.Parse(time.RFC3339, startedAt)
+		if err != nil {
+			return nil, err
+		}
+		r.StartedAt = sa
+		if strings.TrimSpace(finishedAt) != "" {
+			fa, err := time.Parse(time.RFC3339, finishedAt)
+			if err != nil {
+				return nil, err
+			}
+			r.FinishedAt = &fa
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (s *CronStore) GetRun(ctx context.Context, runID string) (CronRun, bool, error) {
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return CronRun{}, false, errors.New("run_id required")
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT id, job_id, session_id, status, started_at, finished_at, output, error FROM cron_runs WHERE id = ?`, runID)
+	var r CronRun
+	var startedAt, finishedAt string
+	if err := row.Scan(&r.ID, &r.JobID, &r.SessionID, &r.Status, &startedAt, &finishedAt, &r.Output, &r.Error); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return CronRun{}, false, nil
+		}
+		return CronRun{}, false, err
+	}
+	sa, err := time.Parse(time.RFC3339, startedAt)
+	if err != nil {
+		return CronRun{}, false, err
+	}
+	r.StartedAt = sa
+	if strings.TrimSpace(finishedAt) != "" {
+		fa, err := time.Parse(time.RFC3339, finishedAt)
+		if err != nil {
+			return CronRun{}, false, err
+		}
+		r.FinishedAt = &fa
+	}
+	return r, true, nil
+}
+
 func formatTimePtr(t *time.Time) string {
 	if t == nil || t.IsZero() {
 		return ""
@@ -337,4 +504,3 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
-

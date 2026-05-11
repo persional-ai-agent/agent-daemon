@@ -195,3 +195,18 @@
 - `070-summary-tool-result-success-field.md`：补齐工具结果 success 字段（兼容性增强）
 - `071-summary-hermes-core-tool-stubs.md`：Hermes core 工具缺口的 stub 对齐
 - `072-summary-read-file-max-chars.md`：read_file 增加 max_chars 防护（Hermes 风格）
+- `073-summary-tool-success-web-session-search.md`：web 与 session_search 工具返回补齐 success
+- `074-summary-tool-success-todo-memory.md`：todo/memory 工具返回补齐 success
+- `075-summary-tool-success-terminal-approval-skills.md`：terminal/approval/skills 工具返回补齐 success
+- `076-summary-process-list-action.md`：process 工具补齐 list 动作（对齐 Hermes 体验）
+- `077-summary-cronjob-update-action.md`：cronjob 补齐 update 动作
+- `078-summary-cronjob-runs-inspection.md`：cronjob 增加 runs/run_get（运行记录查询）
+- `079-summary-session-search-exclude.md`：session_search 支持排除/包含会话参数（对齐 Hermes 体验）
+- `080-summary-doctor-stub-tools.md`：doctor 增加 stub_tools 检查项
+- `081-summary-file-tools-reject-non-regular.md`：文件工具拒绝 FIFO/socket/device 等非普通文件
+- `082-summary-file-tools-reject-symlink-escape.md`：文件工具拒绝 symlink 逃逸 workdir
+- `083-summary-read-file-dedup.md`：read_file 增加去重返回（未变更文件返回 stub）
+- `084-summary-file-staleness-warning.md`：write_file/patch 增加“文件已变更”告警（staleness warning）
+- `085-summary-write-file-reject-status-text.md`：write_file 拒绝写入 read_file 内部状态文本
+- `086-summary-read-file-max-chars-reject.md`：read_file 超过 max_chars 默认拒绝（Hermes 行为）
+- `087-summary-read-file-loop-guard.md`：read_file 连续重复读取告警与阻断（防循环）
