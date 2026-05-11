@@ -227,3 +227,7 @@
 - `102-summary-yuanbao-sticker-search.md`：实现 yb_search_sticker（贴纸目录搜索）
 - `103-summary-rl-tools-local-runner.md`：rl_* 从占位升级为本地 runner（可配置命令）
 - `104-summary-tirith-terminal-scan-and-discord-tool.md`：terminal 增加 tirith 预扫描 + 补齐 Hermes `discord` 工具名
+- `105-summary-process-tool-actions.md`：process 补齐 poll/log/wait/kill/write 动作（Hermes 体验对齐）
+- `106-summary-terminal-notify-on-complete.md`：terminal(background) 补齐 notify_on_complete（Hermes 体验对齐）
+- `107-summary-toolsets-parity-aliases.md`：补齐 Hermes toolsets 名称别名与平台 toolsets（配置兼容）
+- `108-summary-process-write-and-terminate.md`：process 支持 write + stop 改为 TERM->KILL（Hermes 体验对齐）

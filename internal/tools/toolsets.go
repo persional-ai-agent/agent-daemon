@@ -19,6 +19,11 @@ var Toolsets = map[string]Toolset{
 		Description: "Terminal/process execution tools",
 		Tools:       []string{"terminal", "process"},
 	},
+	// Hermes parity alias
+	"todo": {
+		Description: "Todo/planning tools",
+		Tools:       []string{"todo"},
+	},
 	"file": {
 		Description: "File read/write/search tools",
 		Tools:       []string{"read_file", "write_file", "patch", "search_files"},
@@ -46,6 +51,11 @@ var Toolsets = map[string]Toolset{
 	"web": {
 		Description: "Web research tools (search + extract)",
 		Tools:       []string{"web_search", "web_extract"},
+	},
+	// Hermes parity: web_search only
+	"search": {
+		Description: "Web search only",
+		Tools:       []string{"web_search"},
 	},
 	"vision": {
 		Description: "Vision analysis tools (stub)",
@@ -104,7 +114,12 @@ var Toolsets = map[string]Toolset{
 			"browser_type", "browser_scroll", "browser_back",
 			"browser_press", "browser_get_images",
 			"browser_vision", "browser_console", "browser_cdp", "browser_dialog",
+			"web_search",
 		},
+	},
+	"browser-cdp": {
+		Description: "Browser CDP tools (lightweight shim)",
+		Tools:       []string{"browser_cdp", "browser_dialog"},
 	},
 	"tts": {
 		Description: "Text-to-speech tools (stub)",
@@ -152,7 +167,58 @@ var Toolsets = map[string]Toolset{
 	"core": {
 		Description: "Default core toolset (terminal + file + memory + web + skills + approvals + delegation + cronjob + messaging)",
 		Tools:       []string{},
-		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "code_execution", "delegation", "cronjob", "messaging", "homeassistant", "kanban"},
+		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "todo", "memory", "session_search", "clarify", "skills", "approval", "code_execution", "delegation", "cronjob", "messaging", "homeassistant", "kanban"},
+	},
+	"debugging": {
+		Description: "Debug bundle (file + terminal + web)",
+		Tools:       []string{},
+		Includes:    []string{"file", "terminal", "web"},
+	},
+	"safe": {
+		Description: "Read-only research + media generation (no file write, no terminal)",
+		Tools:       []string{},
+		Includes:    []string{"image_gen", "vision", "web"},
+	},
+	// Hermes platform toolset names (composites) — kept for config/toolset-name parity.
+	"hermes-cli": {
+		Description: "Hermes CLI platform toolset (alias of core)",
+		Tools:       []string{},
+		Includes:    []string{"core"},
+	},
+	"hermes-api-server": {
+		Description: "Hermes API server platform toolset (core minus interactive tools; approximated)",
+		Tools:       []string{},
+		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "skills", "approval", "code_execution", "delegation", "cronjob", "homeassistant", "kanban", "session_search"},
+	},
+	"hermes-acp": {
+		Description: "Hermes ACP platform toolset (coding-focused; approximated)",
+		Tools:       []string{},
+		Includes:    []string{"terminal", "file", "skills", "approval", "code_execution", "delegation", "web", "session_search", "memory"},
+	},
+	"hermes-cron": {
+		Description: "Hermes cron platform toolset (alias of core)",
+		Tools:       []string{},
+		Includes:    []string{"core"},
+	},
+	"hermes-telegram": {
+		Description: "Hermes Telegram platform toolset (alias of core)",
+		Tools:       []string{},
+		Includes:    []string{"core"},
+	},
+	"hermes-discord": {
+		Description: "Hermes Discord platform toolset (core + discord + discord_admin)",
+		Tools:       []string{},
+		Includes:    []string{"core", "discord", "discord_admin"},
+	},
+	"hermes-slack": {
+		Description: "Hermes Slack platform toolset (alias of core)",
+		Tools:       []string{},
+		Includes:    []string{"core"},
+	},
+	"hermes-yuanbao": {
+		Description: "Hermes Yuanbao platform toolset (core + yuanbao tools)",
+		Tools:       []string{},
+		Includes:    []string{"core", "yuanbao"},
 	},
 }
 

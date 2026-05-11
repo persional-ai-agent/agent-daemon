@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +24,8 @@ type ProcessSession struct {
 	OutputFile string
 	Err        string
 	cmd        *exec.Cmd
+	stdinMu   sync.Mutex
+	stdin     io.WriteCloser
 }
 
 type ProcessRegistry struct {
@@ -48,17 +52,23 @@ func (r *ProcessRegistry) StartBackground(ctx context.Context, command, cwd stri
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
 	logFile, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		_ = stdin.Close()
 		return nil, err
 	}
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
+		_ = stdin.Close()
 		return nil, err
 	}
-	s := &ProcessSession{ID: id, Command: command, StartedAt: time.Now(), OutputFile: outputFile, cmd: cmd}
+	s := &ProcessSession{ID: id, Command: command, StartedAt: time.Now(), OutputFile: outputFile, cmd: cmd, stdin: stdin}
 
 	r.mu.Lock()
 	r.procs[id] = s
@@ -67,6 +77,12 @@ func (r *ProcessRegistry) StartBackground(ctx context.Context, command, cwd stri
 	go func() {
 		err := cmd.Wait()
 		_ = logFile.Close()
+		s.stdinMu.Lock()
+		if s.stdin != nil {
+			_ = s.stdin.Close()
+			s.stdin = nil
+		}
+		s.stdinMu.Unlock()
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		s.Done = true
@@ -92,6 +108,35 @@ func (r *ProcessRegistry) Poll(id string) (*ProcessSession, bool) {
 }
 
 func (r *ProcessRegistry) Stop(id string) error {
+	// Backwards-compatible: Stop behaves like a hard kill.
+	return r.Kill(id)
+}
+
+func (r *ProcessRegistry) Terminate(id string) error {
+	r.mu.Lock()
+	s, ok := r.procs[id]
+	r.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("unknown process: %s", id)
+	}
+	if s.Done || s.cmd == nil || s.cmd.Process == nil {
+		return nil
+	}
+	_ = s.cmd.Process.Signal(syscall.SIGTERM)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		done := s.Done
+		r.mu.Unlock()
+		if done {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return s.cmd.Process.Kill()
+}
+
+func (r *ProcessRegistry) Kill(id string) error {
 	r.mu.Lock()
 	s, ok := r.procs[id]
 	r.mu.Unlock()
@@ -102,6 +147,25 @@ func (r *ProcessRegistry) Stop(id string) error {
 		return nil
 	}
 	return s.cmd.Process.Kill()
+}
+
+func (r *ProcessRegistry) Write(id string, input string) error {
+	r.mu.Lock()
+	s, ok := r.procs[id]
+	r.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("unknown process: %s", id)
+	}
+	if s.Done {
+		return fmt.Errorf("process already finished: %s", id)
+	}
+	s.stdinMu.Lock()
+	defer s.stdinMu.Unlock()
+	if s.stdin == nil {
+		return fmt.Errorf("stdin not available: %s", id)
+	}
+	_, err := io.WriteString(s.stdin, input)
+	return err
 }
 
 func (r *ProcessRegistry) List(includeDone bool, limit int) []ProcessSession {

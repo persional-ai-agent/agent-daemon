@@ -35,6 +35,9 @@ type BuiltinTools struct {
 
 	readLoopMu sync.Mutex
 	readLoop   map[string]readLoopState // key: sessionID
+
+	procPollMu sync.Mutex
+	procPoll   map[string]int64 // key: sessionID|procID -> last byte offset
 }
 
 type pendingApproval struct {
@@ -520,6 +523,30 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		if err != nil {
 			return nil, err
 		}
+		if boolArg(args, "notify_on_complete", false) && tc.ToolEventSink != nil {
+			sessionID := tc.SessionID
+			procID := s.ID
+			go func() {
+				deadline := time.Now().Add(2 * time.Hour)
+				for {
+					if time.Now().After(deadline) {
+						return
+					}
+					ps, ok := b.proc.Poll(procID)
+					if ok && ps.Done {
+						tc.ToolEventSink("process_complete", map[string]any{
+							"session_id":  sessionID,
+							"process_id":  procID,
+							"exit_code":   ps.ExitCode,
+							"error":       ps.Err,
+							"output_file": ps.OutputFile,
+						})
+						return
+					}
+					time.Sleep(1 * time.Second)
+				}
+			}()
+		}
 		return map[string]any{"success": true, "output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
 	}
 	out, code, err := RunForeground(ctx, command, cwd, timeout)
@@ -581,11 +608,250 @@ func (b *BuiltinTools) process(ctx context.Context, args map[string]any, tc Tool
 		return map[string]any{"success": true, "count": len(out), "processes": out}, nil
 	case "status":
 		return b.processStatus(ctx, args, tc)
+	case "poll":
+		return b.processPoll(ctx, args, tc)
+	case "log":
+		return b.processLog(ctx, args, tc)
+	case "wait":
+		return b.processWait(ctx, args, tc)
 	case "stop":
-		return b.stopProcess(ctx, args, tc)
+		return b.processTerminate(ctx, args, tc)
+	case "kill":
+		return b.processKill(ctx, args, tc)
+	case "write":
+		return b.processWrite(ctx, args, tc)
 	default:
-		return nil, fmt.Errorf("unsupported process action: %s (use list, status, or stop)", action)
+		return nil, fmt.Errorf("unsupported process action: %s", action)
 	}
+}
+
+func (b *BuiltinTools) processTerminate(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	if b.proc == nil {
+		return nil, errors.New("process registry unavailable")
+	}
+	if err := b.proc.Terminate(id); err != nil {
+		return nil, err
+	}
+	return map[string]any{"success": true, "session_id": id, "stopped": true, "signal": "TERM"}, nil
+}
+
+func (b *BuiltinTools) processKill(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	if b.proc == nil {
+		return nil, errors.New("process registry unavailable")
+	}
+	if err := b.proc.Kill(id); err != nil {
+		return nil, err
+	}
+	return map[string]any{"success": true, "session_id": id, "killed": true, "signal": "KILL"}, nil
+}
+
+func (b *BuiltinTools) processWrite(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	input := strArg(args, "input")
+	if input == "" {
+		return nil, errors.New("input required")
+	}
+	if b.proc == nil {
+		return nil, errors.New("process registry unavailable")
+	}
+	if err := b.proc.Write(id, input); err != nil {
+		return map[string]any{"success": false, "session_id": id, "error": err.Error()}, nil
+	}
+	return map[string]any{"success": true, "session_id": id, "written": len(input)}, nil
+}
+
+func procPollKey(sessionID, procID string) string { return sessionID + "|" + procID }
+
+func (b *BuiltinTools) getProcOffset(sessionID, procID string) int64 {
+	if sessionID == "" || procID == "" {
+		return 0
+	}
+	key := procPollKey(sessionID, procID)
+	b.procPollMu.Lock()
+	defer b.procPollMu.Unlock()
+	if b.procPoll == nil {
+		b.procPoll = make(map[string]int64)
+	}
+	return b.procPoll[key]
+}
+
+func (b *BuiltinTools) setProcOffset(sessionID, procID string, off int64) {
+	if sessionID == "" || procID == "" {
+		return
+	}
+	key := procPollKey(sessionID, procID)
+	b.procPollMu.Lock()
+	defer b.procPollMu.Unlock()
+	if b.procPoll == nil {
+		b.procPoll = make(map[string]int64)
+	}
+	if len(b.procPoll) > 2000 {
+		b.procPoll = make(map[string]int64)
+	}
+	b.procPoll[key] = off
+}
+
+func (b *BuiltinTools) processLog(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	if b.proc == nil {
+		return nil, errors.New("process registry unavailable")
+	}
+	s, ok := b.proc.Poll(id)
+	if !ok {
+		return nil, fmt.Errorf("process not found: %s", id)
+	}
+	offset := int64(intArg(args, "offset", 0))
+	maxChars := intArg(args, "max_chars", 50_000)
+	if maxChars <= 0 {
+		maxChars = 50_000
+	}
+	if maxChars > 200_000 {
+		maxChars = 200_000
+	}
+	content, nextOffset, truncated, err := readFileFromOffset(s.OutputFile, offset, int64(maxChars))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"success":     true,
+		"session_id":  id,
+		"status":      statusFromDone(s.Done),
+		"exit_code":   s.ExitCode,
+		"error":       s.Err,
+		"output_file": s.OutputFile,
+		"offset":      offset,
+		"next_offset": nextOffset,
+		"truncated":   truncated,
+		"content":     content,
+	}, nil
+}
+
+func (b *BuiltinTools) processPoll(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	if b.proc == nil {
+		return nil, errors.New("process registry unavailable")
+	}
+	s, ok := b.proc.Poll(id)
+	if !ok {
+		return nil, fmt.Errorf("process not found: %s", id)
+	}
+	maxChars := intArg(args, "max_chars", 20_000)
+	if maxChars <= 0 {
+		maxChars = 20_000
+	}
+	if maxChars > 200_000 {
+		maxChars = 200_000
+	}
+	offset := b.getProcOffset(tc.SessionID, id)
+	content, nextOffset, truncated, err := readFileFromOffset(s.OutputFile, offset, int64(maxChars))
+	if err != nil {
+		return nil, err
+	}
+	b.setProcOffset(tc.SessionID, id, nextOffset)
+	return map[string]any{
+		"success":     true,
+		"session_id":  id,
+		"status":      statusFromDone(s.Done),
+		"done":        s.Done,
+		"exit_code":   s.ExitCode,
+		"error":       s.Err,
+		"output_file": s.OutputFile,
+		"offset":      offset,
+		"next_offset": nextOffset,
+		"truncated":   truncated,
+		"new_output":  content,
+	}, nil
+}
+
+func (b *BuiltinTools) processWait(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	id := strArg(args, "session_id")
+	if id == "" {
+		return nil, errors.New("session_id required")
+	}
+	timeoutSec := intArg(args, "timeout_seconds", 60)
+	if timeoutSec <= 0 {
+		timeoutSec = 60
+	}
+	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
+	for {
+		if b.proc == nil {
+			return nil, errors.New("process registry unavailable")
+		}
+		s, ok := b.proc.Poll(id)
+		if !ok {
+			return nil, fmt.Errorf("process not found: %s", id)
+		}
+		if s.Done {
+			// Return a final poll payload (including any unread output).
+			args2 := map[string]any{
+				"session_id": id,
+				"max_chars":  intArg(args, "max_chars", 50_000),
+			}
+			out, err := b.processPoll(ctx, args2, tc)
+			if err != nil {
+				return nil, err
+			}
+			out["waited"] = true
+			return out, nil
+		}
+		if time.Now().After(deadline) {
+			out, err := b.processPoll(ctx, map[string]any{"session_id": id, "max_chars": intArg(args, "max_chars", 20_000)}, tc)
+			if err != nil {
+				return nil, err
+			}
+			out["waited"] = false
+			out["timeout_seconds"] = timeoutSec
+			return out, nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func readFileFromOffset(path string, offset int64, maxBytes int64) (content string, nextOffset int64, truncated bool, err error) {
+	if maxBytes <= 0 {
+		maxBytes = 20_000
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", 0, false, err
+	}
+	defer f.Close()
+	if offset < 0 {
+		offset = 0
+	}
+	if _, err := f.Seek(offset, 0); err != nil {
+		return "", 0, false, err
+	}
+	buf := make([]byte, maxBytes)
+	n, rerr := f.Read(buf)
+	if rerr != nil && !errors.Is(rerr, io.EOF) {
+		return "", 0, false, rerr
+	}
+	nextOffset = offset + int64(n)
+	content = string(buf[:n])
+	// Determine truncation by checking if more data exists.
+	st, statErr := f.Stat()
+	if statErr == nil && nextOffset < st.Size() {
+		truncated = true
+	}
+	return content, nextOffset, truncated, nil
 }
 
 func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -1531,10 +1797,27 @@ func statusFromDone(done bool) string {
 }
 
 func terminalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}, "approval_ttl_seconds": map[string]any{"type": "integer"}}, "required": []string{"command"}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"command":              map[string]any{"type": "string"},
+		"background":           map[string]any{"type": "boolean"},
+		"timeout":              map[string]any{"type": "integer"},
+		"workdir":              map[string]any{"type": "string"},
+		"requires_approval":    map[string]any{"type": "boolean"},
+		"approval_ttl_seconds": map[string]any{"type": "integer"},
+		"notify_on_complete":   map[string]any{"type": "boolean", "description": "When background=true, emit a stream event when the process finishes (best-effort)."},
+	}, "required": []string{"command"}}
 }
 func processParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"list", "status", "stop"}}, "session_id": map[string]any{"type": "string"}, "include_done": map[string]any{"type": "boolean"}, "limit": map[string]any{"type": "integer"}}, "required": []string{}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"action":          map[string]any{"type": "string", "enum": []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}},
+		"session_id":      map[string]any{"type": "string"},
+		"include_done":    map[string]any{"type": "boolean"},
+		"limit":           map[string]any{"type": "integer"},
+		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log"},
+		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return"},
+		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait"},
+		"input":           map[string]any{"type": "string", "description": "For action=write (not supported)"},
+	}, "required": []string{}}
 }
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
