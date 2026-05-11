@@ -28,6 +28,15 @@ type Engine struct {
 	MaxContextChars int
 	CompressionTailMessages int
 	EventSink     func(core.AgentEvent)
+
+	// Optional gateway context (set by gateway runner; empty for CLI/HTTP).
+	GatewayPlatform  string
+	GatewayChatID    string
+	GatewayChatType  string
+	GatewayUserID    string
+	GatewayUserName  string
+	GatewayMessageID string
+	GatewayThreadID  string
 }
 
 type SessionStore interface {
@@ -89,6 +98,13 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 				ApprovalStore:  e.ApprovalStore,
 				DelegateRunner: e,
 				Workdir:        e.Workdir,
+				GatewayPlatform:  e.GatewayPlatform,
+				GatewayChatID:    e.GatewayChatID,
+				GatewayChatType:  e.GatewayChatType,
+				GatewayUserID:    e.GatewayUserID,
+				GatewayUserName:  e.GatewayUserName,
+				GatewayMessageID: e.GatewayMessageID,
+				GatewayThreadID:  e.GatewayThreadID,
 				ToolEventSink: func(eventType string, data map[string]any) {
 					e.emit(core.AgentEvent{
 						Type:      "mcp_stream_event",

@@ -26,14 +26,14 @@
 - 持久化：SQLite 会话历史与 Markdown 记忆文件
 - 双入口：交互式 CLI + HTTP API
 - 配置管理：`agentd config list|get|set` 可读写 `config/config.ini`，`agentd model show|providers|set` 可查看和切换模型，`agentd tools list|show|schemas|disable|enable` 可查看和启停工具，`agentd doctor` 可做本地配置诊断，`agentd gateway status|platforms|enable|disable` 可管理网关开关，环境变量仍保持最高优先级
-- 消息网关：Telegram + Discord + Slack + Yuanbao 适配器（Yuanbao 目前偏 outbound/tool 驱动），`PlatformAdapter` 接口可按需扩展
+- 消息网关：Telegram + Discord + Slack + Yuanbao 适配器（Yuanbao 目前为最小 inbound：TIMTextElem；其余能力按需扩展），`PlatformAdapter` 接口可按需扩展
 - 非流式摘要：`/v1/chat` 返回轻量 `summary`
 - 流式 API：基于 SSE 的 `/v1/chat/stream`
 - 中断控制：支持按 `session_id` 取消活动中的 HTTP 会话
 - 事件协议：已提供独立事件协议文档，便于前端或 SDK 对接
 - 运行时提示词装配：每次运行都会重新注入 system prompt、持久记忆与工作区规则
 - 基础安全护栏：文件工具限制在工作区内，terminal 会硬阻断灾难性命令
-- 命令审批门禁：危险命令需显式 `requires_approval=true` 才可执行
+- 命令审批门禁：危险命令与 tirith 扫描告警会进入审批流程（hardline 命令仍直接阻断）
 - WebSocket：`/v1/chat/ws` 端点支持全双工实时通信
 - 上下文压缩：长会话超预算时自动压缩中段历史，保留头尾上下文
 

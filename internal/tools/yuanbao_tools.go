@@ -61,8 +61,11 @@ func getYuanbaoGateway() (yuanbaoGateway, bool) {
 	return gw, ok
 }
 
-func (b *BuiltinTools) ybSendDM(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) ybSendDM(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	chatID := strings.TrimSpace(strArg(args, "chat_id"))
+	if chatID == "" && strings.EqualFold(strings.TrimSpace(tc.GatewayPlatform), "yuanbao") {
+		chatID = strings.TrimSpace(tc.GatewayChatID)
+	}
 	text := strArg(args, "text")
 	if strings.TrimSpace(text) == "" {
 		text = strArg(args, "message")
@@ -87,8 +90,11 @@ func (b *BuiltinTools) ybSendDM(ctx context.Context, args map[string]any, _ Tool
 	return map[string]any{"success": true}, nil
 }
 
-func (b *BuiltinTools) ybSendSticker(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) ybSendSticker(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	chatID := strings.TrimSpace(strArg(args, "chat_id"))
+	if chatID == "" && strings.EqualFold(strings.TrimSpace(tc.GatewayPlatform), "yuanbao") {
+		chatID = strings.TrimSpace(tc.GatewayChatID)
+	}
 	if chatID == "" {
 		return nil, errors.New("chat_id required")
 	}
@@ -129,10 +135,13 @@ func (b *BuiltinTools) ybSendSticker(ctx context.Context, args map[string]any, _
 	return out, nil
 }
 
-func (b *BuiltinTools) ybQueryGroupInfo(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) ybQueryGroupInfo(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	groupCode := strings.TrimSpace(strArg(args, "group_code"))
 	if groupCode == "" {
 		groupCode = strings.TrimSpace(strArg(args, "chat_id"))
+	}
+	if groupCode == "" && strings.EqualFold(strings.TrimSpace(tc.GatewayPlatform), "yuanbao") && strings.EqualFold(strings.TrimSpace(tc.GatewayChatType), "group") {
+		groupCode = strings.TrimSpace(tc.GatewayChatID)
 	}
 	if groupCode == "" {
 		return nil, errors.New("group_code required")
@@ -152,10 +161,13 @@ func (b *BuiltinTools) ybQueryGroupInfo(ctx context.Context, args map[string]any
 	return out, nil
 }
 
-func (b *BuiltinTools) ybQueryGroupMembers(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) ybQueryGroupMembers(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	groupCode := strings.TrimSpace(strArg(args, "group_code"))
 	if groupCode == "" {
 		groupCode = strings.TrimSpace(strArg(args, "chat_id"))
+	}
+	if groupCode == "" && strings.EqualFold(strings.TrimSpace(tc.GatewayPlatform), "yuanbao") && strings.EqualFold(strings.TrimSpace(tc.GatewayChatType), "group") {
+		groupCode = strings.TrimSpace(tc.GatewayChatID)
 	}
 	if groupCode == "" {
 		return nil, errors.New("group_code required")

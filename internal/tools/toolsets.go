@@ -59,6 +59,10 @@ var Toolsets = map[string]Toolset{
 		Description: "Discord admin tools (requires DISCORD_BOT_TOKEN; placeholder)",
 		Tools:       []string{"discord_admin"},
 	},
+	"discord": {
+		Description: "Discord tools (requires DISCORD_BOT_TOKEN)",
+		Tools:       []string{"discord"},
+	},
 	"feishu": {
 		Description: "Feishu/Lark doc & drive tools (requires FEISHU_APP_ID/FEISHU_APP_SECRET; placeholder)",
 		Tools: []string{

@@ -226,3 +226,4 @@
 - `101-summary-feishu-tools-implemented.md`：飞书 doc/drive 工具从占位升级为可用实现
 - `102-summary-yuanbao-sticker-search.md`：实现 yb_search_sticker（贴纸目录搜索）
 - `103-summary-rl-tools-local-runner.md`：rl_* 从占位升级为本地 runner（可配置命令）
+- `104-summary-tirith-terminal-scan-and-discord-tool.md`：terminal 增加 tirith 预扫描 + 补齐 Hermes `discord` 工具名

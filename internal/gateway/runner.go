@@ -82,6 +82,13 @@ func (r *Runner) handleMessage(ctx context.Context, adapter PlatformAdapter, eve
 	streamMsgID := ""
 
 	eng := *r.engine
+	eng.GatewayPlatform = adapter.Name()
+	eng.GatewayChatID = event.ChatID
+	eng.GatewayChatType = event.ChatType
+	eng.GatewayUserID = event.UserID
+	eng.GatewayUserName = event.UserName
+	eng.GatewayMessageID = event.MessageID
+	eng.GatewayThreadID = event.ThreadID
 	eng.EventSink = func(evt core.AgentEvent) {
 		collector.Ingest(evt)
 		if collector.ShouldEdit() {

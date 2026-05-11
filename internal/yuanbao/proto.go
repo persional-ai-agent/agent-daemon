@@ -247,6 +247,110 @@ func DecodeConnMsg(b []byte) (ConnMsg, error) {
 	return ConnMsg{Head: h, Data: dataBytes}, nil
 }
 
+// ---- Inbound push decode (minimal) ----
+
+type MsgBodyElement struct {
+	MsgType    string
+	MsgContent map[string]any
+}
+
+type InboundPush struct {
+	FromAccount     string
+	ToAccount       string
+	SenderNickname  string
+	GroupCode       string
+	GroupName       string
+	MsgID           string
+	MsgKey          string
+	MsgSeq          uint64
+	MsgTime         uint64
+	PrivateFromGroupCode string
+	MsgBody         []MsgBodyElement
+}
+
+func decodeMsgContent(b []byte) (map[string]any, error) {
+	f, err := parseFields(b)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if s := getFirstString(f, 1); s != "" {
+		out["text"] = s
+	}
+	if s := getFirstString(f, 2); s != "" {
+		out["uuid"] = s
+	}
+	if v := getFirstVarint(f, 3); v != 0 {
+		out["image_format"] = v
+	}
+	if s := getFirstString(f, 4); s != "" {
+		out["data"] = s
+	}
+	if s := getFirstString(f, 5); s != "" {
+		out["desc"] = s
+	}
+	if v := getFirstVarint(f, 9); true {
+		// index is commonly 0 for sticker; include if present or if other fields exist.
+		if _, ok := f[9]; ok {
+			out["index"] = v
+		}
+	}
+	if s := getFirstString(f, 10); s != "" {
+		out["url"] = s
+	}
+	return out, nil
+}
+
+func decodeMsgBodyElement(b []byte) (MsgBodyElement, error) {
+	f, err := parseFields(b)
+	if err != nil {
+		return MsgBodyElement{}, err
+	}
+	msgType := getFirstString(f, 1)
+	contentBytes := getFirstBytes(f, 2)
+	content := map[string]any{}
+	if len(contentBytes) > 0 {
+		c, err := decodeMsgContent(contentBytes)
+		if err == nil {
+			content = c
+		}
+	}
+	return MsgBodyElement{MsgType: msgType, MsgContent: content}, nil
+}
+
+func DecodeInboundPush(data []byte) (InboundPush, error) {
+	// InboundMessagePush proto bytes.
+	f, err := parseFields(data)
+	if err != nil {
+		return InboundPush{}, err
+	}
+	body := make([]MsgBodyElement, 0)
+	for _, entry := range f[13] {
+		if entry.wire != wireLen {
+			continue
+		}
+		elBytes, _ := entry.v.([]byte)
+		el, err := decodeMsgBodyElement(elBytes)
+		if err != nil {
+			continue
+		}
+		body = append(body, el)
+	}
+	return InboundPush{
+		FromAccount:     getFirstString(f, 2),
+		ToAccount:       getFirstString(f, 3),
+		SenderNickname:  getFirstString(f, 4),
+		GroupCode:       getFirstString(f, 6),
+		GroupName:       getFirstString(f, 7),
+		MsgSeq:          getFirstVarint(f, 8),
+		MsgTime:         getFirstVarint(f, 10),
+		MsgKey:          getFirstString(f, 11),
+		MsgID:           getFirstString(f, 12),
+		PrivateFromGroupCode: getFirstString(f, 19),
+		MsgBody:         body,
+	}, nil
+}
+
 func EncodeBizMsg(method, reqID string, body []byte) []byte {
 	return EncodeConnMsgFull(Head{
 		CmdType: CmdTypeRequest,
@@ -469,4 +573,3 @@ func DecodeGetGroupMemberListRsp(data []byte) (map[string]any, error) {
 		"is_complete": getFirstVarint(f, 5) != 0,
 	}, nil
 }
-

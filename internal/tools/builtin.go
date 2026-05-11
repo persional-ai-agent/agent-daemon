@@ -163,6 +163,9 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "skill_search", desc: "Search for skills from GitHub repositories (e.g. anthropics/skills)", params: skillSearchParams(), call: b.skillSearch})
 	r.Register(toolDef{name: "skill_view", desc: "Read a local skill by name", params: skillViewParams(), call: b.skillView})
 	r.Register(toolDef{name: "skill_manage", desc: "Manage local skills (create/edit/patch/delete)", params: skillManageParams(), call: b.skillManage})
+
+	// Hermes `discord` tool (minimal parity; separate from discord_admin).
+	r.Register(toolDef{name: "discord", desc: "Discord server introspection (requires DISCORD_BOT_TOKEN)", params: discordToolParams(), call: b.discordTool})
 }
 
 func stubCall(name string) func(context.Context, map[string]any, ToolContext) (map[string]any, error) {
@@ -436,6 +439,49 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 	}
 
 	requiresApproval := boolArg(args, "requires_approval", false)
+
+	// Optional Tirith pre-exec scanning (Hermes parity). This is treated as an
+	// approvable warning/block unless already approved.
+	if tr := checkCommandSecurityWithTirith(ctx, command); tr.Action == "warn" || tr.Action == "block" {
+		category := "tirith_" + tr.Action
+		sessionApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
+		patternApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApprovedPattern(tc.SessionID, category)
+		if !requiresApproval && !sessionApproved && !patternApproved {
+			approvalID := uuid.NewString()
+			reason := strings.TrimSpace(tr.Summary)
+			if reason == "" {
+				reason = "tirith security " + tr.Action
+			}
+			b.storePending(pendingApproval{
+				ID:         approvalID,
+				Command:    command,
+				CWD:        cwd,
+				Category:   category,
+				Reason:     reason,
+				Background: background,
+				Timeout:    timeout,
+				Args:       args,
+				ToolCtx:    tc,
+			})
+			return map[string]any{
+				"success":     false,
+				"action":      "terminal",
+				"status":      "pending_approval",
+				"approval_id": approvalID,
+				"approved":    false,
+				"command":     command,
+				"category":    category,
+				"reason":      reason,
+				"tirith": map[string]any{
+					"action":   tr.Action,
+					"summary":  tr.Summary,
+					"findings": tr.Findings,
+				},
+				"instruction": "Use approval action=confirm with this approval_id to approve or deny",
+			}, nil
+		}
+	}
+
 	if category, reason, dangerous := detectDangerousCommand(command); dangerous {
 		sessionApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApproved(tc.SessionID)
 		patternApproved := tc.ApprovalStore != nil && tc.ApprovalStore.IsApprovedPattern(tc.SessionID, category)

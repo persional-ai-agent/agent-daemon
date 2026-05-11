@@ -11,4 +11,5 @@
 - `internal/tools/yuanbao_tools.go`
 - `internal/tools/builtin.go`：更新注册与 schema
 - `internal/gateway/platforms/yuanbao.go`：Yuanbao 平台适配器（当前偏 outbound/tool 驱动）
+- `internal/gateway/platforms/yuanbao.go`：Yuanbao 平台适配器（已支持最小 inbound：TIMTextElem push -> MessageEvent）
 - `internal/yuanbao/*`：sign-token + WS protobuf 编解码 + 最小 WS client

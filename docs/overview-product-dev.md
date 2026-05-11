@@ -11,7 +11,7 @@
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
 - `internal/cli`：CLI 交互层
 - `internal/api`：HTTP 服务层，提供同步、SSE 流式与 WebSocket 接口
-- `internal/gateway`：多平台消息网关层，`PlatformAdapter` 接口 + `GatewayRunner`；含 Telegram、Discord、Slack、Yuanbao 适配器（Yuanbao 目前偏 outbound/tool 驱动）
+- `internal/gateway`：多平台消息网关层，`PlatformAdapter` 接口 + `GatewayRunner`；含 Telegram、Discord、Slack、Yuanbao 适配器（Yuanbao 当前仅最小 inbound：TIMTextElem push）
 - `internal/config`：环境变量与 INI 配置加载；提供 `config list|get|set` 所需的配置文件读写能力
 
 ## Hermes 到 Go 的映射

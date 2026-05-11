@@ -62,6 +62,9 @@ func (a *YuanbaoAdapter) Connect(ctx context.Context) error {
 		AppVersion:       "agent-daemon",
 		OperationSystem:  "linux",
 		BotVersion:       "agent-daemon",
+		OnPush: func(msg yuanbao.ConnMsg) {
+			a.handlePush(botID, msg)
+		},
 	})
 	if err != nil {
 		return err
@@ -119,8 +122,58 @@ func (a *YuanbaoAdapter) EditMessage(_ context.Context, _ string, _ string, _ st
 func (a *YuanbaoAdapter) SendTyping(_ context.Context, _ string) error { return nil }
 
 func (a *YuanbaoAdapter) OnMessage(_ context.Context, handler platform.MessageHandler) {
-	// Minimal parity: outbound-only adapter for tool-driven sends.
+	// Best-effort inbound events via WS push decode (TIMTextElem only).
 	a.onMessage = handler
+}
+
+func (a *YuanbaoAdapter) handlePush(botID string, msg yuanbao.ConnMsg) {
+	if a.onMessage == nil {
+		return
+	}
+	// Best-effort: attempt to parse inbound message push.
+	push, err := yuanbao.DecodeInboundPush(msg.Data)
+	if err != nil {
+		return
+	}
+	// Ignore empty events.
+	if strings.TrimSpace(push.FromAccount) == "" || strings.TrimSpace(push.MsgID) == "" {
+		return
+	}
+	// Ignore bot echo.
+	if push.FromAccount == botID {
+		return
+	}
+	chatType := "direct"
+	chatID := "direct:" + push.FromAccount
+	if strings.TrimSpace(push.GroupCode) != "" {
+		chatType = "group"
+		chatID = "group:" + push.GroupCode
+	}
+	text := renderInboundText(push.MsgBody)
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	a.onMessage(context.Background(), platform.MessageEvent{
+		Text:      text,
+		MessageID: push.MsgID,
+		ChatID:    chatID,
+		ChatType:  chatType,
+		UserID:    push.FromAccount,
+		UserName:  push.SenderNickname,
+		IsCommand: strings.HasPrefix(strings.TrimSpace(text), "/"),
+	})
+}
+
+func renderInboundText(body []yuanbao.MsgBodyElement) string {
+	var sb strings.Builder
+	for _, el := range body {
+		if el.MsgType == "TIMTextElem" {
+			if s, ok := el.MsgContent["text"].(string); ok {
+				sb.WriteString(s)
+			}
+		}
+	}
+	return sb.String()
 }
 
 // Extra helpers for tools (not part of platform.Adapter)

@@ -58,7 +58,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 	}
 }
 
-func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	if action == "" {
 		action = "send"
@@ -78,6 +78,12 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, _ ToolC
 			}
 			p = strings.ToLower(strings.TrimSpace(parts[0]))
 			chatID = strings.TrimSpace(parts[1])
+		}
+		if p == "" && strings.TrimSpace(tc.GatewayPlatform) != "" {
+			p = strings.ToLower(strings.TrimSpace(tc.GatewayPlatform))
+		}
+		if chatID == "" && strings.TrimSpace(tc.GatewayChatID) != "" {
+			chatID = strings.TrimSpace(tc.GatewayChatID)
 		}
 		if p == "" {
 			return nil, errors.New("platform required (or set target)")

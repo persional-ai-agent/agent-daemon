@@ -27,6 +27,7 @@ type Client struct {
 	conn     *websocket.Conn
 	pending  map[string]chan ConnMsg
 	closed   bool
+	onPush   func(ConnMsg)
 }
 
 type ClientOptions struct {
@@ -38,6 +39,8 @@ type ClientOptions struct {
 	AppVersion      string
 	OperationSystem string
 	BotVersion      string
+
+	OnPush func(ConnMsg)
 }
 
 func NewClient(opts ClientOptions) (*Client, error) {
@@ -59,6 +62,7 @@ func NewClient(opts ClientOptions) (*Client, error) {
 		operationSystem:  opts.OperationSystem,
 		botVersion:       opts.BotVersion,
 		pending:          make(map[string]chan ConnMsg),
+		onPush:           opts.OnPush,
 	}
 	return c, nil
 }
@@ -140,6 +144,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.mu.Unlock()
 
 	go c.recvLoop()
+	go c.pingLoop()
 	return nil
 }
 
@@ -186,6 +191,10 @@ func (c *Client) recvLoop() {
 			_ = conn.WriteMessage(websocket.BinaryMessage, ack)
 		}
 
+		if msg.Head.CmdType == CmdTypePush && c.onPush != nil {
+			c.onPush(msg)
+		}
+
 		c.mu.Lock()
 		ch := c.pending[msg.Head.MsgID]
 		c.mu.Unlock()
@@ -195,6 +204,21 @@ func (c *Client) recvLoop() {
 			default:
 			}
 		}
+	}
+}
+
+func (c *Client) pingLoop() {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		c.mu.Lock()
+		conn := c.conn
+		closed := c.closed
+		c.mu.Unlock()
+		if conn == nil || closed {
+			return
+		}
+		_ = conn.WriteMessage(websocket.BinaryMessage, EncodePing(uuid.NewString()))
 	}
 }
 
@@ -320,4 +344,3 @@ func (c *Client) GetGroupMemberList(ctx context.Context, groupCode string, offse
 	decoded["success"] = true
 	return decoded, nil
 }
-

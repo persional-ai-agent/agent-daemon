@@ -34,6 +34,15 @@ type ToolContext struct {
 	DelegateRunner DelegateRunner
 	Workdir        string
 	ToolEventSink  ToolEventSink
+
+	// Optional gateway context (present when the agent is invoked from a chat platform).
+	GatewayPlatform  string
+	GatewayChatID    string
+	GatewayChatType  string
+	GatewayUserID    string
+	GatewayUserName  string
+	GatewayMessageID string
+	GatewayThreadID  string
 }
 
 type Tool interface {
