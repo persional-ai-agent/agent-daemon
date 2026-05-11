@@ -45,7 +45,7 @@ func (e *Engine) Run(ctx context.Context, sessionID, userInput, systemPrompt str
 	if strings.TrimSpace(systemPrompt) == "" {
 		systemPrompt = DefaultSystemPrompt()
 	}
-	systemPrompt = buildRuntimeSystemPrompt(systemPrompt, e.Workdir, e.MemoryStore)
+		systemPrompt = buildRuntimeSystemPrompt(systemPrompt, e.Workdir, e.MemoryStore, e.Registry)
 
 	messages := core.CloneMessages(existing)
 	messages = withSystemPrompt(messages, systemPrompt)

@@ -47,6 +47,10 @@ var Toolsets = map[string]Toolset{
 		Description: "Vision analysis tools (stub)",
 		Tools:       []string{"vision_analyze"},
 	},
+	"video": {
+		Description: "Video analysis tools (ffprobe if available)",
+		Tools:       []string{"video_analyze"},
+	},
 	"image_gen": {
 		Description: "Image generation tools (stub)",
 		Tools:       []string{"image_generate"},
@@ -92,10 +96,21 @@ var Toolsets = map[string]Toolset{
 		Description: "Cross-platform messaging via gateway adapters",
 		Tools:       []string{"send_message"},
 	},
+	"homeassistant": {
+		Description: "Home Assistant control (requires HASS_URL/HASS_TOKEN)",
+		Tools:       []string{"ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"},
+	},
+	"kanban": {
+		Description: "Local kanban coordination tools",
+		Tools: []string{
+			"kanban_show", "kanban_complete", "kanban_block", "kanban_heartbeat",
+			"kanban_comment", "kanban_create", "kanban_link",
+		},
+	},
 	"core": {
 		Description: "Default core toolset (terminal + file + memory + web + skills + approvals + delegation + cronjob + messaging)",
 		Tools:       []string{},
-		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "code_execution", "delegation", "cronjob", "messaging"},
+		Includes:    []string{"web", "terminal", "file", "vision", "image_gen", "browser", "tts", "planning", "memory", "session_search", "clarify", "skills", "approval", "code_execution", "delegation", "cronjob", "messaging", "homeassistant", "kanban"},
 	},
 }
 

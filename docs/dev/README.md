@@ -210,3 +210,12 @@
 - `085-summary-write-file-reject-status-text.md`：write_file 拒绝写入 read_file 内部状态文本
 - `086-summary-read-file-max-chars-reject.md`：read_file 超过 max_chars 默认拒绝（Hermes 行为）
 - `087-summary-read-file-loop-guard.md`：read_file 连续重复读取告警与阻断（防循环）
+- `088-summary-patch-v4a-mode.md`：patch 支持 V4A patch 格式（mode=patch）
+- `089-summary-homeassistant-kanban-tools.md`：实现 ha_* 与 kanban_* core tools
+- `090-summary-browser-vision-image-tts-minimal.md`：browser/vision/image/tts 从 stub 升级为最小可用实现
+- `091-summary-mixture-of-agents.md`：实现 mixture_of_agents（基于子代理聚合）
+- `092-summary-browser-light-actions.md`：browser_click/get_images/type/scroll/press 轻量实现
+- `093-summary-media-real-artifacts-and-browser-form.md`：media 输出增强 + browser 轻量表单提交
+- `094-summary-browser-vision-cdp-console-dialog.md`：补齐 browser_vision/cdp/console/dialog 轻量实现
+- `095-summary-video-analyze-tool.md`：实现 video_analyze（ffprobe 最小实现）
+- `096-summary-patch-v4a-fuzzy.md`：patch V4A UPDATE hunk best-effort 容错

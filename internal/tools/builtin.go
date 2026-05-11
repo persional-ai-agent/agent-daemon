@@ -78,23 +78,39 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "write_file", desc: "Write content to file", params: writeFileParams(), call: b.writeFile})
 	r.Register(toolDef{name: "patch", desc: "Patch file by replacing old_string with new_string", params: patchParams(), call: b.patch})
 	r.Register(toolDef{name: "search_files", desc: "Search text in files", params: searchFilesParams(), call: b.searchFiles})
-	// Hermes-compatible stubs (interface-alignment only)
-	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (not implemented in agent-daemon)", params: stubParams(), call: stubCall("vision_analyze")})
-	r.Register(toolDef{name: "image_generate", desc: "Image generation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("image_generate")})
-	r.Register(toolDef{name: "text_to_speech", desc: "Text-to-speech (not implemented in agent-daemon)", params: stubParams(), call: stubCall("text_to_speech")})
-	r.Register(toolDef{name: "mixture_of_agents", desc: "Mixture-of-agents (not implemented in agent-daemon)", params: stubParams(), call: stubCall("mixture_of_agents")})
-	r.Register(toolDef{name: "browser_navigate", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_navigate")})
-	r.Register(toolDef{name: "browser_snapshot", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_snapshot")})
-	r.Register(toolDef{name: "browser_click", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_click")})
-	r.Register(toolDef{name: "browser_type", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_type")})
-	r.Register(toolDef{name: "browser_scroll", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_scroll")})
-	r.Register(toolDef{name: "browser_back", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_back")})
-	r.Register(toolDef{name: "browser_press", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_press")})
-	r.Register(toolDef{name: "browser_get_images", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_get_images")})
-	r.Register(toolDef{name: "browser_vision", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_vision")})
-	r.Register(toolDef{name: "browser_console", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_console")})
-	r.Register(toolDef{name: "browser_cdp", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_cdp")})
-	r.Register(toolDef{name: "browser_dialog", desc: "Browser automation (not implemented in agent-daemon)", params: stubParams(), call: stubCall("browser_dialog")})
+	// Home Assistant (Hermes core tool parity; gated by HASS_URL/HASS_TOKEN)
+	r.Register(toolDef{name: "ha_list_entities", desc: "List Home Assistant entities (requires HASS_URL/HASS_TOKEN)", params: haListEntitiesParams(), call: b.haListEntities})
+	r.Register(toolDef{name: "ha_get_state", desc: "Get Home Assistant entity state (requires HASS_URL/HASS_TOKEN)", params: haGetStateParams(), call: b.haGetState})
+	r.Register(toolDef{name: "ha_list_services", desc: "List Home Assistant services (requires HASS_URL/HASS_TOKEN)", params: haListServicesParams(), call: b.haListServices})
+	r.Register(toolDef{name: "ha_call_service", desc: "Call Home Assistant service (requires HASS_URL/HASS_TOKEN)", params: haCallServiceParams(), call: b.haCallService})
+	// Kanban coordination (Hermes core tool parity; local persisted board)
+	r.Register(toolDef{name: "kanban_show", desc: "Show local kanban board", params: kanbanShowParams(), call: b.kanbanShow})
+	r.Register(toolDef{name: "kanban_create", desc: "Create a kanban task", params: kanbanCreateParams(), call: b.kanbanCreate})
+	r.Register(toolDef{name: "kanban_comment", desc: "Comment on a kanban task", params: kanbanCommentParams(), call: b.kanbanComment})
+	r.Register(toolDef{name: "kanban_complete", desc: "Mark a kanban task completed", params: kanbanIDParams(), call: b.kanbanComplete})
+	r.Register(toolDef{name: "kanban_block", desc: "Mark a kanban task blocked", params: kanbanBlockParams(), call: b.kanbanBlock})
+	r.Register(toolDef{name: "kanban_heartbeat", desc: "Send kanban worker heartbeat", params: kanbanHeartbeatParams(), call: b.kanbanHeartbeat})
+	r.Register(toolDef{name: "kanban_link", desc: "Link two kanban tasks", params: kanbanLinkParams(), call: b.kanbanLink})
+	// Video analysis (optional toolset in Hermes; implemented when ffprobe is available)
+	r.Register(toolDef{name: "video_analyze", desc: "Analyze video file via ffprobe (if available)", params: videoAnalyzeParams(), call: b.videoAnalyze})
+	// Hermes-compatible tools (minimal local implementations)
+	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (minimal: image metadata)", params: visionAnalyzeParams(), call: b.visionAnalyze})
+	r.Register(toolDef{name: "image_generate", desc: "Image generation (minimal placeholder output)", params: imageGenerateParams(), call: b.imageGenerate})
+	r.Register(toolDef{name: "text_to_speech", desc: "Text-to-speech (minimal placeholder output)", params: textToSpeechParams(), call: b.textToSpeech})
+	r.Register(toolDef{name: "mixture_of_agents", desc: "Mixture-of-agents: run multiple subagents and synthesize results", params: mixtureOfAgentsParams(), call: b.mixtureOfAgents})
+	// Browser automation (lightweight HTTP fetch + snapshot)
+	r.Register(toolDef{name: "browser_navigate", desc: "Browser navigate (lightweight HTTP fetch; no JS)", params: browserNavigateParams(), call: b.browserNavigate})
+	r.Register(toolDef{name: "browser_snapshot", desc: "Browser snapshot (lightweight HTML->text)", params: browserSnapshotParams(), call: b.browserSnapshot})
+	r.Register(toolDef{name: "browser_back", desc: "Browser back (lightweight history stack)", params: stubParams(), call: b.browserBack})
+	r.Register(toolDef{name: "browser_click", desc: "Browser click (lightweight: follow <a href> by text match)", params: browserClickParams(), call: b.browserClick})
+	r.Register(toolDef{name: "browser_type", desc: "Browser type (lightweight: accepted but not persisted)", params: browserTypeParams(), call: b.browserType})
+	r.Register(toolDef{name: "browser_scroll", desc: "Browser scroll (lightweight: no-op)", params: stubParams(), call: b.browserScroll})
+	r.Register(toolDef{name: "browser_press", desc: "Browser press (lightweight: no-op)", params: browserPressParams(), call: b.browserPress})
+	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>)", params: stubParams(), call: b.browserGetImages})
+	r.Register(toolDef{name: "browser_vision", desc: "Browser vision (lightweight: fetch <img src> metadata)", params: browserVisionParams(), call: b.browserVision})
+	r.Register(toolDef{name: "browser_console", desc: "Browser console (lightweight: empty logs)", params: stubParams(), call: b.browserConsole})
+	r.Register(toolDef{name: "browser_cdp", desc: "Browser CDP (lightweight: page metadata)", params: browserCDPParams(), call: b.browserCDP})
+	r.Register(toolDef{name: "browser_dialog", desc: "Browser dialog (lightweight: none)", params: stubParams(), call: b.browserDialog})
 
 	r.Register(toolDef{name: "todo", desc: "Maintain per-session todo list", params: todoParams(), call: b.todo})
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
@@ -125,6 +141,33 @@ func stubCall(name string) func(context.Context, map[string]any, ToolContext) (m
 }
 
 func (b *BuiltinTools) patch(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	mode := strings.ToLower(strings.TrimSpace(strArg(args, "mode")))
+	if mode == "" {
+		mode = "replace"
+	}
+	if mode == "patch" {
+		patchText := strArg(args, "patch")
+		if strings.TrimSpace(patchText) == "" {
+			return nil, errors.New("patch required when mode=patch")
+		}
+		ops, err := ParseV4APatch(patchText)
+		if err != nil {
+			return nil, err
+		}
+		applyRes, err := ApplyV4AOperations(ops, tc.Workdir)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"success":    true,
+			"mode":       "patch",
+			"operations": len(ops),
+			"result":     applyRes,
+		}, nil
+	}
+	if mode != "replace" {
+		return nil, fmt.Errorf("unsupported patch mode: %s", mode)
+	}
 	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
 	if err != nil {
 		return nil, err
@@ -1421,7 +1464,50 @@ func writeFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}
 }
 func patchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "old_string": map[string]any{"type": "string"}, "new_string": map[string]any{"type": "string"}, "replace_all": map[string]any{"type": "boolean"}}, "required": []string{"path", "old_string", "new_string"}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"mode":        map[string]any{"type": "string", "description": "replace (default) or patch (V4A patch format)"},
+			"path":        map[string]any{"type": "string"},
+			"old_string":  map[string]any{"type": "string"},
+			"new_string":  map[string]any{"type": "string"},
+			"replace_all": map[string]any{"type": "boolean"},
+			"patch":       map[string]any{"type": "string", "description": "V4A patch text when mode=patch"},
+		},
+	}
+}
+func haListEntitiesParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func haGetStateParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"entity_id": map[string]any{"type": "string"}}, "required": []string{"entity_id"}}
+}
+func haListServicesParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func haCallServiceParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"domain": map[string]any{"type": "string"}, "service": map[string]any{"type": "string"}, "entity_id": map[string]any{"type": "string"}, "service_data": map[string]any{"type": "object"}}, "required": []string{"domain", "service"}}
+}
+func kanbanShowParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func kanbanCreateParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}, "fields": map[string]any{"type": "object"}}, "required": []string{"title"}}
+}
+func kanbanCommentParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}}, "required": []string{"id", "message"}}
+}
+func kanbanIDParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}}, "required": []string{"id"}}
+}
+func kanbanBlockParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}}, "required": []string{"id"}}
+}
+func kanbanHeartbeatParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"worker": map[string]any{"type": "string"}}}
+}
+func kanbanLinkParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"from": map[string]any{"type": "string"}, "to": map[string]any{"type": "string"}, "kind": map[string]any{"type": "string"}}, "required": []string{"from", "to"}}
 }
 func searchFilesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "pattern": map[string]any{"type": "string"}, "glob": map[string]any{"type": "string"}}, "required": []string{"pattern"}}
@@ -1447,6 +1533,49 @@ func webExtractParams() map[string]any {
 func stubParams() map[string]any {
 	// Keep schema footprint minimal while still being callable by name.
 	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func visionAnalyzeParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}}
+}
+func imageGenerateParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"prompt": map[string]any{"type": "string"}, "output_path": map[string]any{"type": "string"}}, "required": []string{"prompt"}}
+}
+func textToSpeechParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}, "output_path": map[string]any{"type": "string"}}, "required": []string{"text"}}
+}
+func browserNavigateParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
+}
+func browserSnapshotParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func browserClickParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}, "href_contains": map[string]any{"type": "string"}}}
+}
+func browserTypeParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"field": map[string]any{"type": "string"}, "text": map[string]any{"type": "string"}}}
+}
+func browserPressParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"key": map[string]any{"type": "string"}}}
+}
+func browserVisionParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}}}
+}
+func browserCDPParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"include_html": map[string]any{"type": "boolean"}}}
+}
+func mixtureOfAgentsParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"user_prompt":       map[string]any{"type": "string"},
+			"reference_agents":  map[string]any{"type": "integer", "description": "Number of reference subagents (default 3, max 6)"},
+			"max_iterations":    map[string]any{"type": "integer"},
+			"timeout_seconds":   map[string]any{"type": "integer"},
+		},
+		"required": []string{"user_prompt"},
+	}
 }
 func clarifyParams() map[string]any {
 	return map[string]any{
