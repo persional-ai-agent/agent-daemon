@@ -63,7 +63,7 @@
 | API 服务 | 已对齐核心能力 | HTTP、SSE、WebSocket、取消接口 |
 | Gateway | 最小对齐 | 支持 Telegram、Discord、Slack；已补最小 `send_message`（依赖 gateway 运行时适配器）；未覆盖 Hermes 的完整平台矩阵、配对、slash command、队列/中断、delivery、hooks |
 | CLI/TUI | 最小覆盖 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、gateway；未实现 Hermes 全屏 TUI 与完整命令体系 |
-| 工具全集 | 最小覆盖 | 当前内置核心工具 + `cronjob`（interval/one-shot）；未覆盖 browser、code execution、vision、tts、messaging、Home Assistant、Feishu、Spotify、RL 等 Hermes 工具集 |
+| 工具全集 | 最小覆盖 | 当前内置核心工具 + `patch` + `cronjob`（interval/one-shot）+ `send_message`（最小）；未覆盖 browser、code execution、vision、tts、Home Assistant、Feishu、Spotify、RL 等 Hermes 工具集 |
 | 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
 | 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；暂无通用插件系统、ACP adapter、batch/RL/trajectory 链路 |
 

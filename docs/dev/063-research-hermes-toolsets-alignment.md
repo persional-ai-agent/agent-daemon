@@ -16,6 +16,8 @@ Hermes 用 `toolsets.py` 定义 toolset（工具集合）：
 
 缺少 Hermes 风格的 toolsets 组合与 “enabled_toolsets” 限制机制。
 
+另一个差异点是工具命名：Hermes 的 terminal toolset 使用 `process`，而本项目早期是 `process_status/stop_process`；后续以 `process` wrapper 对齐并保持兼容。
+
 ## 最小对齐目标
 
 - 提供内置最小 toolsets（覆盖现有 builtins + cronjob）。
@@ -27,4 +29,3 @@ Hermes 用 `toolsets.py` 定义 toolset（工具集合）：
 
 - Hermes 的 toolset “可用性检查”（check_fn / 环境变量 gating）。
 - 动态 schema patch、toolset 分发到不同平台配置、插件发现等。
-

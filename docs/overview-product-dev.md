@@ -170,7 +170,7 @@
 | Agent Loop | `run_agent.py`、`agent/prompt_builder.py` | `internal/agent` | 已对齐核心 | 保持事件协议稳定，避免把 UI 逻辑塞入 loop |
 | Provider runtime | `hermes_cli/runtime_provider.py`、`plugins/model-providers/` | `internal/model`、`internal/config` | 部分对齐 | 先抽象 provider profile，再增加更多 provider |
 | Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go`、`toolsets.go` | 部分对齐 | 已补最小 toolsets 解析与 registry 过滤；后续补 availability check、动态 schema patch 与插件发现 |
-| Built-in tools | `tools/*`，Hermes 文档列出 68 个工具 | terminal、process、file、todo、memory、session_search、web_fetch、delegate、approval、skills、MCP | 最小覆盖 | 按场景优先补 browser/web/code/cron/vision/messaging |
+| Built-in tools | `tools/*`，Hermes 文档列出 68 个工具 | terminal、process、file、todo、memory、session_search、web_fetch/web_search/web_extract、delegate、approval、skills、MCP、cronjob、send_message | 最小覆盖 | 按场景优先补 browser/code/vision/tts 等 |
 | Terminal environments | `tools/environments/*` | `internal/tools/process.go` | 最小覆盖 | 抽象 Environment 接口后接 Docker/SSH 等后端 |
 | Session storage | `hermes_state.py`、`gateway/session.py` | `internal/store/session_store.go` | 部分对齐 | 如需高质量检索，补 FTS5 与摘要层 |
 | Memory | `agent/memory_manager.py`、`plugins/memory/*` | `internal/memory/store.go` | 最小覆盖 | 先定义 memory provider 接口，再接外部插件 |

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -60,6 +62,7 @@ func (b *BuiltinTools) retrievePending(id string) (pendingApproval, bool) {
 func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	b := &BuiltinTools{proc: proc}
 	r.Register(toolDef{name: "terminal", desc: "Execute shell commands on Linux", params: terminalParams(), call: b.terminal})
+	r.Register(toolDef{name: "process", desc: "Process management wrapper (status/stop)", params: processParams(), call: b.process})
 	r.Register(toolDef{name: "process_status", desc: "Poll background process status by session_id", params: processStatusParams(), call: b.processStatus})
 	r.Register(toolDef{name: "stop_process", desc: "Stop a background process", params: stopProcessParams(), call: b.stopProcess})
 	r.Register(toolDef{name: "read_file", desc: "Read file from filesystem", params: readFileParams(), call: b.readFile})
@@ -70,6 +73,9 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
 	r.Register(toolDef{name: "session_search", desc: "Search previous session messages", params: sessionSearchParams(), call: b.sessionSearch})
 	r.Register(toolDef{name: "web_fetch", desc: "Fetch URL content over HTTP", params: webFetchParams(), call: b.webFetch})
+	r.Register(toolDef{name: "web_search", desc: "Search the web (DuckDuckGo HTML scrape)", params: webSearchParams(), call: b.webSearch})
+	r.Register(toolDef{name: "web_extract", desc: "Extract readable text from a URL", params: webExtractParams(), call: b.webExtract})
+	r.Register(toolDef{name: "clarify", desc: "Ask the user a clarifying question with optional choices", params: clarifyParams(), call: b.clarify})
 	r.Register(toolDef{name: "delegate_task", desc: "Run a child agent on a subtask or a batch of subtasks", params: delegateTaskParams(), call: b.delegateTask})
 	r.Register(toolDef{name: "approval", desc: "Manage session-level dangerous command approvals", params: approvalParams(), call: b.approval})
 	r.Register(toolDef{name: "skill_list", desc: "List available local skills", params: skillListParams(), call: b.skillList})
@@ -234,6 +240,21 @@ func (b *BuiltinTools) stopProcess(_ context.Context, args map[string]any, _ Too
 	return map[string]any{"session_id": id, "stopped": true}, nil
 }
 
+func (b *BuiltinTools) process(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
+	if action == "" {
+		action = "status"
+	}
+	switch action {
+	case "status":
+		return b.processStatus(ctx, args, tc)
+	case "stop":
+		return b.stopProcess(ctx, args, tc)
+	default:
+		return nil, fmt.Errorf("unsupported process action: %s (use status or stop)", action)
+	}
+}
+
 func (b *BuiltinTools) readFile(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
 	if err != nil {
@@ -389,6 +410,94 @@ func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ Tool
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 200_000))
 	return map[string]any{"status": resp.StatusCode, "url": url, "content": string(body)}, nil
+}
+
+func (b *BuiltinTools) webSearch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	query := strings.TrimSpace(strArg(args, "query"))
+	if query == "" {
+		return nil, errors.New("query required")
+	}
+	limit := intArg(args, "limit", 5)
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	baseURL := strings.TrimSpace(strArg(args, "base_url"))
+	if baseURL == "" {
+		baseURL = "https://duckduckgo.com/html/"
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("q", query)
+	u.RawQuery = q.Encode()
+	bs, err := fetchHTTPBytes(ctx, u.String())
+	if err != nil {
+		return nil, fmt.Errorf("fetch search: %w", err)
+	}
+	results := parseDuckDuckGoHTMLResults(string(bs), limit)
+	return map[string]any{"query": query, "count": len(results), "results": results}, nil
+}
+
+func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	rawURL := strings.TrimSpace(strArg(args, "url"))
+	if rawURL == "" {
+		return nil, errors.New("url required")
+	}
+	maxChars := intArg(args, "max_chars", 8000)
+	if maxChars <= 0 {
+		maxChars = 8000
+	}
+	bs, err := fetchHTTPBytes(ctx, rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetch url: %w", err)
+	}
+	text := htmlToText(string(bs))
+	if len(text) > maxChars {
+		text = text[:maxChars]
+	}
+	return map[string]any{"url": rawURL, "content": text, "truncated": len(text) == maxChars}, nil
+}
+
+func (b *BuiltinTools) clarify(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
+	question := strings.TrimSpace(strArg(args, "question"))
+	if question == "" {
+		return nil, errors.New("question required")
+	}
+	allowFreeform := boolArg(args, "allow_freeform", true)
+
+	options := make([]map[string]any, 0)
+	if raw, ok := args["options"]; ok {
+		if arr, ok := raw.([]any); ok {
+			for _, item := range arr {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				label, _ := m["label"].(string)
+				label = strings.TrimSpace(label)
+				if label == "" {
+					continue
+				}
+				desc, _ := m["description"].(string)
+				options = append(options, map[string]any{
+					"label":       label,
+					"description": strings.TrimSpace(desc),
+				})
+			}
+		}
+	}
+	return map[string]any{
+		"success":        true,
+		"question":       question,
+		"options":        options,
+		"allow_freeform": allowFreeform,
+		"instruction":    "Ask the user to answer this question. If options are provided, ask them to pick one label.",
+	}, nil
 }
 
 func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
@@ -908,6 +1017,9 @@ func statusFromDone(done bool) string {
 func terminalParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "background": map[string]any{"type": "boolean"}, "timeout": map[string]any{"type": "integer"}, "workdir": map[string]any{"type": "string"}, "requires_approval": map[string]any{"type": "boolean"}, "approval_ttl_seconds": map[string]any{"type": "integer"}}, "required": []string{"command"}}
 }
+func processParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "stop"}}, "session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
+}
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
 }
@@ -935,6 +1047,33 @@ func sessionSearchParams() map[string]any {
 }
 func webFetchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
+}
+func webSearchParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "base_url": map[string]any{"type": "string"}}, "required": []string{"query"}}
+}
+func webExtractParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer"}}, "required": []string{"url"}}
+}
+func clarifyParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"question": map[string]any{"type": "string"},
+			"allow_freeform": map[string]any{"type": "boolean", "description": "Whether user may answer outside the provided options"},
+			"options": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"label":       map[string]any{"type": "string"},
+						"description": map[string]any{"type": "string"},
+					},
+					"required": []string{"label"},
+				},
+			},
+		},
+		"required": []string{"question"},
+	}
 }
 func delegateTaskParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
@@ -1201,6 +1340,67 @@ func fetchHTTPBytes(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+var ddgResultLinkRE = regexp.MustCompile(`(?is)<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>`)
+
+func parseDuckDuckGoHTMLResults(htmlBody string, limit int) []map[string]any {
+	matches := ddgResultLinkRE.FindAllStringSubmatch(htmlBody, -1)
+	out := make([]map[string]any, 0, limit)
+	for _, m := range matches {
+		if len(out) >= limit {
+			break
+		}
+		rawHref := html.UnescapeString(strings.TrimSpace(m[1]))
+		title := strings.TrimSpace(htmlToText(m[2]))
+		u, err := url.Parse(rawHref)
+		finalURL := rawHref
+		if err == nil {
+			// DuckDuckGo wraps outbound links in /l/?uddg=<encoded>
+			if uddg := u.Query().Get("uddg"); uddg != "" {
+				if decoded, derr := url.QueryUnescape(uddg); derr == nil && strings.HasPrefix(decoded, "http") {
+					finalURL = decoded
+				}
+			}
+		}
+		out = append(out, map[string]any{
+			"title": title,
+			"url":   finalURL,
+		})
+	}
+	return out
+}
+
+func htmlToText(input string) string {
+	// Strip script/style blocks.
+	reScript := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	reStyle := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	s := reScript.ReplaceAllString(input, " ")
+	s = reStyle.ReplaceAllString(s, " ")
+
+	// Convert some block separators to newlines.
+	reBR := regexp.MustCompile(`(?i)<br\s*/?>`)
+	reP := regexp.MustCompile(`(?i)</p\s*>`)
+	reDiv := regexp.MustCompile(`(?i)</div\s*>`)
+	s = reBR.ReplaceAllString(s, "\n")
+	s = reP.ReplaceAllString(s, "\n")
+	s = reDiv.ReplaceAllString(s, "\n")
+
+	// Remove all tags.
+	reTags := regexp.MustCompile(`(?s)<[^>]+>`)
+	s = reTags.ReplaceAllString(s, " ")
+
+	s = html.UnescapeString(s)
+	// Collapse whitespace.
+	lines := strings.Split(s, "\n")
+	outLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(line, " "))
+		if line != "" {
+			outLines = append(outLines, line)
+		}
+	}
+	return strings.Join(outLines, "\n")
 }
 
 func syncGitHubSkill(ctx context.Context, localRoot, repo, subPath string) ([]string, error) {

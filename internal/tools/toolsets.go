@@ -17,7 +17,7 @@ type Toolset struct {
 var Toolsets = map[string]Toolset{
 	"terminal": {
 		Description: "Terminal/process execution tools",
-		Tools:       []string{"terminal", "process_status", "stop_process"},
+		Tools:       []string{"terminal", "process"},
 	},
 	"file": {
 		Description: "File read/write/search tools",
@@ -35,9 +35,13 @@ var Toolsets = map[string]Toolset{
 		Description: "Search previous session messages",
 		Tools:       []string{"session_search"},
 	},
+	"clarify": {
+		Description: "Ask the user clarifying questions",
+		Tools:       []string{"clarify"},
+	},
 	"web": {
-		Description: "Fetch URLs over HTTP",
-		Tools:       []string{"web_fetch"},
+		Description: "Web research tools (search + extract)",
+		Tools:       []string{"web_search", "web_extract"},
 	},
 	"delegation": {
 		Description: "Spawn subagent(s) for subtasks",
@@ -62,7 +66,7 @@ var Toolsets = map[string]Toolset{
 	"core": {
 		Description: "Default core toolset (terminal + file + memory + web + skills + approvals + delegation + cronjob + messaging)",
 		Tools:       []string{},
-		Includes:    []string{"terminal", "file", "planning", "memory", "session_search", "web", "skills", "approval", "delegation", "cronjob", "messaging"},
+		Includes:    []string{"terminal", "file", "planning", "memory", "session_search", "web", "skills", "approval", "delegation", "cronjob", "messaging", "clarify"},
 	},
 }
 

@@ -179,3 +179,12 @@
 - `064-research-hermes-send-message-alignment.md`：Hermes send_message 与 Go 版最小对齐
 - `064-plan-hermes-send-message-alignment.md`：Hermes send_message 最小对齐计划
 - `064-summary-hermes-send-message-alignment.md`：Hermes send_message 最小对齐总结与边界
+- `065-research-hermes-patch-tool-alignment.md`：Hermes patch 工具与 Go 版最小对齐
+- `065-plan-hermes-patch-tool-alignment.md`：Hermes patch 工具最小对齐计划
+- `065-summary-hermes-patch-tool-alignment.md`：Hermes patch 工具最小对齐总结与边界
+- `066-research-hermes-web-tools-alignment.md`：Hermes web_search/web_extract 与 Go 版最小对齐
+- `066-plan-hermes-web-tools-alignment.md`：Hermes web tools 最小对齐计划
+- `066-summary-hermes-web-tools-alignment.md`：Hermes web tools 最小对齐总结
+- `067-research-hermes-clarify-tool-alignment.md`：Hermes clarify 工具与 Go 版最小对齐
+- `067-plan-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐计划
+- `067-summary-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐总结
