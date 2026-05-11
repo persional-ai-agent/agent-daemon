@@ -23,6 +23,10 @@ var Toolsets = map[string]Toolset{
 		Description: "File read/write/search tools",
 		Tools:       []string{"read_file", "write_file", "patch", "search_files"},
 	},
+	"fs_admin": {
+		Description: "Filesystem admin tools (mkdir/list_dir/delete_file/move_file)",
+		Tools:       []string{"mkdir", "list_dir", "delete_file", "move_file"},
+	},
 	"planning": {
 		Description: "Planning tools (todo)",
 		Tools:       []string{"todo"},
@@ -50,6 +54,40 @@ var Toolsets = map[string]Toolset{
 	"video": {
 		Description: "Video analysis tools (ffprobe if available)",
 		Tools:       []string{"video_analyze"},
+	},
+	"discord_admin": {
+		Description: "Discord admin tools (requires DISCORD_BOT_TOKEN; placeholder)",
+		Tools:       []string{"discord_admin"},
+	},
+	"feishu": {
+		Description: "Feishu/Lark doc & drive tools (requires FEISHU_APP_ID/FEISHU_APP_SECRET; placeholder)",
+		Tools: []string{
+			"feishu_doc_read",
+			"feishu_drive_list_comments",
+			"feishu_drive_list_comment_replies",
+			"feishu_drive_add_comment",
+			"feishu_drive_reply_comment",
+		},
+	},
+	"spotify": {
+		Description: "Spotify tools (requires SPOTIFY_ACCESS_TOKEN; placeholder)",
+		Tools: []string{
+			"spotify_search", "spotify_devices", "spotify_playback", "spotify_queue",
+			"spotify_playlists", "spotify_albums", "spotify_library",
+		},
+	},
+	"rl": {
+		Description: "RL training tools (placeholder)",
+		Tools: []string{
+			"rl_list_environments", "rl_select_environment", "rl_get_current_config", "rl_edit_config",
+			"rl_start_training", "rl_stop_training", "rl_check_status", "rl_get_results", "rl_list_runs", "rl_test_inference",
+		},
+	},
+	"yuanbao": {
+		Description: "Yuanbao tools (requires YUANBAO_TOKEN; placeholder)",
+		Tools: []string{
+			"yb_send_dm", "yb_send_sticker", "yb_search_sticker", "yb_query_group_info", "yb_query_group_members",
+		},
 	},
 	"image_gen": {
 		Description: "Image generation tools (stub)",

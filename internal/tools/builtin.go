@@ -78,6 +78,11 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "write_file", desc: "Write content to file", params: writeFileParams(), call: b.writeFile})
 	r.Register(toolDef{name: "patch", desc: "Patch file by replacing old_string with new_string", params: patchParams(), call: b.patch})
 	r.Register(toolDef{name: "search_files", desc: "Search text in files", params: searchFilesParams(), call: b.searchFiles})
+	// Optional filesystem admin tools (Hermes parity beyond core)
+	r.Register(toolDef{name: "mkdir", desc: "Create a directory (within workdir)", params: mkdirParams(), call: b.mkdir})
+	r.Register(toolDef{name: "list_dir", desc: "List directory entries (within workdir)", params: listDirParams(), call: b.listDir})
+	r.Register(toolDef{name: "delete_file", desc: "Delete a file (within workdir)", params: deleteFileParams(), call: b.deleteFile})
+	r.Register(toolDef{name: "move_file", desc: "Move/rename a file (within workdir)", params: moveFileParams(), call: b.moveFile})
 	// Home Assistant (Hermes core tool parity; gated by HASS_URL/HASS_TOKEN)
 	r.Register(toolDef{name: "ha_list_entities", desc: "List Home Assistant entities (requires HASS_URL/HASS_TOKEN)", params: haListEntitiesParams(), call: b.haListEntities})
 	r.Register(toolDef{name: "ha_get_state", desc: "Get Home Assistant entity state (requires HASS_URL/HASS_TOKEN)", params: haGetStateParams(), call: b.haGetState})
@@ -93,6 +98,38 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "kanban_link", desc: "Link two kanban tasks", params: kanbanLinkParams(), call: b.kanbanLink})
 	// Video analysis (optional toolset in Hermes; implemented when ffprobe is available)
 	r.Register(toolDef{name: "video_analyze", desc: "Analyze video file via ffprobe (if available)", params: videoAnalyzeParams(), call: b.videoAnalyze})
+	// Integration tool placeholders (Hermes toolsets; credential-gated)
+	r.Register(toolDef{name: "discord_admin", desc: "Discord admin tools (requires DISCORD_BOT_TOKEN; minimal placeholder)", params: discordAdminParams(), call: b.discordAdmin})
+	r.Register(toolDef{name: "feishu_doc_read", desc: "Feishu/Lark doc read (requires FEISHU_APP_ID/FEISHU_APP_SECRET; placeholder)", params: feishuDocReadParams(), call: b.feishuDocRead})
+	r.Register(toolDef{name: "feishu_drive_list_comments", desc: "Feishu/Lark drive list comments (placeholder)", params: feishuDriveListCommentsParams(), call: b.feishuDriveListComments})
+	r.Register(toolDef{name: "feishu_drive_list_comment_replies", desc: "Feishu/Lark drive list comment replies (placeholder)", params: feishuDriveListCommentRepliesParams(), call: b.feishuDriveListCommentReplies})
+	r.Register(toolDef{name: "feishu_drive_add_comment", desc: "Feishu/Lark drive add comment (placeholder)", params: feishuDriveAddCommentParams(), call: b.feishuDriveAddComment})
+	r.Register(toolDef{name: "feishu_drive_reply_comment", desc: "Feishu/Lark drive reply comment (placeholder)", params: feishuDriveReplyCommentParams(), call: b.feishuDriveReplyComment})
+	// RL training tools (placeholders)
+	r.Register(toolDef{name: "rl_list_environments", desc: "RL: list environments (from RL_ENVIRONMENTS)", params: stubParams(), call: b.rlListEnvironments})
+	r.Register(toolDef{name: "rl_select_environment", desc: "RL: select environment (persisted in workdir)", params: rlSelectEnvParams(), call: b.rlSelectEnvironment})
+	r.Register(toolDef{name: "rl_get_current_config", desc: "RL: get current config (persisted in workdir)", params: stubParams(), call: b.rlGetCurrentConfig})
+	r.Register(toolDef{name: "rl_edit_config", desc: "RL: edit current config key/value (persisted in workdir)", params: rlEditConfigParams(), call: b.rlEditConfig})
+	r.Register(toolDef{name: "rl_start_training", desc: "RL: start training via RL_TRAIN_COMMAND (background)", params: rlStartTrainingParams(), call: b.rlStartTraining})
+	r.Register(toolDef{name: "rl_stop_training", desc: "RL: stop training background process", params: stubParams(), call: b.rlStopTraining})
+	r.Register(toolDef{name: "rl_check_status", desc: "RL: check training status", params: stubParams(), call: b.rlCheckStatus})
+	r.Register(toolDef{name: "rl_get_results", desc: "RL: get latest training metadata", params: stubParams(), call: b.rlGetResults})
+	r.Register(toolDef{name: "rl_list_runs", desc: "RL: list runs (minimal)", params: stubParams(), call: b.rlListRuns})
+	r.Register(toolDef{name: "rl_test_inference", desc: "RL: test inference (not implemented)", params: stubParams(), call: b.rlTestInference})
+	// Spotify tools (requires SPOTIFY_ACCESS_TOKEN)
+	r.Register(toolDef{name: "spotify_search", desc: "Spotify search", params: spotifySearchParams(), call: b.spotifySearch})
+	r.Register(toolDef{name: "spotify_devices", desc: "Spotify devices", params: stubParams(), call: b.spotifyDevices})
+	r.Register(toolDef{name: "spotify_playback", desc: "Spotify playback control/status", params: spotifyPlaybackParams(), call: b.spotifyPlayback})
+	r.Register(toolDef{name: "spotify_queue", desc: "Spotify queue get/add", params: spotifyQueueParams(), call: b.spotifyQueue})
+	r.Register(toolDef{name: "spotify_playlists", desc: "Spotify playlists", params: stubParams(), call: b.spotifyPlaylists})
+	r.Register(toolDef{name: "spotify_albums", desc: "Spotify saved albums", params: stubParams(), call: b.spotifyAlbums})
+	r.Register(toolDef{name: "spotify_library", desc: "Spotify saved tracks", params: stubParams(), call: b.spotifyLibrary})
+	// Yuanbao tools (placeholders; requires YUANBAO_TOKEN)
+	r.Register(toolDef{name: "yb_search_sticker", desc: "Yuanbao search sticker (built-in catalogue)", params: ybSearchStickerParams(), call: b.ybSearchSticker})
+	r.Register(toolDef{name: "yb_send_dm", desc: "Yuanbao send DM (requires yuanbao gateway adapter; not implemented)", params: ybSendParams(), call: b.ybSendNotImplemented})
+	r.Register(toolDef{name: "yb_send_sticker", desc: "Yuanbao send sticker (requires yuanbao gateway adapter; not implemented)", params: ybSendParams(), call: b.ybSendNotImplemented})
+	r.Register(toolDef{name: "yb_query_group_info", desc: "Yuanbao query group info (requires yuanbao gateway adapter; not implemented)", params: stubParams(), call: b.ybSendNotImplemented})
+	r.Register(toolDef{name: "yb_query_group_members", desc: "Yuanbao query group members (requires yuanbao gateway adapter; not implemented)", params: stubParams(), call: b.ybSendNotImplemented})
 	// Hermes-compatible tools (minimal local implementations)
 	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (minimal: image metadata)", params: visionAnalyzeParams(), call: b.visionAnalyze})
 	r.Register(toolDef{name: "image_generate", desc: "Image generation (minimal placeholder output)", params: imageGenerateParams(), call: b.imageGenerate})
@@ -1511,6 +1548,18 @@ func kanbanLinkParams() map[string]any {
 }
 func searchFilesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "pattern": map[string]any{"type": "string"}, "glob": map[string]any{"type": "string"}}, "required": []string{"pattern"}}
+}
+func mkdirParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}}
+}
+func listDirParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}
+}
+func deleteFileParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "recursive": map[string]any{"type": "boolean"}}, "required": []string{"path"}}
+}
+func moveFileParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{"src": map[string]any{"type": "string"}, "dst": map[string]any{"type": "string"}}, "required": []string{"src", "dst"}}
 }
 func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}

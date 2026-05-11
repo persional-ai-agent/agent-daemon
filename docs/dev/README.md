@@ -219,3 +219,10 @@
 - `094-summary-browser-vision-cdp-console-dialog.md`：补齐 browser_vision/cdp/console/dialog 轻量实现
 - `095-summary-video-analyze-tool.md`：实现 video_analyze（ffprobe 最小实现）
 - `096-summary-patch-v4a-fuzzy.md`：patch V4A UPDATE hunk best-effort 容错
+- `097-summary-fs-admin-tools.md`：新增 mkdir/list_dir/delete_file/move_file（可选工具集）
+- `098-summary-integration-tool-placeholders.md`：补齐 discord_admin/feishu/spotify/yb/rl 工具名（占位 + 凭证 gate）
+- `099-summary-discord-admin-implemented.md`：discord_admin 从占位升级为可用实现
+- `100-summary-spotify-tools-implemented.md`：Spotify 工具从占位升级为可用实现
+- `101-summary-feishu-tools-implemented.md`：飞书 doc/drive 工具从占位升级为可用实现
+- `102-summary-yuanbao-sticker-search.md`：实现 yb_search_sticker（贴纸目录搜索）
+- `103-summary-rl-tools-local-runner.md`：rl_* 从占位升级为本地 runner（可配置命令）
