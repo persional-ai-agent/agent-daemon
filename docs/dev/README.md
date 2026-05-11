@@ -146,3 +146,6 @@
 - `053-research-hermes-feature-alignment.md`：Hermes 功能对齐复核调研
 - `053-plan-hermes-feature-alignment.md`：Hermes 功能对齐文档完善计划
 - `053-summary-hermes-feature-alignment.md`：Hermes 功能对齐复核与文档补齐总结
+- `054-research-cli-config-management.md`：CLI 配置管理最小对齐调研
+- `054-plan-cli-config-management.md`：CLI 配置管理最小实现计划
+- `054-summary-cli-config-management.md`：CLI 配置管理最小对齐总结

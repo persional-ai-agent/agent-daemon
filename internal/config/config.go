@@ -63,6 +63,11 @@ type iniValues struct {
 }
 
 func loadConfigINI() iniValues {
+	if p := strings.TrimSpace(os.Getenv("AGENT_CONFIG_FILE")); p != "" {
+		if f, err := ini.Load(p); err == nil {
+			return iniValues{file: f, found: true}
+		}
+	}
 	for _, p := range []string{"config/config.ini", "config.ini"} {
 		f, err := ini.Load(p)
 		if err == nil {

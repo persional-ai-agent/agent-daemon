@@ -48,9 +48,72 @@ func main() {
 		for _, name := range eng.Registry.Names() {
 			fmt.Println(name)
 		}
+	case "config":
+		runConfig(os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
+}
+
+func runConfig(args []string) {
+	if len(args) == 0 {
+		printConfigUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("config list", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		showSecrets := fs.Bool("show-secrets", false, "show secret values")
+		_ = fs.Parse(args[1:])
+		entries, err := config.ListConfigValues(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, entry := range entries {
+			value := entry.Value
+			if !*showSecrets {
+				value = config.RedactConfigValue(entry.Key, value)
+			}
+			fmt.Printf("%s=%s\n", entry.Key, value)
+		}
+	case "get":
+		fs := flag.NewFlagSet("config get", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd config get [-file path] section.key")
+		}
+		value, ok, err := config.ReadConfigValue(*path, fs.Arg(0))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !ok {
+			os.Exit(1)
+		}
+		fmt.Println(value)
+	case "set":
+		fs := flag.NewFlagSet("config set", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 2 {
+			log.Fatal("usage: agentd config set [-file path] section.key value")
+		}
+		if err := config.SaveConfigValue(*path, fs.Arg(0), fs.Arg(1)); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("updated %s in %s\n", fs.Arg(0), config.ConfigFilePath(*path))
+	default:
+		printConfigUsage()
+		os.Exit(2)
+	}
+}
+
+func printConfigUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd config list [-file path] [-show-secrets]")
+	fmt.Fprintln(os.Stderr, "  agentd config get [-file path] section.key")
+	fmt.Fprintln(os.Stderr, "  agentd config set [-file path] section.key value")
 }
 
 func runChat(cfg config.Config, first string, sessionID ...string) {
@@ -84,16 +147,16 @@ func runServe(cfg config.Config) {
 		adapters := buildGatewayAdapters(cfg)
 		if len(adapters) > 0 {
 			runner := gateway.NewRunner(adapters, eng, func(platform string) string {
-			switch platform {
-			case "telegram":
-				return cfg.TelegramAllowed
-			case "discord":
-				return cfg.DiscordAllowed
-			case "slack":
-				return cfg.SlackAllowed
-			}
-			return ""
-		})
+				switch platform {
+				case "telegram":
+					return cfg.TelegramAllowed
+				case "discord":
+					return cfg.DiscordAllowed
+				case "slack":
+					return cfg.SlackAllowed
+				}
+				return ""
+			})
 			if err := runner.Start(gatewayCtx); err != nil {
 				log.Printf("gateway start failed: %v", err)
 			}

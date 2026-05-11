@@ -114,6 +114,17 @@ export AGENT_MCP_TIMEOUT_SECONDS=30
 go run ./cmd/agentd serve
 ```
 
+配置管理：
+
+```bash
+go run ./cmd/agentd config list
+go run ./cmd/agentd config get api.model
+go run ./cmd/agentd config set api.model gpt-4o-mini
+go run ./cmd/agentd config set provider.fallback anthropic
+```
+
+默认读写 `config/config.ini`。也可以通过 `AGENT_CONFIG_FILE=/path/to/config.ini` 或 `-file /path/to/config.ini` 指定配置文件；环境变量仍优先于配置文件。
+
 请求示例：
 
 ```bash
