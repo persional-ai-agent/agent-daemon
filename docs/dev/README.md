@@ -143,3 +143,6 @@
 - `050-summary-gateway-slack.md`：Slack 网关适配器结果总结
 - `051-summary-skills-filter-preload.md`：技能条件过滤 + 预加载结果总结
 - `052-summary-skill-search-hub.md`：技能多源搜索（skill_search）结果总结
+- `053-research-hermes-feature-alignment.md`：Hermes 功能对齐复核调研
+- `053-plan-hermes-feature-alignment.md`：Hermes 功能对齐文档完善计划
+- `053-summary-hermes-feature-alignment.md`：Hermes 功能对齐复核与文档补齐总结

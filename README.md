@@ -2,6 +2,16 @@
 
 Go 版 Agent 守护进程与交互式 CLI，参考 `/data/source/hermes-agent` 的 Agent 架构实现。
 
+## 对齐边界
+
+本项目当前对齐的是 Hermes 的核心 Agent daemon 子集，不是 Hermes Agent 的完整 Go 版复刻。已覆盖核心 Agent Loop、工具调用、会话/记忆、MCP、Skills、Provider 韧性、HTTP/SSE/WebSocket 与 Telegram/Discord/Slack 最小网关；暂未覆盖 Hermes 的完整 TUI/CLI、provider 插件生态、68 个内置工具、52 个 toolsets、多终端后端、ACP、Cron、完整 Gateway、通用插件系统和研究/训练链路。
+
+详细对齐矩阵见：
+
+- `docs/overview-product.md`
+- `docs/overview-product-dev.md`
+- `docs/dev/053-summary-hermes-feature-alignment.md`
+
 ## 当前能力
 
 - OpenAI `chat/completions`、Anthropic `messages`、Codex `responses` 三模式模型调用

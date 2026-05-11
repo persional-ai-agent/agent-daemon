@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"gopkg.in/ini.v1"
 )
 
 type Config struct {
@@ -55,94 +57,155 @@ type Config struct {
 	ModelCostAware          bool
 }
 
+type iniValues struct {
+	file  *ini.File
+	found bool
+}
+
+func loadConfigINI() iniValues {
+	for _, p := range []string{"config/config.ini", "config.ini"} {
+		f, err := ini.Load(p)
+		if err == nil {
+			return iniValues{file: f, found: true}
+		}
+	}
+	return iniValues{}
+}
+
+func iniStr(iv iniValues, section, key, envVar, def string) string {
+	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" {
+		return v
+	}
+	if iv.found && iv.file != nil {
+		if sec := iv.file.Section(section); sec != nil && sec.HasKey(key) {
+			return sec.Key(key).String()
+		}
+	}
+	return def
+}
+
+func iniBool(iv iniValues, section, key, envVar string) bool {
+	if v := os.Getenv(envVar); v != "" {
+		return strings.EqualFold(v, "true") || v == "1"
+	}
+	if iv.found && iv.file != nil {
+		if sec := iv.file.Section(section); sec != nil && sec.HasKey(key) {
+			v := sec.Key(key).String()
+			return strings.EqualFold(v, "true") || v == "1"
+		}
+	}
+	return false
+}
+
+func iniInt(iv iniValues, section, key, envVar string, def int) int {
+	if v := os.Getenv(envVar); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	if iv.found && iv.file != nil {
+		if sec := iv.file.Section(section); sec != nil && sec.HasKey(key) {
+			if i, err := sec.Key(key).Int(); err == nil {
+				return i
+			}
+		}
+	}
+	return def
+}
+
 func Load() Config {
+	iv := loadConfigINI()
+
 	home, _ := os.UserHomeDir()
-	dataDir := getenv("AGENT_DAEMON_HOME", filepath.Join(home, ".agent-daemon"))
-	maxTurns := 30
-	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			maxTurns = i
-		}
+	dataDir := iniStr(iv, "agent", "data_dir", "AGENT_DAEMON_HOME", filepath.Join(home, ".agent-daemon"))
+
+	maxTurns := iniInt(iv, "agent", "max_iterations", "AGENT_MAX_ITERATIONS", 30)
+	if maxTurns <= 0 {
+		maxTurns = 30
 	}
-	maxContextChars := 120000
-	if v := os.Getenv("AGENT_MAX_CONTEXT_CHARS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			maxContextChars = i
-		}
+	maxContextChars := iniInt(iv, "agent", "max_context_chars", "AGENT_MAX_CONTEXT_CHARS", 120000)
+	if maxContextChars <= 0 {
+		maxContextChars = 120000
 	}
-	tailMessages := 14
-	if v := os.Getenv("AGENT_COMPRESSION_TAIL_MESSAGES"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			tailMessages = i
-		}
+	tailMessages := iniInt(iv, "agent", "compression_tail_messages", "AGENT_COMPRESSION_TAIL_MESSAGES", 14)
+	if tailMessages <= 0 {
+		tailMessages = 14
 	}
-	mcpTimeout := 30
-	if v := os.Getenv("AGENT_MCP_TIMEOUT_SECONDS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			mcpTimeout = i
-		}
-	}
-	mcpCallbackPort := 9876
-	if v := os.Getenv("AGENT_MCP_OAUTH_CALLBACK_PORT"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			mcpCallbackPort = i
-		}
-	}
-	approvalTTL := 300
-	if v := os.Getenv("AGENT_APPROVAL_TTL_SECONDS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			approvalTTL = i
-		}
-	}
-	raceEnabled := strings.EqualFold(os.Getenv("AGENT_MODEL_RACE_ENABLED"), "true") || os.Getenv("AGENT_MODEL_RACE_ENABLED") == "1"
-	costAware := strings.EqualFold(os.Getenv("AGENT_MODEL_COST_AWARE"), "true") || os.Getenv("AGENT_MODEL_COST_AWARE") == "1"
-	circuitThreshold := 3
-	if v := os.Getenv("AGENT_MODEL_CIRCUIT_FAILURE_THRESHOLD"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			circuitThreshold = i
-		}
-	}
-	circuitRecoverySec := 60
-	if v := os.Getenv("AGENT_MODEL_CIRCUIT_RECOVERY_TIMEOUT_SECONDS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			circuitRecoverySec = i
-		}
-	}
-	circuitHalfOpenMax := 1
-	if v := os.Getenv("AGENT_MODEL_CIRCUIT_HALF_OPEN_MAX_REQUESTS"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			circuitHalfOpenMax = i
-		}
-	}
-	gatewayEnabled := strings.EqualFold(os.Getenv("AGENT_GATEWAY_ENABLED"), "true") || os.Getenv("AGENT_GATEWAY_ENABLED") == "1"
+
 	wd, _ := os.Getwd()
+
+	apiType := iniStr(iv, "api", "type", "AGENT_MODEL_PROVIDER", "openai")
+	baseURL := iniStr(iv, "api", "base_url", "OPENAI_BASE_URL", "https://api.openai.com/v1")
+	apiKey := iniStr(iv, "api", "api_key", "OPENAI_API_KEY", "")
+	model := iniStr(iv, "api", "model", "OPENAI_MODEL", "gpt-4o-mini")
+
+	codexBase := iniStr(iv, "api.codex", "base_url", "CODEX_BASE_URL", baseURL)
+	codexKey := iniStr(iv, "api.codex", "api_key", "CODEX_API_KEY", apiKey)
+	codexModel := iniStr(iv, "api.codex", "model", "CODEX_MODEL", "gpt-5-codex")
+
+	anthropicBase := iniStr(iv, "api.anthropic", "base_url", "ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1")
+	anthropicKey := iniStr(iv, "api.anthropic", "api_key", "ANTHROPIC_API_KEY", "")
+	anthropicModel := iniStr(iv, "api.anthropic", "model", "ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+
+	mcpTimeout := iniInt(iv, "mcp", "timeout_seconds", "AGENT_MCP_TIMEOUT_SECONDS", 30)
+	if mcpTimeout <= 0 {
+		mcpTimeout = 30
+	}
+	mcpCallbackPort := iniInt(iv, "mcp", "oauth_callback_port", "AGENT_MCP_OAUTH_CALLBACK_PORT", 9876)
+	if mcpCallbackPort <= 0 {
+		mcpCallbackPort = 9876
+	}
+
+	approvalTTL := iniInt(iv, "agent", "approval_ttl_seconds", "AGENT_APPROVAL_TTL_SECONDS", 300)
+	if approvalTTL <= 0 {
+		approvalTTL = 300
+	}
+
+	circuitThreshold := iniInt(iv, "provider", "circuit_failure_threshold", "AGENT_MODEL_CIRCUIT_FAILURE_THRESHOLD", 3)
+	if circuitThreshold <= 0 {
+		circuitThreshold = 3
+	}
+	circuitRecoverySec := iniInt(iv, "provider", "circuit_recovery_seconds", "AGENT_MODEL_CIRCUIT_RECOVERY_TIMEOUT_SECONDS", 60)
+	if circuitRecoverySec <= 0 {
+		circuitRecoverySec = 60
+	}
+	circuitHalfOpenMax := iniInt(iv, "provider", "circuit_half_open_max_requests", "AGENT_MODEL_CIRCUIT_HALF_OPEN_MAX_REQUESTS", 1)
+	if circuitHalfOpenMax <= 0 {
+		circuitHalfOpenMax = 1
+	}
+
+	streaming := iniBool(iv, "api", "streaming", "AGENT_MODEL_USE_STREAMING")
+	raceEnabled := iniBool(iv, "provider", "race_enabled", "AGENT_MODEL_RACE_ENABLED")
+	costAware := iniBool(iv, "provider", "cost_aware", "AGENT_MODEL_COST_AWARE")
+	gatewayEnabled := iniBool(iv, "gateway", "enabled", "AGENT_GATEWAY_ENABLED")
+
 	return Config{
-		ModelProvider:           getenv("AGENT_MODEL_PROVIDER", "openai"),
-		ModelFallbackProvider:   strings.TrimSpace(os.Getenv("AGENT_MODEL_FALLBACK_PROVIDER")),
-		ModelUseStreaming:       getenv("AGENT_MODEL_USE_STREAMING", "") == "1" || strings.EqualFold(getenv("AGENT_MODEL_USE_STREAMING", ""), "true"),
+		ModelProvider:           apiType,
+		ModelFallbackProvider:   iniStr(iv, "provider", "fallback", "AGENT_MODEL_FALLBACK_PROVIDER", ""),
+		ModelUseStreaming:       streaming,
 		ModelRaceEnabled:        raceEnabled,
 		ModelCircuitThreshold:   circuitThreshold,
 		ModelCircuitRecoverySec: circuitRecoverySec,
 		ModelCircuitHalfOpenMax: circuitHalfOpenMax,
-		ModelBaseURL:            getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		ModelAPIKey:             os.Getenv("OPENAI_API_KEY"),
-		ModelName:               getenv("OPENAI_MODEL", "gpt-4o-mini"),
-		CodexBaseURL:            getenv("CODEX_BASE_URL", getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")),
-		CodexAPIKey:             getenv("CODEX_API_KEY", os.Getenv("OPENAI_API_KEY")),
-		CodexModel:              getenv("CODEX_MODEL", "gpt-5-codex"),
-		AnthropicBaseURL:        getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
-		AnthropicAPIKey:         os.Getenv("ANTHROPIC_API_KEY"),
-		AnthropicModel:          getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest"),
-		MCPEndpoint:             strings.TrimSpace(os.Getenv("AGENT_MCP_ENDPOINT")),
-		MCPTransport:            getenv("AGENT_MCP_TRANSPORT", "http"),
-		MCPStdioCommand:         strings.TrimSpace(os.Getenv("AGENT_MCP_STDIO_COMMAND")),
-		MCPOAuthTokenURL:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_TOKEN_URL")),
-		MCPOAuthAuthURL:         strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_AUTH_URL")),
-		MCPOAuthRedirectURL:     strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_REDIRECT_URL")),
-		MCPOAuthClientID:        strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_CLIENT_ID")),
-		MCPOAuthClientSecret:    os.Getenv("AGENT_MCP_OAUTH_CLIENT_SECRET"),
-		MCPOAuthScopes:          strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_SCOPES")),
-		MCPOAuthGrantType:       strings.TrimSpace(os.Getenv("AGENT_MCP_OAUTH_GRANT_TYPE")),
+		ModelBaseURL:            baseURL,
+		ModelAPIKey:             apiKey,
+		ModelName:               model,
+		CodexBaseURL:            codexBase,
+		CodexAPIKey:             codexKey,
+		CodexModel:              codexModel,
+		AnthropicBaseURL:        anthropicBase,
+		AnthropicAPIKey:         anthropicKey,
+		AnthropicModel:          anthropicModel,
+		MCPEndpoint:             iniStr(iv, "mcp", "endpoint", "AGENT_MCP_ENDPOINT", ""),
+		MCPTransport:            iniStr(iv, "mcp", "transport", "AGENT_MCP_TRANSPORT", "http"),
+		MCPStdioCommand:         iniStr(iv, "mcp", "stdio_command", "AGENT_MCP_STDIO_COMMAND", ""),
+		MCPOAuthTokenURL:        iniStr(iv, "mcp", "oauth_token_url", "AGENT_MCP_OAUTH_TOKEN_URL", ""),
+		MCPOAuthAuthURL:         iniStr(iv, "mcp", "oauth_auth_url", "AGENT_MCP_OAUTH_AUTH_URL", ""),
+		MCPOAuthRedirectURL:     iniStr(iv, "mcp", "oauth_redirect_url", "AGENT_MCP_OAUTH_REDIRECT_URL", ""),
+		MCPOAuthClientID:        iniStr(iv, "mcp", "oauth_client_id", "AGENT_MCP_OAUTH_CLIENT_ID", ""),
+		MCPOAuthClientSecret:    iniStr(iv, "mcp", "oauth_client_secret", "AGENT_MCP_OAUTH_CLIENT_SECRET", ""),
+		MCPOAuthScopes:          iniStr(iv, "mcp", "oauth_scopes", "AGENT_MCP_OAUTH_SCOPES", ""),
+		MCPOAuthGrantType:       iniStr(iv, "mcp", "oauth_grant_type", "AGENT_MCP_OAUTH_GRANT_TYPE", ""),
 		MCPOAuthCallbackPort:    mcpCallbackPort,
 		MCPTimeoutSeconds:       mcpTimeout,
 		ApprovalTTLSeconds:      approvalTTL,
@@ -150,25 +213,17 @@ func Load() Config {
 		MaxContextChars:         maxContextChars,
 		CompressionTailMessages: tailMessages,
 		DataDir:                 dataDir,
-		ListenAddr:              getenv("AGENT_DAEMON_ADDR", ":8080"),
-		Workdir:                 getenv("AGENT_WORKDIR", wd),
+		ListenAddr:              iniStr(iv, "agent", "listen_addr", "AGENT_DAEMON_ADDR", ":8080"),
+		Workdir:                 iniStr(iv, "agent", "workdir", "AGENT_WORKDIR", wd),
 		GatewayEnabled:          gatewayEnabled,
-		TelegramToken:           strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_BOT_TOKEN")),
-		TelegramAllowed:         strings.TrimSpace(os.Getenv("AGENT_TELEGRAM_ALLOWED_USERS")),
-		DiscordToken:            strings.TrimSpace(os.Getenv("AGENT_DISCORD_BOT_TOKEN")),
-		DiscordAllowed:          strings.TrimSpace(os.Getenv("AGENT_DISCORD_ALLOWED_USERS")),
-		SlackBotToken:           strings.TrimSpace(os.Getenv("AGENT_SLACK_BOT_TOKEN")),
-		SlackAppToken:           strings.TrimSpace(os.Getenv("AGENT_SLACK_APP_TOKEN")),
-		SlackAllowed:            strings.TrimSpace(os.Getenv("AGENT_SLACK_ALLOWED_USERS")),
-		ModelCascade:            strings.TrimSpace(os.Getenv("AGENT_MODEL_CASCADE")),
+		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
+		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
+		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
+		DiscordAllowed:          iniStr(iv, "gateway.discord", "allowed_users", "AGENT_DISCORD_ALLOWED_USERS", ""),
+		SlackBotToken:           iniStr(iv, "gateway.slack", "bot_token", "AGENT_SLACK_BOT_TOKEN", ""),
+		SlackAppToken:           iniStr(iv, "gateway.slack", "app_token", "AGENT_SLACK_APP_TOKEN", ""),
+		SlackAllowed:            iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
+		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
 		ModelCostAware:          costAware,
 	}
-}
-
-func getenv(k, d string) string {
-	v := os.Getenv(k)
-	if v == "" {
-		return d
-	}
-	return v
 }
