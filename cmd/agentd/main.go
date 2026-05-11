@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/api"
 	"github.com/dingjingmaster/agent-daemon/internal/cli"
 	"github.com/dingjingmaster/agent-daemon/internal/config"
+	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 	"github.com/dingjingmaster/agent-daemon/internal/gateway/platforms"
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
@@ -44,14 +47,15 @@ func main() {
 	case "serve":
 		runServe(cfg)
 	case "tools":
-		eng := mustBuildEngine(cfg)
-		for _, name := range eng.Registry.Names() {
-			fmt.Println(name)
-		}
+		runTools(cfg, os.Args[2:])
 	case "config":
 		runConfig(os.Args[2:])
 	case "model":
 		runModel(cfg, os.Args[2:])
+	case "doctor":
+		runDoctor(cfg, os.Args[2:])
+	case "gateway":
+		runGateway(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
@@ -180,6 +184,455 @@ func printModelUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd model providers")
 	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider model")
 	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider:model")
+}
+
+func runTools(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		eng := mustBuildEngine(cfg)
+		printToolNames(eng.Registry.Names())
+		return
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("tools list", flag.ExitOnError)
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd tools list")
+		}
+		eng := mustBuildEngine(cfg)
+		printToolNames(eng.Registry.Names())
+	case "show":
+		fs := flag.NewFlagSet("tools show", flag.ExitOnError)
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 1 {
+			log.Fatal("usage: agentd tools show tool_name")
+		}
+		eng := mustBuildEngine(cfg)
+		schema, ok := findToolSchema(eng.Registry.Schemas(), fs.Arg(0))
+		if !ok {
+			log.Fatalf("unknown tool: %s", fs.Arg(0))
+		}
+		printJSON(schema)
+	case "schemas":
+		fs := flag.NewFlagSet("tools schemas", flag.ExitOnError)
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd tools schemas")
+		}
+		eng := mustBuildEngine(cfg)
+		printJSON(eng.Registry.Schemas())
+	case "disabled":
+		fs := flag.NewFlagSet("tools disabled", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd tools disabled [-file path]")
+		}
+		disabled := parseNameList(cfg.DisabledTools)
+		if strings.TrimSpace(*path) != "" {
+			var err error
+			disabled, err = readDisabledToolsConfig(*path)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		printToolNames(disabled)
+	case "disable":
+		path, toolName := parseToolToggleArgs(args[1:], "tools disable")
+		disabled, err := readDisabledToolsConfig(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		disabled = addName(disabled, toolName)
+		if err := config.SaveConfigValue(path, "tools.disabled", strings.Join(disabled, ",")); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("disabled tool %s in %s\n", toolName, config.ConfigFilePath(path))
+	case "enable":
+		path, toolName := parseToolToggleArgs(args[1:], "tools enable")
+		disabled, err := readDisabledToolsConfig(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		disabled = removeName(disabled, toolName)
+		if err := config.SaveConfigValue(path, "tools.disabled", strings.Join(disabled, ",")); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("enabled tool %s in %s\n", toolName, config.ConfigFilePath(path))
+	default:
+		printToolsUsage()
+		os.Exit(2)
+	}
+}
+
+func printToolNames(names []string) {
+	for _, name := range names {
+		fmt.Println(name)
+	}
+}
+
+func printToolsUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd tools")
+	fmt.Fprintln(os.Stderr, "  agentd tools list")
+	fmt.Fprintln(os.Stderr, "  agentd tools show tool_name")
+	fmt.Fprintln(os.Stderr, "  agentd tools schemas")
+	fmt.Fprintln(os.Stderr, "  agentd tools disabled [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd tools disable [-file path] tool_name")
+	fmt.Fprintln(os.Stderr, "  agentd tools enable [-file path] tool_name")
+}
+
+func findToolSchema(schemas []core.ToolSchema, name string) (core.ToolSchema, bool) {
+	name = strings.TrimSpace(name)
+	for _, schema := range schemas {
+		if schema.Function.Name == name {
+			return schema, true
+		}
+	}
+	return core.ToolSchema{}, false
+}
+
+func printJSON(v any) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(b))
+}
+
+func parseToolToggleArgs(args []string, name string) (string, string) {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		log.Fatalf("usage: agentd %s [-file path] tool_name", name)
+	}
+	toolName := strings.TrimSpace(fs.Arg(0))
+	if toolName == "" {
+		log.Fatal("tool_name is required")
+	}
+	return *path, toolName
+}
+
+func readDisabledToolsConfig(path string) ([]string, error) {
+	value, ok, err := config.ReadConfigValue(path, "tools.disabled")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	return parseNameList(value), nil
+}
+
+func parseNameList(value string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, part := range strings.Split(value, ",") {
+		name := strings.TrimSpace(part)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func addName(names []string, name string) []string {
+	names = append(names, name)
+	return parseNameList(strings.Join(names, ","))
+}
+
+func removeName(names []string, name string) []string {
+	name = strings.TrimSpace(name)
+	var out []string
+	for _, item := range names {
+		if item != name {
+			out = append(out, item)
+		}
+	}
+	return parseNameList(strings.Join(out, ","))
+}
+
+type doctorCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+}
+
+func runDoctor(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd doctor [-json]")
+	}
+	checks := buildDoctorChecks(cfg)
+	if *jsonOutput {
+		printJSON(checks)
+	} else {
+		for _, check := range checks {
+			fmt.Printf("[%s] %s: %s\n", check.Status, check.Name, check.Detail)
+		}
+	}
+	if hasDoctorError(checks) {
+		os.Exit(1)
+	}
+}
+
+func buildDoctorChecks(cfg config.Config) []doctorCheck {
+	checks := []doctorCheck{
+		{Name: "config_file", Status: "ok", Detail: "using " + config.ConfigFilePath("") + " when present; environment variables take precedence"},
+		checkDirectory("workdir", cfg.Workdir, false),
+		checkDirectory("data_dir", cfg.DataDir, true),
+		checkModelConfig(cfg),
+		checkProviderCredentials(cfg),
+		checkMCPConfig(cfg),
+		checkGatewayConfig(cfg),
+		checkRegisteredTools(),
+	}
+	return checks
+}
+
+func checkDirectory(name, path string, create bool) doctorCheck {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return doctorCheck{Name: name, Status: "error", Detail: "path is empty"}
+	}
+	if create {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return doctorCheck{Name: name, Status: "error", Detail: err.Error()}
+		}
+		f, err := os.CreateTemp(path, ".agentd-doctor-*")
+		if err != nil {
+			return doctorCheck{Name: name, Status: "error", Detail: "not writable: " + err.Error()}
+		}
+		tmpName := f.Name()
+		_ = f.Close()
+		_ = os.Remove(tmpName)
+		return doctorCheck{Name: name, Status: "ok", Detail: path + " is writable"}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return doctorCheck{Name: name, Status: "error", Detail: err.Error()}
+	}
+	if !info.IsDir() {
+		return doctorCheck{Name: name, Status: "error", Detail: "not a directory: " + path}
+	}
+	return doctorCheck{Name: name, Status: "ok", Detail: path}
+}
+
+func checkModelConfig(cfg config.Config) doctorCheck {
+	provider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+	if provider == "" {
+		provider = "openai"
+	}
+	if _, _, err := normalizeModelSelection(provider, selectedModelName(cfg, provider)); err != nil {
+		return doctorCheck{Name: "model", Status: "error", Detail: err.Error()}
+	}
+	modelName, baseURL := currentModelConfig(cfg, provider)
+	return doctorCheck{Name: "model", Status: "ok", Detail: fmt.Sprintf("%s:%s (%s)", provider, modelName, baseURL)}
+}
+
+func checkProviderCredentials(cfg config.Config) doctorCheck {
+	provider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+	if provider == "" {
+		provider = "openai"
+	}
+	keyName, value := selectedProviderKey(cfg, provider)
+	if strings.TrimSpace(value) == "" {
+		return doctorCheck{Name: "provider_credentials", Status: "warn", Detail: keyName + " is empty"}
+	}
+	return doctorCheck{Name: "provider_credentials", Status: "ok", Detail: keyName + " is set"}
+}
+
+func selectedProviderKey(cfg config.Config, provider string) (string, string) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic":
+		return "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey
+	case "codex":
+		return "CODEX_API_KEY", cfg.CodexAPIKey
+	default:
+		return "OPENAI_API_KEY", cfg.ModelAPIKey
+	}
+}
+
+func selectedModelName(cfg config.Config, provider string) string {
+	modelName, _ := currentModelConfig(cfg, provider)
+	return modelName
+}
+
+func checkMCPConfig(cfg config.Config) doctorCheck {
+	transport := strings.ToLower(strings.TrimSpace(cfg.MCPTransport))
+	if transport == "" {
+		transport = "http"
+	}
+	switch transport {
+	case "http":
+		if strings.TrimSpace(cfg.MCPEndpoint) == "" {
+			return doctorCheck{Name: "mcp", Status: "ok", Detail: "disabled"}
+		}
+		return doctorCheck{Name: "mcp", Status: "ok", Detail: "http endpoint configured"}
+	case "stdio":
+		if strings.TrimSpace(cfg.MCPStdioCommand) == "" {
+			return doctorCheck{Name: "mcp", Status: "warn", Detail: "stdio transport selected but command is empty"}
+		}
+		return doctorCheck{Name: "mcp", Status: "ok", Detail: "stdio command configured"}
+	default:
+		return doctorCheck{Name: "mcp", Status: "error", Detail: "unsupported transport: " + transport}
+	}
+}
+
+func checkGatewayConfig(cfg config.Config) doctorCheck {
+	if !cfg.GatewayEnabled {
+		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
+	}
+	configured := make([]string, 0, 3)
+	if strings.TrimSpace(cfg.TelegramToken) != "" {
+		configured = append(configured, "telegram")
+	}
+	if strings.TrimSpace(cfg.DiscordToken) != "" {
+		configured = append(configured, "discord")
+	}
+	if strings.TrimSpace(cfg.SlackBotToken) != "" && strings.TrimSpace(cfg.SlackAppToken) != "" {
+		configured = append(configured, "slack")
+	}
+	if len(configured) == 0 {
+		return doctorCheck{Name: "gateway", Status: "warn", Detail: "enabled but no platform tokens are configured"}
+	}
+	return doctorCheck{Name: "gateway", Status: "ok", Detail: "configured platforms: " + strings.Join(configured, ",")}
+}
+
+func checkRegisteredTools() doctorCheck {
+	registry := tools.NewRegistry()
+	procDir, err := os.MkdirTemp("", "agentd-doctor-tools-*")
+	if err != nil {
+		return doctorCheck{Name: "tools", Status: "error", Detail: err.Error()}
+	}
+	defer os.RemoveAll(procDir)
+	tools.RegisterBuiltins(registry, tools.NewProcessRegistry(procDir))
+	names := registry.Names()
+	if len(names) == 0 {
+		return doctorCheck{Name: "tools", Status: "error", Detail: "no tools registered"}
+	}
+	return doctorCheck{Name: "tools", Status: "ok", Detail: fmt.Sprintf("%d builtin tools registered", len(names))}
+}
+
+func hasDoctorError(checks []doctorCheck) bool {
+	for _, check := range checks {
+		if check.Status == "error" {
+			return true
+		}
+	}
+	return false
+}
+
+func runGateway(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printGatewayUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "status":
+		fs := flag.NewFlagSet("gateway status", flag.ExitOnError)
+		path := fs.String("file", "", "config file path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway status [-file path] [-json]")
+		}
+		statusCfg := cfg
+		if strings.TrimSpace(*path) != "" {
+			var err error
+			statusCfg, err = config.LoadFile(*path)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		status := gatewayStatus(statusCfg)
+		if *jsonOutput {
+			printJSON(status)
+			return
+		}
+		fmt.Printf("enabled=%t\n", status.Enabled)
+		if len(status.ConfiguredPlatforms) == 0 {
+			fmt.Println("configured_platforms=")
+		} else {
+			fmt.Println("configured_platforms=" + strings.Join(status.ConfiguredPlatforms, ","))
+		}
+		fmt.Println("supported_platforms=" + strings.Join(status.SupportedPlatforms, ","))
+	case "platforms":
+		for _, platform := range supportedGatewayPlatforms() {
+			fmt.Println(platform)
+		}
+	case "enable":
+		path := parseGatewayConfigPath(args[1:], "gateway enable")
+		if err := config.SaveConfigValue(path, "gateway.enabled", "true"); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("enabled gateway in %s\n", config.ConfigFilePath(path))
+	case "disable":
+		path := parseGatewayConfigPath(args[1:], "gateway disable")
+		if err := config.SaveConfigValue(path, "gateway.enabled", "false"); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("disabled gateway in %s\n", config.ConfigFilePath(path))
+	default:
+		printGatewayUsage()
+		os.Exit(2)
+	}
+}
+
+func parseGatewayConfigPath(args []string, name string) string {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatalf("usage: agentd %s [-file path]", name)
+	}
+	return *path
+}
+
+func printGatewayUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
+	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
+}
+
+type gatewayStatusInfo struct {
+	Enabled             bool     `json:"enabled"`
+	ConfiguredPlatforms []string `json:"configured_platforms"`
+	SupportedPlatforms  []string `json:"supported_platforms"`
+}
+
+func gatewayStatus(cfg config.Config) gatewayStatusInfo {
+	return gatewayStatusInfo{
+		Enabled:             cfg.GatewayEnabled,
+		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
+		SupportedPlatforms:  supportedGatewayPlatforms(),
+	}
+}
+
+func supportedGatewayPlatforms() []string {
+	return []string{"telegram", "discord", "slack"}
+}
+
+func configuredGatewayPlatforms(cfg config.Config) []string {
+	out := make([]string, 0, 3)
+	if strings.TrimSpace(cfg.TelegramToken) != "" {
+		out = append(out, "telegram")
+	}
+	if strings.TrimSpace(cfg.DiscordToken) != "" {
+		out = append(out, "discord")
+	}
+	if strings.TrimSpace(cfg.SlackBotToken) != "" && strings.TrimSpace(cfg.SlackAppToken) != "" {
+		out = append(out, "slack")
+	}
+	return out
 }
 
 func supportedModelProviders() []string {
@@ -349,6 +802,10 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 	return adapters
 }
 
+func applyDisabledTools(registry *tools.Registry, disabled string) {
+	registry.Disable(parseNameList(disabled)...)
+}
+
 func mustBuildEngine(cfg config.Config) *agent.Engine {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		log.Fatal(err)
@@ -419,6 +876,7 @@ func mustBuildEngine(cfg config.Config) *agent.Engine {
 			}
 		}
 	}
+	applyDisabledTools(registry, cfg.DisabledTools)
 	client := buildModelClient(cfg)
 	return &agent.Engine{
 		Client:                  client,

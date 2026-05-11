@@ -57,6 +57,14 @@ func (r *Registry) Register(t Tool) {
 	r.tools[t.Name()] = t
 }
 
+func (r *Registry) Disable(names ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, name := range names {
+		delete(r.tools, name)
+	}
+}
+
 func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

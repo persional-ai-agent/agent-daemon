@@ -135,6 +135,34 @@ go run ./cmd/agentd model set anthropic:claude-3-5-haiku-latest
 go run ./cmd/agentd model set -base-url https://api.openai.com/v1 codex gpt-5-codex
 ```
 
+工具查看：
+
+```bash
+go run ./cmd/agentd tools
+go run ./cmd/agentd tools list
+go run ./cmd/agentd tools show terminal
+go run ./cmd/agentd tools schemas
+go run ./cmd/agentd tools disable terminal
+go run ./cmd/agentd tools disabled
+go run ./cmd/agentd tools enable terminal
+```
+
+诊断检查：
+
+```bash
+go run ./cmd/agentd doctor
+go run ./cmd/agentd doctor -json
+```
+
+网关配置：
+
+```bash
+go run ./cmd/agentd gateway status
+go run ./cmd/agentd gateway platforms
+go run ./cmd/agentd gateway enable
+go run ./cmd/agentd gateway disable
+```
+
 请求示例：
 
 ```bash

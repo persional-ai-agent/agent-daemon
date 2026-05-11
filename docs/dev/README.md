@@ -152,3 +152,15 @@
 - `055-research-cli-model-management.md`：CLI 模型管理最小对齐调研
 - `055-plan-cli-model-management.md`：CLI 模型管理最小实现计划
 - `055-summary-cli-model-management.md`：CLI 模型管理最小对齐总结
+- `056-research-cli-tools-inspection.md`：CLI 工具查看最小对齐调研
+- `056-plan-cli-tools-inspection.md`：CLI 工具查看最小实现计划
+- `056-summary-cli-tools-inspection.md`：CLI 工具查看最小对齐总结
+- `057-research-cli-doctor.md`：CLI 本地诊断最小对齐调研
+- `057-plan-cli-doctor.md`：CLI 本地诊断最小实现计划
+- `057-summary-cli-doctor.md`：CLI 本地诊断最小对齐总结
+- `058-research-cli-gateway-management.md`：CLI 网关管理最小对齐调研
+- `058-plan-cli-gateway-management.md`：CLI 网关管理最小实现计划
+- `058-summary-cli-gateway-management.md`：CLI 网关管理最小对齐总结
+- `059-research-tool-disable-config.md`：工具禁用配置最小对齐调研
+- `059-plan-tool-disable-config.md`：工具禁用配置最小实现计划
+- `059-summary-tool-disable-config.md`：工具禁用配置最小对齐总结

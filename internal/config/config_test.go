@@ -182,3 +182,18 @@ func TestLoadFile(t *testing.T) {
 		t.Fatalf("AnthropicModel = %q, want claude-test", cfg.AnthropicModel)
 	}
 }
+
+func TestLoadDisabledTools(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.ini")
+	if err := os.WriteFile(path, []byte("[tools]\ndisabled = terminal, web_fetch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DisabledTools != "terminal, web_fetch" {
+		t.Fatalf("DisabledTools = %q", cfg.DisabledTools)
+	}
+}

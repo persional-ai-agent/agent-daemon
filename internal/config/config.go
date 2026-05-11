@@ -55,6 +55,7 @@ type Config struct {
 	SlackAllowed            string
 	ModelCascade            string
 	ModelCostAware          bool
+	DisabledTools           string
 }
 
 type iniValues struct {
@@ -240,5 +241,6 @@ func loadFromINIValues(iv iniValues) Config {
 		SlackAllowed:            iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
 		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
 		ModelCostAware:          costAware,
+		DisabledTools:           iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),
 	}
 }
