@@ -110,10 +110,12 @@ type sessionWorker struct {
 
 	queue chan MessageEvent
 
-	mu             sync.Mutex
-	cancelCurrent  context.CancelFunc
-	running        bool
-	lastApprovalID string
+	mu                  sync.Mutex
+	cancelCurrent       context.CancelFunc
+	running             bool
+	lastApprovalID      string
+	lastApprovalCommand string
+	lastApprovalReason  string
 }
 
 func deliveryHooksEnabled() bool {
@@ -350,6 +352,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			reply := w.approvalStatus(ctx)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
 			return
+		case "/pending":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			reply := w.pendingApprovalStatus()
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/pending"})
+			return
 		case "/grant":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
@@ -367,7 +377,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /pending, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -442,8 +452,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				})
 			case "tool_finished":
 				parsed := tools.ParseJSONArgs(evt.Content)
-				if approvalID, ok := pendingApprovalID(parsed); ok {
-					w.setLastApprovalID(approvalID)
+				if approvalID, command, reason, ok := pendingApprovalDetails(parsed); ok {
+					w.setPendingApproval(approvalID, command, reason)
 					_, _ = w.sendText(context.Background(), event.ChatID, "Pending approval: /approve "+approvalID+" or /deny "+approvalID, event.MessageID, map[string]any{
 						"phase":       "approval",
 						"approval_id": approvalID,
@@ -607,26 +617,30 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	}
 }
 
-func pendingApprovalID(parsed map[string]any) (string, bool) {
+func pendingApprovalDetails(parsed map[string]any) (string, string, string, bool) {
 	if len(parsed) == 0 {
-		return "", false
+		return "", "", "", false
 	}
 	status, _ := parsed["status"].(string)
 	if strings.TrimSpace(status) != "pending_approval" {
-		return "", false
+		return "", "", "", false
 	}
 	id, _ := parsed["approval_id"].(string)
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", false
+		return "", "", "", false
 	}
-	return id, true
+	command, _ := parsed["command"].(string)
+	reason, _ := parsed["reason"].(string)
+	return id, strings.TrimSpace(command), strings.TrimSpace(reason), true
 }
 
-func (w *sessionWorker) setLastApprovalID(id string) {
+func (w *sessionWorker) setPendingApproval(id, command, reason string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.lastApprovalID = strings.TrimSpace(id)
+	w.lastApprovalCommand = strings.TrimSpace(command)
+	w.lastApprovalReason = strings.TrimSpace(reason)
 }
 
 func (w *sessionWorker) resolveApprovalID(cmd string) string {
@@ -644,6 +658,8 @@ func (w *sessionWorker) clearApprovalID(id string) {
 	defer w.mu.Unlock()
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(w.lastApprovalID) == strings.TrimSpace(id) {
 		w.lastApprovalID = ""
+		w.lastApprovalCommand = ""
+		w.lastApprovalReason = ""
 	}
 }
 
@@ -735,6 +751,23 @@ func (w *sessionWorker) gatewayStatusText() string {
 	if last := w.resolveApprovalID(""); strings.TrimSpace(last) != "" {
 		lines = append(lines, "last_approval_id: "+last)
 	}
+	return strings.Join(lines, "\n")
+}
+
+func (w *sessionWorker) pendingApprovalStatus() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.TrimSpace(w.lastApprovalID) == "" {
+		return "No pending approval."
+	}
+	lines := []string{"approval_id: " + w.lastApprovalID}
+	if strings.TrimSpace(w.lastApprovalCommand) != "" {
+		lines = append(lines, "command: "+truncateString(w.lastApprovalCommand, 500))
+	}
+	if strings.TrimSpace(w.lastApprovalReason) != "" {
+		lines = append(lines, "reason: "+truncateString(w.lastApprovalReason, 500))
+	}
+	lines = append(lines, "actions: /approve "+w.lastApprovalID+" or /deny "+w.lastApprovalID)
 	return strings.Join(lines, "\n")
 }
 

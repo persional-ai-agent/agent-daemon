@@ -289,3 +289,4 @@
 - `164-summary-gateway-approval-status-command.md`：新增 gateway 审批状态命令 `/approvals`
 - `165-summary-gateway-approval-manage-commands.md`：新增 gateway 授权管理命令 `/grant` `/revoke`
 - `166-summary-gateway-status-command.md`：新增 gateway 文本状态命令 `/status`
+- `167-summary-gateway-pending-command.md`：新增 gateway 待审批查看命令 `/pending`
