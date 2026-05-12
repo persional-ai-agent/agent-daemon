@@ -1098,8 +1098,28 @@ func runUpdateBundle(args []string) {
 		if *strict && info["status"] != "ok" {
 			os.Exit(1)
 		}
+	case "unpack":
+		fs := flag.NewFlagSet("update bundle unpack", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path")
+		dest := fs.String("dest", "", "destination directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle unpack -file <bundle.tar.gz> -dest <dir> [-json]")
+		}
+		info, err := unpackUpdateBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%s\n", info["bundle_path"])
+		fmt.Printf("dest=%s\n", info["dest"])
+		fmt.Printf("files=%v\n", info["files"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack]")
 	}
 }
 
@@ -1239,6 +1259,69 @@ func verifyUpdateBundle(path string) (map[string]any, error) {
 	info["issues"] = issues
 	info["next_actions"] = nextActions
 	return info, nil
+}
+
+func unpackUpdateBundle(path, dest string) (map[string]any, error) {
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	files := 0
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		name := filepath.Clean(header.Name)
+		if name == "." || strings.HasPrefix(name, "..") {
+			return nil, fmt.Errorf("unsafe bundle entry: %s", header.Name)
+		}
+		target := filepath.Join(dest, name)
+		rel, err := filepath.Rel(dest, target)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return nil, fmt.Errorf("bundle entry escapes destination: %s", header.Name)
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return nil, err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return nil, err
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(header.Mode))
+			if err != nil {
+				return nil, err
+			}
+			if _, err := io.Copy(out, tr); err != nil {
+				out.Close()
+				return nil, err
+			}
+			if err := out.Close(); err != nil {
+				return nil, err
+			}
+			files++
+		}
+	}
+	return map[string]any{
+		"bundle_path": path,
+		"dest":        dest,
+		"files":       files,
+	}, nil
 }
 
 func anyBool(value any) bool {

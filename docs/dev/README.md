@@ -311,3 +311,4 @@
 - `186-summary-cli-update-bundle-command.md`：新增 `update bundle` 本地 release 打包命令
 - `187-summary-cli-update-bundle-inspect-command.md`：新增 `update bundle inspect` 本地 bundle 校验命令
 - `188-summary-cli-update-bundle-verify-command.md`：新增 `update bundle verify` 严格校验命令
+- `189-summary-cli-update-bundle-unpack-command.md`：新增 `update bundle unpack` 本地解包命令

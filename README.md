@@ -74,6 +74,7 @@ go run ./cmd/agentd version -check-update -json
 go run ./cmd/agentd update bundle -json
 go run ./cmd/agentd update bundle inspect -file /tmp/release.tgz -json
 go run ./cmd/agentd update bundle verify -file /tmp/release.tgz -json
+go run ./cmd/agentd update bundle unpack -file /tmp/release.tgz -dest /tmp/release-dir -json
 go run ./cmd/agentd update changelog -json
 go run ./cmd/agentd update doctor -json
 go run ./cmd/agentd update status -json
