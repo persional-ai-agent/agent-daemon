@@ -146,7 +146,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "browser_type", desc: "Browser type (lightweight: accepted but not persisted)", params: browserTypeParams(), call: b.browserType})
 	r.Register(toolDef{name: "browser_scroll", desc: "Browser scroll (lightweight: no-op)", params: browserScrollParams(), call: b.browserScroll})
 	r.Register(toolDef{name: "browser_press", desc: "Browser press (lightweight: no-op)", params: browserPressParams(), call: b.browserPress})
-	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>)", params: browserGetImagesParams(), call: b.browserGetImages})
+	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>, supports limit)", params: browserGetImagesParams(), call: b.browserGetImages})
 	r.Register(toolDef{name: "browser_vision", desc: "Browser vision (lightweight: fetch <img src> metadata)", params: browserVisionParams(), call: b.browserVision})
 	r.Register(toolDef{name: "browser_console", desc: "Browser console output and JS errors (CDP-backed when configured)", params: browserConsoleParams(), call: b.browserConsole})
 	r.Register(toolDef{name: "browser_cdp", desc: "Browser CDP (lightweight: page metadata)", params: browserCDPParams(), call: b.browserCDP})
@@ -2000,7 +2000,9 @@ func browserScrollParams() map[string]any {
 	}}
 }
 func browserGetImagesParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"limit": map[string]any{"type": "integer"},
+	}}
 }
 func browserConsoleParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{

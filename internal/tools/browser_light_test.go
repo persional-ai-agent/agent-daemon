@@ -57,3 +57,34 @@ func TestBrowserConsoleReturnsAppliedLimitInLightMode(t *testing.T) {
 		t.Fatalf("count=%v, want 0", res["count"])
 	}
 }
+
+func TestBrowserGetImagesRespectsLimit(t *testing.T) {
+	sessionID := "test-browser-images-limit"
+	st := getLightBrowser(sessionID)
+	st.stack = []lightBrowserPage{
+		{
+			URL: "https://example.com/base/",
+			HTML: `<html><body>
+<img src="a.png"><img src="b.png"><img src="c.png"><img src="d.png">
+</body></html>`,
+			LoadedAt: "2026-01-01T00:00:00Z",
+			Status:   200,
+		},
+	}
+
+	b := &BuiltinTools{}
+	res, err := b.browserGetImages(context.Background(), map[string]any{"limit": 2}, ToolContext{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := res["count"].(int); got != 2 {
+		t.Fatalf("count=%v, want 2", res["count"])
+	}
+	images, _ := res["images"].([]string)
+	if len(images) != 2 {
+		t.Fatalf("images len=%d, want 2", len(images))
+	}
+	if got, _ := res["applied_limit"].(int); got != 2 {
+		t.Fatalf("applied_limit=%v, want 2", res["applied_limit"])
+	}
+}

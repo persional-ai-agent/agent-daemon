@@ -322,22 +322,32 @@ func (b *BuiltinTools) browserPress(ctx context.Context, args map[string]any, tc
 	return map[string]any{"success": true, "note": "Lightweight browser: press is a no-op.", "key": key}, nil
 }
 
-func (b *BuiltinTools) browserGetImages(_ context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserGetImages(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
 		return nil, errors.New("no page loaded; call browser_navigate first")
 	}
 	p := st.stack[len(st.stack)-1]
+	limit := intArg(args, "limit", 200)
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
 	srcs := findImageSrcs(p.HTML)
 	resolved := make([]string, 0, len(srcs))
 	for _, s := range srcs {
+		if len(resolved) >= limit {
+			break
+		}
 		u, err := resolveURL(p.URL, s)
 		if err != nil {
 			continue
 		}
 		resolved = append(resolved, u)
 	}
-	return map[string]any{"success": true, "url": p.URL, "images": resolved, "count": len(resolved), "note": "Lightweight browser: image list derived from <img src> only."}, nil
+	return map[string]any{"success": true, "url": p.URL, "images": resolved, "count": len(resolved), "applied_limit": limit, "note": "Lightweight browser: image list derived from <img src> only."}, nil
 }
 
 func (b *BuiltinTools) browserConsole(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
