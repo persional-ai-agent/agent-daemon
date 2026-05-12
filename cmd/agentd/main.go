@@ -1260,8 +1260,31 @@ func runUpdateBundle(args []string) {
 		if nextActions, ok := info["next_actions"].([]string); ok {
 			fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
 		}
+	case "manifest":
+		fs := flag.NewFlagSet("update bundle manifest", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" {
+			log.Fatal("usage: agentd update bundle manifest -file <bundle.tar.gz|manifest.json> [-dest <dir>] [-json]")
+		}
+		info, err := bundleManifestSummary(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%v\n", info["bundle_path"])
+		fmt.Printf("manifest=%v\n", info["manifest_path"])
+		fmt.Printf("status=%v\n", info["status"])
+		if dest != nil && strings.TrimSpace(*dest) != "" {
+			fmt.Printf("target=%v\n", info["target_dir"])
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest]")
 	}
 }
 
@@ -1808,6 +1831,62 @@ func bundleStatusSummary(path, dest string) (map[string]any, error) {
 	}
 	if len(nextActions) == 0 {
 		nextActions = append(nextActions, "bundle 状态正常，可继续 apply、rollback 或按需 prune")
+	}
+	result["status"] = status
+	result["issues"] = dedupeStrings(issues)
+	result["next_actions"] = dedupeStrings(nextActions)
+	return result, nil
+}
+
+func bundleManifestSummary(path, dest string) (map[string]any, error) {
+	info, err := inspectUpdateBundle(path)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]any{
+		"bundle_path":      info["bundle_path"],
+		"manifest_path":    info["manifest_path"],
+		"bundle_exists":    info["bundle_exists"],
+		"manifest_exists":  info["manifest_exists"],
+		"manifest_matches": info["manifest_matches"],
+		"archive_entries":  info["archive_entries"],
+	}
+	status := "ok"
+	issues := make([]string, 0, 4)
+	nextActions := make([]string, 0, 4)
+	if manifest, ok := info["manifest"].(map[string]any); ok {
+		result["manifest"] = manifest
+	}
+	if !anyBool(info["bundle_exists"]) {
+		status = "warn"
+		issues = append(issues, "bundle file missing")
+		nextActions = append(nextActions, "确认 bundle 路径是否正确，或重新执行 `agentd update bundle`")
+	}
+	if !anyBool(info["manifest_exists"]) {
+		status = "warn"
+		issues = append(issues, "bundle manifest missing")
+		nextActions = append(nextActions, "保留 bundle 旁的 `.json` manifest，便于分发时读取元数据")
+	}
+	if anyBool(info["manifest_exists"]) && !anyBool(info["manifest_matches"]) {
+		status = "warn"
+		issues = append(issues, "bundle manifest does not match bundle path")
+		nextActions = append(nextActions, "检查 manifest 与 bundle 是否来自同一次构建")
+	}
+	if dest != "" {
+		result["target_dir"] = dest
+		backups, err := listBundleBackups(dest, 1)
+		if err != nil {
+			return nil, err
+		}
+		result["target_backups"] = backups
+		if count, _ := backups["count"].(int); count > 0 {
+			if latest, err := latestBundleBackupPath(dest); err == nil {
+				result["latest_backup_path"] = latest
+			}
+		}
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "manifest 状态正常，可继续分发、apply 或 rollback")
 	}
 	result["status"] = status
 	result["issues"] = dedupeStrings(issues)
