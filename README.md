@@ -82,7 +82,7 @@ go run ./cmd/agentd gateway stop
 go run ./cmd/agentd gateway uninstall
 ```
 
-说明：Gateway 现在同时持有同一 `workdir` 单实例锁和基于平台凭证指纹的全局 `token lock`，避免不同工作区重复启动同一组网关消费者。
+说明：Gateway 现在同时持有同一 `workdir` 单实例锁和基于平台凭证指纹的全局 `token lock`，避免不同工作区重复启动同一组网关消费者；危险命令出现 `pending_approval` 时，可在聊天里直接用 `/approve <id>` 或 `/deny <id>` 处理。
 
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。
 

@@ -285,3 +285,4 @@
 - `160-summary-cli-update-install-uninstall.md`：新增 `update install/uninstall` 最小脚本安装命令
 - `161-summary-gateway-single-instance-lock.md`：新增 gateway 同 workdir 单实例锁
 - `162-summary-gateway-token-lock.md`：新增 gateway 跨工作区 token lock
+- `163-summary-gateway-approval-text-commands.md`：新增 gateway 文本审批命令 `/approve` `/deny`

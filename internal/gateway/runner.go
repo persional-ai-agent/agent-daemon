@@ -5,8 +5,8 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -20,15 +20,16 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 	"github.com/google/uuid"
 )
 
 type Runner struct {
-	adapters        []PlatformAdapter
-	engine          *agent.Engine
-	allowedFor      func(platform string) string
-	mu              sync.Mutex
-	wg              sync.WaitGroup
+	adapters   []PlatformAdapter
+	engine     *agent.Engine
+	allowedFor func(platform string) string
+	mu         sync.Mutex
+	wg         sync.WaitGroup
 
 	sessionsMu sync.Mutex
 	sessions   map[string]*sessionWorker
@@ -45,13 +46,13 @@ type Runner struct {
 
 func NewRunner(adapters []PlatformAdapter, engine *agent.Engine, allowedFor func(platform string) string) *Runner {
 	r := &Runner{
-		adapters:   adapters,
-		engine:     engine,
-		allowedFor: allowedFor,
-		sessions:   map[string]*sessionWorker{},
-		pairings:   map[string]map[string]bool{},
-		pairCode:   strings.TrimSpace(os.Getenv("AGENT_GATEWAY_PAIR_CODE")),
-		pairFile:   filepath.Join(engine.Workdir, ".agent-daemon", "gateway_pairs.json"),
+		adapters:      adapters,
+		engine:        engine,
+		allowedFor:    allowedFor,
+		sessions:      map[string]*sessionWorker{},
+		pairings:      map[string]map[string]bool{},
+		pairCode:      strings.TrimSpace(os.Getenv("AGENT_GATEWAY_PAIR_CODE")),
+		pairFile:      filepath.Join(engine.Workdir, ".agent-daemon", "gateway_pairs.json"),
 		hookSpoolPath: filepath.Join(engine.Workdir, ".agent-daemon", "gateway_hooks_spool.jsonl"),
 		hookSpoolSeen: map[string]time.Time{},
 	}
@@ -109,9 +110,10 @@ type sessionWorker struct {
 
 	queue chan MessageEvent
 
-	mu            sync.Mutex
-	cancelCurrent context.CancelFunc
-	running       bool
+	mu             sync.Mutex
+	cancelCurrent  context.CancelFunc
+	running        bool
+	lastApprovalID string
 }
 
 func deliveryHooksEnabled() bool {
@@ -318,8 +320,22 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
 			return
+		case "/approve", "/deny":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			approve := strings.EqualFold(strings.Fields(cmd)[0], "/approve")
+			approvalID := w.resolveApprovalID(cmd)
+			if approvalID == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /approve <approval_id> or /deny <approval_id>", event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
+				return
+			}
+			reply := w.confirmApproval(ctx, approvalID, approve)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0], "approval_id": approvalID})
+			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /help", event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -393,6 +409,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					"at":          time.Now().Format(time.RFC3339Nano),
 				})
 			case "tool_finished":
+				parsed := tools.ParseJSONArgs(evt.Content)
+				if approvalID, ok := pendingApprovalID(parsed); ok {
+					w.setLastApprovalID(approvalID)
+					_, _ = w.sendText(context.Background(), event.ChatID, "Pending approval: /approve "+approvalID+" or /deny "+approvalID, event.MessageID, map[string]any{
+						"phase":       "approval",
+						"approval_id": approvalID,
+					})
+				}
 				w.runner.emitHook("gateway.tool_finished", map[string]any{
 					"platform":    w.adapter.Name(),
 					"session_key": sessionKey,
@@ -549,6 +573,85 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			"at":          time.Now().Format(time.RFC3339Nano),
 		})
 	}
+}
+
+func pendingApprovalID(parsed map[string]any) (string, bool) {
+	if len(parsed) == 0 {
+		return "", false
+	}
+	status, _ := parsed["status"].(string)
+	if strings.TrimSpace(status) != "pending_approval" {
+		return "", false
+	}
+	id, _ := parsed["approval_id"].(string)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", false
+	}
+	return id, true
+}
+
+func (w *sessionWorker) setLastApprovalID(id string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastApprovalID = strings.TrimSpace(id)
+}
+
+func (w *sessionWorker) resolveApprovalID(cmd string) string {
+	parts := strings.Fields(strings.TrimSpace(cmd))
+	if len(parts) >= 2 && strings.TrimSpace(parts[1]) != "" {
+		return strings.TrimSpace(parts[1])
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.TrimSpace(w.lastApprovalID)
+}
+
+func (w *sessionWorker) clearApprovalID(id string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.TrimSpace(id) == "" || strings.TrimSpace(w.lastApprovalID) == strings.TrimSpace(id) {
+		w.lastApprovalID = ""
+	}
+}
+
+func (w *sessionWorker) confirmApproval(ctx context.Context, approvalID string, approve bool) string {
+	raw := w.engine.Registry.Dispatch(ctx, "approval", map[string]any{
+		"action":      "confirm",
+		"approval_id": approvalID,
+		"approve":     approve,
+	}, tools.ToolContext{
+		SessionID:      w.key,
+		SessionStore:   w.engine.SearchStore,
+		MemoryStore:    w.engine.MemoryStore,
+		TodoStore:      w.engine.TodoStore,
+		ApprovalStore:  w.engine.ApprovalStore,
+		DelegateRunner: w.engine,
+		Workdir:        w.engine.Workdir,
+	})
+	parsed := tools.ParseJSONArgs(raw)
+	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+		return "Approval failed: " + errText
+	}
+	approved, _ := parsed["approved"].(bool)
+	command, _ := parsed["command"].(string)
+	if !approved {
+		w.clearApprovalID(approvalID)
+		if strings.TrimSpace(command) == "" {
+			return "Denied."
+		}
+		return "Denied: " + command
+	}
+	w.clearApprovalID(approvalID)
+	output, _ := parsed["output"].(string)
+	output = strings.TrimSpace(output)
+	if output != "" {
+		return "Approved and executed.\n" + truncateString(output, 1500)
+	}
+	if strings.TrimSpace(command) != "" {
+		return "Approved: " + command
+	}
+	return "Approved."
 }
 
 func parseIntEnv(key string, def int) int {
