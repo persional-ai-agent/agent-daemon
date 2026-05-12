@@ -1283,8 +1283,30 @@ func runUpdateBundle(args []string) {
 		if dest != nil && strings.TrimSpace(*dest) != "" {
 			fmt.Printf("target=%v\n", info["target_dir"])
 		}
+	case "plan":
+		fs := flag.NewFlagSet("update bundle plan", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle plan -file <bundle.tar.gz|manifest.json> -dest <dir> [-json]")
+		}
+		info, err := planUpdateBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%v\n", info["bundle_path"])
+		fmt.Printf("dest=%v\n", info["dest"])
+		fmt.Printf("create=%v\n", info["create_count"])
+		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
+		fmt.Printf("backup=%v\n", info["backup_count"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan]")
 	}
 }
 
@@ -1508,6 +1530,55 @@ func applyUpdateBundle(path, dest string) (map[string]any, error) {
 	}
 	result["bundle_path"] = bundlePath
 	return result, nil
+}
+
+func planUpdateBundle(path, dest string) (map[string]any, error) {
+	info, err := inspectUpdateBundle(path)
+	if err != nil {
+		return nil, err
+	}
+	bundlePath := strings.TrimSpace(anyString(info["bundle_path"]))
+	if bundlePath == "" || !anyBool(info["bundle_exists"]) {
+		return nil, fmt.Errorf("bundle file missing: %s", path)
+	}
+	relFiles, err := listBundleRegularEntries(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	createItems := make([]string, 0)
+	overwriteItems := make([]string, 0)
+	for _, rel := range relFiles {
+		target := filepath.Join(dest, rel)
+		stat, err := os.Stat(target)
+		if err == nil && stat.Mode().IsRegular() {
+			overwriteItems = append(overwriteItems, rel)
+			continue
+		}
+		if os.IsNotExist(err) {
+			createItems = append(createItems, rel)
+		}
+	}
+	nextActions := make([]string, 0, 4)
+	if len(overwriteItems) > 0 {
+		nextActions = append(nextActions, "将覆盖现有文件，建议先查看 `update bundle backups` 或保留目标目录快照")
+	}
+	if len(createItems) > 0 {
+		nextActions = append(nextActions, "将创建新文件，可继续执行 `agentd update bundle apply` 落地变更")
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "目标目录与 bundle 内容已完全重合，apply 主要会重写现有文件")
+	}
+	return map[string]any{
+		"bundle_path":     bundlePath,
+		"dest":            dest,
+		"archive_entries": len(relFiles),
+		"create_count":    len(createItems),
+		"overwrite_count": len(overwriteItems),
+		"backup_count":    len(overwriteItems),
+		"create_items":    createItems,
+		"overwrite_items": overwriteItems,
+		"next_actions":    nextActions,
+	}, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
