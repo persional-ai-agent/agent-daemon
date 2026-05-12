@@ -47,3 +47,9 @@ func TestSendMessageListAndSend(t *testing.T) {
 		t.Fatalf("expected success: %v", res)
 	}
 }
+
+func TestHomeTargetEnvVarIncludesYuanbao(t *testing.T) {
+	if got := homeTargetEnvVar("yuanbao"); got != "YUANBAO_HOME_CHANNEL" {
+		t.Fatalf("homeTargetEnvVar(yuanbao)=%q, want %q", got, "YUANBAO_HOME_CHANNEL")
+	}
+}

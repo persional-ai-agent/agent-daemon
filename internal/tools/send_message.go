@@ -38,7 +38,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 					},
 					"platform": map[string]any{
 						"type":        "string",
-						"description": "Platform name (telegram/discord/slack)",
+						"description": "Platform name (telegram/discord/slack/yuanbao)",
 					},
 					"chat_id": map[string]any{
 						"type":        "string",
