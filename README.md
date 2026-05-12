@@ -76,6 +76,7 @@ go run ./cmd/agentd update bundle inspect -file /tmp/release.tgz -json
 go run ./cmd/agentd update bundle verify -file /tmp/release.tgz -json
 go run ./cmd/agentd update bundle unpack -file /tmp/release.tgz -dest /tmp/release-dir -json
 go run ./cmd/agentd update bundle apply -file /tmp/release.tgz -dest /tmp/agent-daemon-checkout -json
+go run ./cmd/agentd update bundle backups -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update bundle rollback -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update changelog -json
 go run ./cmd/agentd update doctor -json

@@ -314,3 +314,4 @@
 - `189-summary-cli-update-bundle-unpack-command.md`：新增 `update bundle unpack` 本地解包命令
 - `190-summary-cli-update-bundle-apply-command.md`：新增 `update bundle apply` 本地覆盖安装命令
 - `191-summary-cli-update-bundle-rollback-command.md`：新增 `update bundle rollback` 本地回滚命令
+- `192-summary-cli-update-bundle-backups-command.md`：新增 `update bundle backups` 备份列表命令

@@ -1164,8 +1164,32 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("created_files=%v\n", info["created_files"])
 		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
 		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
+	case "backups":
+		fs := flag.NewFlagSet("update bundle backups", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		limit := fs.Int("limit", 10, "max backups to return")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle backups -dest <dir> [-limit N] [-json]")
+		}
+		info, err := listBundleBackups(strings.TrimSpace(*dest), *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("backup_dir=%s\n", info["backup_dir"])
+		fmt.Printf("count=%v\n", info["count"])
+		if items, ok := info["items"].([]map[string]any); ok {
+			for _, item := range items {
+				fmt.Printf("%s %v files=%v source=%v\n", anyString(item["bundle_path"]), item["generated_at"], item["file_count"], item["source_bundle_path"])
+			}
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups]")
 	}
 }
 
@@ -1537,6 +1561,50 @@ func latestBundleBackupPath(dest string) (string, error) {
 	return matches[len(matches)-1], nil
 }
 
+func listBundleBackups(dest string, limit int) (map[string]any, error) {
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	matches, err := filepath.Glob(filepath.Join(backupDir, "*.tar.gz"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+	if limit <= 0 {
+		limit = len(matches)
+	}
+	items := make([]map[string]any, 0, minInt(limit, len(matches)))
+	for idx := len(matches) - 1; idx >= 0 && len(items) < limit; idx-- {
+		bundlePath := matches[idx]
+		manifestPath := strings.TrimSuffix(bundlePath, ".tar.gz") + ".json"
+		item := map[string]any{
+			"bundle_path":     bundlePath,
+			"manifest_path":   manifestPath,
+			"manifest_exists": fileExists(manifestPath),
+		}
+		if stat, err := os.Stat(bundlePath); err == nil {
+			item["bundle_size"] = stat.Size()
+		}
+		if fileExists(manifestPath) {
+			bs, err := os.ReadFile(manifestPath)
+			if err != nil {
+				return nil, err
+			}
+			var manifest map[string]any
+			if err := json.Unmarshal(bs, &manifest); err != nil {
+				return nil, err
+			}
+			item["generated_at"] = manifest["generated_at"]
+			item["file_count"] = manifest["file_count"]
+			item["source_bundle_path"] = manifest["source_bundle_path"]
+		}
+		items = append(items, item)
+	}
+	return map[string]any{
+		"backup_dir": backupDir,
+		"count":      len(items),
+		"items":      items,
+	}, nil
+}
+
 func bundleBackupLabel(bundlePath string) string {
 	label := strings.TrimSuffix(filepath.Base(bundlePath), ".tar.gz")
 	label = strings.TrimSuffix(label, ".tgz")
@@ -1557,6 +1625,13 @@ func bundleBackupLabel(bundlePath string) string {
 		}
 	}
 	return sanitizeBundleLabel(label)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func listBundleRegularEntries(path string) ([]string, error) {
