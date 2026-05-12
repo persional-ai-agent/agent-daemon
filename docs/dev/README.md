@@ -270,3 +270,5 @@
 - `145-summary-gateway-hooks-doctor.md`：新增 `hooks doctor` 配置诊断命令
 - `146-summary-gateway-hook-spool-import.md`：新增 `spool import`（支持 append/覆盖与 event_id 去重）
 - `147-summary-gateway-hooks-doctor-and-verify.md`：补充 hooks doctor + spool verify 的诊断能力整合说明
+- `148-summary-gateway-hook-spool-import-all.md`：`spool import` 新增 `-all` 批量导入 JSONL 片段
+- `149-summary-gateway-hooks-doctor-next-actions.md`：`hooks doctor` 增加可执行的 `next_actions` 建议

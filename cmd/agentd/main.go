@@ -477,6 +477,82 @@ func importSpoolFile(inputPath, targetPath string, appendMode bool) (imported in
 	return imported, skipped, total, nil
 }
 
+func listImportFiles(input string) ([]string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, fmt.Errorf("input path is empty")
+	}
+	info, err := os.Stat(input)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		// If a file is given with -all, import sibling .jsonl files in same directory.
+		dir := filepath.Dir(input)
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		base := filepath.Base(input)
+		prefix := base
+		if strings.Contains(base, ".") {
+			prefix = strings.SplitN(base, ".", 2)[0]
+		}
+		out := make([]string, 0, 16)
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			name := f.Name()
+			if !strings.HasSuffix(strings.ToLower(name), ".jsonl") {
+				continue
+			}
+			if strings.HasPrefix(name, prefix) || strings.Contains(name, "gateway_hooks_spool") {
+				out = append(out, filepath.Join(dir, name))
+			}
+		}
+		sort.Strings(out)
+		if len(out) == 0 {
+			return []string{input}, nil
+		}
+		return out, nil
+	}
+	files, err := os.ReadDir(input)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, 32)
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		name := f.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".jsonl") {
+			continue
+		}
+		if strings.Contains(name, "gateway_hooks_spool") || strings.Contains(name, "spool") || strings.Contains(name, "hook") {
+			out = append(out, filepath.Join(input, name))
+		}
+	}
+	if len(out) == 0 {
+		// fallback: all jsonl files
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			name := f.Name()
+			if strings.HasSuffix(strings.ToLower(name), ".jsonl") {
+				out = append(out, filepath.Join(input, name))
+			}
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no importable .jsonl files found under %s", input)
+	}
+	return out, nil
+}
+
 func verifySpoolFile(path string) (lines int, valid int, invalid int, invalidSamples []string, err error) {
 	bs, err := os.ReadFile(path)
 	if err != nil {
@@ -1245,36 +1321,46 @@ func runGatewayHookDoctor(cfg config.Config, args []string) {
 	spoolMaxLines := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_SPOOL_MAX_LINES", 2000)
 	spoolMaxBytes := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_SPOOL_MAX_BYTES", 5<<20)
 	issues := make([]map[string]any, 0, 8)
+	nextActions := make([]string, 0, 8)
 	addIssue := func(level, key, detail string) {
 		issues = append(issues, map[string]any{"level": level, "key": key, "detail": detail})
 	}
 	if !enabled {
 		addIssue("warn", "AGENT_GATEWAY_HOOK_URL", "hooks disabled (url not set)")
+		nextActions = append(nextActions, "设置 `AGENT_GATEWAY_HOOK_URL` 后可启用 webhook hooks。")
 	}
 	if enabled && timeout <= 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_TIMEOUT_SECONDS", "must be > 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_TIMEOUT_SECONDS` 调整为大于 0 的值。")
 	}
 	if enabled && retries < 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_RETRIES", "must be >= 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_RETRIES` 调整为大于等于 0。")
 	}
 	if enabled && backoff < 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_BACKOFF_MS", "must be >= 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_BACKOFF_MS` 调整为大于等于 0。")
 	}
 	if spoolEnabled && !enabled {
 		addIssue("warn", "AGENT_GATEWAY_HOOK_SPOOL", "spool enabled but hook url missing")
+		nextActions = append(nextActions, "若保留 spool，请先配置 `AGENT_GATEWAY_HOOK_URL`。")
 	}
 	if spoolEnabled && spoolReplay <= 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_REPLAY_SECONDS", "must be > 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_SPOOL_REPLAY_SECONDS` 调整为大于 0。")
 	}
 	if spoolEnabled && spoolMaxLines <= 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_MAX_LINES", "must be > 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_SPOOL_MAX_LINES` 调整为大于 0。")
 	}
 	if spoolEnabled && spoolMaxBytes < 0 {
 		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_MAX_BYTES", "must be >= 0")
+		nextActions = append(nextActions, "将 `AGENT_GATEWAY_HOOK_SPOOL_MAX_BYTES` 调整为大于等于 0。")
 	}
 	if info, err := os.Stat(spoolPath); err == nil {
 		if info.Size() > int64(20<<20) {
 			addIssue("warn", "spool_size", "spool exceeds 20MB; consider replay/compact")
+			nextActions = append(nextActions, "执行 `agentd gateway hooks spool replay -all` 与 `agentd gateway hooks spool compact -all` 清理积压。")
 		}
 	}
 	status := "ok"
@@ -1305,6 +1391,7 @@ func runGatewayHookDoctor(cfg config.Config, args []string) {
 			"spool_max_bytes":   spoolMaxBytes,
 		},
 		"issues": issues,
+		"next_actions": nextActions,
 	})
 }
 
@@ -1704,10 +1791,11 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
 		path := fs.String("path", "", "target base spool path")
 		in := fs.String("in", "", "input JSONL file path (required)")
+		all := fs.Bool("all", false, "import all JSONL files under input directory matching spool-like names")
 		appendMode := fs.Bool("append", true, "append into target (default true). set false to overwrite target before import")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
-			log.Fatal("usage: agentd gateway hooks spool import -in file [-workdir dir] [-path file] [-append=true|false]")
+			log.Fatal("usage: agentd gateway hooks spool import -in file [-all] [-workdir dir] [-path file] [-append=true|false]")
 		}
 		if strings.TrimSpace(*in) == "" {
 			log.Fatal("in is required")
@@ -1716,18 +1804,48 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 		if target == "" {
 			target = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
 		}
-		imported, skipped, total, err := importSpoolFile(strings.TrimSpace(*in), target, *appendMode)
-		if err != nil {
-			log.Fatal(err)
+		inputs := []string{strings.TrimSpace(*in)}
+		if *all {
+			allInputs, err := listImportFiles(strings.TrimSpace(*in))
+			if err != nil {
+				log.Fatal(err)
+			}
+			inputs = allInputs
+		}
+		totalImported, totalSkipped, totalLines := 0, 0, 0
+		perFile := make([]map[string]any, 0, len(inputs))
+		first := true
+		for _, inputPath := range inputs {
+			appendThis := *appendMode
+			if !*appendMode && !first {
+				appendThis = true
+			}
+			imported, skipped, total, err := importSpoolFile(inputPath, target, appendThis)
+			if err != nil {
+				log.Fatal(err)
+			}
+			first = false
+			totalImported += imported
+			totalSkipped += skipped
+			totalLines += total
+			perFile = append(perFile, map[string]any{
+				"input":    inputPath,
+				"total":    total,
+				"imported": imported,
+				"skipped":  skipped,
+			})
 		}
 		printJSON(map[string]any{
 			"success":  true,
 			"input":    strings.TrimSpace(*in),
+			"inputs":   inputs,
 			"target":   target,
-			"total":    total,
-			"imported": imported,
-			"skipped":  skipped,
+			"total":    totalLines,
+			"imported": totalImported,
+			"skipped":  totalSkipped,
 			"append":   *appendMode,
+			"all":      *all,
+			"files":    perFile,
 		})
 	default:
 		printGatewayHookSpoolUsage()
@@ -1870,7 +1988,7 @@ func printGatewayHookSpoolUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool verify [-workdir dir] [-path file] [-all]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool import -in file [-workdir dir] [-path file] [-append=true|false]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool import -in file [-all] [-workdir dir] [-path file] [-append=true|false]")
 }
 
 type gatewayStatusInfo struct {
