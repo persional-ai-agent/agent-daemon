@@ -1327,8 +1327,28 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("create=%v\n", info["create_count"])
 		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
 		fmt.Printf("backup=%v\n", info["backup_count"])
+	case "snapshot":
+		fs := flag.NewFlagSet("update bundle snapshot", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		outPath := fs.String("out", "", "output tar.gz path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshot -dest <dir> [-out file] [-json]")
+		}
+		info, err := snapshotTargetBundle(strings.TrimSpace(*dest), strings.TrimSpace(*outPath))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%v\n", info["bundle_path"])
+		fmt.Printf("manifest=%v\n", info["manifest_path"])
+		fmt.Printf("file_count=%v\n", info["file_count"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot]")
 	}
 }
 
@@ -1623,6 +1643,41 @@ func planRollbackBundle(path, dest string) (map[string]any, error) {
 		info["next_actions"] = nextActions
 	}
 	return info, nil
+}
+
+func snapshotTargetBundle(dest, outPath string) (map[string]any, error) {
+	dest = filepath.Clean(dest)
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	if outPath == "" {
+		if err := os.MkdirAll(backupDir, 0o755); err != nil {
+			return nil, err
+		}
+		outPath = filepath.Join(backupDir, fmt.Sprintf("%d-manual-snapshot.tar.gz", time.Now().UnixNano()))
+	}
+	files, err := listSnapshotFiles(dest, outPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		return nil, err
+	}
+	if err := writeRepoBundle(dest, outPath, files); err != nil {
+		return nil, err
+	}
+	manifestPath := strings.TrimSuffix(outPath, ".tar.gz") + ".json"
+	manifest := map[string]any{
+		"bundle_path":   outPath,
+		"target_dir":    dest,
+		"file_count":    len(files),
+		"generated_at":  time.Now().Format(time.RFC3339Nano),
+		"snapshot_type": "manual",
+	}
+	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		return nil, err
+	}
+	manifest["manifest_path"] = manifestPath
+	return manifest, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
@@ -2036,6 +2091,41 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func listSnapshotFiles(root, outPath string) ([]string, error) {
+	files := make([]string, 0, 128)
+	skipDir := filepath.Clean(filepath.Join(root, ".agent-daemon", "release-backups"))
+	cleanOut := filepath.Clean(outPath)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		cleanPath := filepath.Clean(path)
+		if info.IsDir() {
+			if cleanPath == skipDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		if cleanPath == cleanOut || cleanPath == strings.TrimSuffix(cleanOut, ".tar.gz")+".json" {
+			return nil
+		}
+		rel, err := filepath.Rel(root, cleanPath)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 func dedupeStrings(items []string) []string {
