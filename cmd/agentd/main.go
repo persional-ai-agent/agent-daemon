@@ -1391,8 +1391,33 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("snapshot_dir=%s\n", info["snapshot_dir"])
 		fmt.Printf("kept=%v\n", info["kept"])
 		fmt.Printf("removed=%v\n", info["removed"])
+	case "snapshots-doctor":
+		fs := flag.NewFlagSet("update bundle snapshots-doctor", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		strict := fs.Bool("strict", false, "exit non-zero when doctor status is not ok")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-doctor -dest <dir> [-strict] [-json]")
+		}
+		info, err := doctorSnapshotBundles(strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+		} else {
+			fmt.Printf("status=%v\n", info["status"])
+			fmt.Printf("snapshot_dir=%v\n", info["snapshot_dir"])
+			if nextActions, ok := info["next_actions"].([]string); ok {
+				fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+			}
+		}
+		if *strict && anyString(info["status"]) != "ok" {
+			os.Exit(1)
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor]")
 	}
 }
 
@@ -1797,6 +1822,51 @@ func pruneSnapshotBundles(dest string, keep int) (map[string]any, error) {
 		"kept":         kept,
 		"removed":      len(removed),
 		"items":        removed,
+	}, nil
+}
+
+func doctorSnapshotBundles(dest string) (map[string]any, error) {
+	snapshots, err := listSnapshotBundles(dest, 10)
+	if err != nil {
+		return nil, err
+	}
+	status := "ok"
+	issues := make([]string, 0, 4)
+	nextActions := make([]string, 0, 4)
+	count, _ := snapshots["count"].(int)
+	if count == 0 {
+		status = "warn"
+		issues = append(issues, "no manual snapshots found")
+		nextActions = append(nextActions, "先执行一次 `agentd update bundle snapshot -dest <dir>` 创建手工 restore point")
+	}
+	if items, ok := snapshots["items"].([]map[string]any); ok {
+		missingManifest := 0
+		for _, item := range items {
+			if exists, _ := item["manifest_exists"].(bool); !exists {
+				missingManifest++
+			}
+		}
+		if missingManifest > 0 {
+			status = "warn"
+			issues = append(issues, fmt.Sprintf("%d snapshot manifests missing", missingManifest))
+			nextActions = append(nextActions, "保留 manual snapshot 旁的 `.json` manifest，便于后续确认 restore point 元数据")
+		}
+		if count > 10 {
+			status = "warn"
+			issues = append(issues, "too many manual snapshots retained")
+			nextActions = append(nextActions, "运行 `agentd update bundle snapshots-prune -dest <dir> -keep N` 清理过旧手工快照")
+		}
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "manual snapshot 状态正常，可继续保留为 restore point 或按需执行 snapshots-prune")
+	}
+	return map[string]any{
+		"status":       status,
+		"snapshot_dir": snapshots["snapshot_dir"],
+		"count":        count,
+		"issues":       issues,
+		"next_actions": nextActions,
+		"items":        snapshots["items"],
 	}, nil
 }
 
