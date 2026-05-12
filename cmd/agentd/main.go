@@ -3468,7 +3468,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway restart [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway install [-file path] [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway uninstall [-file path] [-workdir dir] [-stop] [-json]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway manifest -platform <slack|discord|telegram> [-command /agent] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway manifest -platform <slack|discord|telegram|yuanbao> [-command /agent] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
@@ -3502,7 +3502,7 @@ func runGatewayManifest(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway manifest -platform <slack|discord|telegram> [-command /agent] [-json]")
+		log.Fatal("usage: agentd gateway manifest -platform <slack|discord|telegram|yuanbao> [-command /agent] [-json]")
 	}
 	switch strings.ToLower(strings.TrimSpace(*platformName)) {
 	case "slack":
@@ -3526,8 +3526,15 @@ func runGatewayManifest(args []string) {
 			return
 		}
 		printJSON(export)
+	case "yuanbao":
+		export := buildYuanbaoManifestExport()
+		if *jsonOutput {
+			printJSON(export)
+			return
+		}
+		printJSON(export)
 	default:
-		log.Fatal("supported platforms: slack, discord, telegram")
+		log.Fatal("supported platforms: slack, discord, telegram, yuanbao")
 	}
 }
 
@@ -3661,6 +3668,51 @@ func buildTelegramManifestExport() map[string]any {
 			"在 BotFather 创建 bot 并配置 TELEGRAM_TOKEN",
 			"启动 gateway 后会自动调用 setMyCommands 注册这些命令",
 			"若需手工核对，可把 botfather_commands 逐行粘贴到 BotFather 命令菜单配置",
+		},
+	}
+}
+
+func buildYuanbaoManifestExport() map[string]any {
+	commands := []map[string]string{
+		{"command": "/status", "description": "show current session status"},
+		{"command": "/pending", "description": "show latest pending approval"},
+		{"command": "/approvals", "description": "show active approvals"},
+		{"command": "/grant [ttl]", "description": "grant session approval"},
+		{"command": "/grant pattern <name> [ttl]", "description": "grant pattern approval"},
+		{"command": "/revoke", "description": "revoke session approval"},
+		{"command": "/revoke pattern <name>", "description": "revoke pattern approval"},
+		{"command": "/approve [id]", "description": "approve pending approval"},
+		{"command": "/deny [id]", "description": "deny pending approval"},
+		{"command": "/help", "description": "show supported commands"},
+	}
+	quickReplies := []map[string]string{
+		{"text": "状态", "route": "/status"},
+		{"text": "待审批", "route": "/pending"},
+		{"text": "审批", "route": "/approvals"},
+		{"text": "批准", "route": "/approve"},
+		{"text": "同意", "route": "/approve"},
+		{"text": "通过", "route": "/approve"},
+		{"text": "拒绝", "route": "/deny"},
+		{"text": "驳回", "route": "/deny"},
+		{"text": "帮助", "route": "/help"},
+	}
+	return map[string]any{
+		"platform":      "yuanbao",
+		"commands":      commands,
+		"quick_replies": quickReplies,
+		"install_requirements": []string{
+			"YUANBAO_TOKEN or (YUANBAO_APP_ID + YUANBAO_APP_SECRET)",
+			"YUANBAO_BOT_ID when sign-token response does not include bot_id",
+		},
+		"optional_env": []string{
+			"YUANBAO_API_DOMAIN",
+			"YUANBAO_WS_URL",
+			"YUANBAO_ROUTE_ENV",
+		},
+		"next_actions": []string{
+			"配置 YUANBAO_TOKEN，或配置 YUANBAO_APP_ID 与 YUANBAO_APP_SECRET 以换取 sign-token",
+			"如 sign-token 响应不返回 bot_id，则额外配置 YUANBAO_BOT_ID",
+			"聊天侧可直接发送“状态”“待审批”“批准”“拒绝”等快捷回复，Gateway 会归一到现有命令内核",
 		},
 	}
 }

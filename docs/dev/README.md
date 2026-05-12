@@ -302,3 +302,4 @@
 - `177-summary-cli-gateway-slack-manifest-export.md`：新增 Slack gateway manifest 导出命令
 - `178-summary-cli-gateway-discord-manifest-export.md`：新增 Discord gateway 命令清单导出命令
 - `179-summary-cli-gateway-telegram-manifest-export.md`：新增 Telegram gateway 命令清单导出命令
+- `180-summary-cli-gateway-yuanbao-manifest-export.md`：新增 Yuanbao gateway 命令清单导出命令

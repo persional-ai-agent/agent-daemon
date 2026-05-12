@@ -80,12 +80,13 @@ go run ./cmd/agentd update uninstall
 	go run ./cmd/agentd gateway manifest -platform slack -command /agent -json
 	go run ./cmd/agentd gateway manifest -platform discord -json
 	go run ./cmd/agentd gateway manifest -platform telegram -json
+	go run ./cmd/agentd gateway manifest -platform yuanbao -json
 	go run ./cmd/agentd gateway start
 	go run ./cmd/agentd gateway stop
 	go run ./cmd/agentd gateway uninstall
 ```
 
-说明：Gateway 现在同时持有同一 `workdir` 单实例锁和基于平台凭证指纹的全局 `token lock`，避免不同工作区重复启动同一组网关消费者；聊天侧可用 `/status` 查看当前会话概况，用 `/pending` 查看最近待审批项，再用 `/approvals`、`/grant`、`/revoke`、`/approve`、`/deny` 处理审批闭环；Telegram 已补最小原生命令菜单、审批按钮与 manifest 导出，Discord 已补最小原生 slash 命令（含 `grant` / `revoke`）、审批按钮与命令清单导出，Slack 已补最小原生审批按钮、通用 slash 命令入口与 manifest 导出，Yuanbao 已补最小审批快捷回复（如“批准”/“拒绝”）。
+说明：Gateway 现在同时持有同一 `workdir` 单实例锁和基于平台凭证指纹的全局 `token lock`，避免不同工作区重复启动同一组网关消费者；聊天侧可用 `/status` 查看当前会话概况，用 `/pending` 查看最近待审批项，再用 `/approvals`、`/grant`、`/revoke`、`/approve`、`/deny` 处理审批闭环；Telegram 已补最小原生命令菜单、审批按钮与 manifest 导出，Discord 已补最小原生 slash 命令（含 `grant` / `revoke`）、审批按钮与命令清单导出，Slack 已补最小原生审批按钮、通用 slash 命令入口与 manifest 导出，Yuanbao 已补最小审批快捷回复与 manifest 导出（如“批准”/“拒绝”）。
 
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。
 
