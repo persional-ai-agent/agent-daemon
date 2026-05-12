@@ -143,7 +143,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "browser_snapshot", desc: "Browser snapshot (lightweight HTML->text)", params: browserSnapshotParams(), call: b.browserSnapshot})
 	r.Register(toolDef{name: "browser_back", desc: "Browser back (lightweight history stack)", params: browserBackParams(), call: b.browserBack})
 	r.Register(toolDef{name: "browser_click", desc: "Browser click (lightweight: follow <a href> by text match)", params: browserClickParams(), call: b.browserClick})
-	r.Register(toolDef{name: "browser_type", desc: "Browser type (lightweight: accepted but not persisted)", params: browserTypeParams(), call: b.browserType})
+	r.Register(toolDef{name: "browser_type", desc: "Browser type (lightweight: stored for best-effort form submit)", params: browserTypeParams(), call: b.browserType})
 	r.Register(toolDef{name: "browser_scroll", desc: "Browser scroll (lightweight: no-op)", params: browserScrollParams(), call: b.browserScroll})
 	r.Register(toolDef{name: "browser_press", desc: "Browser press (lightweight: no-op)", params: browserPressParams(), call: b.browserPress})
 	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>, supports limit)", params: browserGetImagesParams(), call: b.browserGetImages})
