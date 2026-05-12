@@ -485,10 +485,14 @@ func (b *BuiltinTools) browserCDPInfoCDP(ctx context.Context, args map[string]an
 	return out, nil
 }
 
-func (b *BuiltinTools) browserConsoleCDP(ctx context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserConsoleCDP(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	st, err := getCDPBrowser(ctx, tc.SessionID)
 	if err != nil {
 		return nil, err
+	}
+	limit := intArg(args, "limit", 200)
+	if limit <= 0 {
+		limit = 200
 	}
 	st.mu.Lock()
 	logs := st.logs
@@ -497,15 +501,19 @@ func (b *BuiltinTools) browserConsoleCDP(ctx context.Context, _ map[string]any, 
 	if logs == nil {
 		logs = []map[string]any{}
 	}
+	if len(logs) > limit {
+		logs = logs[len(logs)-limit:]
+	}
 	out := make([]any, 0, len(logs))
 	for _, l := range logs {
 		out = append(out, l)
 	}
 	return map[string]any{
-		"success": true,
-		"logs":    out,
-		"count":   len(out),
-		"note":    "CDP console: returns and clears buffered console/log/exception entries.",
+		"success":       true,
+		"logs":          out,
+		"count":         len(out),
+		"applied_limit": limit,
+		"note":          "CDP console: returns and clears buffered console/log/exception entries.",
 	}, nil
 }
 

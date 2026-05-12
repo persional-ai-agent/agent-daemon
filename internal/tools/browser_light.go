@@ -344,6 +344,10 @@ func (b *BuiltinTools) browserConsole(ctx context.Context, args map[string]any, 
 	if cdpEnabled() {
 		return b.browserConsoleCDP(ctx, args, tc)
 	}
+	limit := intArg(args, "limit", 200)
+	if limit <= 0 {
+		limit = 200
+	}
 	// No JS execution -> no console logs.
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
@@ -354,6 +358,8 @@ func (b *BuiltinTools) browserConsole(ctx context.Context, args map[string]any, 
 		"success": true,
 		"url":     p.URL,
 		"logs":    []any{},
+		"count":   0,
+		"applied_limit": limit,
 		"note":    "Lightweight browser: no JS execution, console logs are unavailable.",
 	}, nil
 }
