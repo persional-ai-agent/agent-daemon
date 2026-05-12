@@ -102,6 +102,32 @@ func (s *SlackAdapter) Connect(ctx context.Context) error {
 					ReplyToID: callback.Container.MessageTs,
 					IsCommand: true,
 				})
+			case socketmode.EventTypeSlashCommand:
+				cmd, ok := evt.Data.(slack.SlashCommand)
+				if !ok {
+					continue
+				}
+				s.sm.Ack(*evt.Request)
+				if s.handler == nil {
+					continue
+				}
+				text := renderSlackSlashCommand(cmd)
+				if strings.TrimSpace(text) == "" {
+					continue
+				}
+				chatType := "dm"
+				if strings.HasPrefix(cmd.ChannelID, "C") {
+					chatType = "group"
+				}
+				s.handler(ctx, gateway.MessageEvent{
+					Text:      text,
+					MessageID: cmd.TriggerID,
+					ChatID:    cmd.ChannelID,
+					ChatType:  chatType,
+					UserID:    cmd.UserID,
+					UserName:  cmd.UserName,
+					IsCommand: true,
+				})
 			}
 		}
 	}()
@@ -214,4 +240,19 @@ func approvalBlocks(meta map[string]any) []slack.Block {
 	return []slack.Block{
 		slack.NewActionBlock("approval_actions_"+approvalID, approve, deny),
 	}
+}
+
+func renderSlackSlashCommand(cmd slack.SlashCommand) string {
+	command := strings.TrimSpace(cmd.Command)
+	if command == "" {
+		return ""
+	}
+	text := strings.TrimSpace(cmd.Text)
+	if strings.HasPrefix(text, "/") {
+		return text
+	}
+	if text == "" {
+		return command
+	}
+	return command + " " + text
 }
