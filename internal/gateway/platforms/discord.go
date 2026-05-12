@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -59,6 +60,55 @@ func (d *DiscordAdapter) Connect(ctx context.Context) error {
 		}
 		d.handler(ctx, event)
 	})
+	d.session.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		if d.handler == nil || ic == nil || ic.Type != discordgo.InteractionMessageComponent || ic.Member == nil && ic.User == nil {
+			return
+		}
+		data := ic.MessageComponentData()
+		customID := strings.TrimSpace(data.CustomID)
+		if !strings.HasPrefix(customID, "/") {
+			return
+		}
+		if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		}); err != nil {
+			log.Printf("[gateway:discord] acknowledge interaction: %v", err)
+		}
+		userID := ""
+		userName := ""
+		if ic.Member != nil && ic.Member.User != nil {
+			userID = ic.Member.User.ID
+			userName = ic.Member.User.Username
+		} else if ic.User != nil {
+			userID = ic.User.ID
+			userName = ic.User.Username
+		}
+		chatType := "dm"
+		if strings.TrimSpace(ic.GuildID) != "" {
+			chatType = "group"
+		}
+		threadID := ""
+		if ic.Message != nil && ic.Message.Thread != nil {
+			threadID = ic.Message.Thread.ID
+		}
+		messageID := ""
+		replyToID := ""
+		if ic.Message != nil {
+			messageID = ic.Message.ID
+			replyToID = ic.Message.ID
+		}
+		d.handler(ctx, gateway.MessageEvent{
+			Text:      customID,
+			MessageID: messageID,
+			ChatID:    ic.ChannelID,
+			ChatType:  chatType,
+			UserID:    userID,
+			UserName:  userName,
+			ThreadID:  threadID,
+			ReplyToID: replyToID,
+			IsCommand: true,
+		})
+	})
 
 	if err := d.session.Open(); err != nil {
 		return fmt.Errorf("discord: connect: %w", err)
@@ -78,9 +128,16 @@ func (d *DiscordAdapter) Disconnect(_ context.Context) error {
 }
 
 func (d *DiscordAdapter) Send(_ context.Context, chatID, content, replyTo string) (gateway.SendResult, error) {
+	return d.SendText(context.Background(), chatID, content, replyTo, nil)
+}
+
+func (d *DiscordAdapter) SendText(_ context.Context, chatID, content, replyTo string, meta map[string]any) (gateway.SendResult, error) {
 	msg := &discordgo.MessageSend{
 		Content:   truncateDiscord(content, 2000),
 		Reference: &discordgo.MessageReference{MessageID: replyTo},
+	}
+	if components := approvalComponents(meta); len(components) > 0 {
+		msg.Components = components
 	}
 	if replyTo == "" {
 		msg.Reference = nil
@@ -137,4 +194,31 @@ func truncateDiscord(s string, limit int) string {
 		return s
 	}
 	return s[:limit-3] + "..."
+}
+
+func approvalComponents(meta map[string]any) []discordgo.MessageComponent {
+	if len(meta) == 0 {
+		return nil
+	}
+	approvalID, _ := meta["approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return nil
+	}
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "Approve",
+					Style:    discordgo.SuccessButton,
+					CustomID: "/approve " + approvalID,
+				},
+				discordgo.Button{
+					Label:    "Deny",
+					Style:    discordgo.DangerButton,
+					CustomID: "/deny " + approvalID,
+				},
+			},
+		},
+	}
 }
