@@ -1371,8 +1371,28 @@ func runUpdateBundle(args []string) {
 				fmt.Printf("%s %v files=%v\n", anyString(item["bundle_path"]), item["generated_at"], item["file_count"])
 			}
 		}
+	case "snapshots-prune":
+		fs := flag.NewFlagSet("update bundle snapshots-prune", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		keep := fs.Int("keep", 5, "number of newest manual snapshots to keep")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-prune -dest <dir> [-keep N] [-json]")
+		}
+		info, err := pruneSnapshotBundles(strings.TrimSpace(*dest), *keep)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("snapshot_dir=%s\n", info["snapshot_dir"])
+		fmt.Printf("kept=%v\n", info["kept"])
+		fmt.Printf("removed=%v\n", info["removed"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune]")
 	}
 }
 
@@ -1745,6 +1765,38 @@ func listSnapshotBundles(dest string, limit int) (map[string]any, error) {
 		"snapshot_dir": backupDir,
 		"count":        len(items),
 		"items":        items,
+	}, nil
+}
+
+func pruneSnapshotBundles(dest string, keep int) (map[string]any, error) {
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	matches, err := filepath.Glob(filepath.Join(backupDir, "*-manual-snapshot.tar.gz"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+	if keep < 0 {
+		keep = 0
+	}
+	removed := make([]string, 0)
+	if len(matches) > keep {
+		for _, bundlePath := range matches[:len(matches)-keep] {
+			manifestPath := strings.TrimSuffix(bundlePath, ".tar.gz") + ".json"
+			if err := os.Remove(bundlePath); err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+			if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+			removed = append(removed, bundlePath)
+		}
+	}
+	kept := minInt(keep, len(matches))
+	return map[string]any{
+		"snapshot_dir": backupDir,
+		"kept":         kept,
+		"removed":      len(removed),
+		"items":        removed,
 	}, nil
 }
 

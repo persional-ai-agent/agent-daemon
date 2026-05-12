@@ -323,3 +323,4 @@
 - `198-summary-cli-update-bundle-rollback-plan-command.md`：新增 `update bundle rollback-plan` 回滚预演命令
 - `199-summary-cli-update-bundle-snapshot-command.md`：新增 `update bundle snapshot` 目标快照命令
 - `200-summary-cli-update-bundle-snapshots-command.md`：新增 `update bundle snapshots` 快照列表命令
+- `201-summary-cli-update-bundle-snapshots-prune-command.md`：新增 `update bundle snapshots-prune` 快照清理命令
