@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
@@ -51,5 +52,13 @@ func TestSendMessageListAndSend(t *testing.T) {
 func TestHomeTargetEnvVarIncludesYuanbao(t *testing.T) {
 	if got := homeTargetEnvVar("yuanbao"); got != "YUANBAO_HOME_CHANNEL" {
 		t.Fatalf("homeTargetEnvVar(yuanbao)=%q, want %q", got, "YUANBAO_HOME_CHANNEL")
+	}
+}
+
+func TestSendMessageSchemaActionIsOptional(t *testing.T) {
+	schema := NewSendMessageTool().Schema()
+	required, _ := schema.Function.Parameters["required"].([]string)
+	if len(required) != 0 && !reflect.DeepEqual(required, []string{}) {
+		t.Fatalf("required=%v, want empty", required)
 	}
 }

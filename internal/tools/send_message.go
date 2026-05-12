@@ -57,7 +57,6 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 						"description": "Optional message id to reply to",
 					},
 				},
-				"required": []string{"action"},
 			},
 		},
 	}
