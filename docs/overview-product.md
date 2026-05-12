@@ -62,7 +62,7 @@
 | Skills | 已对齐核心能力 | 支持本地列表/查看/管理、条件过滤、预加载、同步与 GitHub 搜索 |
 | API 服务 | 已对齐核心能力 | HTTP、SSE、WebSocket、取消接口 |
 | Gateway | 部分对齐 | 支持 Telegram、Discord、Slack、Yuanbao；已补最小 `send_message` + Telegram/Discord/Slack 本地文件投递（`MEDIA:` / `media_path`）+ Yuanbao best-effort 媒体投递（COS 上传链路，依赖网络与凭证）+ 最小 pairing/slash command/队列中断/hooks 运维 + `gateway run/start/stop/restart/install/uninstall` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 `token lock` + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；未覆盖 Hermes 的完整平台矩阵、更多平台原生 slash UI 和更完整 token lock |
-| CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`bootstrap`、`version`、`update status/check/release/apply/install/uninstall`、gateway 与最小 `gateway setup/run/start/stop/restart/install/uninstall`；未实现 Hermes 全屏 TUI、完整安装器级 update 与更完整命令体系 |
+| CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`bootstrap`、`version`、`update status/check/release/apply/install/uninstall` 与最小 update 脚本安装面、gateway 与最小 `gateway setup/run/start/stop/restart/install/uninstall`；未实现 Hermes 全屏 TUI、完整安装器级 update 与更完整命令体系 |
 | 工具全集 | 部分对齐 | 已对齐 Hermes 文档中的 68 个内置工具“工具名/Toolsets 名称”（含 `discord`、`yb_*`、`process` 动作面等）；其中 browser/vision/image_generate 等仍存在能力级差距，但 browser 已支持可选 CDP 后端（配置 `BROWSER_CDP_URL`）以执行 JS/DOM |
 | 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
 | 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；暂无通用插件系统、ACP adapter、batch/RL/trajectory 链路 |

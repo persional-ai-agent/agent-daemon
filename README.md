@@ -92,6 +92,8 @@ go run ./cmd/agentd update uninstall
 
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。
 
+说明：`update install` 现在会在 `.agent-daemon/bin/` 下生成 `update-status.sh`、`update-check.sh`、`update-release.sh`、`update-apply.sh` 四个最小运维脚本。
+
 Anthropic 模式：
 
 ```bash

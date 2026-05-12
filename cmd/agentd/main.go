@@ -1054,8 +1054,8 @@ func updateInstallStatus(repo string) (map[string]any, error) {
 	if err := json.Unmarshal(manifestBytes, &manifest); err == nil {
 		info["manifest"] = manifest
 	}
-	scripts := make([]string, 0, 2)
-	for _, name := range []string{"update-check.sh", "update-apply.sh"} {
+	scripts := make([]string, 0, 4)
+	for _, name := range []string{"update-status.sh", "update-check.sh", "update-release.sh", "update-apply.sh"} {
 		target := filepath.Join(installDir, name)
 		if _, err := os.Stat(target); err == nil {
 			scripts = append(scripts, target)
@@ -1092,7 +1092,9 @@ func installUpdateScripts(repoPath string) (updateInstallInfo, error) {
 		name string
 		args string
 	}{
+		{name: "update-status.sh", args: "update status"},
 		{name: "update-check.sh", args: "update -fetch"},
+		{name: "update-release.sh", args: "update release"},
 		{name: "update-apply.sh", args: "update apply"},
 	}
 	scripts := make([]string, 0, len(scriptSpecs))
@@ -1132,7 +1134,7 @@ func uninstallUpdateScripts(repoPath string) (updateInstallInfo, error) {
 		return updateInstallInfo{}, err
 	}
 	removed := make([]string, 0, 3)
-	for _, name := range []string{"update-check.sh", "update-apply.sh"} {
+	for _, name := range []string{"update-status.sh", "update-check.sh", "update-release.sh", "update-apply.sh"} {
 		target := filepath.Join(updateInstallDir(repo), name)
 		if err := os.Remove(target); err == nil {
 			removed = append(removed, target)
