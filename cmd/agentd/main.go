@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -417,6 +418,63 @@ func compactSpoolFile(path string, maxLines int) (before int, after int, err err
 	}
 	after = len(outLines)
 	return before, after, nil
+}
+
+func verifySpoolFile(path string) (lines int, valid int, invalid int, invalidSamples []string, err error) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0, 0, nil, nil
+		}
+		return 0, 0, 0, nil, err
+	}
+	invalidSamples = make([]string, 0, 5)
+	for _, raw := range strings.Split(string(bs), "\n") {
+		ln := strings.TrimSpace(raw)
+		if ln == "" {
+			continue
+		}
+		lines++
+		var e hookSpoolEntry
+		if jerr := json.Unmarshal([]byte(ln), &e); jerr != nil {
+			invalid++
+			if len(invalidSamples) < 5 {
+				invalidSamples = append(invalidSamples, "json:"+truncateForSample(ln, 120))
+			}
+			continue
+		}
+		if strings.TrimSpace(e.Type) == "" || strings.TrimSpace(e.Body) == "" {
+			invalid++
+			if len(invalidSamples) < 5 {
+				invalidSamples = append(invalidSamples, "shape:"+truncateForSample(ln, 120))
+			}
+			continue
+		}
+		valid++
+	}
+	return lines, valid, invalid, invalidSamples, nil
+}
+
+func truncateForSample(s string, n int) string {
+	if n <= 0 || len(s) <= n {
+		return s
+	}
+	if n <= 3 {
+		return s[:n]
+	}
+	return s[:n-3] + "..."
+}
+
+func parseIntEnvWithDefault(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 func main() {
@@ -1097,10 +1155,100 @@ func runGatewayHooks(cfg config.Config, args []string) {
 		runGatewayHookSpool(cfg, args[1:])
 	case "ping":
 		runGatewayHookPing(cfg, args[1:])
+	case "doctor":
+		runGatewayHookDoctor(cfg, args[1:])
 	default:
 		printGatewayHooksUsage()
 		os.Exit(2)
 	}
+}
+
+func runGatewayHookDoctor(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway hooks doctor", flag.ExitOnError)
+	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+	path := fs.String("path", "", "base spool path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway hooks doctor [-workdir dir] [-path file]")
+	}
+	spoolPath := strings.TrimSpace(*path)
+	if spoolPath == "" {
+		spoolPath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+	}
+	hookURL := strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_URL"))
+	enabled := hookURL != ""
+	spoolEnabled := strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_SPOOL")), "true")
+	secret := strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_SECRET"))
+	verbose := strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_VERBOSE")), "true")
+	delivery := strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_DELIVERY")), "true")
+	timeout := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_TIMEOUT_SECONDS", 4)
+	retries := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_RETRIES", 2)
+	backoff := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_BACKOFF_MS", 250)
+	spoolReplay := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_SPOOL_REPLAY_SECONDS", 10)
+	spoolMaxLines := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_SPOOL_MAX_LINES", 2000)
+	spoolMaxBytes := parseIntEnvWithDefault("AGENT_GATEWAY_HOOK_SPOOL_MAX_BYTES", 5<<20)
+	issues := make([]map[string]any, 0, 8)
+	addIssue := func(level, key, detail string) {
+		issues = append(issues, map[string]any{"level": level, "key": key, "detail": detail})
+	}
+	if !enabled {
+		addIssue("warn", "AGENT_GATEWAY_HOOK_URL", "hooks disabled (url not set)")
+	}
+	if enabled && timeout <= 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_TIMEOUT_SECONDS", "must be > 0")
+	}
+	if enabled && retries < 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_RETRIES", "must be >= 0")
+	}
+	if enabled && backoff < 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_BACKOFF_MS", "must be >= 0")
+	}
+	if spoolEnabled && !enabled {
+		addIssue("warn", "AGENT_GATEWAY_HOOK_SPOOL", "spool enabled but hook url missing")
+	}
+	if spoolEnabled && spoolReplay <= 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_REPLAY_SECONDS", "must be > 0")
+	}
+	if spoolEnabled && spoolMaxLines <= 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_MAX_LINES", "must be > 0")
+	}
+	if spoolEnabled && spoolMaxBytes < 0 {
+		addIssue("error", "AGENT_GATEWAY_HOOK_SPOOL_MAX_BYTES", "must be >= 0")
+	}
+	if info, err := os.Stat(spoolPath); err == nil {
+		if info.Size() > int64(20<<20) {
+			addIssue("warn", "spool_size", "spool exceeds 20MB; consider replay/compact")
+		}
+	}
+	status := "ok"
+	for _, it := range issues {
+		if it["level"] == "error" {
+			status = "error"
+			break
+		}
+		if it["level"] == "warn" && status == "ok" {
+			status = "warn"
+		}
+	}
+	printJSON(map[string]any{
+		"status": status,
+		"env": map[string]any{
+			"hook_enabled":      enabled,
+			"hook_url_set":      enabled,
+			"has_secret":        secret != "",
+			"verbose":           verbose,
+			"delivery_events":   delivery,
+			"timeout_seconds":   timeout,
+			"retries":           retries,
+			"backoff_ms":        backoff,
+			"spool_enabled":     spoolEnabled,
+			"spool_path":        spoolPath,
+			"spool_replay_secs": spoolReplay,
+			"spool_max_lines":   spoolMaxLines,
+			"spool_max_bytes":   spoolMaxBytes,
+		},
+		"issues": issues,
+	})
 }
 
 func runGatewayHookPing(_ config.Config, args []string) {
@@ -1446,6 +1594,54 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			"max_lines":    *maxLines,
 			"files":        perFile,
 		})
+	case "verify":
+		fs := flag.NewFlagSet("gateway hooks spool verify", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path")
+		all := fs.Bool("all", false, "verify rotated spool files too")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool verify [-workdir dir] [-path file] [-all]")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{basePath}
+		if *all {
+			paths = listSpoolFiles(basePath)
+		}
+		files := make([]map[string]any, 0, len(paths))
+		totalLines, totalValid, totalInvalid := 0, 0, 0
+		for _, p := range paths {
+			lines, valid, invalid, samples, err := verifySpoolFile(p)
+			if err != nil {
+				files = append(files, map[string]any{"path": p, "error": err.Error()})
+				continue
+			}
+			totalLines += lines
+			totalValid += valid
+			totalInvalid += invalid
+			files = append(files, map[string]any{
+				"path":           p,
+				"lines":          lines,
+				"valid":          valid,
+				"invalid":        invalid,
+				"invalid_samples": samples,
+			})
+		}
+		status := "ok"
+		if totalInvalid > 0 {
+			status = "warn"
+		}
+		printJSON(map[string]any{
+			"status":        status,
+			"paths":         paths,
+			"lines_total":   totalLines,
+			"valid_total":   totalValid,
+			"invalid_total": totalInvalid,
+			"files":         files,
+		})
 	default:
 		printGatewayHookSpoolUsage()
 		os.Exit(2)
@@ -1572,6 +1768,7 @@ func printGatewayHooksUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool <subcommand>")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks ping [-url hook] [-secret s] [-timeout S]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks doctor [-workdir dir] [-path file]")
 	fmt.Fprintln(os.Stderr, "  spool subcommands: status, clear, replay")
 }
 
@@ -1585,6 +1782,7 @@ func printGatewayHookSpoolUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool export -out file [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool verify [-workdir dir] [-path file] [-all]")
 }
 
 type gatewayStatusInfo struct {

@@ -266,3 +266,5 @@
 - `141-summary-gateway-hook-spool-export-prune.md`：`spool export/prune` 支持按 type/id/time 过滤
 - `142-summary-gateway-hook-spool-compact.md`：`spool compact` 支持去重/排序/按 max-lines 裁剪
 - `143-summary-gateway-hook-spool-stats-command.md`：新增 `spool stats` 命令（支持 `-all` 聚合）
+- `144-summary-gateway-hook-spool-verify.md`：新增 `spool verify` 完整性校验命令（支持 `-all`）
+- `145-summary-gateway-hooks-doctor.md`：新增 `hooks doctor` 配置诊断命令
