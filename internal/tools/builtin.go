@@ -141,14 +141,14 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	// Browser automation (lightweight HTTP fetch + snapshot)
 	r.Register(toolDef{name: "browser_navigate", desc: "Browser navigate (lightweight HTTP fetch; no JS)", params: browserNavigateParams(), call: b.browserNavigate})
 	r.Register(toolDef{name: "browser_snapshot", desc: "Browser snapshot (lightweight HTML->text)", params: browserSnapshotParams(), call: b.browserSnapshot})
-	r.Register(toolDef{name: "browser_back", desc: "Browser back (lightweight history stack)", params: stubParams(), call: b.browserBack})
+	r.Register(toolDef{name: "browser_back", desc: "Browser back (lightweight history stack)", params: browserBackParams(), call: b.browserBack})
 	r.Register(toolDef{name: "browser_click", desc: "Browser click (lightweight: follow <a href> by text match)", params: browserClickParams(), call: b.browserClick})
 	r.Register(toolDef{name: "browser_type", desc: "Browser type (lightweight: accepted but not persisted)", params: browserTypeParams(), call: b.browserType})
-	r.Register(toolDef{name: "browser_scroll", desc: "Browser scroll (lightweight: no-op)", params: stubParams(), call: b.browserScroll})
+	r.Register(toolDef{name: "browser_scroll", desc: "Browser scroll (lightweight: no-op)", params: browserScrollParams(), call: b.browserScroll})
 	r.Register(toolDef{name: "browser_press", desc: "Browser press (lightweight: no-op)", params: browserPressParams(), call: b.browserPress})
-	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>)", params: stubParams(), call: b.browserGetImages})
+	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>)", params: browserGetImagesParams(), call: b.browserGetImages})
 	r.Register(toolDef{name: "browser_vision", desc: "Browser vision (lightweight: fetch <img src> metadata)", params: browserVisionParams(), call: b.browserVision})
-	r.Register(toolDef{name: "browser_console", desc: "Browser console output and JS errors (CDP-backed when configured)", params: stubParams(), call: b.browserConsole})
+	r.Register(toolDef{name: "browser_console", desc: "Browser console output and JS errors (CDP-backed when configured)", params: browserConsoleParams(), call: b.browserConsole})
 	r.Register(toolDef{name: "browser_cdp", desc: "Browser CDP (lightweight: page metadata)", params: browserCDPParams(), call: b.browserCDP})
 	r.Register(toolDef{name: "browser_dialog", desc: "Respond to a native JS dialog (CDP-backed when configured)", params: browserDialogParams(), call: b.browserDialog})
 
@@ -1967,6 +1967,9 @@ func textToSpeechParams() map[string]any {
 func browserNavigateParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
 }
+func browserBackParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
 func browserSnapshotParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"full": map[string]any{"type": "boolean", "description": "Compatibility hint; ignored by lightweight browser."},
@@ -1988,6 +1991,20 @@ func browserTypeParams() map[string]any {
 }
 func browserPressParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"key": map[string]any{"type": "string"}}}
+}
+func browserScrollParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"direction": map[string]any{"type": "string"},
+		"amount":    map[string]any{"type": "integer"},
+	}}
+}
+func browserGetImagesParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func browserConsoleParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"limit": map[string]any{"type": "integer"},
+	}}
 }
 func browserVisionParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}}}
