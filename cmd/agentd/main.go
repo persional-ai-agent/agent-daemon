@@ -1118,8 +1118,31 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("bundle=%s\n", info["bundle_path"])
 		fmt.Printf("dest=%s\n", info["dest"])
 		fmt.Printf("files=%v\n", info["files"])
+	case "apply":
+		fs := flag.NewFlagSet("update bundle apply", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		dest := fs.String("dest", "", "destination directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle apply -file <bundle.tar.gz|manifest.json> -dest <dir> [-json]")
+		}
+		info, err := applyUpdateBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%s\n", info["bundle_path"])
+		fmt.Printf("dest=%s\n", info["dest"])
+		fmt.Printf("applied_files=%v\n", info["applied_files"])
+		fmt.Printf("created_files=%v\n", info["created_files"])
+		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
+		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply]")
 	}
 }
 
@@ -1322,6 +1345,171 @@ func unpackUpdateBundle(path, dest string) (map[string]any, error) {
 		"dest":        dest,
 		"files":       files,
 	}, nil
+}
+
+func applyUpdateBundle(path, dest string) (map[string]any, error) {
+	info, err := inspectUpdateBundle(path)
+	if err != nil {
+		return nil, err
+	}
+	bundlePath := strings.TrimSpace(anyString(info["bundle_path"]))
+	if bundlePath == "" || !anyBool(info["bundle_exists"]) {
+		return nil, fmt.Errorf("bundle file missing: %s", path)
+	}
+	if entries, _ := info["archive_entries"].(int); entries == 0 {
+		return nil, fmt.Errorf("bundle archive has no entries: %s", bundlePath)
+	}
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return nil, err
+	}
+	relFiles, err := listBundleRegularEntries(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	backupFiles := make([]string, 0, len(relFiles))
+	for _, rel := range relFiles {
+		target := filepath.Join(dest, rel)
+		info, err := os.Stat(target)
+		if err == nil && info.Mode().IsRegular() {
+			backupFiles = append(backupFiles, rel)
+		}
+	}
+	backupPath := ""
+	backupManifestPath := ""
+	if len(backupFiles) > 0 {
+		label := strings.TrimSuffix(filepath.Base(bundlePath), ".tar.gz")
+		label = strings.TrimSuffix(label, ".tgz")
+		label = sanitizeBundleLabel(label)
+		backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+		if err := os.MkdirAll(backupDir, 0o755); err != nil {
+			return nil, err
+		}
+		backupPath = filepath.Join(backupDir, time.Now().Format("20060102-150405")+"-"+label+".tar.gz")
+		if err := writeRepoBundle(dest, backupPath, backupFiles); err != nil {
+			return nil, err
+		}
+		backupManifestPath = strings.TrimSuffix(backupPath, ".tar.gz") + ".json"
+		backupManifest := map[string]any{
+			"source_bundle_path": path,
+			"bundle_path":        backupPath,
+			"file_count":         len(backupFiles),
+			"generated_at":       time.Now().Format(time.RFC3339Nano),
+		}
+		manifestBytes, _ := json.MarshalIndent(backupManifest, "", "  ")
+		if err := os.WriteFile(backupManifestPath, manifestBytes, 0o644); err != nil {
+			return nil, err
+		}
+	}
+	f, err := os.Open(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	applied := 0
+	created := 0
+	overwritten := 0
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		target, err := safeBundleTarget(dest, header.Name)
+		if err != nil {
+			return nil, err
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return nil, err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return nil, err
+			}
+			_, statErr := os.Stat(target)
+			if statErr == nil {
+				overwritten++
+			} else if os.IsNotExist(statErr) {
+				created++
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(header.Mode))
+			if err != nil {
+				return nil, err
+			}
+			if _, err := io.Copy(out, tr); err != nil {
+				out.Close()
+				return nil, err
+			}
+			if err := out.Close(); err != nil {
+				return nil, err
+			}
+			applied++
+		}
+	}
+	return map[string]any{
+		"bundle_path":          bundlePath,
+		"dest":                 dest,
+		"applied_files":        applied,
+		"created_files":        created,
+		"overwritten_files":    overwritten,
+		"backup_files":         len(backupFiles),
+		"backup_bundle_path":   backupPath,
+		"backup_manifest_path": backupManifestPath,
+	}, nil
+}
+
+func listBundleRegularEntries(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	files := make([]string, 0, 64)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			return files, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch header.Typeflag {
+		case tar.TypeReg, tar.TypeRegA:
+			target, err := safeBundleTarget(".", header.Name)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, filepath.Clean(target))
+		}
+	}
+}
+
+func safeBundleTarget(dest, name string) (string, error) {
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || strings.HasPrefix(cleanName, "..") {
+		return "", fmt.Errorf("unsafe bundle entry: %s", name)
+	}
+	target := filepath.Join(dest, cleanName)
+	rel, err := filepath.Rel(dest, target)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("bundle entry escapes destination: %s", name)
+	}
+	return target, nil
 }
 
 func anyBool(value any) bool {
