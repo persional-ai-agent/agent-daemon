@@ -11,6 +11,10 @@
      - `list_guilds`
      - `server_info`
      - `list_channels`
+     - `fetch_channel`
+     - `fetch_messages`
+     - `send_message`
+     - `react`
 
 ## 配置与环境变量
 
@@ -32,4 +36,3 @@ Discord：
 - `internal/tools/discord_tool.go`
 - `internal/tools/builtin.go`（注册 `discord` 工具）
 - `internal/tools/toolsets.go`（新增 `discord` toolset）
-

@@ -443,6 +443,63 @@ func EncodeMsgContentFace(index uint32, data string) []byte {
 	return buf
 }
 
+type ImageInfo struct {
+	Type   uint32
+	Size   uint32
+	Width  uint32
+	Height uint32
+	URL    string
+}
+
+func EncodeMsgContentImage(uuid string, imageFormat uint32, infos []ImageInfo) []byte {
+	buf := make([]byte, 0, 256)
+	if uuid != "" {
+		buf = append(buf, encodeField(2, wireLen, encodeString(uuid))...)
+	}
+	if imageFormat != 0 {
+		buf = append(buf, encodeField(3, wireVarint, encodeVarint(uint64(imageFormat)))...)
+	}
+	for _, info := range infos {
+		imgBuf := make([]byte, 0, 64)
+		if info.Type != 0 {
+			imgBuf = append(imgBuf, encodeField(1, wireVarint, encodeVarint(uint64(info.Type)))...)
+		}
+		if info.Size != 0 {
+			imgBuf = append(imgBuf, encodeField(2, wireVarint, encodeVarint(uint64(info.Size)))...)
+		}
+		if info.Width != 0 {
+			imgBuf = append(imgBuf, encodeField(3, wireVarint, encodeVarint(uint64(info.Width)))...)
+		}
+		if info.Height != 0 {
+			imgBuf = append(imgBuf, encodeField(4, wireVarint, encodeVarint(uint64(info.Height)))...)
+		}
+		if info.URL != "" {
+			imgBuf = append(imgBuf, encodeField(5, wireLen, encodeString(info.URL))...)
+		}
+		if len(imgBuf) > 0 {
+			buf = append(buf, encodeField(8, wireLen, encodeMessage(imgBuf))...)
+		}
+	}
+	return buf
+}
+
+func EncodeMsgContentFile(uuid, fileName string, fileSize uint32, url string) []byte {
+	buf := make([]byte, 0, 256)
+	if uuid != "" {
+		buf = append(buf, encodeField(2, wireLen, encodeString(uuid))...)
+	}
+	if url != "" {
+		buf = append(buf, encodeField(10, wireLen, encodeString(url))...)
+	}
+	if fileSize != 0 {
+		buf = append(buf, encodeField(11, wireVarint, encodeVarint(uint64(fileSize)))...)
+	}
+	if fileName != "" {
+		buf = append(buf, encodeField(12, wireLen, encodeString(fileName))...)
+	}
+	return buf
+}
+
 func EncodeMsgBodyElement(msgType string, msgContent []byte) []byte {
 	buf := make([]byte, 0, 64+len(msgType)+len(msgContent))
 	if msgType != "" {

@@ -33,3 +33,8 @@ type Adapter interface {
 	OnMessage(ctx context.Context, handler MessageHandler)
 }
 
+// MediaSender is an optional extension for gateway adapters.
+// If implemented, tools like send_message can deliver local files (e.g. TTS audio).
+type MediaSender interface {
+	SendMedia(ctx context.Context, chatID, path, caption, replyTo string) (SendResult, error)
+}

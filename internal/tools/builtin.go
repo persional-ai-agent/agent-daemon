@@ -148,9 +148,9 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "browser_press", desc: "Browser press (lightweight: no-op)", params: browserPressParams(), call: b.browserPress})
 	r.Register(toolDef{name: "browser_get_images", desc: "Browser get images (lightweight: parse <img src>)", params: stubParams(), call: b.browserGetImages})
 	r.Register(toolDef{name: "browser_vision", desc: "Browser vision (lightweight: fetch <img src> metadata)", params: browserVisionParams(), call: b.browserVision})
-	r.Register(toolDef{name: "browser_console", desc: "Browser console (lightweight: empty logs)", params: stubParams(), call: b.browserConsole})
+	r.Register(toolDef{name: "browser_console", desc: "Browser console output and JS errors (CDP-backed when configured)", params: stubParams(), call: b.browserConsole})
 	r.Register(toolDef{name: "browser_cdp", desc: "Browser CDP (lightweight: page metadata)", params: browserCDPParams(), call: b.browserCDP})
-	r.Register(toolDef{name: "browser_dialog", desc: "Browser dialog (lightweight: none)", params: stubParams(), call: b.browserDialog})
+	r.Register(toolDef{name: "browser_dialog", desc: "Respond to a native JS dialog (CDP-backed when configured)", params: browserDialogParams(), call: b.browserDialog})
 
 	r.Register(toolDef{name: "todo", desc: "Maintain per-session todo list", params: todoParams(), call: b.todo})
 	r.Register(toolDef{name: "memory", desc: "Manage persistent MEMORY.md/USER.md", params: memoryParams(), call: b.memory})
@@ -1914,25 +1914,77 @@ func stubParams() map[string]any {
 }
 
 func visionAnalyzeParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path":     map[string]any{"type": "string", "description": "Local image file path (within workdir)."},
+			"question": map[string]any{"type": "string", "description": "Optional specific question about the image."},
+		},
+		"required": []string{"path"},
+	}
 }
 func imageGenerateParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"prompt": map[string]any{"type": "string"}, "output_path": map[string]any{"type": "string"}}, "required": []string{"prompt"}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"prompt":      map[string]any{"type": "string"},
+			"output_path": map[string]any{"type": "string"},
+			"size": map[string]any{
+				"type":        "string",
+				"description": "Optional image size for real backends (e.g. 512x512, 1024x1024).",
+			},
+			"model": map[string]any{
+				"type":        "string",
+				"description": "Optional image model override for real backends.",
+			},
+			"caption":     map[string]any{"type": "string", "description": "Optional caption used when deliver=true."},
+			"deliver": map[string]any{
+				"type":        "boolean",
+				"description": "If true and running under a gateway context, deliver the generated image to the current chat (requires adapter media support).",
+			},
+		},
+		"required": []string{"prompt"},
+	}
 }
 func textToSpeechParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}, "output_path": map[string]any{"type": "string"}}, "required": []string{"text"}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"text":        map[string]any{"type": "string"},
+			"output_path": map[string]any{"type": "string"},
+			"format": map[string]any{
+				"type":        "string",
+				"description": "Audio format hint for real backends (mp3,wav,opus,aac).",
+			},
+			"deliver": map[string]any{
+				"type":        "boolean",
+				"description": "If true and running under a gateway context, immediately deliver the generated file to the current chat (requires adapter media support).",
+			},
+		},
+		"required": []string{"text"},
+	}
 }
 func browserNavigateParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
 }
 func browserSnapshotParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"full": map[string]any{"type": "boolean", "description": "Compatibility hint; ignored by lightweight browser."},
+	}}
 }
 func browserClickParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}, "href_contains": map[string]any{"type": "string"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"ref":          map[string]any{"type": "string", "description": "Ref ID like '@e5' from browser_snapshot."},
+		"text":         map[string]any{"type": "string"},
+		"href_contains": map[string]any{"type": "string"},
+	}}
 }
 func browserTypeParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"field": map[string]any{"type": "string"}, "text": map[string]any{"type": "string"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"ref":   map[string]any{"type": "string", "description": "Ref ID like '@e3' for an input field from browser_snapshot."},
+		"field": map[string]any{"type": "string"},
+		"text":  map[string]any{"type": "string"},
+	}}
 }
 func browserPressParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"key": map[string]any{"type": "string"}}}
@@ -1942,6 +1994,22 @@ func browserVisionParams() map[string]any {
 }
 func browserCDPParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"include_html": map[string]any{"type": "boolean"}}}
+}
+func browserDialogParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"description": "Dialog action (accept|dismiss). If omitted, returns current pending dialog (if any).",
+				"enum":        []string{"accept", "dismiss"},
+			},
+			"prompt_text": map[string]any{
+				"type":        "string",
+				"description": "Optional text for prompt dialogs (action=accept).",
+			},
+		},
+	}
 }
 func mixtureOfAgentsParams() map[string]any {
 	return map[string]any{

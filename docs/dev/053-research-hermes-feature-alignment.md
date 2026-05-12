@@ -31,7 +31,7 @@
 
 - TUI 与完整 CLI 命令体系：Hermes 有全屏 TUI、slash commands、模型/工具/配置/setup/doctor/update 等命令；当前项目只有 `chat`、`serve`、`tools`。
 - Provider 生态：Hermes 通过插件覆盖 OpenRouter、Nous、Gemini、DeepSeek、Kimi、MiniMax、HuggingFace、Copilot、Bedrock、自定义 provider 等；当前项目只内置 OpenAI、Anthropic、Codex 三类。
-- 工具全集：Hermes 文档列出 68 个内置工具和 52 个 toolsets；当前项目内置约 17 个工具，缺 browser、browser-cdp、code execution、cronjob、vision、tts、messaging、Home Assistant、Feishu、Spotify、Yuanbao、RL 等。
+- 工具全集：Hermes 文档列出 68 个内置工具和 52 个 toolsets；当前项目已对齐 68 工具名与 toolsets 名称（另包含额外工具），但 browser/vision/tts 等仍以轻量实现/占位为主，与 Hermes “能力级”实现仍有差距。
 - 终端运行环境：Hermes 支持 local、Docker、SSH、Singularity、Modal、Daytona、Vercel Sandbox；当前项目只实现本地 Linux 执行。
 - Gateway 完整能力：Hermes 有 20 个左右平台、DM pairing、slash command、运行中断/队列、delivery、hooks、token lock、跨平台发送等；当前项目是 Telegram/Discord/Slack 的最小消息入口。
 - 插件系统：Hermes 支持工具、模型 provider、memory provider、context engine、dashboard 等插件；当前项目无通用插件加载框架。

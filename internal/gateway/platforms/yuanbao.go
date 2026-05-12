@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,84 @@ func (a *YuanbaoAdapter) Send(ctx context.Context, chatID, content, _ string) (p
 		return platform.SendResult{Success: true, MessageID: ""}, nil
 	}
 	_, err := c.SendC2C(ctx, id, content)
+	if err != nil {
+		return platform.SendResult{Success: false, Error: err.Error()}, nil
+	}
+	return platform.SendResult{Success: true, MessageID: ""}, nil
+}
+
+func (a *YuanbaoAdapter) SendMedia(ctx context.Context, chatID, path, caption, replyTo string) (platform.SendResult, error) {
+	a.clientMu.Lock()
+	c := a.client
+	cfg := a.cfg
+	a.clientMu.Unlock()
+	if c == nil {
+		return platform.SendResult{Success: false, Error: "yuanbao adapter not connected"}, nil
+	}
+
+	kind, id := parseYuanbaoChatID(chatID)
+	if id == "" {
+		return platform.SendResult{Success: false, Error: "chat_id required"}, nil
+	}
+	filename := filepath.Base(strings.TrimSpace(path))
+	if filename == "" {
+		filename = "file"
+	}
+	info, err := yuanbao.GetUploadInfo(ctx, cfg, filename, "")
+	if err != nil {
+		return platform.SendResult{Success: false, Error: err.Error()}, nil
+	}
+	up, err := yuanbao.UploadToCOS(ctx, info, path)
+	if err != nil {
+		return platform.SendResult{Success: false, Error: err.Error()}, nil
+	}
+
+	// Best-effort: treat images as TIMImageElem, otherwise TIMFileElem.
+	isImage := strings.HasPrefix(strings.ToLower(up.MimeType), "image/")
+	if kind == "group" {
+		if strings.TrimSpace(caption) != "" {
+			// Send caption as a separate text message before the media (Yuanbao media elems may not support captions).
+			_, _ = c.SendGroupText(ctx, id, caption, replyTo)
+		}
+		if isImage {
+			imgFmt := yuanbao.ImageFormatFromMime(up.MimeType)
+			_, err := c.SendGroupImage(ctx, id, replyTo, up.UUID, imgFmt, yuanbao.ImageInfo{
+				Type:   1,
+				Size:   uint32(up.Size),
+				Width:  uint32(up.Width),
+				Height: uint32(up.Height),
+				URL:    up.URL,
+			})
+			if err != nil {
+				return platform.SendResult{Success: false, Error: err.Error()}, nil
+			}
+			return platform.SendResult{Success: true, MessageID: ""}, nil
+		}
+		_, err := c.SendGroupFile(ctx, id, replyTo, up.UUID, up.FileName, uint32(up.Size), up.URL)
+		if err != nil {
+			return platform.SendResult{Success: false, Error: err.Error()}, nil
+		}
+		return platform.SendResult{Success: true, MessageID: ""}, nil
+	}
+
+	if strings.TrimSpace(caption) != "" {
+		_, _ = c.SendC2C(ctx, id, caption)
+	}
+	if isImage {
+		imgFmt := yuanbao.ImageFormatFromMime(up.MimeType)
+		_, err := c.SendC2CImage(ctx, id, up.UUID, imgFmt, yuanbao.ImageInfo{
+			Type:   1,
+			Size:   uint32(up.Size),
+			Width:  uint32(up.Width),
+			Height: uint32(up.Height),
+			URL:    up.URL,
+		})
+		if err != nil {
+			return platform.SendResult{Success: false, Error: err.Error()}, nil
+		}
+		return platform.SendResult{Success: true, MessageID: ""}, nil
+	}
+	_, err = c.SendC2CFile(ctx, id, up.UUID, up.FileName, uint32(up.Size), up.URL)
 	if err != nil {
 		return platform.SendResult{Success: false, Error: err.Error()}, nil
 	}

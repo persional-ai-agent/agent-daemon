@@ -3,6 +3,8 @@ package platforms
 import (
 	"context"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/slack-go/slack"
@@ -102,6 +104,36 @@ func (s *SlackAdapter) Send(_ context.Context, chatID, content, replyTo string) 
 		return gateway.SendResult{Success: false, Error: err.Error()}, err
 	}
 	return gateway.SendResult{Success: true, MessageID: ts}, nil
+}
+
+func (s *SlackAdapter) SendMedia(_ context.Context, chatID, path, caption, replyTo string) (gateway.SendResult, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+
+	params := slack.UploadFileParameters{
+		File:           path,
+		Filename:       filepath.Base(path),
+		FileSize:       int(info.Size()),
+		Title:          "",
+		InitialComment: truncateSlack(caption),
+		Channel:        chatID,
+		ThreadTimestamp: func() string {
+			if strings.TrimSpace(replyTo) == "" {
+				return ""
+			}
+			return strings.TrimSpace(replyTo)
+		}(),
+	}
+	file, err := s.client.UploadFile(params)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+	if file == nil {
+		return gateway.SendResult{Success: false, Error: "slack: upload returned nil file"}, nil
+	}
+	return gateway.SendResult{Success: true, MessageID: file.ID}, nil
 }
 
 func (s *SlackAdapter) EditMessage(_ context.Context, chatID, messageID, content string) error {

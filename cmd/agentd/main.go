@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -30,6 +34,390 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/store"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
+
+type hookSpoolEntry struct {
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"created_at"`
+}
+
+func signHook(secret, ts string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(ts))
+	_, _ = mac.Write([]byte("."))
+	_, _ = mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func replaySpoolOnce(spoolPath, hookURL, secret string, timeoutSeconds, limit int, typeFilter, idFilter string) (sent int, remaining int, err error) {
+	bs, err := os.ReadFile(spoolPath)
+	if err != nil {
+		return 0, 0, err
+	}
+	lines := strings.Split(string(bs), "\n")
+	if len(lines) == 0 {
+		return 0, 0, nil
+	}
+	client := &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second}
+	keep := make([]string, 0, len(lines))
+	seen := map[string]bool{}
+	for _, ln := range lines {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		var e hookSpoolEntry
+		if err := json.Unmarshal([]byte(ln), &e); err != nil || strings.TrimSpace(e.Body) == "" {
+			continue
+		}
+		if strings.TrimSpace(typeFilter) != "" && strings.TrimSpace(e.Type) != strings.TrimSpace(typeFilter) {
+			keep = append(keep, ln)
+			continue
+		}
+		if strings.TrimSpace(idFilter) != "" && strings.TrimSpace(e.ID) != strings.TrimSpace(idFilter) {
+			keep = append(keep, ln)
+			continue
+		}
+		if strings.TrimSpace(e.ID) != "" {
+			if seen[e.ID] {
+				continue
+			}
+			seen[e.ID] = true
+		}
+		if sent >= limit {
+			keep = append(keep, ln)
+			continue
+		}
+		bodyBytes := []byte(e.Body)
+		reqCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+		ts := fmt.Sprintf("%d", time.Now().Unix())
+		req, rerr := http.NewRequestWithContext(reqCtx, http.MethodPost, hookURL, bytes.NewReader(bodyBytes))
+		if rerr != nil {
+			cancel()
+			keep = append(keep, ln)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Agent-Event", strings.TrimSpace(e.Type))
+		req.Header.Set("X-Agent-Timestamp", ts)
+		if strings.TrimSpace(e.ID) != "" {
+			req.Header.Set("X-Agent-Event-Id", strings.TrimSpace(e.ID))
+		}
+		if strings.TrimSpace(secret) != "" {
+			req.Header.Set("X-Agent-Signature", signHook(secret, ts, bodyBytes))
+		}
+		resp, derr := client.Do(req)
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		cancel()
+		if derr == nil && resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			sent++
+			continue
+		}
+		keep = append(keep, ln)
+	}
+	out := strings.Join(keep, "\n")
+	if len(keep) > 0 && !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	if werr := os.WriteFile(spoolPath, []byte(out), 0o644); werr != nil {
+		return sent, len(keep), werr
+	}
+	return sent, len(keep), nil
+}
+
+func listSpoolFiles(basePath string) []string {
+	basePath = strings.TrimSpace(basePath)
+	if basePath == "" {
+		return nil
+	}
+	dir := filepath.Dir(basePath)
+	base := filepath.Base(basePath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		// If directory doesn't exist, still include base path.
+		return []string{basePath}
+	}
+	paths := make([]string, 0, 8)
+	// Include rotated files first (oldest first), then base file last.
+	prefix := base + "."
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if name == base {
+			continue
+		}
+		if strings.HasPrefix(name, prefix) {
+			paths = append(paths, filepath.Join(dir, name))
+		}
+	}
+	sort.Strings(paths)
+	paths = append(paths, basePath)
+	return paths
+}
+
+func spoolStats(paths []string) map[string]any {
+	type fileStat struct {
+		Path      string            `json:"path"`
+		Exists    bool              `json:"exists"`
+		SizeBytes int64             `json:"size_bytes"`
+		Count     int               `json:"count"`
+		ModTime   string            `json:"mod_time,omitempty"`
+		Types     map[string]int    `json:"types,omitempty"`
+		OldestAt  string            `json:"oldest_at,omitempty"`
+		Error     string            `json:"error,omitempty"`
+	}
+	files := make([]fileStat, 0, len(paths))
+	totalCount := 0
+	totalSize := int64(0)
+	totalTypes := map[string]int{}
+	var oldest time.Time
+	for _, path := range paths {
+		st := fileStat{Path: path, Types: map[string]int{}}
+		info, err := os.Stat(path)
+		if err != nil {
+			st.Exists = false
+			st.Error = err.Error()
+			files = append(files, st)
+			continue
+		}
+		st.Exists = true
+		st.SizeBytes = info.Size()
+		st.ModTime = info.ModTime().Format(time.RFC3339Nano)
+		totalSize += info.Size()
+		bs, err := os.ReadFile(path)
+		if err != nil {
+			st.Error = err.Error()
+			files = append(files, st)
+			continue
+		}
+		for _, ln := range strings.Split(string(bs), "\n") {
+			ln = strings.TrimSpace(ln)
+			if ln == "" {
+				continue
+			}
+			st.Count++
+			totalCount++
+			var e hookSpoolEntry
+			if err := json.Unmarshal([]byte(ln), &e); err == nil {
+				tp := strings.TrimSpace(e.Type)
+				if tp == "" {
+					tp = "(unknown)"
+				}
+				st.Types[tp]++
+				totalTypes[tp]++
+				if strings.TrimSpace(e.CreatedAt) != "" {
+					if t, err := time.Parse(time.RFC3339Nano, e.CreatedAt); err == nil {
+						if oldest.IsZero() || t.Before(oldest) {
+							oldest = t
+						}
+						if st.OldestAt == "" {
+							st.OldestAt = t.Format(time.RFC3339Nano)
+						} else if cur, err := time.Parse(time.RFC3339Nano, st.OldestAt); err == nil && t.Before(cur) {
+							st.OldestAt = t.Format(time.RFC3339Nano)
+						}
+					}
+				}
+			}
+		}
+		files = append(files, st)
+	}
+	out := map[string]any{
+		"files":       files,
+		"file_count":  len(files),
+		"total_count": totalCount,
+		"total_size_bytes": totalSize,
+		"types":       totalTypes,
+	}
+	if !oldest.IsZero() {
+		out["oldest_at"] = oldest.Format(time.RFC3339Nano)
+		out["oldest_age_seconds"] = int(time.Since(oldest).Seconds())
+	}
+	return out
+}
+
+func parseCutoff(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("invalid before timestamp: %q (expected RFC3339/RFC3339Nano)", s)
+}
+
+func matchesSpoolFilter(e hookSpoolEntry, typeFilter, idFilter string, cutoff time.Time) bool {
+	if strings.TrimSpace(typeFilter) != "" && strings.TrimSpace(e.Type) != strings.TrimSpace(typeFilter) {
+		return false
+	}
+	if strings.TrimSpace(idFilter) != "" && strings.TrimSpace(e.ID) != strings.TrimSpace(idFilter) {
+		return false
+	}
+	if !cutoff.IsZero() {
+		if strings.TrimSpace(e.CreatedAt) == "" {
+			return false
+		}
+		t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(e.CreatedAt))
+		if err != nil {
+			if t2, err2 := time.Parse(time.RFC3339, strings.TrimSpace(e.CreatedAt)); err2 == nil {
+				t = t2
+			} else {
+				return false
+			}
+		}
+		if !t.Before(cutoff) {
+			return false
+		}
+	}
+	return true
+}
+
+func collectSpoolLines(paths []string, typeFilter, idFilter string, cutoff time.Time) (lines []string, matched int, err error) {
+	lines = make([]string, 0, 128)
+	for _, path := range paths {
+		bs, rerr := os.ReadFile(path)
+		if rerr != nil {
+			if os.IsNotExist(rerr) {
+				continue
+			}
+			return nil, matched, rerr
+		}
+		for _, ln := range strings.Split(string(bs), "\n") {
+			ln = strings.TrimSpace(ln)
+			if ln == "" {
+				continue
+			}
+			var e hookSpoolEntry
+			if jerr := json.Unmarshal([]byte(ln), &e); jerr != nil {
+				continue
+			}
+			if matchesSpoolFilter(e, typeFilter, idFilter, cutoff) {
+				lines = append(lines, ln)
+				matched++
+			}
+		}
+	}
+	return lines, matched, nil
+}
+
+func pruneSpoolFile(path, typeFilter, idFilter string, cutoff time.Time) (removed int, remaining int, err error) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	keep := make([]string, 0, 64)
+	for _, ln := range strings.Split(string(bs), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		var e hookSpoolEntry
+		if jerr := json.Unmarshal([]byte(ln), &e); jerr != nil {
+			// Keep malformed lines to avoid accidental data loss.
+			keep = append(keep, ln)
+			continue
+		}
+		if matchesSpoolFilter(e, typeFilter, idFilter, cutoff) {
+			removed++
+			continue
+		}
+		keep = append(keep, ln)
+	}
+	out := strings.Join(keep, "\n")
+	if len(keep) > 0 && !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	if werr := os.WriteFile(path, []byte(out), 0o644); werr != nil {
+		return removed, len(keep), werr
+	}
+	return removed, len(keep), nil
+}
+
+func compactSpoolFile(path string, maxLines int) (before int, after int, err error) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	lines := strings.Split(string(bs), "\n")
+	type item struct {
+		line string
+		ent  hookSpoolEntry
+		ts   time.Time
+	}
+	items := make([]item, 0, len(lines))
+	seen := map[string]bool{}
+	for _, ln := range lines {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		before++
+		var e hookSpoolEntry
+		if err := json.Unmarshal([]byte(ln), &e); err != nil {
+			// Drop malformed lines during compact.
+			continue
+		}
+		id := strings.TrimSpace(e.ID)
+		if id != "" {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+		}
+		t := time.Time{}
+		if strings.TrimSpace(e.CreatedAt) != "" {
+			if tt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(e.CreatedAt)); err == nil {
+				t = tt
+			} else if tt, err := time.Parse(time.RFC3339, strings.TrimSpace(e.CreatedAt)); err == nil {
+				t = tt
+			}
+		}
+		items = append(items, item{line: ln, ent: e, ts: t})
+	}
+	// Oldest first, so truncating to newest is easy.
+	sort.Slice(items, func(i, j int) bool {
+		ti, tj := items[i].ts, items[j].ts
+		if ti.IsZero() && tj.IsZero() {
+			return items[i].line < items[j].line
+		}
+		if ti.IsZero() {
+			return true
+		}
+		if tj.IsZero() {
+			return false
+		}
+		return ti.Before(tj)
+	})
+	if maxLines > 0 && len(items) > maxLines {
+		items = items[len(items)-maxLines:]
+	}
+	outLines := make([]string, 0, len(items))
+	for _, it := range items {
+		outLines = append(outLines, it.line)
+	}
+	out := strings.Join(outLines, "\n")
+	if len(outLines) > 0 && !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+		return before, 0, err
+	}
+	after = len(outLines)
+	return before, after, nil
+}
 
 func main() {
 	cfg := config.Load()
@@ -689,8 +1077,465 @@ func runGateway(cfg config.Config, args []string) {
 			log.Fatal(err)
 		}
 		fmt.Printf("disabled gateway in %s\n", config.ConfigFilePath(path))
+	case "pairs":
+		runGatewayPairs(cfg, args[1:])
+	case "hooks":
+		runGatewayHooks(cfg, args[1:])
 	default:
 		printGatewayUsage()
+		os.Exit(2)
+	}
+}
+
+func runGatewayHooks(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printGatewayHooksUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "spool":
+		runGatewayHookSpool(cfg, args[1:])
+	case "ping":
+		runGatewayHookPing(cfg, args[1:])
+	default:
+		printGatewayHooksUsage()
+		os.Exit(2)
+	}
+}
+
+func runGatewayHookPing(_ config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway hooks ping", flag.ExitOnError)
+	urlFlag := fs.String("url", "", "hook URL (defaults to env AGENT_GATEWAY_HOOK_URL)")
+	secret := fs.String("secret", "", "optional secret for signature (defaults to env AGENT_GATEWAY_HOOK_SECRET)")
+	timeoutSeconds := fs.Int("timeout", 4, "timeout seconds")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway hooks ping [-url hook] [-secret s] [-timeout S]")
+	}
+	hookURL := strings.TrimSpace(*urlFlag)
+	if hookURL == "" {
+		hookURL = strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_URL"))
+	}
+	if hookURL == "" {
+		log.Fatal("hook url required (set env AGENT_GATEWAY_HOOK_URL or pass -url)")
+	}
+	hookSecret := strings.TrimSpace(*secret)
+	if hookSecret == "" {
+		hookSecret = strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_SECRET"))
+	}
+	if *timeoutSeconds <= 0 {
+		*timeoutSeconds = 4
+	}
+	env := map[string]any{"hook_url": hookURL, "has_secret": hookSecret != "", "timeout_seconds": *timeoutSeconds}
+	payload := map[string]any{
+		"id":   uuid.NewString(),
+		"type": "gateway.ping",
+		"at":   time.Now().Format(time.RFC3339Nano),
+		"data": map[string]any{"ok": true},
+	}
+	bs, _ := json.Marshal(payload)
+	client := &http.Client{Timeout: time.Duration(*timeoutSeconds) * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSeconds)*time.Second)
+	defer cancel()
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hookURL, bytes.NewReader(bs))
+	if err != nil {
+		printJSON(map[string]any{"success": false, "error": err.Error(), "env": env})
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-Event", "gateway.ping")
+	req.Header.Set("X-Agent-Event-Id", payload["id"].(string))
+	req.Header.Set("X-Agent-Timestamp", ts)
+	if hookSecret != "" {
+		req.Header.Set("X-Agent-Signature", signHook(hookSecret, ts, bs))
+	}
+	resp, err := client.Do(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		printJSON(map[string]any{"success": false, "error": err.Error(), "env": env})
+		return
+	}
+	printJSON(map[string]any{"success": resp.StatusCode >= 200 && resp.StatusCode < 300, "status": resp.StatusCode, "env": env})
+}
+
+func runGatewayHookSpool(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printGatewayHookSpoolUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("gateway hooks spool list", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path (default <workdir>/.agent-daemon/gateway_hooks_spool.jsonl)")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool list [-workdir dir] [-path file]")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		files := listSpoolFiles(basePath)
+		printJSON(map[string]any{"base": basePath, "files": files, "count": len(files)})
+	case "status":
+		fs := flag.NewFlagSet("gateway hooks spool status", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "override spool path")
+		all := fs.Bool("all", false, "aggregate status across base + rotated spool files")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
+		}
+		spoolPath := strings.TrimSpace(*path)
+		if spoolPath == "" {
+			spoolPath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{spoolPath}
+		if *all {
+			paths = listSpoolFiles(spoolPath)
+		}
+		stats := spoolStats(paths)
+		printJSON(stats)
+	case "stats":
+		fs := flag.NewFlagSet("gateway hooks spool stats", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path")
+		all := fs.Bool("all", false, "aggregate across base + rotated files")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool stats [-workdir dir] [-path file] [-all]")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{basePath}
+		if *all {
+			paths = listSpoolFiles(basePath)
+		}
+		stats := spoolStats(paths)
+		printJSON(stats)
+	case "clear":
+		fs := flag.NewFlagSet("gateway hooks spool clear", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "override spool path")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool clear [-workdir dir] [-path file]")
+		}
+		spoolPath := strings.TrimSpace(*path)
+		if spoolPath == "" {
+			spoolPath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		_ = os.WriteFile(spoolPath, []byte(""), 0o644)
+		printJSON(map[string]any{"cleared": true, "path": spoolPath})
+	case "replay":
+		fs := flag.NewFlagSet("gateway hooks spool replay", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "override spool path")
+		urlFlag := fs.String("url", "", "override hook URL (defaults to env AGENT_GATEWAY_HOOK_URL)")
+		secret := fs.String("secret", "", "optional hook secret for signing (defaults to env AGENT_GATEWAY_HOOK_SECRET)")
+		all := fs.Bool("all", false, "replay base spool and rotated spool files")
+		typeFilter := fs.String("type", "", "optional event type filter (e.g. gateway.delivery.media)")
+		idFilter := fs.String("id", "", "optional event id filter")
+		limit := fs.Int("limit", 200, "max events to attempt in this run")
+		timeoutSeconds := fs.Int("timeout", 4, "per-request timeout seconds")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool replay [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-url hook] [-secret s] [-limit N] [-timeout S]")
+		}
+		spoolPath := strings.TrimSpace(*path)
+		if spoolPath == "" {
+			spoolPath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		hookURL := strings.TrimSpace(*urlFlag)
+		if hookURL == "" {
+			hookURL = strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_URL"))
+		}
+		if hookURL == "" {
+			log.Fatal("hook url required (set env AGENT_GATEWAY_HOOK_URL or pass -url)")
+		}
+		hookSecret := strings.TrimSpace(*secret)
+		if hookSecret == "" {
+			hookSecret = strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_SECRET"))
+		}
+		if *timeoutSeconds <= 0 {
+			*timeoutSeconds = 4
+		}
+		if *limit <= 0 {
+			*limit = 200
+		}
+		totalSent := 0
+		totalRemaining := 0
+		var paths []string
+		if *all {
+			paths = listSpoolFiles(spoolPath)
+		} else {
+			paths = []string{spoolPath}
+		}
+		for _, p := range paths {
+			if totalSent >= *limit {
+				break
+			}
+		sent, remaining, err := replaySpoolOnce(p, hookURL, hookSecret, *timeoutSeconds, *limit-totalSent, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter))
+			totalSent += sent
+			totalRemaining += remaining
+			if err != nil {
+				printJSON(map[string]any{"success": false, "error": err.Error(), "path": p, "sent": totalSent, "remaining": totalRemaining})
+				return
+			}
+		}
+		printJSON(map[string]any{
+			"success":   true,
+			"paths":     paths,
+			"sent":      totalSent,
+			"remaining": totalRemaining,
+			"filter": map[string]any{
+				"type": strings.TrimSpace(*typeFilter),
+				"id":   strings.TrimSpace(*idFilter),
+			},
+		})
+	case "export":
+		fs := flag.NewFlagSet("gateway hooks spool export", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path")
+		out := fs.String("out", "", "output file path (required)")
+		all := fs.Bool("all", false, "include rotated spool files")
+		typeFilter := fs.String("type", "", "optional event type filter")
+		idFilter := fs.String("id", "", "optional event id filter")
+		before := fs.String("before", "", "optional RFC3339/RFC3339Nano cutoff (created_at < before)")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool export -out file [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
+		}
+		if strings.TrimSpace(*out) == "" {
+			log.Fatal("out is required")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{basePath}
+		if *all {
+			paths = listSpoolFiles(basePath)
+		}
+		cutoff, err := parseCutoff(strings.TrimSpace(*before))
+		if err != nil {
+			log.Fatal(err)
+		}
+		lines, matched, err := collectSpoolLines(paths, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter), cutoff)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(strings.TrimSpace(*out)), 0o755); err != nil {
+			log.Fatal(err)
+		}
+		data := strings.Join(lines, "\n")
+		if len(lines) > 0 && !strings.HasSuffix(data, "\n") {
+			data += "\n"
+		}
+		if err := os.WriteFile(strings.TrimSpace(*out), []byte(data), 0o644); err != nil {
+			log.Fatal(err)
+		}
+		printJSON(map[string]any{
+			"success": true,
+			"out":     strings.TrimSpace(*out),
+			"paths":   paths,
+			"matched": matched,
+			"filter": map[string]any{
+				"type":   strings.TrimSpace(*typeFilter),
+				"id":     strings.TrimSpace(*idFilter),
+				"before": strings.TrimSpace(*before),
+			},
+		})
+	case "prune":
+		fs := flag.NewFlagSet("gateway hooks spool prune", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path")
+		all := fs.Bool("all", false, "prune rotated spool files too")
+		typeFilter := fs.String("type", "", "optional event type filter")
+		idFilter := fs.String("id", "", "optional event id filter")
+		before := fs.String("before", "", "optional RFC3339/RFC3339Nano cutoff (created_at < before)")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{basePath}
+		if *all {
+			paths = listSpoolFiles(basePath)
+		}
+		cutoff, err := parseCutoff(strings.TrimSpace(*before))
+		if err != nil {
+			log.Fatal(err)
+		}
+		totalRemoved := 0
+		totalRemain := 0
+		perFile := make([]map[string]any, 0, len(paths))
+		for _, p := range paths {
+			removed, remain, err := pruneSpoolFile(p, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter), cutoff)
+			if err != nil {
+				log.Fatal(err)
+			}
+			totalRemoved += removed
+			totalRemain += remain
+			perFile = append(perFile, map[string]any{"path": p, "removed": removed, "remaining": remain})
+		}
+		printJSON(map[string]any{
+			"success":        true,
+			"paths":          paths,
+			"removed_total":  totalRemoved,
+			"remaining_total": totalRemain,
+			"files":          perFile,
+			"filter": map[string]any{
+				"type":   strings.TrimSpace(*typeFilter),
+				"id":     strings.TrimSpace(*idFilter),
+				"before": strings.TrimSpace(*before),
+			},
+		})
+	case "compact":
+		fs := flag.NewFlagSet("gateway hooks spool compact", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "base spool path")
+		all := fs.Bool("all", false, "compact rotated spool files too")
+		maxLines := fs.Int("max-lines", 2000, "max lines kept per file after compact")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
+		}
+		basePath := strings.TrimSpace(*path)
+		if basePath == "" {
+			basePath = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		paths := []string{basePath}
+		if *all {
+			paths = listSpoolFiles(basePath)
+		}
+		if *maxLines <= 0 {
+			*maxLines = 2000
+		}
+		perFile := make([]map[string]any, 0, len(paths))
+		totalBefore, totalAfter := 0, 0
+		for _, p := range paths {
+			beforeCount, afterCount, err := compactSpoolFile(p, *maxLines)
+			if err != nil {
+				log.Fatal(err)
+			}
+			totalBefore += beforeCount
+			totalAfter += afterCount
+			perFile = append(perFile, map[string]any{
+				"path":    p,
+				"before":  beforeCount,
+				"after":   afterCount,
+				"removed": beforeCount - afterCount,
+			})
+		}
+		printJSON(map[string]any{
+			"success":      true,
+			"paths":        paths,
+			"before_total": totalBefore,
+			"after_total":  totalAfter,
+			"removed_total": totalBefore - totalAfter,
+			"max_lines":    *maxLines,
+			"files":        perFile,
+		})
+	default:
+		printGatewayHookSpoolUsage()
+		os.Exit(2)
+	}
+}
+
+func runGatewayPairs(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printGatewayPairsUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("gateway pairs list", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir (contains .agent-daemon/gateway_pairs.json)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway pairs list [-workdir dir] [-json]")
+		}
+		pairsPath := filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_pairs.json")
+		pairs := map[string][]string{}
+		bs, err := os.ReadFile(pairsPath)
+		if err == nil && len(bs) > 0 {
+			_ = json.Unmarshal(bs, &pairs)
+		}
+		if *jsonOutput {
+			printJSON(map[string]any{"path": pairsPath, "pairs": pairs})
+			return
+		}
+		fmt.Println("path=" + pairsPath)
+		platforms := make([]string, 0, len(pairs))
+		for p := range pairs {
+			platforms = append(platforms, p)
+		}
+		sort.Strings(platforms)
+		for _, p := range platforms {
+			ids := pairs[p]
+			sort.Strings(ids)
+			fmt.Printf("%s=%s\n", p, strings.Join(ids, ","))
+		}
+	case "revoke":
+		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		platformName := fs.String("platform", "", "platform name (telegram/discord/slack/yuanbao)")
+		userID := fs.String("user", "", "user id to revoke")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
+		}
+		if strings.TrimSpace(*platformName) == "" || strings.TrimSpace(*userID) == "" {
+			log.Fatal("platform and user are required")
+		}
+		pairsPath := filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_pairs.json")
+		pairs := map[string][]string{}
+		bs, err := os.ReadFile(pairsPath)
+		if err == nil && len(bs) > 0 {
+			_ = json.Unmarshal(bs, &pairs)
+		}
+		p := strings.ToLower(strings.TrimSpace(*platformName))
+		uid := strings.TrimSpace(*userID)
+		ids := pairs[p]
+		out := make([]string, 0, len(ids))
+		removed := false
+		for _, id := range ids {
+			if strings.TrimSpace(id) == uid {
+				removed = true
+				continue
+			}
+			out = append(out, id)
+		}
+		if removed {
+			if len(out) == 0 {
+				delete(pairs, p)
+			} else {
+				pairs[p] = out
+			}
+			bs, _ := json.MarshalIndent(pairs, "", "  ")
+			if err := os.MkdirAll(filepath.Dir(pairsPath), 0o755); err != nil {
+				log.Fatal(err)
+			}
+			if err := os.WriteFile(pairsPath, bs, 0o644); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println("revoked=true")
+		} else {
+			fmt.Println("revoked=false")
+		}
+	default:
+		printGatewayPairsUsage()
 		os.Exit(2)
 	}
 }
@@ -711,6 +1556,35 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool clear [-workdir dir] [-path file]")
+}
+
+func printGatewayPairsUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
+}
+
+func printGatewayHooksUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool <subcommand>")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks ping [-url hook] [-secret s] [-timeout S]")
+	fmt.Fprintln(os.Stderr, "  spool subcommands: status, clear, replay")
+}
+
+func printGatewayHookSpoolUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool list [-workdir dir] [-path file]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool stats [-workdir dir] [-path file] [-all]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool clear [-workdir dir] [-path file]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool replay [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-url hook] [-secret s] [-limit N] [-timeout S]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool export -out file [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
 }
 
 type gatewayStatusInfo struct {

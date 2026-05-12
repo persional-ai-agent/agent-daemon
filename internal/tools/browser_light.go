@@ -31,6 +31,14 @@ type lightBrowserPage struct {
 type lightBrowserState struct {
 	stack      []lightBrowserPage
 	formInputs map[string]string
+	elements   map[string]lightElement
+}
+
+type lightElement struct {
+	Kind  string // link|input|button
+	Text  string
+	Href  string
+	Field string // for input
 }
 
 var lightBrowserMu sync.Mutex
@@ -44,13 +52,16 @@ func getLightBrowser(sessionID string) *lightBrowserState {
 	}
 	st := lightBrowserSessions[sessionID]
 	if st == nil {
-		st = &lightBrowserState{formInputs: map[string]string{}}
+		st = &lightBrowserState{formInputs: map[string]string{}, elements: map[string]lightElement{}}
 		lightBrowserSessions[sessionID] = st
 	}
 	return st
 }
 
 func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserNavigateCDP(ctx, args, tc)
+	}
 	url := strings.TrimSpace(strArg(args, "url"))
 	if url == "" {
 		return nil, errors.New("url required")
@@ -88,6 +99,7 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 	st := getLightBrowser(tc.SessionID)
 	st.stack = append(st.stack, p)
 	st.formInputs = map[string]string{}
+	st.elements = map[string]lightElement{}
 	return map[string]any{
 		"success":   true,
 		"url":       url,
@@ -98,20 +110,41 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 	}, nil
 }
 
-func (b *BuiltinTools) browserSnapshot(_ context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserSnapshot(ctx context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserSnapshotCDP(ctx, nil, tc)
+	}
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
 		return nil, errors.New("no page loaded; call browser_navigate first")
 	}
 	p := st.stack[len(st.stack)-1]
-	text := htmlToTextLite(p.HTML, 120_000)
+	// Build a pseudo "accessibility snapshot" with lightweight ref IDs (@e1...).
+	els := extractLightElements(p.HTML, 80)
+	st.elements = map[string]lightElement{}
+	var sb strings.Builder
+	for i, el := range els {
+		ref := fmt.Sprintf("@e%d", i+1)
+		st.elements[ref] = el
+		switch el.Kind {
+		case "link":
+			sb.WriteString("[" + ref + "] link: " + el.Text + " (href=" + el.Href + ")\n")
+		case "input":
+			sb.WriteString("[" + ref + "] input: " + el.Field + "\n")
+		case "button":
+			sb.WriteString("[" + ref + "] button: " + el.Text + "\n")
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString(htmlToTextLite(p.HTML, 120_000))
 	return map[string]any{
 		"success":   true,
 		"url":       p.URL,
 		"status":    p.Status,
 		"loaded_at": p.LoadedAt,
-		"content":   text,
-		"note":      "Lightweight snapshot: derived from fetched HTML; no accessibility tree.",
+		"content":   sb.String(),
+		"pending_dialogs": []any{},
+		"note":      "Lightweight snapshot: derived from fetched HTML; ref IDs are best-effort (no JS/DOM).",
 	}, nil
 }
 
@@ -126,15 +159,30 @@ func (b *BuiltinTools) browserBack(_ context.Context, _ map[string]any, tc ToolC
 }
 
 func (b *BuiltinTools) browserClick(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserClickCDP(ctx, args, tc)
+	}
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
 		return nil, errors.New("no page loaded; call browser_navigate first")
 	}
 	p := st.stack[len(st.stack)-1]
+	if ref := strings.TrimSpace(strArg(args, "ref")); ref != "" {
+		if st.elements != nil {
+			if el, ok := st.elements[ref]; ok && el.Kind == "link" && strings.TrimSpace(el.Href) != "" {
+				next, err := resolveURL(p.URL, el.Href)
+				if err != nil {
+					return nil, err
+				}
+				return b.browserNavigate(ctx, map[string]any{"url": next}, tc)
+			}
+		}
+		return map[string]any{"success": false, "error": "ref not found or not a link"}, nil
+	}
 	targetText := strings.TrimSpace(strArg(args, "text"))
 	hrefContains := strings.TrimSpace(strArg(args, "href_contains"))
 	if targetText == "" && hrefContains == "" {
-		return nil, errors.New("text or href_contains required")
+		return nil, errors.New("ref, text or href_contains required")
 	}
 	href, ok := findAnchorHref(p.HTML, targetText, hrefContains)
 	if !ok {
@@ -147,9 +195,22 @@ func (b *BuiltinTools) browserClick(ctx context.Context, args map[string]any, tc
 	return b.browserNavigate(ctx, map[string]any{"url": next}, tc)
 }
 
-func (b *BuiltinTools) browserType(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserType(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserTypeCDP(ctx, args, tc)
+	}
 	// Lightweight browser has no DOM state; we accept the call for parity.
 	field := strings.TrimSpace(strArg(args, "field"))
+	if ref := strings.TrimSpace(strArg(args, "ref")); ref != "" {
+		st := getLightBrowser(tc.SessionID)
+		if st.elements != nil {
+			if el, ok := st.elements[ref]; ok && el.Kind == "input" {
+				if strings.TrimSpace(el.Field) != "" {
+					field = el.Field
+				}
+			}
+		}
+	}
 	text := strArg(args, "text")
 	if field == "" {
 		field = "unknown"
@@ -162,12 +223,60 @@ func (b *BuiltinTools) browserType(_ context.Context, args map[string]any, tc To
 	return map[string]any{"success": true, "note": "Lightweight browser: stored typed values for best-effort GET form submission.", "field": field}, nil
 }
 
+func extractLightElements(html string, limit int) []lightElement {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	out := make([]lightElement, 0, limit)
+	// Links
+	linkRe := regexp.MustCompile(`(?is)<a[^>]+href\\s*=\\s*['"]([^'"]+)['"][^>]*>(.*?)</a>`)
+	for _, m := range linkRe.FindAllStringSubmatch(html, limit) {
+		href := strings.TrimSpace(m[1])
+		txt := strings.TrimSpace(htmlToTextLite(m[2], 200))
+		if txt == "" {
+			txt = "(link)"
+		}
+		out = append(out, lightElement{Kind: "link", Text: txt, Href: href})
+	}
+	// Inputs
+	inputRe := regexp.MustCompile(`(?is)<input[^>]*(?:name\\s*=\\s*['"]([^'"]+)['"])?[^>]*>`)
+	for _, m := range inputRe.FindAllStringSubmatch(html, limit-len(out)) {
+		field := strings.TrimSpace(m[1])
+		if field == "" {
+			field = "input"
+		}
+		out = append(out, lightElement{Kind: "input", Field: field})
+		if len(out) >= limit {
+			return out
+		}
+	}
+	// Buttons (text only)
+	btnRe := regexp.MustCompile(`(?is)<button[^>]*>(.*?)</button>`)
+	for _, m := range btnRe.FindAllStringSubmatch(html, limit-len(out)) {
+		txt := strings.TrimSpace(htmlToTextLite(m[1], 200))
+		if txt == "" {
+			txt = "(button)"
+		}
+		out = append(out, lightElement{Kind: "button", Text: txt})
+		if len(out) >= limit {
+			return out
+		}
+	}
+	return out
+}
+
 func (b *BuiltinTools) browserScroll(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	_ = args
 	return map[string]any{"success": true, "note": "Lightweight browser: scroll is a no-op."}, nil
 }
 
 func (b *BuiltinTools) browserPress(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserPressCDP(ctx, args, tc)
+	}
 	key := strings.TrimSpace(strArg(args, "key"))
 	if key == "" {
 		key = "unknown"
@@ -225,6 +334,9 @@ func (b *BuiltinTools) browserGetImages(_ context.Context, _ map[string]any, tc 
 }
 
 func (b *BuiltinTools) browserConsole(_ context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserConsoleCDP(context.Background(), nil, tc)
+	}
 	// No JS execution -> no console logs.
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
@@ -239,7 +351,10 @@ func (b *BuiltinTools) browserConsole(_ context.Context, _ map[string]any, tc To
 	}, nil
 }
 
-func (b *BuiltinTools) browserDialog(_ context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserDialog(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserDialogCDP(context.Background(), args, tc)
+	}
 	// No JS -> no dialogs.
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
@@ -254,7 +369,10 @@ func (b *BuiltinTools) browserDialog(_ context.Context, _ map[string]any, tc Too
 	}, nil
 }
 
-func (b *BuiltinTools) browserCDP(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserCDP(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	if cdpEnabled() {
+		return b.browserCDPInfoCDP(ctx, args, tc)
+	}
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
 		return nil, errors.New("no page loaded; call browser_navigate first")

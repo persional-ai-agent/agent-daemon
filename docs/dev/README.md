@@ -231,3 +231,38 @@
 - `106-summary-terminal-notify-on-complete.md`：terminal(background) 补齐 notify_on_complete（Hermes 体验对齐）
 - `107-summary-toolsets-parity-aliases.md`：补齐 Hermes toolsets 名称别名与平台 toolsets（配置兼容）
 - `108-summary-process-write-and-terminate.md`：process 支持 write + stop 改为 TERM->KILL（Hermes 体验对齐）
+- `109-summary-image-generate-gate.md`：image_generate 增加 FAL_KEY gate（Hermes 可用性对齐）
+- `110-summary-browser-snapshot-ref-ids.md`：browser_snapshot 增强 ref IDs + browser_click/type 支持 ref（轻量对齐）
+- `111-summary-send-message-home-channel.md`：send_message 支持 HOME_CHANNEL 默认目标（Hermes 体验对齐）
+- `112-summary-doc-parity-refresh.md`：刷新 Hermes 对齐文档描述（工具/网关/范围声明）
+- `113-summary-tts-openai-backend-media-prefix.md`：text_to_speech 增加可选 OpenAI 后端 + MEDIA: 前缀（Hermes 风格）
+- `114-summary-gateway-media-send-discord-slack.md`：Discord/Slack 网关适配器补齐本地文件投递（MEDIA: / media_path）
+- `115-summary-tts-deliver-to-gateway.md`：text_to_speech 支持 `deliver=true` 直接投递到当前网关会话（需适配器支持）
+- `116-summary-image-generate-deliver-to-gateway.md`：image_generate 支持 `deliver=true` 直接投递到当前网关会话（需适配器支持）
+- `117-summary-yuanbao-media-delivery-cos.md`：Yuanbao 网关适配器补齐媒体投递（COS 上传 best-effort）
+- `118-summary-gateway-auto-deliver-media-final.md`：网关在最终响应为 `MEDIA:` 时自动投递媒体文件（Hermes 体验对齐）
+- `119-summary-browser-cdp-backend.md`：browser_* 增加可选真实 CDP 后端（执行 JS/DOM；Hermes 能力级对齐）
+- `120-summary-browser-cdp-console-dialog.md`：CDP 模式补齐 browser_console/browser_dialog 与 pending_dialogs（Hermes 体验对齐）
+- `121-summary-vision-analyze-openai-backend.md`：vision_analyze 增加可选 OpenAI 视觉后端（无 key 时回退为元数据）
+- `122-summary-image-generate-openai-backend.md`：image_generate 增加可选 OpenAI 图片后端（无 key 时回退为占位图）
+- `123-summary-gateway-queue-and-cancel.md`：Gateway 增加 per-session 队列与 `/cancel` 中断（Hermes 体验对齐）
+- `124-summary-gateway-pairing.md`：Gateway 增加最小 `/pair <code>` 配对与持久化（Hermes 体验对齐）
+- `125-summary-gateway-pairing-management.md`：配对管理：`/unpair` + `agentd gateway pairs list/revoke`
+- `126-summary-gateway-slow-response-hint.md`：Gateway 增加慢响应提示消息（Hermes 体验对齐）
+- `127-summary-gateway-webhook-hooks.md`：Gateway 增加完成事件 webhook hooks（best-effort）
+- `128-summary-gateway-webhook-lifecycle.md`：Gateway webhook hooks 扩展生命周期事件与可选 tool 事件
+- `129-summary-gateway-webhook-signing-retry.md`：Gateway webhook hooks 增加 HMAC 签名与重试/backoff（best-effort）
+- `130-summary-gateway-webhook-delivery-events.md`：Gateway webhook hooks 增加投递事件（send/edit/media）
+- `131-summary-gateway-webhook-spool.md`：Gateway webhook hooks 增加本地 spool（失败落盘 + 定时补发）
+- `132-summary-gateway-webhook-event-id.md`：Gateway webhook envelope 增加 `id`（UUID）用于去重/追踪
+- `133-summary-gateway-webhook-spool-dedup.md`：Webhook spool 按 `event_id` 去重（减少重复与增长）
+- `134-summary-gateway-hook-spool-cli.md`：CLI 增加 webhook spool 的 status/clear 管理命令
+- `135-summary-gateway-hook-spool-replay-cli.md`：CLI 增加 webhook spool 的手动 replay 命令
+- `136-summary-gateway-hooks-ping-cli.md`：CLI 增加 webhook hooks 的连通性/签名健康检查（ping）
+- `137-summary-gateway-hook-spool-rotation.md`：Webhook spool 增加按大小滚动（控制磁盘占用）
+- `138-summary-gateway-hook-spool-rotated-cli.md`：CLI 支持 rotated spool 文件：list + replay -all
+- `139-summary-gateway-hook-spool-status-aggregate.md`：`spool status -all` 增加跨 rotated 文件的聚合积压统计
+- `140-summary-gateway-hook-spool-replay-filters.md`：`spool replay` 支持 `-type`/`-id` 定向重放
+- `141-summary-gateway-hook-spool-export-prune.md`：`spool export/prune` 支持按 type/id/time 过滤
+- `142-summary-gateway-hook-spool-compact.md`：`spool compact` 支持去重/排序/按 max-lines 裁剪
+- `143-summary-gateway-hook-spool-stats-command.md`：新增 `spool stats` 命令（支持 `-all` 聚合）

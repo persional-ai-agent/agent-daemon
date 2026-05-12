@@ -314,6 +314,66 @@ func (c *Client) SendC2CSticker(ctx context.Context, toAccount, stickerJSON stri
 	return out, nil
 }
 
+func (c *Client) SendC2CImage(ctx context.Context, toAccount, uuid string, imageFormat uint32, info ImageInfo) (map[string]any, error) {
+	content := EncodeMsgContentImage(uuid, imageFormat, []ImageInfo{info})
+	el := EncodeMsgBodyElement("TIMImageElem", content)
+	body := EncodeSendC2CMessageReq(toAccount, c.botID, [][]byte{el})
+	res, err := c.call(ctx, "send_c2c_message", body)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"success": res.Head.CmdType == CmdTypeResponse, "req_id": res.Head.MsgID}
+	if len(res.Data) > 0 {
+		out["raw"] = fmt.Sprintf("%x", res.Data)
+	}
+	return out, nil
+}
+
+func (c *Client) SendGroupImage(ctx context.Context, groupCode, refMsgID, uuid string, imageFormat uint32, info ImageInfo) (map[string]any, error) {
+	content := EncodeMsgContentImage(uuid, imageFormat, []ImageInfo{info})
+	el := EncodeMsgBodyElement("TIMImageElem", content)
+	body := EncodeSendGroupMessageReq(groupCode, c.botID, refMsgID, [][]byte{el})
+	res, err := c.call(ctx, "send_group_message", body)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"success": res.Head.CmdType == CmdTypeResponse, "req_id": res.Head.MsgID}
+	if len(res.Data) > 0 {
+		out["raw"] = fmt.Sprintf("%x", res.Data)
+	}
+	return out, nil
+}
+
+func (c *Client) SendC2CFile(ctx context.Context, toAccount, uuid, fileName string, fileSize uint32, url string) (map[string]any, error) {
+	content := EncodeMsgContentFile(uuid, fileName, fileSize, url)
+	el := EncodeMsgBodyElement("TIMFileElem", content)
+	body := EncodeSendC2CMessageReq(toAccount, c.botID, [][]byte{el})
+	res, err := c.call(ctx, "send_c2c_message", body)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"success": res.Head.CmdType == CmdTypeResponse, "req_id": res.Head.MsgID}
+	if len(res.Data) > 0 {
+		out["raw"] = fmt.Sprintf("%x", res.Data)
+	}
+	return out, nil
+}
+
+func (c *Client) SendGroupFile(ctx context.Context, groupCode, refMsgID, uuid, fileName string, fileSize uint32, url string) (map[string]any, error) {
+	content := EncodeMsgContentFile(uuid, fileName, fileSize, url)
+	el := EncodeMsgBodyElement("TIMFileElem", content)
+	body := EncodeSendGroupMessageReq(groupCode, c.botID, refMsgID, [][]byte{el})
+	res, err := c.call(ctx, "send_group_message", body)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"success": res.Head.CmdType == CmdTypeResponse, "req_id": res.Head.MsgID}
+	if len(res.Data) > 0 {
+		out["raw"] = fmt.Sprintf("%x", res.Data)
+	}
+	return out, nil
+}
+
 func (c *Client) QueryGroupInfo(ctx context.Context, groupCode string) (map[string]any, error) {
 	body := EncodeQueryGroupInfoReq(groupCode)
 	res, err := c.call(ctx, "query_group_info", body)

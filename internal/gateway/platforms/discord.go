@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -79,6 +81,33 @@ func (d *DiscordAdapter) Send(_ context.Context, chatID, content, replyTo string
 	msg := &discordgo.MessageSend{
 		Content:   truncateDiscord(content, 2000),
 		Reference: &discordgo.MessageReference{MessageID: replyTo},
+	}
+	if replyTo == "" {
+		msg.Reference = nil
+	}
+	sent, err := d.session.ChannelMessageSendComplex(chatID, msg)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+	return gateway.SendResult{Success: true, MessageID: sent.ID}, nil
+}
+
+func (d *DiscordAdapter) SendMedia(_ context.Context, chatID, path, caption, replyTo string) (gateway.SendResult, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return gateway.SendResult{Success: false, Error: err.Error()}, err
+	}
+	defer f.Close()
+
+	msg := &discordgo.MessageSend{
+		Content:   truncateDiscord(caption, 2000),
+		Reference: &discordgo.MessageReference{MessageID: replyTo},
+		Files: []*discordgo.File{
+			{
+				Name:   filepath.Base(path),
+				Reader: f,
+			},
+		},
 	}
 	if replyTo == "" {
 		msg.Reference = nil

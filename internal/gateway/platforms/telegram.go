@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+	"github.com/dingjingmaster/agent-daemon/internal/platform"
 )
 
 type TelegramAdapter struct {
@@ -125,6 +128,58 @@ func (t *TelegramAdapter) SendTyping(_ context.Context, chatID string) error {
 
 func (t *TelegramAdapter) OnMessage(_ context.Context, handler gateway.MessageHandler) {
 	t.handler = handler
+}
+
+func (t *TelegramAdapter) SendMedia(_ context.Context, chatID, path, caption, replyTo string) (platform.SendResult, error) {
+	chatIDInt, err := parseChatID(chatID)
+	if err != nil {
+		return platform.SendResult{Success: false, Error: err.Error()}, err
+	}
+	if st, err := os.Stat(path); err != nil || st == nil || st.IsDir() {
+		if err == nil {
+			err = fmt.Errorf("not a file: %s", path)
+		}
+		return platform.SendResult{Success: false, Error: err.Error()}, err
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	file := tgbotapi.FilePath(path)
+	var msg tgbotapi.Chattable
+	switch ext {
+	case ".ogg", ".opus":
+		v := tgbotapi.NewVoice(chatIDInt, file)
+		v.Caption = caption
+		if replyTo != "" {
+			if id, err2 := parseChatID(replyTo); err2 == nil {
+				v.ReplyToMessageID = int(id)
+			}
+		}
+		msg = v
+	case ".mp3", ".wav", ".m4a", ".aac":
+		a := tgbotapi.NewAudio(chatIDInt, file)
+		a.Caption = caption
+		if replyTo != "" {
+			if id, err2 := parseChatID(replyTo); err2 == nil {
+				a.ReplyToMessageID = int(id)
+			}
+		}
+		msg = a
+	default:
+		d := tgbotapi.NewDocument(chatIDInt, file)
+		d.Caption = caption
+		if replyTo != "" {
+			if id, err2 := parseChatID(replyTo); err2 == nil {
+				d.ReplyToMessageID = int(id)
+			}
+		}
+		msg = d
+	}
+	sent, err := t.bot.Send(msg)
+	if err != nil {
+		return platform.SendResult{Success: false, Error: err.Error()}, err
+	}
+	_ = sent
+	// Not all Chattable responses include MessageID in a consistent way; keep empty.
+	return platform.SendResult{Success: true}, nil
 }
 
 func parseChatID(s string) (int64, error) {
