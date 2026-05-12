@@ -342,8 +342,24 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			reply := w.approvalStatus(ctx)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
 			return
+		case "/grant":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			reply := w.grantApproval(ctx, cmd)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/grant"})
+			return
+		case "/revoke":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			reply := w.revokeApproval(ctx, cmd)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
+			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approvals, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -628,15 +644,7 @@ func (w *sessionWorker) confirmApproval(ctx context.Context, approvalID string, 
 		"action":      "confirm",
 		"approval_id": approvalID,
 		"approve":     approve,
-	}, tools.ToolContext{
-		SessionID:      w.key,
-		SessionStore:   w.engine.SearchStore,
-		MemoryStore:    w.engine.MemoryStore,
-		TodoStore:      w.engine.TodoStore,
-		ApprovalStore:  w.engine.ApprovalStore,
-		DelegateRunner: w.engine,
-		Workdir:        w.engine.Workdir,
-	})
+	}, w.approvalToolContext())
 	parsed := tools.ParseJSONArgs(raw)
 	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
 		return "Approval failed: " + errText
@@ -665,15 +673,7 @@ func (w *sessionWorker) confirmApproval(ctx context.Context, approvalID string, 
 func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 	raw := w.engine.Registry.Dispatch(ctx, "approval", map[string]any{
 		"action": "status",
-	}, tools.ToolContext{
-		SessionID:      w.key,
-		SessionStore:   w.engine.SearchStore,
-		MemoryStore:    w.engine.MemoryStore,
-		TodoStore:      w.engine.TodoStore,
-		ApprovalStore:  w.engine.ApprovalStore,
-		DelegateRunner: w.engine,
-		Workdir:        w.engine.Workdir,
-	})
+	}, w.approvalToolContext())
 	parsed := tools.ParseJSONArgs(raw)
 	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
 		return "Approval status failed: " + errText
@@ -707,6 +707,98 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 		return "No active approvals."
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (w *sessionWorker) grantApproval(ctx context.Context, cmd string) string {
+	args, usageErr := parseApprovalManageCommand(cmd)
+	if usageErr != "" {
+		return usageErr
+	}
+	args["action"] = "grant"
+	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
+	parsed := tools.ParseJSONArgs(raw)
+	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+		return "Grant failed: " + errText
+	}
+	scope, _ := parsed["scope"].(string)
+	pattern, _ := parsed["pattern"].(string)
+	expiresAt, _ := parsed["expires_at"].(string)
+	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
+		if strings.TrimSpace(expiresAt) != "" {
+			return "Granted pattern approval: " + pattern + " until " + expiresAt
+		}
+		return "Granted pattern approval: " + pattern
+	}
+	if strings.TrimSpace(expiresAt) != "" {
+		return "Granted session approval until " + expiresAt
+	}
+	return "Granted session approval."
+}
+
+func (w *sessionWorker) revokeApproval(ctx context.Context, cmd string) string {
+	args, usageErr := parseApprovalManageCommand(cmd)
+	if usageErr != "" {
+		return usageErr
+	}
+	args["action"] = "revoke"
+	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
+	parsed := tools.ParseJSONArgs(raw)
+	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+		return "Revoke failed: " + errText
+	}
+	scope, _ := parsed["scope"].(string)
+	pattern, _ := parsed["pattern"].(string)
+	revoked, _ := parsed["revoked"].(bool)
+	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
+		if revoked {
+			return "Revoked pattern approval: " + pattern
+		}
+		return "Pattern approval not found: " + pattern
+	}
+	if revoked {
+		return "Revoked session approval."
+	}
+	return "No active session approval."
+}
+
+func parseApprovalManageCommand(cmd string) (map[string]any, string) {
+	parts := strings.Fields(strings.TrimSpace(cmd))
+	args := map[string]any{}
+	if len(parts) <= 1 {
+		return args, ""
+	}
+	if strings.EqualFold(parts[1], "pattern") {
+		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+			return nil, "Usage: /grant pattern <name> [ttl] or /revoke pattern <name>"
+		}
+		args["scope"] = "pattern"
+		args["pattern"] = strings.TrimSpace(parts[2])
+		if len(parts) >= 4 {
+			if ttl, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && ttl >= 0 {
+				args["ttl_seconds"] = ttl
+			} else if strings.HasPrefix(parts[0], "/grant") {
+				return nil, "Usage: /grant pattern <name> [ttl]"
+			}
+		}
+		return args, ""
+	}
+	if ttl, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && ttl >= 0 {
+		args["ttl_seconds"] = ttl
+		return args, ""
+	}
+	return nil, "Usage: /grant [ttl], /grant pattern <name> [ttl], /revoke, or /revoke pattern <name>"
+}
+
+func (w *sessionWorker) approvalToolContext() tools.ToolContext {
+	return tools.ToolContext{
+		SessionID:      w.key,
+		SessionStore:   w.engine.SearchStore,
+		MemoryStore:    w.engine.MemoryStore,
+		TodoStore:      w.engine.TodoStore,
+		ApprovalStore:  w.engine.ApprovalStore,
+		DelegateRunner: w.engine,
+		Workdir:        w.engine.Workdir,
+	}
 }
 
 func parseIntEnv(key string, def int) int {

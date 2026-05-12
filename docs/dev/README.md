@@ -287,3 +287,4 @@
 - `162-summary-gateway-token-lock.md`：新增 gateway 跨工作区 token lock
 - `163-summary-gateway-approval-text-commands.md`：新增 gateway 文本审批命令 `/approve` `/deny`
 - `164-summary-gateway-approval-status-command.md`：新增 gateway 审批状态命令 `/approvals`
+- `165-summary-gateway-approval-manage-commands.md`：新增 gateway 授权管理命令 `/grant` `/revoke`
