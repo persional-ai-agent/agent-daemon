@@ -86,6 +86,7 @@ go run ./cmd/agentd update bundle snapshot -dest /tmp/agent-daemon-checkout -jso
 go run ./cmd/agentd update bundle snapshots -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update bundle snapshots-prune -dest /tmp/agent-daemon-checkout -keep 3 -json
 go run ./cmd/agentd update bundle snapshots-doctor -dest /tmp/agent-daemon-checkout -json
+go run ./cmd/agentd update bundle snapshots-status -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update bundle rollback-plan -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update bundle rollback -dest /tmp/agent-daemon-checkout -json
 go run ./cmd/agentd update changelog -json

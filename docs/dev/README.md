@@ -325,3 +325,4 @@
 - `200-summary-cli-update-bundle-snapshots-command.md`：新增 `update bundle snapshots` 快照列表命令
 - `201-summary-cli-update-bundle-snapshots-prune-command.md`：新增 `update bundle snapshots-prune` 快照清理命令
 - `202-summary-cli-update-bundle-snapshots-doctor-command.md`：新增 `update bundle snapshots-doctor` 快照诊断命令
+- `203-summary-cli-update-bundle-snapshots-status-command.md`：新增 `update bundle snapshots-status` 快照聚合状态命令

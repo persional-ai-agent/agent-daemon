@@ -1416,8 +1416,31 @@ func runUpdateBundle(args []string) {
 		if *strict && anyString(info["status"]) != "ok" {
 			os.Exit(1)
 		}
+	case "snapshots-status":
+		fs := flag.NewFlagSet("update bundle snapshots-status", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		limit := fs.Int("limit", 5, "max snapshots to include")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-status -dest <dir> [-limit N] [-json]")
+		}
+		info, err := snapshotStatusSummary(strings.TrimSpace(*dest), *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("status=%v\n", info["status"])
+		fmt.Printf("snapshot_ready=%v\n", info["snapshot_ready"])
+		fmt.Printf("latest_snapshot_path=%v\n", info["latest_snapshot_path"])
+		if nextActions, ok := info["next_actions"].([]string); ok {
+			fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status]")
 	}
 }
 
@@ -1868,6 +1891,61 @@ func doctorSnapshotBundles(dest string) (map[string]any, error) {
 		"next_actions": nextActions,
 		"items":        snapshots["items"],
 	}, nil
+}
+
+func latestSnapshotBundlePath(dest string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(dest, ".agent-daemon", "release-backups", "*-manual-snapshot.tar.gz"))
+	if err != nil {
+		return "", err
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no manual snapshots found under %s", filepath.Join(dest, ".agent-daemon", "release-backups"))
+	}
+	sort.Strings(matches)
+	return matches[len(matches)-1], nil
+}
+
+func snapshotStatusSummary(dest string, limit int) (map[string]any, error) {
+	status := "ok"
+	issues := make([]string, 0, 6)
+	nextActions := make([]string, 0, 6)
+	result := map[string]any{
+		"status": status,
+	}
+	snapshots, err := listSnapshotBundles(dest, limit)
+	if err != nil {
+		return nil, err
+	}
+	result["snapshots"] = snapshots
+	doctor, err := doctorSnapshotBundles(dest)
+	if err != nil {
+		return nil, err
+	}
+	result["doctor"] = doctor
+	if anyString(doctor["status"]) != "ok" {
+		status = "warn"
+		if doctorIssues, ok := doctor["issues"].([]string); ok {
+			issues = append(issues, doctorIssues...)
+		}
+		if doctorActions, ok := doctor["next_actions"].([]string); ok {
+			nextActions = append(nextActions, doctorActions...)
+		}
+	}
+	if count, _ := snapshots["count"].(int); count > 0 {
+		if latest, err := latestSnapshotBundlePath(dest); err == nil {
+			result["latest_snapshot_path"] = latest
+			result["snapshot_ready"] = true
+		}
+	} else {
+		result["snapshot_ready"] = false
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "manual snapshot 状态正常，可继续保留 restore point 或按需执行 snapshots-prune")
+	}
+	result["status"] = status
+	result["issues"] = dedupeStrings(issues)
+	result["next_actions"] = dedupeStrings(nextActions)
+	return result, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
