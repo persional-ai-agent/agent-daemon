@@ -1208,8 +1208,33 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("backup_dir=%s\n", info["backup_dir"])
 		fmt.Printf("kept=%v\n", info["kept"])
 		fmt.Printf("removed=%v\n", info["removed"])
+	case "doctor":
+		fs := flag.NewFlagSet("update bundle doctor", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		strict := fs.Bool("strict", false, "exit non-zero when doctor status is not ok")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle doctor -dest <dir> [-strict] [-json]")
+		}
+		info, err := doctorBundleBackups(strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+		} else {
+			fmt.Printf("status=%v\n", info["status"])
+			fmt.Printf("backup_dir=%v\n", info["backup_dir"])
+			if nextActions, ok := info["next_actions"].([]string); ok {
+				fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+			}
+		}
+		if *strict && anyString(info["status"]) != "ok" {
+			os.Exit(1)
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor]")
 	}
 }
 
@@ -1654,6 +1679,51 @@ func pruneBundleBackups(dest string, keep int) (map[string]any, error) {
 		"kept":       kept,
 		"removed":    len(removed),
 		"items":      removed,
+	}, nil
+}
+
+func doctorBundleBackups(dest string) (map[string]any, error) {
+	backups, err := listBundleBackups(dest, 10)
+	if err != nil {
+		return nil, err
+	}
+	status := "ok"
+	issues := make([]string, 0, 4)
+	nextActions := make([]string, 0, 4)
+	count, _ := backups["count"].(int)
+	if count == 0 {
+		status = "warn"
+		issues = append(issues, "no backup bundles found")
+		nextActions = append(nextActions, "先执行一次 `agentd update bundle apply` 或 `agentd update bundle rollback`，生成可回滚的 backup bundle")
+	}
+	if items, ok := backups["items"].([]map[string]any); ok {
+		missingManifest := 0
+		for _, item := range items {
+			if exists, _ := item["manifest_exists"].(bool); !exists {
+				missingManifest++
+			}
+		}
+		if missingManifest > 0 {
+			status = "warn"
+			issues = append(issues, fmt.Sprintf("%d backup manifests missing", missingManifest))
+			nextActions = append(nextActions, "保留 backup bundle 旁的 `.json` manifest，便于回滚前确认来源与文件数")
+		}
+		if count > 10 {
+			status = "warn"
+			issues = append(issues, "too many backup bundles retained")
+			nextActions = append(nextActions, "运行 `agentd update bundle prune -dest <dir> -keep N` 清理过旧回滚点")
+		}
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "bundle backup 状态正常，可继续执行 rollback 或按需 prune")
+	}
+	return map[string]any{
+		"status":       status,
+		"backup_dir":   backups["backup_dir"],
+		"count":        count,
+		"issues":       issues,
+		"next_actions": nextActions,
+		"items":        backups["items"],
 	}, nil
 }
 

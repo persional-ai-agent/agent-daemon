@@ -316,3 +316,4 @@
 - `191-summary-cli-update-bundle-rollback-command.md`：新增 `update bundle rollback` 本地回滚命令
 - `192-summary-cli-update-bundle-backups-command.md`：新增 `update bundle backups` 备份列表命令
 - `193-summary-cli-update-bundle-prune-command.md`：新增 `update bundle prune` 备份清理命令
+- `194-summary-cli-update-bundle-doctor-command.md`：新增 `update bundle doctor` 备份诊断命令
