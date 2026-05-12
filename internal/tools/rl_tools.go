@@ -253,4 +253,38 @@ func rlStartTrainingParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"environment": map[string]any{"type": "string"}}}
 }
 
+func rlListEnvironmentsParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlGetCurrentConfigParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlStopTrainingParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlCheckStatusParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlGetResultsParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlListRunsParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func rlTestInferenceParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"environment": map[string]any{"type": "string"},
+			"timeout":     map[string]any{"type": "integer"},
+		},
+	}
+}
+
 var _ = fmt.Sprintf

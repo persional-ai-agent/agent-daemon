@@ -253,5 +253,20 @@ func spotifyQueueParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string"}, "uri": map[string]any{"type": "string"}}}
 }
 
-var _ = errors.New
+func spotifyDevicesParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
 
+func spotifyPlaylistsParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func spotifyAlbumsParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+func spotifyLibraryParams() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+
+var _ = errors.New
