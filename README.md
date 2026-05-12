@@ -61,6 +61,13 @@ export AGENT_MODEL_FALLBACK_PROVIDER=anthropic
 export AGENT_MODEL_USE_STREAMING=true
 ```
 
+也可以直接用统一 setup 入口写入配置文件：
+
+```bash
+go run ./cmd/agentd setup -provider openai -model gpt-4o-mini -api-key "$OPENAI_API_KEY"
+go run ./cmd/agentd setup -provider anthropic -model claude-3-5-haiku-latest -api-key "$ANTHROPIC_API_KEY" -gateway-platform telegram -gateway-token "$AGENT_TELEGRAM_BOT_TOKEN"
+```
+
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。
 
 Anthropic 模式：

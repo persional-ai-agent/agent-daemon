@@ -640,6 +640,8 @@ func main() {
 		runModel(cfg, os.Args[2:])
 	case "doctor":
 		runDoctor(cfg, os.Args[2:])
+	case "setup":
+		runSetup(cfg, os.Args[2:])
 	case "gateway":
 		runGateway(cfg, os.Args[2:])
 	case "sessions":
@@ -703,6 +705,96 @@ func runConfig(args []string) {
 	}
 }
 
+func runSetup(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	provider := fs.String("provider", "", "model provider (openai/anthropic/codex)")
+	modelName := fs.String("model", "", "model name")
+	baseURL := fs.String("base-url", "", "provider base URL")
+	apiKey := fs.String("api-key", "", "provider API key")
+	fallback := fs.String("fallback-provider", "", "fallback provider")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (telegram/discord/slack/yuanbao)")
+	gatewayToken := fs.String("gateway-token", "", "shared gateway token (telegram/discord/yuanbao)")
+	gatewayBotToken := fs.String("gateway-bot-token", "", "slack bot token")
+	gatewayAppToken := fs.String("gateway-app-token", "", "slack app token")
+	gatewayAppID := fs.String("gateway-app-id", "", "yuanbao app id")
+	gatewayAppSecret := fs.String("gateway-app-secret", "", "yuanbao app secret")
+	gatewayAllowedUsers := fs.String("gateway-allowed-users", "", "comma-separated allowed users")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+	}
+	selectedProvider := strings.ToLower(strings.TrimSpace(*provider))
+	if selectedProvider == "" {
+		selectedProvider = strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+	}
+	if selectedProvider == "" {
+		selectedProvider = "openai"
+	}
+	if !containsName(supportedModelProviders(), selectedProvider) {
+		log.Fatalf("unsupported provider: %s", selectedProvider)
+	}
+	selectedModel := strings.TrimSpace(*modelName)
+	if selectedModel == "" {
+		selectedModel, _ = currentModelConfig(cfg, selectedProvider)
+	}
+	if strings.TrimSpace(selectedModel) == "" {
+		log.Fatal("model is required")
+	}
+	if err := saveModelSelection(*path, selectedProvider, selectedModel, strings.TrimSpace(*baseURL)); err != nil {
+		log.Fatal(err)
+	}
+	written := []string{"api.type"}
+	modelKey, baseURLKey := modelConfigKeys(selectedProvider)
+	written = append(written, modelKey)
+	targetPath := config.ConfigFilePath(*path)
+	if strings.TrimSpace(*baseURL) != "" {
+		written = append(written, baseURLKey)
+	}
+	if apiKeyKey := providerAPIKeyConfigKey(selectedProvider); apiKeyKey != "" && strings.TrimSpace(*apiKey) != "" {
+		if err := config.SaveConfigValue(targetPath, apiKeyKey, strings.TrimSpace(*apiKey)); err != nil {
+			log.Fatal(err)
+		}
+		written = append(written, apiKeyKey)
+	}
+	if strings.TrimSpace(*fallback) != "" {
+		fb := strings.ToLower(strings.TrimSpace(*fallback))
+		if !containsName(supportedModelProviders(), fb) {
+			log.Fatalf("unsupported fallback provider: %s", fb)
+		}
+		if err := config.SaveConfigValue(targetPath, "provider.fallback", fb); err != nil {
+			log.Fatal(err)
+		}
+		written = append(written, "provider.fallback")
+	}
+	selectedGateway := strings.ToLower(strings.TrimSpace(*gatewayPlatform))
+	if selectedGateway != "" {
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, strings.TrimSpace(*gatewayToken), strings.TrimSpace(*gatewayBotToken), strings.TrimSpace(*gatewayAppToken), strings.TrimSpace(*gatewayAppID), strings.TrimSpace(*gatewayAppSecret), strings.TrimSpace(*gatewayAllowedUsers))
+		if err != nil {
+			log.Fatal(err)
+		}
+		written = append(written, gatewayWritten...)
+	}
+	written = uniqueSortedNames(written)
+	if *jsonOutput {
+		printJSON(map[string]any{
+			"success":          true,
+			"path":             targetPath,
+			"provider":         selectedProvider,
+			"model":            selectedModel,
+			"gateway_platform": selectedGateway,
+			"written":          written,
+		})
+		return
+	}
+	fmt.Printf("configured provider %s:%s in %s\n", selectedProvider, selectedModel, targetPath)
+	if selectedGateway != "" {
+		fmt.Printf("configured gateway platform %s\n", selectedGateway)
+	}
+	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
 func runToolsets(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage:")
@@ -753,6 +845,11 @@ func printConfigUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd config list [-file path] [-show-secrets]")
 	fmt.Fprintln(os.Stderr, "  agentd config get [-file path] section.key")
 	fmt.Fprintln(os.Stderr, "  agentd config set [-file path] section.key value")
+}
+
+func printSetupUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 }
 
 func runModel(cfg config.Config, args []string) {
@@ -1992,72 +2089,11 @@ func runGatewaySetup(args []string) {
 	if platformKey == "" {
 		log.Fatal("platform is required")
 	}
-	values := map[string]string{
-		"gateway.enabled": "true",
-	}
-	written := []string{"gateway.enabled"}
-	switch platformKey {
-	case "telegram":
-		if strings.TrimSpace(*token) == "" {
-			log.Fatal("telegram setup requires -token")
-		}
-		values["gateway.telegram.bot_token"] = strings.TrimSpace(*token)
-		written = append(written, "gateway.telegram.bot_token")
-		if strings.TrimSpace(*allowedUsers) != "" {
-			values["gateway.telegram.allowed_users"] = strings.TrimSpace(*allowedUsers)
-			written = append(written, "gateway.telegram.allowed_users")
-		}
-	case "discord":
-		if strings.TrimSpace(*token) == "" {
-			log.Fatal("discord setup requires -token")
-		}
-		values["gateway.discord.bot_token"] = strings.TrimSpace(*token)
-		written = append(written, "gateway.discord.bot_token")
-		if strings.TrimSpace(*allowedUsers) != "" {
-			values["gateway.discord.allowed_users"] = strings.TrimSpace(*allowedUsers)
-			written = append(written, "gateway.discord.allowed_users")
-		}
-	case "slack":
-		if strings.TrimSpace(*botToken) == "" || strings.TrimSpace(*appToken) == "" {
-			log.Fatal("slack setup requires -bot-token and -app-token")
-		}
-		values["gateway.slack.bot_token"] = strings.TrimSpace(*botToken)
-		values["gateway.slack.app_token"] = strings.TrimSpace(*appToken)
-		written = append(written, "gateway.slack.bot_token", "gateway.slack.app_token")
-		if strings.TrimSpace(*allowedUsers) != "" {
-			values["gateway.slack.allowed_users"] = strings.TrimSpace(*allowedUsers)
-			written = append(written, "gateway.slack.allowed_users")
-		}
-	case "yuanbao":
-		if strings.TrimSpace(*token) == "" && (strings.TrimSpace(*appID) == "" || strings.TrimSpace(*appSecret) == "") {
-			log.Fatal("yuanbao setup requires -token or both -app-id and -app-secret")
-		}
-		if strings.TrimSpace(*token) != "" {
-			values["gateway.yuanbao.token"] = strings.TrimSpace(*token)
-			written = append(written, "gateway.yuanbao.token")
-		}
-		if strings.TrimSpace(*appID) != "" {
-			values["gateway.yuanbao.app_id"] = strings.TrimSpace(*appID)
-			written = append(written, "gateway.yuanbao.app_id")
-		}
-		if strings.TrimSpace(*appSecret) != "" {
-			values["gateway.yuanbao.app_secret"] = strings.TrimSpace(*appSecret)
-			written = append(written, "gateway.yuanbao.app_secret")
-		}
-		if strings.TrimSpace(*allowedUsers) != "" {
-			values["gateway.yuanbao.allowed_users"] = strings.TrimSpace(*allowedUsers)
-			written = append(written, "gateway.yuanbao.allowed_users")
-		}
-	default:
-		log.Fatalf("unsupported platform: %s", platformKey)
-	}
 	targetPath := config.ConfigFilePath(*path)
-	for _, key := range written {
-		if err := config.SaveConfigValue(targetPath, key, values[key]); err != nil {
-			log.Fatal(err)
-		}
+	written, err := setupGatewayConfig(targetPath, platformKey, strings.TrimSpace(*token), strings.TrimSpace(*botToken), strings.TrimSpace(*appToken), strings.TrimSpace(*appID), strings.TrimSpace(*appSecret), strings.TrimSpace(*allowedUsers))
+	if err != nil {
+		log.Fatal(err)
 	}
-	sort.Strings(written)
 	if *jsonOutput {
 		printJSON(map[string]any{
 			"success":  true,
@@ -2070,6 +2106,99 @@ func runGatewaySetup(args []string) {
 	}
 	fmt.Printf("configured gateway platform %s in %s\n", platformKey, targetPath)
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
+func setupGatewayConfig(path, platformKey, token, botToken, appToken, appID, appSecret, allowedUsers string) ([]string, error) {
+	values := map[string]string{
+		"gateway.enabled": "true",
+	}
+	written := []string{"gateway.enabled"}
+	switch platformKey {
+	case "telegram":
+		if token == "" {
+			return nil, fmt.Errorf("telegram setup requires -token")
+		}
+		values["gateway.telegram.bot_token"] = token
+		written = append(written, "gateway.telegram.bot_token")
+		if allowedUsers != "" {
+			values["gateway.telegram.allowed_users"] = allowedUsers
+			written = append(written, "gateway.telegram.allowed_users")
+		}
+	case "discord":
+		if token == "" {
+			return nil, fmt.Errorf("discord setup requires -token")
+		}
+		values["gateway.discord.bot_token"] = token
+		written = append(written, "gateway.discord.bot_token")
+		if allowedUsers != "" {
+			values["gateway.discord.allowed_users"] = allowedUsers
+			written = append(written, "gateway.discord.allowed_users")
+		}
+	case "slack":
+		if botToken == "" || appToken == "" {
+			return nil, fmt.Errorf("slack setup requires -bot-token and -app-token")
+		}
+		values["gateway.slack.bot_token"] = botToken
+		values["gateway.slack.app_token"] = appToken
+		written = append(written, "gateway.slack.bot_token", "gateway.slack.app_token")
+		if allowedUsers != "" {
+			values["gateway.slack.allowed_users"] = allowedUsers
+			written = append(written, "gateway.slack.allowed_users")
+		}
+	case "yuanbao":
+		if token == "" && (appID == "" || appSecret == "") {
+			return nil, fmt.Errorf("yuanbao setup requires -token or both -app-id and -app-secret")
+		}
+		if token != "" {
+			values["gateway.yuanbao.token"] = token
+			written = append(written, "gateway.yuanbao.token")
+		}
+		if appID != "" {
+			values["gateway.yuanbao.app_id"] = appID
+			written = append(written, "gateway.yuanbao.app_id")
+		}
+		if appSecret != "" {
+			values["gateway.yuanbao.app_secret"] = appSecret
+			written = append(written, "gateway.yuanbao.app_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.yuanbao.allowed_users"] = allowedUsers
+			written = append(written, "gateway.yuanbao.allowed_users")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", platformKey)
+	}
+	for _, key := range written {
+		if err := config.SaveConfigValue(path, key, values[key]); err != nil {
+			return nil, err
+		}
+	}
+	return uniqueSortedNames(written), nil
+}
+
+func containsName(names []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, name := range names {
+		if strings.TrimSpace(name) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueSortedNames(names []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func printGatewayUsage() {
@@ -2321,6 +2450,17 @@ func modelConfigKeys(provider string) (string, string) {
 		return "api.codex.model", "api.codex.base_url"
 	default:
 		return "api.model", "api.base_url"
+	}
+}
+
+func providerAPIKeyConfigKey(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "anthropic":
+		return "api.anthropic.api_key"
+	case "codex":
+		return "api.codex.api_key"
+	default:
+		return "api.api_key"
 	}
 }
 

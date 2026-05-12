@@ -275,3 +275,4 @@
 - `150-summary-gateway-hook-spool-import-filters.md`：`spool import` 增加 `-type/-id/-before` 过滤导入能力
 - `151-summary-gateway-hooks-doctor-strict.md`：`hooks doctor` 增加 `--strict` 非健康即非零退出
 - `152-summary-cli-gateway-setup.md`：新增 `gateway setup` 最小平台配置写入入口
+- `153-summary-cli-setup-entrypoint.md`：新增统一 `setup` 引导入口（模型 + 可选网关）
