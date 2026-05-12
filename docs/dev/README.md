@@ -328,3 +328,4 @@
 - `203-summary-cli-update-bundle-snapshots-status-command.md`：新增 `update bundle snapshots-status` 快照聚合状态命令
 - `204-summary-cli-update-bundle-snapshots-restore-command.md`：新增 `update bundle snapshots-restore` 快照恢复命令
 - `205-summary-cli-update-bundle-snapshots-restore-plan-command.md`：新增 `update bundle snapshots-restore-plan` 快照恢复预演命令
+- `206-summary-cli-update-bundle-snapshots-delete-command.md`：新增 `update bundle snapshots-delete` 快照定向删除命令

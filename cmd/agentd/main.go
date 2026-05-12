@@ -1484,8 +1484,28 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("create=%v\n", info["create_count"])
 		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
 		fmt.Printf("backup=%v\n", info["backup_count"])
+	case "snapshots-delete":
+		fs := flag.NewFlagSet("update bundle snapshots-delete", flag.ExitOnError)
+		path := fs.String("file", "", "manual snapshot tar.gz path or manifest json path (defaults to latest snapshot under dest)")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-delete -dest <dir> [-file <snapshot.tar.gz|manifest.json>] [-json]")
+		}
+		info, err := deleteSnapshotBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("deleted=%v\n", info["deleted"])
+		fmt.Printf("snapshot_bundle=%v\n", info["snapshot_bundle_path"])
+		fmt.Printf("manifest=%v\n", info["manifest_path"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status|snapshots-restore|snapshots-restore-plan]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status|snapshots-restore|snapshots-restore-plan|snapshots-delete]")
 	}
 }
 
@@ -2042,6 +2062,32 @@ func planRestoreSnapshotBundle(path, dest string) (map[string]any, error) {
 		info["next_actions"] = nextActions
 	}
 	return info, nil
+}
+
+func deleteSnapshotBundle(path, dest string) (map[string]any, error) {
+	snapshotPath := strings.TrimSpace(path)
+	if snapshotPath == "" {
+		var err error
+		snapshotPath, err = latestSnapshotBundlePath(dest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if strings.HasSuffix(strings.ToLower(snapshotPath), ".json") {
+		snapshotPath = strings.TrimSuffix(snapshotPath, ".json")
+	}
+	manifestPath := strings.TrimSuffix(snapshotPath, ".tar.gz") + ".json"
+	if err := os.Remove(snapshotPath); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return map[string]any{
+		"deleted":              true,
+		"snapshot_bundle_path": snapshotPath,
+		"manifest_path":        manifestPath,
+	}, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
