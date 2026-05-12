@@ -241,11 +241,11 @@ func approvalKeyboard(meta map[string]any) any {
 }
 
 func (t *TelegramAdapter) registerCommands() error {
-	_, err := t.bot.Request(tgbotapi.NewSetMyCommands(telegramCommands()...))
+	_, err := t.bot.Request(tgbotapi.NewSetMyCommands(TelegramCommands()...))
 	return err
 }
 
-func telegramCommands() []tgbotapi.BotCommand {
+func TelegramCommands() []tgbotapi.BotCommand {
 	return []tgbotapi.BotCommand{
 		{Command: "pair", Description: "pair with gateway using a code"},
 		{Command: "unpair", Description: "remove current gateway pairing"},

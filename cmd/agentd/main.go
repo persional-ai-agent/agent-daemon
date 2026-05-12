@@ -3468,7 +3468,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway restart [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway install [-file path] [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway uninstall [-file path] [-workdir dir] [-stop] [-json]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway manifest -platform <slack> [-command /agent] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway manifest -platform <slack|discord|telegram> [-command /agent] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
@@ -3502,7 +3502,7 @@ func runGatewayManifest(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway manifest -platform <slack|discord> [-command /agent] [-json]")
+		log.Fatal("usage: agentd gateway manifest -platform <slack|discord|telegram> [-command /agent] [-json]")
 	}
 	switch strings.ToLower(strings.TrimSpace(*platformName)) {
 	case "slack":
@@ -3519,8 +3519,15 @@ func runGatewayManifest(args []string) {
 			return
 		}
 		printJSON(export)
+	case "telegram":
+		export := buildTelegramManifestExport()
+		if *jsonOutput {
+			printJSON(export)
+			return
+		}
+		printJSON(export)
 	default:
-		log.Fatal("supported platforms: slack, discord")
+		log.Fatal("supported platforms: slack, discord, telegram")
 	}
 }
 
@@ -3628,6 +3635,32 @@ func buildDiscordManifestExport() map[string]any {
 			"为 Discord 应用勾选 bot 与 applications.commands scopes",
 			"确保 bot 拥有 Send Messages、Read Message History、Use Application Commands、Attach Files 权限",
 			"启动 gateway 后会自动 bulk overwrite 注册这些全局 slash 命令",
+		},
+	}
+}
+
+func buildTelegramManifestExport() map[string]any {
+	commands := make([]map[string]string, 0, len(platforms.TelegramCommands()))
+	botFatherCommands := make([]string, 0, len(platforms.TelegramCommands()))
+	for _, cmd := range platforms.TelegramCommands() {
+		commands = append(commands, map[string]string{
+			"command":     cmd.Command,
+			"description": cmd.Description,
+		})
+		botFatherCommands = append(botFatherCommands, "/"+cmd.Command+" - "+cmd.Description)
+	}
+	return map[string]any{
+		"platform":           "telegram",
+		"commands":           commands,
+		"set_my_commands":    commands,
+		"botfather_commands": botFatherCommands,
+		"install_requirements": []string{
+			"TELEGRAM_TOKEN",
+		},
+		"next_actions": []string{
+			"在 BotFather 创建 bot 并配置 TELEGRAM_TOKEN",
+			"启动 gateway 后会自动调用 setMyCommands 注册这些命令",
+			"若需手工核对，可把 botfather_commands 逐行粘贴到 BotFather 命令菜单配置",
 		},
 	}
 }
