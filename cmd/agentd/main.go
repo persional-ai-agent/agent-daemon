@@ -1439,8 +1439,31 @@ func runUpdateBundle(args []string) {
 		if nextActions, ok := info["next_actions"].([]string); ok {
 			fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
 		}
+	case "snapshots-restore":
+		fs := flag.NewFlagSet("update bundle snapshots-restore", flag.ExitOnError)
+		path := fs.String("file", "", "manual snapshot tar.gz path or manifest json path (defaults to latest snapshot under dest)")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-restore -dest <dir> [-file <snapshot.tar.gz|manifest.json>] [-json]")
+		}
+		info, err := restoreSnapshotBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("snapshot_bundle=%s\n", info["snapshot_bundle_path"])
+		fmt.Printf("dest=%s\n", info["dest"])
+		fmt.Printf("applied_files=%v\n", info["applied_files"])
+		fmt.Printf("created_files=%v\n", info["created_files"])
+		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
+		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status|snapshots-restore]")
 	}
 }
 
@@ -1945,6 +1968,35 @@ func snapshotStatusSummary(dest string, limit int) (map[string]any, error) {
 	result["status"] = status
 	result["issues"] = dedupeStrings(issues)
 	result["next_actions"] = dedupeStrings(nextActions)
+	return result, nil
+}
+
+func restoreSnapshotBundle(path, dest string) (map[string]any, error) {
+	snapshotPath := strings.TrimSpace(path)
+	if snapshotPath == "" {
+		var err error
+		snapshotPath, err = latestSnapshotBundlePath(dest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	info, err := inspectUpdateBundle(snapshotPath)
+	if err != nil {
+		return nil, err
+	}
+	resolvedPath := strings.TrimSpace(anyString(info["bundle_path"]))
+	if resolvedPath == "" || !anyBool(info["bundle_exists"]) {
+		return nil, fmt.Errorf("snapshot bundle file missing: %s", snapshotPath)
+	}
+	if entries, _ := info["archive_entries"].(int); entries == 0 {
+		return nil, fmt.Errorf("snapshot bundle archive has no entries: %s", resolvedPath)
+	}
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	result, err := applyBundleArchive(resolvedPath, dest, backupDir, snapshotPath)
+	if err != nil {
+		return nil, err
+	}
+	result["snapshot_bundle_path"] = resolvedPath
 	return result, nil
 }
 
