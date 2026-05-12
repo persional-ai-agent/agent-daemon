@@ -272,3 +272,5 @@
 - `147-summary-gateway-hooks-doctor-and-verify.md`：补充 hooks doctor + spool verify 的诊断能力整合说明
 - `148-summary-gateway-hook-spool-import-all.md`：`spool import` 新增 `-all` 批量导入 JSONL 片段
 - `149-summary-gateway-hooks-doctor-next-actions.md`：`hooks doctor` 增加可执行的 `next_actions` 建议
+- `150-summary-gateway-hook-spool-import-filters.md`：`spool import` 增加 `-type/-id/-before` 过滤导入能力
+- `151-summary-gateway-hooks-doctor-strict.md`：`hooks doctor` 增加 `--strict` 非健康即非零退出

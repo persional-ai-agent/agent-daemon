@@ -420,7 +420,7 @@ func compactSpoolFile(path string, maxLines int) (before int, after int, err err
 	return before, after, nil
 }
 
-func importSpoolFile(inputPath, targetPath string, appendMode bool) (imported int, skipped int, total int, err error) {
+func importSpoolFile(inputPath, targetPath string, appendMode bool, typeFilter, idFilter string, cutoff time.Time) (imported int, skipped int, total int, err error) {
 	inBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		return 0, 0, 0, err
@@ -450,6 +450,10 @@ func importSpoolFile(inputPath, targetPath string, appendMode bool) (imported in
 		total++
 		var e hookSpoolEntry
 		if jerr := json.Unmarshal([]byte(ln), &e); jerr != nil || strings.TrimSpace(e.Type) == "" || strings.TrimSpace(e.Body) == "" {
+			skipped++
+			continue
+		}
+		if !matchesSpoolFilter(e, typeFilter, idFilter, cutoff) {
 			skipped++
 			continue
 		}
@@ -1300,9 +1304,10 @@ func runGatewayHookDoctor(cfg config.Config, args []string) {
 	fs := flag.NewFlagSet("gateway hooks doctor", flag.ExitOnError)
 	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
 	path := fs.String("path", "", "base spool path")
+	strict := fs.Bool("strict", false, "exit non-zero on warn/error (CI mode)")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway hooks doctor [-workdir dir] [-path file]")
+		log.Fatal("usage: agentd gateway hooks doctor [-workdir dir] [-path file] [-strict]")
 	}
 	spoolPath := strings.TrimSpace(*path)
 	if spoolPath == "" {
@@ -1393,6 +1398,9 @@ func runGatewayHookDoctor(cfg config.Config, args []string) {
 		"issues": issues,
 		"next_actions": nextActions,
 	})
+	if *strict && status != "ok" {
+		os.Exit(1)
+	}
 }
 
 func runGatewayHookPing(_ config.Config, args []string) {
@@ -1792,10 +1800,13 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 		path := fs.String("path", "", "target base spool path")
 		in := fs.String("in", "", "input JSONL file path (required)")
 		all := fs.Bool("all", false, "import all JSONL files under input directory matching spool-like names")
+		typeFilter := fs.String("type", "", "optional event type filter")
+		idFilter := fs.String("id", "", "optional event id filter")
+		before := fs.String("before", "", "optional RFC3339/RFC3339Nano cutoff (created_at < before)")
 		appendMode := fs.Bool("append", true, "append into target (default true). set false to overwrite target before import")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
-			log.Fatal("usage: agentd gateway hooks spool import -in file [-all] [-workdir dir] [-path file] [-append=true|false]")
+			log.Fatal("usage: agentd gateway hooks spool import -in file [-all] [-type t] [-id eid] [-before ts] [-workdir dir] [-path file] [-append=true|false]")
 		}
 		if strings.TrimSpace(*in) == "" {
 			log.Fatal("in is required")
@@ -1812,6 +1823,10 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			}
 			inputs = allInputs
 		}
+		cutoff, err := parseCutoff(strings.TrimSpace(*before))
+		if err != nil {
+			log.Fatal(err)
+		}
 		totalImported, totalSkipped, totalLines := 0, 0, 0
 		perFile := make([]map[string]any, 0, len(inputs))
 		first := true
@@ -1820,7 +1835,7 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			if !*appendMode && !first {
 				appendThis = true
 			}
-			imported, skipped, total, err := importSpoolFile(inputPath, target, appendThis)
+			imported, skipped, total, err := importSpoolFile(inputPath, target, appendThis, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter), cutoff)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -1846,6 +1861,11 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			"append":   *appendMode,
 			"all":      *all,
 			"files":    perFile,
+			"filter": map[string]any{
+				"type":   strings.TrimSpace(*typeFilter),
+				"id":     strings.TrimSpace(*idFilter),
+				"before": strings.TrimSpace(*before),
+			},
 		})
 	default:
 		printGatewayHookSpoolUsage()
@@ -1973,7 +1993,7 @@ func printGatewayHooksUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool <subcommand>")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks ping [-url hook] [-secret s] [-timeout S]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway hooks doctor [-workdir dir] [-path file]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks doctor [-workdir dir] [-path file] [-strict]")
 	fmt.Fprintln(os.Stderr, "  spool subcommands: status, clear, replay")
 }
 
@@ -1988,7 +2008,7 @@ func printGatewayHookSpoolUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool verify [-workdir dir] [-path file] [-all]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool import -in file [-all] [-workdir dir] [-path file] [-append=true|false]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool import -in file [-all] [-type t] [-id eid] [-before ts] [-workdir dir] [-path file] [-append=true|false]")
 }
 
 type gatewayStatusInfo struct {
