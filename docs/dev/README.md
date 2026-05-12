@@ -278,3 +278,4 @@
 - `153-summary-cli-setup-entrypoint.md`：新增统一 `setup` 引导入口（模型 + 可选网关）
 - `154-summary-cli-setup-wizard.md`：新增交互式 `setup wizard` 引导流程
 - `155-summary-cli-update-command.md`：新增最小 `update` 命令（git checkout 检查/快进更新）
+- `156-summary-cli-version-command.md`：新增 `version` 命令（含可选更新状态检查）

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,12 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/model"
 	"github.com/dingjingmaster/agent-daemon/internal/store"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
+)
+
+var (
+	appVersion  = "dev"
+	releaseDate = ""
+	buildCommit = ""
 )
 
 type hookSpoolEntry struct {
@@ -646,6 +653,8 @@ func main() {
 		runSetup(cfg, os.Args[2:])
 	case "update":
 		runUpdate(os.Args[2:])
+	case "version":
+		runVersion(os.Args[2:])
 	case "gateway":
 		runGateway(cfg, os.Args[2:])
 	case "sessions":
@@ -840,6 +849,58 @@ func runUpdate(args []string) {
 		fmt.Printf("updated=%v\n", result["updated"])
 	default:
 		log.Fatal("usage: agentd update [check|apply]")
+	}
+}
+
+func runVersion(args []string) {
+	fs := flag.NewFlagSet("version", flag.ExitOnError)
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	checkUpdate := fs.Bool("check-update", false, "check git upstream update status")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd version [-json] [-check-update]")
+	}
+	info := map[string]any{
+		"app_version":  appVersion,
+		"release_date": releaseDate,
+		"build_commit": buildCommit,
+		"go_version":   runtime.Version(),
+	}
+	if strings.TrimSpace(buildCommit) == "" {
+		if commit, err := runGit("", "rev-parse", "HEAD"); err == nil {
+			info["git_commit"] = commit
+		}
+	}
+	if *checkUpdate {
+		if status, err := gitUpdateStatus(true); err == nil {
+			info["update"] = status
+		} else {
+			info["update_error"] = err.Error()
+		}
+	}
+	if *jsonOutput {
+		printJSON(info)
+		return
+	}
+	fmt.Printf("agent-daemon %s\n", appVersion)
+	if strings.TrimSpace(releaseDate) != "" {
+		fmt.Printf("release_date=%s\n", releaseDate)
+	}
+	if v, ok := info["build_commit"].(string); ok && strings.TrimSpace(v) != "" {
+		fmt.Printf("build_commit=%s\n", v)
+	} else if v, ok := info["git_commit"].(string); ok && strings.TrimSpace(v) != "" {
+		fmt.Printf("git_commit=%s\n", v)
+	}
+	fmt.Printf("go_version=%s\n", runtime.Version())
+	if *checkUpdate {
+		if status, ok := info["update"].(map[string]any); ok {
+			fmt.Printf("update_upstream=%v\n", status["upstream"])
+			fmt.Printf("update_ahead=%v\n", status["ahead"])
+			fmt.Printf("update_behind=%v\n", status["behind"])
+			fmt.Printf("update_dirty=%v\n", status["dirty"])
+		} else if errText, ok := info["update_error"].(string); ok && strings.TrimSpace(errText) != "" {
+			fmt.Printf("update_error=%s\n", errText)
+		}
 	}
 }
 
