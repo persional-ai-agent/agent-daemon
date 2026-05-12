@@ -71,6 +71,7 @@ go run ./cmd/agentd bootstrap init
 go run ./cmd/agentd bootstrap status -json
 go run ./cmd/agentd version
 go run ./cmd/agentd version -check-update -json
+go run ./cmd/agentd update bundle -json
 go run ./cmd/agentd update changelog -json
 go run ./cmd/agentd update doctor -json
 go run ./cmd/agentd update status -json

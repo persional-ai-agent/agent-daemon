@@ -1,8 +1,10 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -10,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -805,6 +808,31 @@ func runUpdate(args []string) {
 		args = args[1:]
 	}
 	switch mode {
+	case "bundle":
+		fs := flag.NewFlagSet("update bundle", flag.ExitOnError)
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before building bundle metadata")
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		outPath := fs.String("out", "", "output tar.gz path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update bundle [-fetch-tags] [-repo path] [-out file] [-json]")
+		}
+		info, err := buildUpdateBundle(strings.TrimSpace(*repoPath), strings.TrimSpace(*outPath), *fetchTags)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("repo=%s\n", info["repo"])
+		fmt.Printf("bundle=%s\n", info["bundle_path"])
+		fmt.Printf("manifest=%s\n", info["manifest_path"])
+		fmt.Printf("commit=%s\n", info["commit"])
+		fmt.Printf("latest_tag=%v\n", info["latest_tag"])
+		fmt.Printf("file_count=%v\n", info["file_count"])
+		return
 	case "changelog":
 		fs := flag.NewFlagSet("update changelog", flag.ExitOnError)
 		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before checking releases")
@@ -1010,8 +1038,120 @@ func runUpdate(args []string) {
 			fmt.Println("removed=")
 		}
 	default:
-		log.Fatal("usage: agentd update [changelog|doctor|status|check|apply|release|install|uninstall]")
+		log.Fatal("usage: agentd update [bundle|changelog|doctor|status|check|apply|release|install|uninstall]")
 	}
+}
+
+func buildUpdateBundle(repoPath, outPath string, fetchTags bool) (map[string]any, error) {
+	repo, err := resolveUpdateRepoRoot(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	releaseInfo, err := gitReleaseInfoAt(repo, fetchTags, 20)
+	if err != nil {
+		return nil, err
+	}
+	commit, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	shortCommit, err := runGit(repo, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	label := strings.TrimSpace(anyString(releaseInfo["latest_tag"]))
+	if label == "" {
+		label = shortCommit
+	}
+	if outPath == "" {
+		outPath = filepath.Join(repo, ".agent-daemon", "release", "agent-daemon-"+sanitizeBundleLabel(label)+".tar.gz")
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		return nil, err
+	}
+	filesOut, err := runGit(repo, "ls-files")
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0)
+	for _, line := range strings.Split(filesOut, "\n") {
+		path := strings.TrimSpace(line)
+		if path == "" {
+			continue
+		}
+		files = append(files, path)
+	}
+	if err := writeRepoBundle(repo, outPath, files); err != nil {
+		return nil, err
+	}
+	manifestPath := strings.TrimSuffix(outPath, ".tar.gz") + ".json"
+	manifest := map[string]any{
+		"repo":         repo,
+		"bundle_path":  outPath,
+		"commit":       commit,
+		"short_commit": shortCommit,
+		"latest_tag":   releaseInfo["latest_tag"],
+		"current_tag":  releaseInfo["current_tag"],
+		"file_count":   len(files),
+		"generated_at": time.Now().Format(time.RFC3339Nano),
+	}
+	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		return nil, err
+	}
+	manifest["manifest_path"] = manifestPath
+	return manifest, nil
+}
+
+func writeRepoBundle(repo, outPath string, files []string) error {
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+	gzw := gzip.NewWriter(outFile)
+	defer gzw.Close()
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+	for _, rel := range files {
+		abs := filepath.Join(repo, rel)
+		info, err := os.Stat(abs)
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(rel)
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		f, err := os.Open(abs)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sanitizeBundleLabel(label string) string {
+	replacer := strings.NewReplacer("/", "-", "\\", "-", " ", "-", ":", "-", "@", "-")
+	label = replacer.Replace(strings.TrimSpace(label))
+	if label == "" {
+		return "bundle"
+	}
+	return label
 }
 
 func gitChangelogInfo(repoPath string, fetchTags bool, limit int) (map[string]any, error) {
