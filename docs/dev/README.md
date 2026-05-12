@@ -320,3 +320,4 @@
 - `195-summary-cli-update-bundle-status-command.md`：新增 `update bundle status` 聚合状态命令
 - `196-summary-cli-update-bundle-manifest-command.md`：新增 `update bundle manifest` 分发清单命令
 - `197-summary-cli-update-bundle-plan-command.md`：新增 `update bundle plan` dry-run 规划命令
+- `198-summary-cli-update-bundle-rollback-plan-command.md`：新增 `update bundle rollback-plan` 回滚预演命令

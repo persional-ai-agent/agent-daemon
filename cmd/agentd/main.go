@@ -1305,8 +1305,30 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("create=%v\n", info["create_count"])
 		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
 		fmt.Printf("backup=%v\n", info["backup_count"])
+	case "rollback-plan":
+		fs := flag.NewFlagSet("update bundle rollback-plan", flag.ExitOnError)
+		path := fs.String("file", "", "backup bundle tar.gz path or manifest json path (defaults to latest backup under dest)")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle rollback-plan -dest <dir> [-file <backup.tar.gz|manifest.json>] [-json]")
+		}
+		info, err := planRollbackBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("rollback_bundle=%v\n", info["rollback_bundle_path"])
+		fmt.Printf("dest=%v\n", info["dest"])
+		fmt.Printf("create=%v\n", info["create_count"])
+		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
+		fmt.Printf("backup=%v\n", info["backup_count"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan]")
 	}
 }
 
@@ -1579,6 +1601,28 @@ func planUpdateBundle(path, dest string) (map[string]any, error) {
 		"overwrite_items": overwriteItems,
 		"next_actions":    nextActions,
 	}, nil
+}
+
+func planRollbackBundle(path, dest string) (map[string]any, error) {
+	bundlePath := strings.TrimSpace(path)
+	if bundlePath == "" {
+		var err error
+		bundlePath, err = latestBundleBackupPath(dest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	info, err := planUpdateBundle(bundlePath, dest)
+	if err != nil {
+		return nil, err
+	}
+	info["rollback_bundle_path"] = info["bundle_path"]
+	delete(info, "bundle_path")
+	if nextActions, ok := info["next_actions"].([]string); ok {
+		nextActions = append([]string{"这是 rollback 预演；确认后可执行 `agentd update bundle rollback` 恢复目标目录"}, nextActions...)
+		info["next_actions"] = nextActions
+	}
+	return info, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
