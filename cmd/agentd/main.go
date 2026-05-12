@@ -809,29 +809,7 @@ func runUpdate(args []string) {
 	}
 	switch mode {
 	case "bundle":
-		fs := flag.NewFlagSet("update bundle", flag.ExitOnError)
-		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before building bundle metadata")
-		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
-		outPath := fs.String("out", "", "output tar.gz path")
-		jsonOutput := fs.Bool("json", false, "output JSON")
-		_ = fs.Parse(args)
-		if fs.NArg() != 0 {
-			log.Fatal("usage: agentd update bundle [-fetch-tags] [-repo path] [-out file] [-json]")
-		}
-		info, err := buildUpdateBundle(strings.TrimSpace(*repoPath), strings.TrimSpace(*outPath), *fetchTags)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if *jsonOutput {
-			printJSON(info)
-			return
-		}
-		fmt.Printf("repo=%s\n", info["repo"])
-		fmt.Printf("bundle=%s\n", info["bundle_path"])
-		fmt.Printf("manifest=%s\n", info["manifest_path"])
-		fmt.Printf("commit=%s\n", info["commit"])
-		fmt.Printf("latest_tag=%v\n", info["latest_tag"])
-		fmt.Printf("file_count=%v\n", info["file_count"])
+		runUpdateBundle(args)
 		return
 	case "changelog":
 		fs := flag.NewFlagSet("update changelog", flag.ExitOnError)
@@ -1042,6 +1020,64 @@ func runUpdate(args []string) {
 	}
 }
 
+func runUpdateBundle(args []string) {
+	submode := "build"
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
+		submode = strings.ToLower(strings.TrimSpace(args[0]))
+		args = args[1:]
+	}
+	switch submode {
+	case "build":
+		fs := flag.NewFlagSet("update bundle", flag.ExitOnError)
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before building bundle metadata")
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		outPath := fs.String("out", "", "output tar.gz path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update bundle [build] [-fetch-tags] [-repo path] [-out file] [-json]")
+		}
+		info, err := buildUpdateBundle(strings.TrimSpace(*repoPath), strings.TrimSpace(*outPath), *fetchTags)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("repo=%s\n", info["repo"])
+		fmt.Printf("bundle=%s\n", info["bundle_path"])
+		fmt.Printf("manifest=%s\n", info["manifest_path"])
+		fmt.Printf("commit=%s\n", info["commit"])
+		fmt.Printf("latest_tag=%v\n", info["latest_tag"])
+		fmt.Printf("file_count=%v\n", info["file_count"])
+	case "inspect":
+		fs := flag.NewFlagSet("update bundle inspect", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" {
+			log.Fatal("usage: agentd update bundle inspect -file <bundle.tar.gz|manifest.json> [-json]")
+		}
+		info, err := inspectUpdateBundle(strings.TrimSpace(*path))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("bundle=%s\n", info["bundle_path"])
+		fmt.Printf("manifest=%s\n", info["manifest_path"])
+		fmt.Printf("bundle_exists=%v\n", info["bundle_exists"])
+		fmt.Printf("manifest_exists=%v\n", info["manifest_exists"])
+		fmt.Printf("archive_entries=%v\n", info["archive_entries"])
+		fmt.Printf("manifest_matches=%v\n", info["manifest_matches"])
+	default:
+		log.Fatal("usage: agentd update bundle [build|inspect]")
+	}
+}
+
 func buildUpdateBundle(repoPath, outPath string, fetchTags bool) (map[string]any, error) {
 	repo, err := resolveUpdateRepoRoot(repoPath)
 	if err != nil {
@@ -1101,6 +1137,71 @@ func buildUpdateBundle(repoPath, outPath string, fetchTags bool) (map[string]any
 	}
 	manifest["manifest_path"] = manifestPath
 	return manifest, nil
+}
+
+func inspectUpdateBundle(path string) (map[string]any, error) {
+	bundlePath := path
+	manifestPath := path
+	if strings.HasSuffix(strings.ToLower(path), ".json") {
+		bundlePath = strings.TrimSuffix(path, ".json")
+	} else {
+		manifestPath = path + ".json"
+	}
+	info := map[string]any{
+		"bundle_path":      bundlePath,
+		"manifest_path":    manifestPath,
+		"bundle_exists":    fileExists(bundlePath),
+		"manifest_exists":  fileExists(manifestPath),
+		"manifest_matches": false,
+		"archive_entries":  0,
+	}
+	if fileExists(bundlePath) {
+		entryCount, err := countBundleEntries(bundlePath)
+		if err != nil {
+			return nil, err
+		}
+		info["archive_entries"] = entryCount
+	}
+	if fileExists(manifestPath) {
+		var manifest map[string]any
+		bs, err := os.ReadFile(manifestPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(bs, &manifest); err != nil {
+			return nil, err
+		}
+		info["manifest"] = manifest
+		if strings.TrimSpace(anyString(manifest["bundle_path"])) == strings.TrimSpace(bundlePath) {
+			info["manifest_matches"] = true
+		}
+	}
+	return info, nil
+}
+
+func countBundleEntries(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return 0, err
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	count := 0
+	for {
+		_, err := tr.Next()
+		if err == io.EOF {
+			return count, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		count++
+	}
 }
 
 func writeRepoBundle(repo, outPath string, files []string) error {

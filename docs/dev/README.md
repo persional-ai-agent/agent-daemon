@@ -309,3 +309,4 @@
 - `184-summary-cli-update-doctor-command.md`：新增 `update doctor` 诊断与 next actions 命令
 - `185-summary-cli-update-changelog-command.md`：新增 `update changelog` 本地变更摘要命令
 - `186-summary-cli-update-bundle-command.md`：新增 `update bundle` 本地 release 打包命令
+- `187-summary-cli-update-bundle-inspect-command.md`：新增 `update bundle inspect` 本地 bundle 校验命令
