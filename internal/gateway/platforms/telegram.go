@@ -46,6 +46,28 @@ func (t *TelegramAdapter) Connect(ctx context.Context) error {
 				if !ok {
 					return
 				}
+				if update.CallbackQuery != nil && t.handler != nil && update.CallbackQuery.Message != nil && update.CallbackQuery.From != nil {
+					cb := update.CallbackQuery
+					chatID := fmt.Sprintf("%d", cb.Message.Chat.ID)
+					chatType := "dm"
+					if cb.Message.Chat.IsGroup() || cb.Message.Chat.IsSuperGroup() {
+						chatType = "group"
+					}
+					event := gateway.MessageEvent{
+						Text:      strings.TrimSpace(cb.Data),
+						MessageID: fmt.Sprintf("%d", cb.Message.MessageID),
+						ChatID:    chatID,
+						ChatType:  chatType,
+						UserID:    fmt.Sprintf("%d", cb.From.ID),
+						UserName:  cb.From.UserName,
+						IsCommand: strings.HasPrefix(strings.TrimSpace(cb.Data), "/"),
+					}
+					if _, err := t.bot.Request(tgbotapi.NewCallback(cb.ID, "")); err != nil {
+						log.Printf("[gateway:telegram] answer callback: %v", err)
+					}
+					t.handler(ctx, event)
+					continue
+				}
 				if update.Message == nil || t.handler == nil {
 					continue
 				}
@@ -64,9 +86,9 @@ func (t *TelegramAdapter) Connect(ctx context.Context) error {
 					UserName:  msg.From.UserName,
 					IsCommand: msg.IsCommand(),
 				}
-			if msg.ReplyToMessage != nil {
-				event.ReplyToID = fmt.Sprintf("%d", msg.ReplyToMessage.MessageID)
-			}
+				if msg.ReplyToMessage != nil {
+					event.ReplyToID = fmt.Sprintf("%d", msg.ReplyToMessage.MessageID)
+				}
 				t.handler(ctx, event)
 			}
 		}
@@ -80,12 +102,19 @@ func (t *TelegramAdapter) Disconnect(_ context.Context) error {
 }
 
 func (t *TelegramAdapter) Send(_ context.Context, chatID, content, replyTo string) (gateway.SendResult, error) {
+	return t.SendText(context.Background(), chatID, content, replyTo, nil)
+}
+
+func (t *TelegramAdapter) SendText(_ context.Context, chatID, content, replyTo string, meta map[string]any) (gateway.SendResult, error) {
 	chatIDInt, err := parseChatID(chatID)
 	if err != nil {
 		return gateway.SendResult{Success: false, Error: err.Error()}, err
 	}
 	msg := tgbotapi.NewMessage(chatIDInt, content)
 	msg.ParseMode = tgbotapi.ModeMarkdown
+	if markup := approvalKeyboard(meta); markup != nil {
+		msg.ReplyMarkup = markup
+	}
 	if replyTo != "" {
 		if id, err2 := parseChatID(replyTo); err2 == nil {
 			msg.ReplyToMessageID = int(id)
@@ -189,4 +218,21 @@ func parseChatID(s string) (int64, error) {
 		return 0, fmt.Errorf("invalid chat id %q: %w", s, err)
 	}
 	return id, nil
+}
+
+func approvalKeyboard(meta map[string]any) any {
+	if len(meta) == 0 {
+		return nil
+	}
+	approvalID, _ := meta["approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return nil
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Approve", "/approve "+approvalID),
+			tgbotapi.NewInlineKeyboardButtonData("Deny", "/deny "+approvalID),
+		),
+	)
 }

@@ -123,7 +123,15 @@ func deliveryHooksEnabled() bool {
 }
 
 func (w *sessionWorker) sendText(ctx context.Context, chatID, content, replyTo string, meta map[string]any) (SendResult, error) {
-	res, err := w.adapter.Send(ctx, chatID, content, replyTo)
+	var (
+		res SendResult
+		err error
+	)
+	if rich, ok := w.adapter.(platform.RichTextSender); ok {
+		res, err = rich.SendText(ctx, chatID, content, replyTo, meta)
+	} else {
+		res, err = w.adapter.Send(ctx, chatID, content, replyTo)
+	}
 	if w.runner != nil && deliveryHooksEnabled() {
 		data := map[string]any{
 			"platform":   w.adapter.Name(),
@@ -358,7 +366,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := w.pendingApprovalStatus()
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/pending"})
+			meta := map[string]any{"slash": "/pending"}
+			if approvalID := w.resolveApprovalID(""); strings.TrimSpace(approvalID) != "" {
+				meta["approval_id"] = approvalID
+			}
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/grant":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
