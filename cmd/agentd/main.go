@@ -805,6 +805,35 @@ func runUpdate(args []string) {
 		args = args[1:]
 	}
 	switch mode {
+	case "doctor":
+		fs := flag.NewFlagSet("update doctor", flag.ExitOnError)
+		fetch := fs.Bool("fetch", false, "run git fetch before checking upstream")
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before checking releases")
+		limit := fs.Int("limit", 10, "max tags to return")
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		strict := fs.Bool("strict", false, "exit non-zero when doctor status is not ok")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update doctor [-fetch] [-fetch-tags] [-limit N] [-repo path] [-strict] [-json]")
+		}
+		report, err := updateDoctorReport(strings.TrimSpace(*repoPath), *fetch, *fetchTags, *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(report)
+		} else {
+			fmt.Printf("status=%v\n", report["status"])
+			fmt.Printf("repo=%v\n", report["repo"])
+			if nextActions, ok := report["next_actions"].([]string); ok {
+				fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+			}
+		}
+		if *strict && report["status"] != "ok" {
+			os.Exit(1)
+		}
+		return
 	case "status":
 		fs := flag.NewFlagSet("update status", flag.ExitOnError)
 		fetch := fs.Bool("fetch", false, "run git fetch before checking upstream")
@@ -954,8 +983,56 @@ func runUpdate(args []string) {
 			fmt.Println("removed=")
 		}
 	default:
-		log.Fatal("usage: agentd update [status|check|apply|release|install|uninstall]")
+		log.Fatal("usage: agentd update [doctor|status|check|apply|release|install|uninstall]")
 	}
+}
+
+func updateDoctorReport(repoPath string, fetch bool, fetchTags bool, limit int) (map[string]any, error) {
+	summary, err := updateStatusSummary(repoPath, fetch, fetchTags, limit)
+	if err != nil {
+		return nil, err
+	}
+	nextActions := make([]string, 0, 6)
+	issues := make([]string, 0, 6)
+	status := "ok"
+	if install, ok := summary["install"].(map[string]any); ok {
+		if installed, _ := install["installed"].(bool); !installed {
+			status = "warn"
+			issues = append(issues, "update scripts not installed")
+			nextActions = append(nextActions, "运行 `agentd update install` 生成最小 update 运维脚本")
+		}
+	}
+	if release, ok := summary["release"].(map[string]any); ok {
+		if tagCount, _ := release["tag_count"].(int); tagCount == 0 {
+			status = "warn"
+			issues = append(issues, "no release tags found")
+			nextActions = append(nextActions, "当前仓库尚无 tags，可在发布流程接入 tag/release 管理")
+		}
+	}
+	if update, ok := summary["update"].(map[string]any); ok {
+		if dirty, _ := update["dirty"].(bool); dirty {
+			status = "warn"
+			issues = append(issues, "working tree is dirty")
+			nextActions = append(nextActions, "提交或清理当前工作区改动后再执行 update apply")
+		}
+		if behind, _ := update["behind"].(int); behind > 0 {
+			status = "warn"
+			issues = append(issues, "branch is behind upstream")
+			nextActions = append(nextActions, "运行 `agentd update apply` 拉取上游快进更新")
+		}
+		if ahead, _ := update["ahead"].(int); ahead > 0 {
+			status = "warn"
+			issues = append(issues, "branch is ahead of upstream")
+			nextActions = append(nextActions, "当前分支领先上游，确认是否需要先推送再继续 update 流程")
+		}
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "update 状态正常，无需额外操作")
+	}
+	summary["status"] = status
+	summary["issues"] = issues
+	summary["next_actions"] = nextActions
+	return summary, nil
 }
 
 func updateStatusSummary(repoPath string, fetch bool, fetchTags bool, limit int) (map[string]any, error) {

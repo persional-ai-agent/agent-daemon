@@ -306,3 +306,4 @@
 - `181-summary-cli-update-release-command.md`：新增 `update release` 最小 release 查询命令
 - `182-summary-cli-update-status-command.md`：新增 `update status` 聚合状态命令
 - `183-summary-cli-update-install-script-expansion.md`：扩展 update 安装脚本集合到 `status/check/release/apply`
+- `184-summary-cli-update-doctor-command.md`：新增 `update doctor` 诊断与 next actions 命令
