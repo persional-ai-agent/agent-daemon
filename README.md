@@ -66,6 +66,7 @@ export AGENT_MODEL_USE_STREAMING=true
 ```bash
 go run ./cmd/agentd setup -provider openai -model gpt-4o-mini -api-key "$OPENAI_API_KEY"
 go run ./cmd/agentd setup -provider anthropic -model claude-3-5-haiku-latest -api-key "$ANTHROPIC_API_KEY" -gateway-platform telegram -gateway-token "$AGENT_TELEGRAM_BOT_TOKEN"
+printf 'openai\ngpt-4o-mini\n\n\nanthropic\nnone\n' | go run ./cmd/agentd setup wizard
 ```
 
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。

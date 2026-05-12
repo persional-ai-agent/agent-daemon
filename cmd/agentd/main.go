@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -706,6 +707,10 @@ func runConfig(args []string) {
 }
 
 func runSetup(cfg config.Config, args []string) {
+	if len(args) > 0 && strings.TrimSpace(args[0]) == "wizard" {
+		runSetupWizard(cfg, args[1:])
+		return
+	}
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
 	provider := fs.String("provider", "", "model provider (openai/anthropic/codex)")
@@ -742,41 +747,25 @@ func runSetup(cfg config.Config, args []string) {
 	if strings.TrimSpace(selectedModel) == "" {
 		log.Fatal("model is required")
 	}
-	if err := saveModelSelection(*path, selectedProvider, selectedModel, strings.TrimSpace(*baseURL)); err != nil {
+	targetPath := config.ConfigFilePath(*path)
+	written, selectedGateway, err := applySetupConfig(
+		targetPath,
+		selectedProvider,
+		selectedModel,
+		strings.TrimSpace(*baseURL),
+		strings.TrimSpace(*apiKey),
+		strings.TrimSpace(*fallback),
+		strings.ToLower(strings.TrimSpace(*gatewayPlatform)),
+		strings.TrimSpace(*gatewayToken),
+		strings.TrimSpace(*gatewayBotToken),
+		strings.TrimSpace(*gatewayAppToken),
+		strings.TrimSpace(*gatewayAppID),
+		strings.TrimSpace(*gatewayAppSecret),
+		strings.TrimSpace(*gatewayAllowedUsers),
+	)
+	if err != nil {
 		log.Fatal(err)
 	}
-	written := []string{"api.type"}
-	modelKey, baseURLKey := modelConfigKeys(selectedProvider)
-	written = append(written, modelKey)
-	targetPath := config.ConfigFilePath(*path)
-	if strings.TrimSpace(*baseURL) != "" {
-		written = append(written, baseURLKey)
-	}
-	if apiKeyKey := providerAPIKeyConfigKey(selectedProvider); apiKeyKey != "" && strings.TrimSpace(*apiKey) != "" {
-		if err := config.SaveConfigValue(targetPath, apiKeyKey, strings.TrimSpace(*apiKey)); err != nil {
-			log.Fatal(err)
-		}
-		written = append(written, apiKeyKey)
-	}
-	if strings.TrimSpace(*fallback) != "" {
-		fb := strings.ToLower(strings.TrimSpace(*fallback))
-		if !containsName(supportedModelProviders(), fb) {
-			log.Fatalf("unsupported fallback provider: %s", fb)
-		}
-		if err := config.SaveConfigValue(targetPath, "provider.fallback", fb); err != nil {
-			log.Fatal(err)
-		}
-		written = append(written, "provider.fallback")
-	}
-	selectedGateway := strings.ToLower(strings.TrimSpace(*gatewayPlatform))
-	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, strings.TrimSpace(*gatewayToken), strings.TrimSpace(*gatewayBotToken), strings.TrimSpace(*gatewayAppToken), strings.TrimSpace(*gatewayAppID), strings.TrimSpace(*gatewayAppSecret), strings.TrimSpace(*gatewayAllowedUsers))
-		if err != nil {
-			log.Fatal(err)
-		}
-		written = append(written, gatewayWritten...)
-	}
-	written = uniqueSortedNames(written)
 	if *jsonOutput {
 		printJSON(map[string]any{
 			"success":          true,
@@ -793,6 +782,143 @@ func runSetup(cfg config.Config, args []string) {
 		fmt.Printf("configured gateway platform %s\n", selectedGateway)
 	}
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
+func runSetupWizard(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("setup wizard", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd setup wizard [-file path]")
+	}
+	reader := bufio.NewReader(os.Stdin)
+	currentProvider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+	if currentProvider == "" {
+		currentProvider = "openai"
+	}
+	currentModel, currentBaseURL := currentModelConfig(cfg, currentProvider)
+	provider := promptInput(reader, "provider [openai/anthropic/codex]", currentProvider)
+	if !containsName(supportedModelProviders(), provider) {
+		log.Fatalf("unsupported provider: %s", provider)
+	}
+	if provider != currentProvider {
+		currentModel = ""
+		currentBaseURL = ""
+	}
+	modelName := promptInput(reader, "model", currentModel)
+	if strings.TrimSpace(modelName) == "" {
+		log.Fatal("model is required")
+	}
+	baseURL := promptInput(reader, "base URL (optional)", currentBaseURL)
+	apiKey := promptInput(reader, "API key (optional)", "")
+	fallback := promptInput(reader, "fallback provider (optional)", strings.ToLower(strings.TrimSpace(cfg.ModelFallbackProvider)))
+	if fallback != "" && !containsName(supportedModelProviders(), fallback) {
+		log.Fatalf("unsupported fallback provider: %s", fallback)
+	}
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/telegram/discord/slack/yuanbao]", "none")))
+	if gatewayPlatform == "none" {
+		gatewayPlatform = ""
+	}
+	gatewayToken := ""
+	gatewayBotToken := ""
+	gatewayAppToken := ""
+	gatewayAppID := ""
+	gatewayAppSecret := ""
+	gatewayAllowedUsers := ""
+	switch gatewayPlatform {
+	case "":
+	case "telegram", "discord":
+		gatewayToken = promptInput(reader, "gateway token", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "slack":
+		gatewayBotToken = promptInput(reader, "slack bot token", "")
+		gatewayAppToken = promptInput(reader, "slack app token", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "yuanbao":
+		gatewayToken = promptInput(reader, "yuanbao token (optional)", "")
+		gatewayAppID = promptInput(reader, "yuanbao app id (optional)", "")
+		gatewayAppSecret = promptInput(reader, "yuanbao app secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	default:
+		log.Fatalf("unsupported gateway platform: %s", gatewayPlatform)
+	}
+	targetPath := config.ConfigFilePath(*path)
+	written, selectedGateway, err := applySetupConfig(
+		targetPath,
+		provider,
+		modelName,
+		baseURL,
+		apiKey,
+		fallback,
+		gatewayPlatform,
+		gatewayToken,
+		gatewayBotToken,
+		gatewayAppToken,
+		gatewayAppID,
+		gatewayAppSecret,
+		gatewayAllowedUsers,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("configured provider %s:%s in %s\n", provider, modelName, targetPath)
+	if selectedGateway != "" {
+		fmt.Printf("configured gateway platform %s\n", selectedGateway)
+	}
+	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
+func promptInput(reader *bufio.Reader, label, def string) string {
+	if strings.TrimSpace(def) != "" {
+		fmt.Printf("%s [%s]: ", label, def)
+	} else {
+		fmt.Printf("%s: ", label)
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil && len(line) == 0 {
+		log.Fatal(err)
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return strings.TrimSpace(def)
+	}
+	return line
+}
+
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
+		return nil, "", err
+	}
+	written := []string{"api.type"}
+	modelKey, baseURLKey := modelConfigKeys(provider)
+	written = append(written, modelKey)
+	if baseURL != "" {
+		written = append(written, baseURLKey)
+	}
+	if apiKeyKey := providerAPIKeyConfigKey(provider); apiKeyKey != "" && apiKey != "" {
+		if err := config.SaveConfigValue(targetPath, apiKeyKey, apiKey); err != nil {
+			return nil, "", err
+		}
+		written = append(written, apiKeyKey)
+	}
+	if fallback != "" {
+		if !containsName(supportedModelProviders(), fallback) {
+			return nil, "", fmt.Errorf("unsupported fallback provider: %s", fallback)
+		}
+		if err := config.SaveConfigValue(targetPath, "provider.fallback", fallback); err != nil {
+			return nil, "", err
+		}
+		written = append(written, "provider.fallback")
+	}
+	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
+	if selectedGateway != "" {
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		if err != nil {
+			return nil, "", err
+		}
+		written = append(written, gatewayWritten...)
+	}
+	return uniqueSortedNames(written), selectedGateway, nil
 }
 
 func runToolsets(args []string) {
@@ -850,6 +976,7 @@ func printConfigUsage() {
 func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd setup wizard [-file path]")
 }
 
 func runModel(cfg config.Config, args []string) {
