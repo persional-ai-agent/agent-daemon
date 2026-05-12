@@ -3974,25 +3974,9 @@ func checkStubTools(cfg config.Config) doctorCheck {
 		}
 		allowed = resolved
 	}
-	// These tools exist as interface-alignment stubs only.
-	stubs := []string{
-		"vision_analyze",
-		"image_generate",
-		"text_to_speech",
-		"mixture_of_agents",
-		"browser_navigate",
-		"browser_snapshot",
-		"browser_click",
-		"browser_type",
-		"browser_scroll",
-		"browser_back",
-		"browser_press",
-		"browser_get_images",
-		"browser_vision",
-		"browser_console",
-		"browser_cdp",
-		"browser_dialog",
-	}
+	// Keep only real interface-alignment stubs here.
+	// Lightweight/minimal implementations should not be listed as "not implemented".
+	stubs := []string{}
 	var present []string
 	if len(allowed) == 0 {
 		// toolsets disabled: stubs are registered, but that does not mean usable.

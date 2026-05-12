@@ -261,6 +261,26 @@ func TestDoctorChecksGatewayEnabledWithoutTokensWarns(t *testing.T) {
 	}
 }
 
+func TestCheckStubToolsNoToolsetFilter(t *testing.T) {
+	check := checkStubTools(config.Config{})
+	if check.Status != "ok" {
+		t.Fatalf("stub_tools status = %q, want ok", check.Status)
+	}
+	if check.Detail != "none enabled" {
+		t.Fatalf("stub_tools detail = %q, want none enabled", check.Detail)
+	}
+}
+
+func TestCheckStubToolsWithToolsetFilter(t *testing.T) {
+	check := checkStubTools(config.Config{EnabledToolsets: "core"})
+	if check.Status != "ok" {
+		t.Fatalf("stub_tools status = %q, want ok", check.Status)
+	}
+	if check.Detail != "none enabled" {
+		t.Fatalf("stub_tools detail = %q, want none enabled", check.Detail)
+	}
+}
+
 func doctorCheckByName(checks []doctorCheck, name string) doctorCheck {
 	for _, check := range checks {
 		if check.Name == name {

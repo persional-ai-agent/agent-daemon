@@ -58,7 +58,7 @@ var Toolsets = map[string]Toolset{
 		Tools:       []string{"web_search"},
 	},
 	"vision": {
-		Description: "Vision analysis tools (stub)",
+		Description: "Vision analysis tools (minimal implementation)",
 		Tools:       []string{"vision_analyze"},
 	},
 	"video": {
@@ -66,7 +66,7 @@ var Toolsets = map[string]Toolset{
 		Tools:       []string{"video_analyze"},
 	},
 	"discord_admin": {
-		Description: "Discord admin tools (requires DISCORD_BOT_TOKEN; placeholder)",
+		Description: "Discord admin tools (requires DISCORD_BOT_TOKEN)",
 		Tools:       []string{"discord_admin"},
 	},
 	"discord": {
@@ -74,7 +74,7 @@ var Toolsets = map[string]Toolset{
 		Tools:       []string{"discord"},
 	},
 	"feishu": {
-		Description: "Feishu/Lark doc & drive tools (requires FEISHU_APP_ID/FEISHU_APP_SECRET; placeholder)",
+		Description: "Feishu/Lark doc & drive tools (requires FEISHU_APP_ID/FEISHU_APP_SECRET)",
 		Tools: []string{
 			"feishu_doc_read",
 			"feishu_drive_list_comments",
@@ -84,14 +84,14 @@ var Toolsets = map[string]Toolset{
 		},
 	},
 	"spotify": {
-		Description: "Spotify tools (requires SPOTIFY_ACCESS_TOKEN; placeholder)",
+		Description: "Spotify tools (requires SPOTIFY_ACCESS_TOKEN)",
 		Tools: []string{
 			"spotify_search", "spotify_devices", "spotify_playback", "spotify_queue",
 			"spotify_playlists", "spotify_albums", "spotify_library",
 		},
 	},
 	"rl": {
-		Description: "RL training tools (placeholder)",
+		Description: "RL training tools (minimal local runner)",
 		Tools: []string{
 			"rl_list_environments", "rl_select_environment", "rl_get_current_config", "rl_edit_config",
 			"rl_start_training", "rl_stop_training", "rl_check_status", "rl_get_results", "rl_list_runs", "rl_test_inference",
@@ -104,11 +104,11 @@ var Toolsets = map[string]Toolset{
 		},
 	},
 	"image_gen": {
-		Description: "Image generation tools (stub)",
+		Description: "Image generation tools (minimal implementation)",
 		Tools:       []string{"image_generate"},
 	},
 	"browser": {
-		Description: "Browser automation tools (stub)",
+		Description: "Browser automation tools (lightweight implementation)",
 		Tools: []string{
 			"browser_navigate", "browser_snapshot", "browser_click",
 			"browser_type", "browser_scroll", "browser_back",
@@ -122,7 +122,7 @@ var Toolsets = map[string]Toolset{
 		Tools:       []string{"browser_cdp", "browser_dialog"},
 	},
 	"tts": {
-		Description: "Text-to-speech tools (stub)",
+		Description: "Text-to-speech tools (minimal implementation)",
 		Tools:       []string{"text_to_speech"},
 	},
 	"delegation": {
@@ -130,7 +130,7 @@ var Toolsets = map[string]Toolset{
 		Tools:       []string{"delegate_task"},
 	},
 	"moa": {
-		Description: "Mixture-of-agents reasoning tool (stub)",
+		Description: "Mixture-of-agents reasoning tool",
 		Tools:       []string{"mixture_of_agents"},
 	},
 	"code_execution": {
