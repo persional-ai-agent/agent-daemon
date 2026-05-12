@@ -299,3 +299,4 @@
 - `174-summary-gateway-discord-grant-revoke-slash.md`：补齐 Discord `grant` / `revoke` 原生 slash 参数面
 - `175-summary-gateway-slack-slash-command-entrypoint.md`：新增 Slack slash 命令入口最小闭环
 - `176-summary-gateway-slack-generic-slash-forwarding.md`：增强 Slack 通用 slash 命令转发与即时确认
+- `177-summary-cli-gateway-slack-manifest-export.md`：新增 Slack gateway manifest 导出命令

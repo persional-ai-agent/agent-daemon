@@ -2051,6 +2051,8 @@ func runGateway(cfg config.Config, args []string) {
 		runGatewayInstall(cfg, args[1:])
 	case "uninstall":
 		runGatewayUninstall(cfg, args[1:])
+	case "manifest":
+		runGatewayManifest(args[1:])
 	case "status":
 		fs := flag.NewFlagSet("gateway status", flag.ExitOnError)
 		path := fs.String("file", "", "config file path")
@@ -3466,6 +3468,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway restart [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway install [-file path] [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway uninstall [-file path] [-workdir dir] [-stop] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway manifest -platform <slack> [-command /agent] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
@@ -3481,6 +3484,98 @@ func printGatewayPairsUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
+}
+
+type slackManifestExport struct {
+	Platform      string              `json:"platform"`
+	Command       string              `json:"command"`
+	Commands      []map[string]string `json:"commands"`
+	AppManifest   map[string]any      `json:"app_manifest"`
+	NextActions   []string            `json:"next_actions"`
+	CommandRoutes map[string]string   `json:"command_routes,omitempty"`
+}
+
+func runGatewayManifest(args []string) {
+	fs := flag.NewFlagSet("gateway manifest", flag.ExitOnError)
+	platformName := fs.String("platform", "", "platform name")
+	command := fs.String("command", "/agent", "slash command entrypoint for slack")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway manifest -platform <slack> [-command /agent] [-json]")
+	}
+	switch strings.ToLower(strings.TrimSpace(*platformName)) {
+	case "slack":
+		export := buildSlackManifestExport(*command)
+		if *jsonOutput {
+			printJSON(export)
+			return
+		}
+		printJSON(export)
+	default:
+		log.Fatal("supported platforms: slack")
+	}
+}
+
+func buildSlackManifestExport(command string) slackManifestExport {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		command = "/agent"
+	}
+	if !strings.HasPrefix(command, "/") {
+		command = "/" + command
+	}
+	commands := []map[string]string{
+		{"command": command, "description": "Gateway command entrypoint"},
+		{"command": "/status", "description": "Show current session status"},
+		{"command": "/pending", "description": "Show latest pending approval"},
+		{"command": "/approvals", "description": "Show active approvals"},
+		{"command": "/grant", "description": "Grant session or pattern approval"},
+		{"command": "/revoke", "description": "Revoke session or pattern approval"},
+		{"command": "/approve", "description": "Approve a pending approval id"},
+		{"command": "/deny", "description": "Deny a pending approval id"},
+	}
+	manifest := map[string]any{
+		"display_information": map[string]any{
+			"name": "agent-daemon gateway",
+		},
+		"features": map[string]any{
+			"bot_user": map[string]any{
+				"display_name":  "agent-daemon",
+				"always_online": false,
+			},
+			"slash_commands": commands,
+		},
+		"oauth_config": map[string]any{
+			"scopes": map[string]any{
+				"bot": []string{"app_mentions:read", "channels:history", "chat:write", "commands", "groups:history", "im:history", "mpim:history"},
+			},
+		},
+		"settings": map[string]any{
+			"interactivity": map[string]any{
+				"is_enabled": true,
+			},
+			"socket_mode_enabled": true,
+		},
+	}
+	return slackManifestExport{
+		Platform:    "slack",
+		Command:     command,
+		Commands:    commands,
+		AppManifest: manifest,
+		NextActions: []string{
+			"在 Slack app 配置中启用 Socket Mode 与 Interactivity",
+			"至少保留一个 slash command；若使用通用入口，可配置 " + command + " 并通过 `/agent status` 等命令转发",
+			"把生成的 scopes 同步到 Slack app，并重新安装应用",
+		},
+		CommandRoutes: map[string]string{
+			command + " status":    "/status",
+			command + " pending":   "/pending",
+			command + " approvals": "/approvals",
+			command + " grant 300": "/grant 300",
+			command + " revoke":    "/revoke",
+		},
+	}
 }
 
 func printGatewayHooksUsage() {
