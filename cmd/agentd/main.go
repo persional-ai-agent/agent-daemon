@@ -849,6 +849,31 @@ func runUpdate(args []string) {
 		fmt.Printf("before=%s\n", result["before"])
 		fmt.Printf("after=%s\n", result["after"])
 		fmt.Printf("updated=%v\n", result["updated"])
+	case "release":
+		fs := flag.NewFlagSet("update release", flag.ExitOnError)
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before checking releases")
+		limit := fs.Int("limit", 10, "max tags to return")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update release [-fetch-tags] [-limit N] [-json]")
+		}
+		info, err := gitReleaseInfo(*fetchTags, *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("repo=%s\n", info["repo"])
+		fmt.Printf("commit=%s\n", info["commit"])
+		fmt.Printf("current_tag=%v\n", info["current_tag"])
+		fmt.Printf("latest_tag=%v\n", info["latest_tag"])
+		fmt.Printf("tag_count=%v\n", info["tag_count"])
+		if tags, ok := info["recent_tags"].([]string); ok {
+			fmt.Printf("recent_tags=%s\n", strings.Join(tags, ","))
+		}
 	case "install":
 		fs := flag.NewFlagSet("update install", flag.ExitOnError)
 		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
@@ -891,8 +916,54 @@ func runUpdate(args []string) {
 			fmt.Println("removed=")
 		}
 	default:
-		log.Fatal("usage: agentd update [check|apply|install|uninstall]")
+		log.Fatal("usage: agentd update [check|apply|release|install|uninstall]")
 	}
+}
+
+func gitReleaseInfo(fetchTags bool, limit int) (map[string]any, error) {
+	repo, err := gitRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+	if fetchTags {
+		if _, err := runGit(repo, "fetch", "--tags", "--quiet"); err != nil {
+			return nil, err
+		}
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	commit, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	currentTag, _ := runGit(repo, "describe", "--tags", "--exact-match")
+	latestTag, _ := runGit(repo, "describe", "--tags", "--abbrev=0")
+	tagList, err := runGit(repo, "tag", "--sort=-creatordate")
+	if err != nil {
+		return nil, err
+	}
+	allTags := make([]string, 0)
+	for _, line := range strings.Split(tagList, "\n") {
+		tag := strings.TrimSpace(line)
+		if tag == "" {
+			continue
+		}
+		allTags = append(allTags, tag)
+	}
+	recentTags := allTags
+	if len(recentTags) > limit {
+		recentTags = recentTags[:limit]
+	}
+	return map[string]any{
+		"repo":        repo,
+		"commit":      commit,
+		"current_tag": strings.TrimSpace(currentTag),
+		"latest_tag":  strings.TrimSpace(latestTag),
+		"tag_count":   len(allTags),
+		"recent_tags": recentTags,
+		"fetched":     fetchTags,
+	}, nil
 }
 
 type updateInstallInfo struct {

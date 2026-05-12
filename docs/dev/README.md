@@ -303,3 +303,4 @@
 - `178-summary-cli-gateway-discord-manifest-export.md`：新增 Discord gateway 命令清单导出命令
 - `179-summary-cli-gateway-telegram-manifest-export.md`：新增 Telegram gateway 命令清单导出命令
 - `180-summary-cli-gateway-yuanbao-manifest-export.md`：新增 Yuanbao gateway 命令清单导出命令
+- `181-summary-cli-update-release-command.md`：新增 `update release` 最小 release 查询命令

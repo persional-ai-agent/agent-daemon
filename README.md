@@ -72,6 +72,7 @@ go run ./cmd/agentd bootstrap status -json
 go run ./cmd/agentd version
 go run ./cmd/agentd version -check-update -json
 go run ./cmd/agentd update -fetch
+go run ./cmd/agentd update release -json
 go run ./cmd/agentd update install
 go run ./cmd/agentd update apply
 go run ./cmd/agentd update uninstall
