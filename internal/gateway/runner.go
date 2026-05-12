@@ -320,6 +320,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
 			return
+		case "/status":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			reply := w.gatewayStatusText()
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/status"})
+			return
 		case "/approve", "/deny":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
@@ -359,7 +367,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -707,6 +715,33 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 		return "No active approvals."
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (w *sessionWorker) gatewayStatusText() string {
+	lines := []string{
+		"platform: " + w.adapter.Name(),
+		"session: " + w.key,
+		"queue: " + itoa(len(w.queue)),
+	}
+	if w.runner != nil {
+		paired := w.runner.isPaired(w.adapter.Name(), w.engine.GatewayUserID)
+		if paired {
+			lines = append(lines, "paired: yes")
+		} else {
+			lines = append(lines, "paired: no")
+		}
+	}
+	lines = append(lines, "running: "+map[bool]string{true: "yes", false: "no"}[w.isRunning()])
+	if last := w.resolveApprovalID(""); strings.TrimSpace(last) != "" {
+		lines = append(lines, "last_approval_id: "+last)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (w *sessionWorker) isRunning() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.running
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, cmd string) string {
