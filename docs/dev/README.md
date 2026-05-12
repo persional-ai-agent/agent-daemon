@@ -268,3 +268,5 @@
 - `143-summary-gateway-hook-spool-stats-command.md`：新增 `spool stats` 命令（支持 `-all` 聚合）
 - `144-summary-gateway-hook-spool-verify.md`：新增 `spool verify` 完整性校验命令（支持 `-all`）
 - `145-summary-gateway-hooks-doctor.md`：新增 `hooks doctor` 配置诊断命令
+- `146-summary-gateway-hook-spool-import.md`：新增 `spool import`（支持 append/覆盖与 event_id 去重）
+- `147-summary-gateway-hooks-doctor-and-verify.md`：补充 hooks doctor + spool verify 的诊断能力整合说明

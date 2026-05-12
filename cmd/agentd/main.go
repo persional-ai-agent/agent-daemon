@@ -420,6 +420,63 @@ func compactSpoolFile(path string, maxLines int) (before int, after int, err err
 	return before, after, nil
 }
 
+func importSpoolFile(inputPath, targetPath string, appendMode bool) (imported int, skipped int, total int, err error) {
+	inBytes, err := os.ReadFile(inputPath)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	targetLines := make([]string, 0, 128)
+	seen := map[string]bool{}
+	if appendMode {
+		if cur, rerr := os.ReadFile(targetPath); rerr == nil && len(cur) > 0 {
+			for _, ln := range strings.Split(string(cur), "\n") {
+				ln = strings.TrimSpace(ln)
+				if ln == "" {
+					continue
+				}
+				targetLines = append(targetLines, ln)
+				var e hookSpoolEntry
+				if jerr := json.Unmarshal([]byte(ln), &e); jerr == nil && strings.TrimSpace(e.ID) != "" {
+					seen[strings.TrimSpace(e.ID)] = true
+				}
+			}
+		}
+	}
+	for _, ln := range strings.Split(string(inBytes), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		total++
+		var e hookSpoolEntry
+		if jerr := json.Unmarshal([]byte(ln), &e); jerr != nil || strings.TrimSpace(e.Type) == "" || strings.TrimSpace(e.Body) == "" {
+			skipped++
+			continue
+		}
+		id := strings.TrimSpace(e.ID)
+		if id != "" && seen[id] {
+			skipped++
+			continue
+		}
+		if id != "" {
+			seen[id] = true
+		}
+		targetLines = append(targetLines, ln)
+		imported++
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return imported, skipped, total, err
+	}
+	out := strings.Join(targetLines, "\n")
+	if len(targetLines) > 0 && !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	if err := os.WriteFile(targetPath, []byte(out), 0o644); err != nil {
+		return imported, skipped, total, err
+	}
+	return imported, skipped, total, nil
+}
+
 func verifySpoolFile(path string) (lines int, valid int, invalid int, invalidSamples []string, err error) {
 	bs, err := os.ReadFile(path)
 	if err != nil {
@@ -1642,6 +1699,36 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			"invalid_total": totalInvalid,
 			"files":         files,
 		})
+	case "import":
+		fs := flag.NewFlagSet("gateway hooks spool import", flag.ExitOnError)
+		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+		path := fs.String("path", "", "target base spool path")
+		in := fs.String("in", "", "input JSONL file path (required)")
+		appendMode := fs.Bool("append", true, "append into target (default true). set false to overwrite target before import")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd gateway hooks spool import -in file [-workdir dir] [-path file] [-append=true|false]")
+		}
+		if strings.TrimSpace(*in) == "" {
+			log.Fatal("in is required")
+		}
+		target := strings.TrimSpace(*path)
+		if target == "" {
+			target = filepath.Join(strings.TrimSpace(*workdir), ".agent-daemon", "gateway_hooks_spool.jsonl")
+		}
+		imported, skipped, total, err := importSpoolFile(strings.TrimSpace(*in), target, *appendMode)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(map[string]any{
+			"success":  true,
+			"input":    strings.TrimSpace(*in),
+			"target":   target,
+			"total":    total,
+			"imported": imported,
+			"skipped":  skipped,
+			"append":   *appendMode,
+		})
 	default:
 		printGatewayHookSpoolUsage()
 		os.Exit(2)
@@ -1783,6 +1870,7 @@ func printGatewayHookSpoolUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool prune [-workdir dir] [-path file] [-all] [-type t] [-id eid] [-before ts]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool compact [-workdir dir] [-path file] [-all] [-max-lines N]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool verify [-workdir dir] [-path file] [-all]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool import -in file [-workdir dir] [-path file] [-append=true|false]")
 }
 
 type gatewayStatusInfo struct {
