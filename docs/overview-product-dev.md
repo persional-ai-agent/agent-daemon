@@ -151,6 +151,7 @@
 - `agentd doctor`：检查配置文件优先级、工作目录、数据目录、模型/provider、MCP、Gateway 与内置工具注册情况；支持 `-json`。
 - `agentd setup`：统一写入最小模型/provider 配置，可选连带写入一个 gateway 平台配置。
 - `agentd setup wizard`：终端交互式引导版本，复用 `setup` 的底层写入逻辑。
+- `agentd update`：针对 git checkout 的最小更新流，支持检查本地/上游差异与 `pull --ff-only` 应用更新。
 - `agentd gateway status` / `platforms` / `enable` / `disable` / `setup`：查看网关状态、支持平台，写入 `gateway.enabled` 开关，并按平台写入最小凭证配置。
 
 默认读写 `config/config.ini`，也可通过 `AGENT_CONFIG_FILE` 或 `-file` 指定路径。运行时优先级仍为：环境变量 > 配置文件 > 内置默认值。
@@ -159,7 +160,7 @@
 
 核心 Agent daemon 能力已对齐 Hermes 的主干设计。后续可选扩展：
 
-- 配置与 CLI 管理面：已具备最小 `config list|get|set`、`model show|providers|set`、`tools list|show|schemas|enable|disable`、`doctor`、`setup`、`setup wizard`、`gateway status|platforms|enable|disable|setup`；后续补齐更完整的 update / bootstrap 管理面。
+- 配置与 CLI 管理面：已具备最小 `config list|get|set`、`model show|providers|set`、`tools list|show|schemas|enable|disable`、`doctor`、`setup`、`setup wizard`、`update`、`gateway status|platforms|enable|disable|setup`；后续补齐安装器级 update / bootstrap 管理面。
 - Toolset 与插件系统：从固定内置工具列表演进为 toolset 解析、可用性检查、插件发现与动态 schema 过滤。
 - Gateway 完整体验：继续补原生平台 slash UI、审批按钮流、delivery、token lock，再扩展更多平台。
 - 执行环境：在 `internal/tools/process.go` 之外抽象本地、Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox 等后端。
@@ -179,7 +180,7 @@
 | Context compression | `agent/context_compressor.py`、context engine plugins | `internal/agent/compressor.go` | 核心对齐 | 后续可加可替换 context engine |
 | MCP | `tools/mcp_tool.py` | `internal/tools/mcp.go` | 核心对齐 | 继续补更完整的服务器能力与错误分类 |
 | Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`（含别名 `skills_list`）、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
-| CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 部分对齐 | 已补最小 config/model/tools 查看与启停/doctor/`setup`/`setup wizard`/gateway 开关与 `gateway setup`；后续补更完整 update/bootstrap 流，再评估 TUI |
+| CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 部分对齐 | 已补最小 config/model/tools 查看与启停/doctor/`setup`/`setup wizard`/`update`/gateway 开关与 `gateway setup`；后续补安装器级 update/bootstrap 流，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
 | Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack/Yuanbao + `send_message` | 部分对齐 | 已补 HOME_CHANNEL 默认目标、Yuanbao 最小 inbound、Telegram/Discord/Slack 本地文件投递（MEDIA: / media_path）+ Yuanbao best-effort 媒体投递（COS 上传）+ 最小配对/slash command/队列中断/hooks 运维；后续补原生平台 slash UI、审批按钮流、token lock 与更多平台 |
 | Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 无通用插件框架 | 未覆盖 | 明确插件边界后再引入，避免过早复杂化 |

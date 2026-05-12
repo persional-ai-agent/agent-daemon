@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
@@ -643,6 +644,8 @@ func main() {
 		runDoctor(cfg, os.Args[2:])
 	case "setup":
 		runSetup(cfg, os.Args[2:])
+	case "update":
+		runUpdate(os.Args[2:])
 	case "gateway":
 		runGateway(cfg, os.Args[2:])
 	case "sessions":
@@ -782,6 +785,172 @@ func runSetup(cfg config.Config, args []string) {
 		fmt.Printf("configured gateway platform %s\n", selectedGateway)
 	}
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
+func runUpdate(args []string) {
+	mode := "check"
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
+		mode = strings.ToLower(strings.TrimSpace(args[0]))
+		args = args[1:]
+	}
+	switch mode {
+	case "check":
+		fs := flag.NewFlagSet("update check", flag.ExitOnError)
+		fetch := fs.Bool("fetch", false, "run git fetch before checking")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update [check] [-fetch] [-json]")
+		}
+		status, err := gitUpdateStatus(*fetch)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(status)
+			return
+		}
+		fmt.Printf("repo=%s\n", status["repo"])
+		fmt.Printf("branch=%s\n", status["branch"])
+		fmt.Printf("commit=%s\n", status["commit"])
+		fmt.Printf("upstream=%s\n", status["upstream"])
+		fmt.Printf("ahead=%v\n", status["ahead"])
+		fmt.Printf("behind=%v\n", status["behind"])
+		fmt.Printf("dirty=%v\n", status["dirty"])
+		fmt.Printf("can_fast_forward=%v\n", status["can_fast_forward"])
+	case "apply":
+		fs := flag.NewFlagSet("update apply", flag.ExitOnError)
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update apply [-json]")
+		}
+		result, err := gitUpdateApply()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Printf("repo=%s\n", result["repo"])
+		fmt.Printf("branch=%s\n", result["branch"])
+		fmt.Printf("before=%s\n", result["before"])
+		fmt.Printf("after=%s\n", result["after"])
+		fmt.Printf("updated=%v\n", result["updated"])
+	default:
+		log.Fatal("usage: agentd update [check|apply]")
+	}
+}
+
+func gitUpdateStatus(fetch bool) (map[string]any, error) {
+	repo, err := gitRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+	if fetch {
+		if _, err := runGit(repo, "fetch", "--quiet"); err != nil {
+			return nil, err
+		}
+	}
+	branch, err := runGit(repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	commit, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	upstream, err := runGit(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil {
+		return nil, fmt.Errorf("update requires a configured git upstream: %w", err)
+	}
+	counts, err := runGit(repo, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Fields(counts)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("unexpected rev-list output: %q", counts)
+	}
+	ahead, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, err
+	}
+	behind, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	dirtyOut, err := runGit(repo, "status", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"repo":             repo,
+		"branch":           branch,
+		"commit":           commit,
+		"upstream":         upstream,
+		"ahead":            ahead,
+		"behind":           behind,
+		"dirty":            strings.TrimSpace(dirtyOut) != "",
+		"can_fast_forward": behind > 0 && ahead == 0,
+	}, nil
+}
+
+func gitUpdateApply() (map[string]any, error) {
+	repo, err := gitRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+	before, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	branch, err := runGit(repo, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := runGit(repo, "fetch", "--quiet"); err != nil {
+		return nil, err
+	}
+	if _, err := runGit(repo, "pull", "--ff-only"); err != nil {
+		return nil, err
+	}
+	after, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"repo":    repo,
+		"branch":  branch,
+		"before":  before,
+		"after":   after,
+		"updated": before != after,
+	}, nil
+}
+
+func gitRepoRoot() (string, error) {
+	repo, err := runGit("", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("update is only available in a git checkout: %w", err)
+	}
+	return repo, nil
+}
+
+func runGit(workdir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	if strings.TrimSpace(workdir) != "" {
+		cmd.Dir = workdir
+	}
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		}
+		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), text)
+	}
+	return text, nil
 }
 
 func runSetupWizard(cfg config.Config, args []string) {
