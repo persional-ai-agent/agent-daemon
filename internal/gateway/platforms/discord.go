@@ -273,6 +273,13 @@ func discordApplicationCommands() []*discordgo.ApplicationCommand {
 		{Name: "status", Description: "show current session status"},
 		{Name: "pending", Description: "show latest pending approval"},
 		{Name: "approvals", Description: "show active approvals"},
+		{Name: "grant", Description: "grant session or pattern approval", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "ttl", Description: "ttl seconds", Required: false},
+		}},
+		{Name: "revoke", Description: "revoke session or pattern approval", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
+		}},
 		{Name: "approve", Description: "approve a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
 		{Name: "deny", Description: "deny a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
 		{Name: "help", Description: "show supported commands"},
@@ -296,9 +303,43 @@ func renderDiscordSlashCommand(data discordgo.ApplicationCommandInteractionData)
 			}
 		}
 		return name
+	case "/grant":
+		return renderDiscordGrantRevoke(name, data)
+	case "/revoke":
+		return renderDiscordGrantRevoke(name, data)
 	case "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/help":
 		return name
 	default:
 		return ""
 	}
+}
+
+func renderDiscordGrantRevoke(name string, data discordgo.ApplicationCommandInteractionData) string {
+	pattern := ""
+	if opt := data.GetOption("pattern"); opt != nil {
+		if value, ok := opt.Value.(string); ok {
+			pattern = strings.TrimSpace(value)
+		}
+	}
+	ttl := ""
+	if opt := data.GetOption("ttl"); opt != nil && opt.Value != nil {
+		switch value := opt.Value.(type) {
+		case float64:
+			ttl = fmt.Sprintf("%.0f", value)
+		case int64:
+			ttl = fmt.Sprintf("%d", value)
+		case int:
+			ttl = fmt.Sprintf("%d", value)
+		}
+	}
+	if strings.TrimSpace(pattern) != "" {
+		if strings.TrimSpace(ttl) != "" && name == "/grant" {
+			return name + " pattern " + pattern + " " + ttl
+		}
+		return name + " pattern " + pattern
+	}
+	if strings.TrimSpace(ttl) != "" && name == "/grant" {
+		return name + " " + ttl
+	}
+	return name
 }
