@@ -186,6 +186,8 @@ go run ./cmd/agentd gateway status
 go run ./cmd/agentd gateway platforms
 go run ./cmd/agentd gateway enable
 go run ./cmd/agentd gateway disable
+go run ./cmd/agentd gateway setup -platform telegram -token "$AGENT_TELEGRAM_BOT_TOKEN"
+go run ./cmd/agentd gateway setup -platform slack -bot-token "$AGENT_SLACK_BOT_TOKEN" -app-token "$AGENT_SLACK_APP_TOKEN"
 ```
 
 会话检索：

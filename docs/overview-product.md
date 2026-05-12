@@ -25,7 +25,7 @@
 - 状态工具：todo、session_search、memory、delegate_task
 - 持久化：SQLite 会话历史与 Markdown 记忆文件
 - 双入口：交互式 CLI + HTTP API
-- 配置管理：`agentd config list|get|set` 可读写 `config/config.ini`，`agentd model show|providers|set` 可查看和切换模型，`agentd tools list|show|schemas|disable|enable` 可查看和启停工具，`agentd doctor` 可做本地配置诊断，`agentd gateway status|platforms|enable|disable` 可管理网关开关，环境变量仍保持最高优先级
+- 配置管理：`agentd config list|get|set` 可读写 `config/config.ini`，`agentd model show|providers|set` 可查看和切换模型，`agentd tools list|show|schemas|disable|enable` 可查看和启停工具，`agentd doctor` 可做本地配置诊断，`agentd gateway status|platforms|enable|disable|setup` 可管理网关开关与平台配置，环境变量仍保持最高优先级
 - 消息网关：Telegram + Discord + Slack + Yuanbao 适配器（Yuanbao 目前为最小 inbound：TIMTextElem；其余能力按需扩展），`PlatformAdapter` 接口可按需扩展
 - 非流式摘要：`/v1/chat` 返回轻量 `summary`
 - 流式 API：基于 SSE 的 `/v1/chat/stream`
@@ -61,8 +61,8 @@
 | MCP | 已对齐核心能力 | 支持 HTTP、stdio、OAuth client credentials、OAuth authorization code 与流式事件透传 |
 | Skills | 已对齐核心能力 | 支持本地列表/查看/管理、条件过滤、预加载、同步与 GitHub 搜索 |
 | API 服务 | 已对齐核心能力 | HTTP、SSE、WebSocket、取消接口 |
-| Gateway | 最小对齐 | 支持 Telegram、Discord、Slack、Yuanbao；已补最小 `send_message` + Telegram/Discord/Slack 本地文件投递（`MEDIA:` / `media_path`）+ Yuanbao best-effort 媒体投递（COS 上传链路，依赖网络与凭证）；未覆盖 Hermes 的完整平台矩阵、配对、slash command、队列/中断、hooks |
-| CLI/TUI | 最小覆盖 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、gateway；未实现 Hermes 全屏 TUI 与完整命令体系 |
+| Gateway | 部分对齐 | 支持 Telegram、Discord、Slack、Yuanbao；已补最小 `send_message` + Telegram/Discord/Slack 本地文件投递（`MEDIA:` / `media_path`）+ Yuanbao best-effort 媒体投递（COS 上传链路，依赖网络与凭证）+ 最小 pairing/slash command/队列中断/hooks 运维；未覆盖 Hermes 的完整平台矩阵、原生平台 slash UI、审批按钮流和 token lock |
+| CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、gateway 与最小 `gateway setup`；未实现 Hermes 全屏 TUI、setup wizard、update 等完整命令体系 |
 | 工具全集 | 部分对齐 | 已对齐 Hermes 文档中的 68 个内置工具“工具名/Toolsets 名称”（含 `discord`、`yb_*`、`process` 动作面等）；其中 browser/vision/image_generate 等仍存在能力级差距，但 browser 已支持可选 CDP 后端（配置 `BROWSER_CDP_URL`）以执行 JS/DOM |
 | 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
 | 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；暂无通用插件系统、ACP adapter、batch/RL/trajectory 链路 |
@@ -71,14 +71,14 @@
 
 以下能力属于 Hermes 完整产品体验的一部分，但当前项目未实现或只保留最小骨架：
 
-- 全屏 TUI、slash commands、setup/update 和完整 Gateway setup 等 CLI 管理面
+- 全屏 TUI、setup wizard、update 和更完整的 CLI 管理面
 - 18+ provider 与 provider 插件加载机制
 - 52 个 Hermes toolsets 的完整动态行为（按平台/环境动态过滤、UI 交互管理）
 - browser（真实浏览器/JS/DOM）、vision（模型推理）、tts（真实语音合成）、image_generate（真实 FAL 后端）等“能力级”实现
 - Docker、SSH、Singularity、Modal、Daytona、Vercel Sandbox 等终端后端
-- 多平台 Gateway 的 DM pairing、运行中断/队列、跨平台 delivery、hooks、token lock 和更多平台适配器
+- 多平台 Gateway 的原生 slash UI、审批按钮流、token lock 和更多平台适配器
 - 通用插件系统、ACP/IDE 集成、Cron 的平台投递/脚本/链式上下文等高级能力、Web/TUI dashboard、研究/训练数据链路
 
 ## 当前范围
 
-- 已实现：核心闭环、系统提示词动态装配、记忆回灌、工作区规则注入、上下文压缩、Hermes 68 工具名对齐 + toolsets 名称兼容（另含若干额外辅助工具）、并发子 Agent 委派、结构化事件流、持久化（SQLite）、CLI + HTTP API（同步/SSE/WebSocket）、CLI 配置管理（`config list|get|set` + `model show|providers|set` + `tools list|show|schemas|enable|disable` + `doctor` + `gateway status|platforms|enable|disable`）、安全护栏（hardline 阻断 + 审批门禁 + 交互确认 + pattern 级授权 + tirith 可选预扫描）、MCP（http/stdio/OAuth CC/授权码/`/call` 流式 + 事件透传）、技能（索引注入 + 条件过滤 + sync 同步 + 预加载 + GitHub 搜索）、Provider（OpenAI/Anthropic/Codex 流式聚合 + 故障切换 + 熔断 + 并行竞速 + 多级级联 + 成本感知 + `model_stream_event` v2 完整字典）、多平台网关（Telegram + Discord + Slack + Yuanbao）
+- 已实现：核心闭环、系统提示词动态装配、记忆回灌、工作区规则注入、上下文压缩、Hermes 68 工具名对齐 + toolsets 名称兼容（另含若干额外辅助工具）、并发子 Agent 委派、结构化事件流、持久化（SQLite）、CLI + HTTP API（同步/SSE/WebSocket）、CLI 配置管理（`config list|get|set` + `model show|providers|set` + `tools list|show|schemas|enable|disable` + `doctor` + `gateway status|platforms|enable|disable|setup`）、安全护栏（hardline 阻断 + 审批门禁 + 交互确认 + pattern 级授权 + tirith 可选预扫描）、MCP（http/stdio/OAuth CC/授权码/`/call` 流式 + 事件透传）、技能（索引注入 + 条件过滤 + sync 同步 + 预加载 + GitHub 搜索）、Provider（OpenAI/Anthropic/Codex 流式聚合 + 故障切换 + 熔断 + 并行竞速 + 多级级联 + 成本感知 + `model_stream_event` v2 完整字典）、多平台网关（Telegram + Discord + Slack + Yuanbao，含最小 pairing/queue/cancel/hooks 运维）

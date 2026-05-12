@@ -5,8 +5,8 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -162,14 +162,14 @@ func listSpoolFiles(basePath string) []string {
 
 func spoolStats(paths []string) map[string]any {
 	type fileStat struct {
-		Path      string            `json:"path"`
-		Exists    bool              `json:"exists"`
-		SizeBytes int64             `json:"size_bytes"`
-		Count     int               `json:"count"`
-		ModTime   string            `json:"mod_time,omitempty"`
-		Types     map[string]int    `json:"types,omitempty"`
-		OldestAt  string            `json:"oldest_at,omitempty"`
-		Error     string            `json:"error,omitempty"`
+		Path      string         `json:"path"`
+		Exists    bool           `json:"exists"`
+		SizeBytes int64          `json:"size_bytes"`
+		Count     int            `json:"count"`
+		ModTime   string         `json:"mod_time,omitempty"`
+		Types     map[string]int `json:"types,omitempty"`
+		OldestAt  string         `json:"oldest_at,omitempty"`
+		Error     string         `json:"error,omitempty"`
 	}
 	files := make([]fileStat, 0, len(paths))
 	totalCount := 0
@@ -227,11 +227,11 @@ func spoolStats(paths []string) map[string]any {
 		files = append(files, st)
 	}
 	out := map[string]any{
-		"files":       files,
-		"file_count":  len(files),
-		"total_count": totalCount,
+		"files":            files,
+		"file_count":       len(files),
+		"total_count":      totalCount,
 		"total_size_bytes": totalSize,
-		"types":       totalTypes,
+		"types":            totalTypes,
 	}
 	if !oldest.IsZero() {
 		out["oldest_at"] = oldest.Format(time.RFC3339Nano)
@@ -1272,6 +1272,8 @@ func runGateway(cfg config.Config, args []string) {
 			log.Fatal(err)
 		}
 		fmt.Printf("disabled gateway in %s\n", config.ConfigFilePath(path))
+	case "setup":
+		runGatewaySetup(args[1:])
 	case "pairs":
 		runGatewayPairs(cfg, args[1:])
 	case "hooks":
@@ -1395,7 +1397,7 @@ func runGatewayHookDoctor(cfg config.Config, args []string) {
 			"spool_max_lines":   spoolMaxLines,
 			"spool_max_bytes":   spoolMaxBytes,
 		},
-		"issues": issues,
+		"issues":       issues,
 		"next_actions": nextActions,
 	})
 	if *strict && status != "ok" {
@@ -1581,7 +1583,7 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			if totalSent >= *limit {
 				break
 			}
-		sent, remaining, err := replaySpoolOnce(p, hookURL, hookSecret, *timeoutSeconds, *limit-totalSent, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter))
+			sent, remaining, err := replaySpoolOnce(p, hookURL, hookSecret, *timeoutSeconds, *limit-totalSent, strings.TrimSpace(*typeFilter), strings.TrimSpace(*idFilter))
 			totalSent += sent
 			totalRemaining += remaining
 			if err != nil {
@@ -1689,11 +1691,11 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			perFile = append(perFile, map[string]any{"path": p, "removed": removed, "remaining": remain})
 		}
 		printJSON(map[string]any{
-			"success":        true,
-			"paths":          paths,
-			"removed_total":  totalRemoved,
+			"success":         true,
+			"paths":           paths,
+			"removed_total":   totalRemoved,
 			"remaining_total": totalRemain,
-			"files":          perFile,
+			"files":           perFile,
 			"filter": map[string]any{
 				"type":   strings.TrimSpace(*typeFilter),
 				"id":     strings.TrimSpace(*idFilter),
@@ -1738,13 +1740,13 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			})
 		}
 		printJSON(map[string]any{
-			"success":      true,
-			"paths":        paths,
-			"before_total": totalBefore,
-			"after_total":  totalAfter,
+			"success":       true,
+			"paths":         paths,
+			"before_total":  totalBefore,
+			"after_total":   totalAfter,
 			"removed_total": totalBefore - totalAfter,
-			"max_lines":    *maxLines,
-			"files":        perFile,
+			"max_lines":     *maxLines,
+			"files":         perFile,
 		})
 	case "verify":
 		fs := flag.NewFlagSet("gateway hooks spool verify", flag.ExitOnError)
@@ -1775,10 +1777,10 @@ func runGatewayHookSpool(cfg config.Config, args []string) {
 			totalValid += valid
 			totalInvalid += invalid
 			files = append(files, map[string]any{
-				"path":           p,
-				"lines":          lines,
-				"valid":          valid,
-				"invalid":        invalid,
+				"path":            p,
+				"lines":           lines,
+				"valid":           valid,
+				"invalid":         invalid,
 				"invalid_samples": samples,
 			})
 		}
@@ -1971,12 +1973,112 @@ func parseGatewayConfigPath(args []string, name string) string {
 	return *path
 }
 
+func runGatewaySetup(args []string) {
+	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	platformName := fs.String("platform", "", "platform name (telegram/discord/slack/yuanbao)")
+	token := fs.String("token", "", "shared token field (telegram/discord/yuanbao)")
+	botToken := fs.String("bot-token", "", "slack bot token")
+	appToken := fs.String("app-token", "", "slack app token")
+	appID := fs.String("app-id", "", "yuanbao app id")
+	appSecret := fs.String("app-secret", "", "yuanbao app secret")
+	allowedUsers := fs.String("allowed-users", "", "comma-separated allowed users")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway setup -platform <telegram|discord|slack|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	}
+	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
+	if platformKey == "" {
+		log.Fatal("platform is required")
+	}
+	values := map[string]string{
+		"gateway.enabled": "true",
+	}
+	written := []string{"gateway.enabled"}
+	switch platformKey {
+	case "telegram":
+		if strings.TrimSpace(*token) == "" {
+			log.Fatal("telegram setup requires -token")
+		}
+		values["gateway.telegram.bot_token"] = strings.TrimSpace(*token)
+		written = append(written, "gateway.telegram.bot_token")
+		if strings.TrimSpace(*allowedUsers) != "" {
+			values["gateway.telegram.allowed_users"] = strings.TrimSpace(*allowedUsers)
+			written = append(written, "gateway.telegram.allowed_users")
+		}
+	case "discord":
+		if strings.TrimSpace(*token) == "" {
+			log.Fatal("discord setup requires -token")
+		}
+		values["gateway.discord.bot_token"] = strings.TrimSpace(*token)
+		written = append(written, "gateway.discord.bot_token")
+		if strings.TrimSpace(*allowedUsers) != "" {
+			values["gateway.discord.allowed_users"] = strings.TrimSpace(*allowedUsers)
+			written = append(written, "gateway.discord.allowed_users")
+		}
+	case "slack":
+		if strings.TrimSpace(*botToken) == "" || strings.TrimSpace(*appToken) == "" {
+			log.Fatal("slack setup requires -bot-token and -app-token")
+		}
+		values["gateway.slack.bot_token"] = strings.TrimSpace(*botToken)
+		values["gateway.slack.app_token"] = strings.TrimSpace(*appToken)
+		written = append(written, "gateway.slack.bot_token", "gateway.slack.app_token")
+		if strings.TrimSpace(*allowedUsers) != "" {
+			values["gateway.slack.allowed_users"] = strings.TrimSpace(*allowedUsers)
+			written = append(written, "gateway.slack.allowed_users")
+		}
+	case "yuanbao":
+		if strings.TrimSpace(*token) == "" && (strings.TrimSpace(*appID) == "" || strings.TrimSpace(*appSecret) == "") {
+			log.Fatal("yuanbao setup requires -token or both -app-id and -app-secret")
+		}
+		if strings.TrimSpace(*token) != "" {
+			values["gateway.yuanbao.token"] = strings.TrimSpace(*token)
+			written = append(written, "gateway.yuanbao.token")
+		}
+		if strings.TrimSpace(*appID) != "" {
+			values["gateway.yuanbao.app_id"] = strings.TrimSpace(*appID)
+			written = append(written, "gateway.yuanbao.app_id")
+		}
+		if strings.TrimSpace(*appSecret) != "" {
+			values["gateway.yuanbao.app_secret"] = strings.TrimSpace(*appSecret)
+			written = append(written, "gateway.yuanbao.app_secret")
+		}
+		if strings.TrimSpace(*allowedUsers) != "" {
+			values["gateway.yuanbao.allowed_users"] = strings.TrimSpace(*allowedUsers)
+			written = append(written, "gateway.yuanbao.allowed_users")
+		}
+	default:
+		log.Fatalf("unsupported platform: %s", platformKey)
+	}
+	targetPath := config.ConfigFilePath(*path)
+	for _, key := range written {
+		if err := config.SaveConfigValue(targetPath, key, values[key]); err != nil {
+			log.Fatal(err)
+		}
+	}
+	sort.Strings(written)
+	if *jsonOutput {
+		printJSON(map[string]any{
+			"success":  true,
+			"path":     targetPath,
+			"platform": platformKey,
+			"enabled":  true,
+			"written":  written,
+		})
+		return
+	}
+	fmt.Printf("configured gateway platform %s in %s\n", platformKey, targetPath)
+	fmt.Printf("written=%s\n", strings.Join(written, ","))
+}
+
 func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <telegram|discord|slack|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
