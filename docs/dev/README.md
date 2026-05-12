@@ -304,3 +304,4 @@
 - `179-summary-cli-gateway-telegram-manifest-export.md`：新增 Telegram gateway 命令清单导出命令
 - `180-summary-cli-gateway-yuanbao-manifest-export.md`：新增 Yuanbao gateway 命令清单导出命令
 - `181-summary-cli-update-release-command.md`：新增 `update release` 最小 release 查询命令
+- `182-summary-cli-update-status-command.md`：新增 `update status` 聚合状态命令

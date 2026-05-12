@@ -805,6 +805,44 @@ func runUpdate(args []string) {
 		args = args[1:]
 	}
 	switch mode {
+	case "status":
+		fs := flag.NewFlagSet("update status", flag.ExitOnError)
+		fetch := fs.Bool("fetch", false, "run git fetch before checking upstream")
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before checking releases")
+		limit := fs.Int("limit", 10, "max tags to return")
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update status [-fetch] [-fetch-tags] [-limit N] [-repo path] [-json]")
+		}
+		info, err := updateStatusSummary(strings.TrimSpace(*repoPath), *fetch, *fetchTags, *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		if update, ok := info["update"].(map[string]any); ok {
+			fmt.Printf("repo=%v\n", update["repo"])
+			fmt.Printf("branch=%v\n", update["branch"])
+			fmt.Printf("commit=%v\n", update["commit"])
+			fmt.Printf("upstream=%v\n", update["upstream"])
+			fmt.Printf("ahead=%v\n", update["ahead"])
+			fmt.Printf("behind=%v\n", update["behind"])
+			fmt.Printf("dirty=%v\n", update["dirty"])
+		}
+		if release, ok := info["release"].(map[string]any); ok {
+			fmt.Printf("current_tag=%v\n", release["current_tag"])
+			fmt.Printf("latest_tag=%v\n", release["latest_tag"])
+			fmt.Printf("tag_count=%v\n", release["tag_count"])
+		}
+		if install, ok := info["install"].(map[string]any); ok {
+			fmt.Printf("installed=%v\n", install["installed"])
+			fmt.Printf("install_dir=%v\n", install["install_dir"])
+			fmt.Printf("manifest_path=%v\n", install["manifest_path"])
+		}
 	case "check":
 		fs := flag.NewFlagSet("update check", flag.ExitOnError)
 		fetch := fs.Bool("fetch", false, "run git fetch before checking")
@@ -916,8 +954,33 @@ func runUpdate(args []string) {
 			fmt.Println("removed=")
 		}
 	default:
-		log.Fatal("usage: agentd update [check|apply|release|install|uninstall]")
+		log.Fatal("usage: agentd update [status|check|apply|release|install|uninstall]")
 	}
+}
+
+func updateStatusSummary(repoPath string, fetch bool, fetchTags bool, limit int) (map[string]any, error) {
+	repo, err := resolveUpdateRepoRoot(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	updateInfo, err := gitUpdateStatusAt(repo, fetch)
+	if err != nil {
+		return nil, err
+	}
+	releaseInfo, err := gitReleaseInfoAt(repo, fetchTags, limit)
+	if err != nil {
+		return nil, err
+	}
+	installInfo, err := updateInstallStatus(repo)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"repo":    repo,
+		"update":  updateInfo,
+		"release": releaseInfo,
+		"install": installInfo,
+	}, nil
 }
 
 func gitReleaseInfo(fetchTags bool, limit int) (map[string]any, error) {
@@ -925,6 +988,10 @@ func gitReleaseInfo(fetchTags bool, limit int) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return gitReleaseInfoAt(repo, fetchTags, limit)
+}
+
+func gitReleaseInfoAt(repo string, fetchTags bool, limit int) (map[string]any, error) {
 	if fetchTags {
 		if _, err := runGit(repo, "fetch", "--tags", "--quiet"); err != nil {
 			return nil, err
@@ -964,6 +1031,38 @@ func gitReleaseInfo(fetchTags bool, limit int) (map[string]any, error) {
 		"recent_tags": recentTags,
 		"fetched":     fetchTags,
 	}, nil
+}
+
+func updateInstallStatus(repo string) (map[string]any, error) {
+	installDir := updateInstallDir(repo)
+	manifestPath := updateManifestPath(repo)
+	info := map[string]any{
+		"repo":          repo,
+		"install_dir":   installDir,
+		"manifest_path": manifestPath,
+		"installed":     false,
+	}
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return info, nil
+		}
+		return nil, err
+	}
+	info["installed"] = true
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBytes, &manifest); err == nil {
+		info["manifest"] = manifest
+	}
+	scripts := make([]string, 0, 2)
+	for _, name := range []string{"update-check.sh", "update-apply.sh"} {
+		target := filepath.Join(installDir, name)
+		if _, err := os.Stat(target); err == nil {
+			scripts = append(scripts, target)
+		}
+	}
+	info["scripts"] = scripts
+	return info, nil
 }
 
 type updateInstallInfo struct {
@@ -1331,6 +1430,10 @@ func gitUpdateStatus(fetch bool) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return gitUpdateStatusAt(repo, fetch)
+}
+
+func gitUpdateStatusAt(repo string, fetch bool) (map[string]any, error) {
 	if fetch {
 		if _, err := runGit(repo, "fetch", "--quiet"); err != nil {
 			return nil, err
