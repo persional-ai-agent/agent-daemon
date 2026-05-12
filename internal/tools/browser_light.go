@@ -276,8 +276,29 @@ func extractLightElements(html string, limit int) []lightElement {
 }
 
 func (b *BuiltinTools) browserScroll(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
-	_ = args
-	return map[string]any{"success": true, "note": "Lightweight browser: scroll is a no-op."}, nil
+	direction := strings.ToLower(strings.TrimSpace(strArg(args, "direction")))
+	if direction == "" {
+		direction = "down"
+	}
+	switch direction {
+	case "up", "down", "left", "right":
+	default:
+		direction = "down"
+	}
+	amount := intArg(args, "amount", 1)
+	if amount <= 0 {
+		amount = 1
+	}
+	if amount > 100 {
+		amount = 100
+	}
+	return map[string]any{
+		"success":           true,
+		"direction":         direction,
+		"amount":            amount,
+		"scroll_performed":  false,
+		"note":              "Lightweight browser: scroll is a no-op.",
+	}, nil
 }
 
 func (b *BuiltinTools) browserPress(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {

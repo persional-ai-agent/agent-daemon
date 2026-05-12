@@ -88,3 +88,20 @@ func TestBrowserGetImagesRespectsLimit(t *testing.T) {
 		t.Fatalf("applied_limit=%v, want 2", res["applied_limit"])
 	}
 }
+
+func TestBrowserScrollReturnsNormalizedArgs(t *testing.T) {
+	b := &BuiltinTools{}
+	res, err := b.browserScroll(context.Background(), map[string]any{"direction": "SIDEWAYS", "amount": -3}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := res["direction"].(string); got != "down" {
+		t.Fatalf("direction=%v, want down", res["direction"])
+	}
+	if got, _ := res["amount"].(int); got != 1 {
+		t.Fatalf("amount=%v, want 1", res["amount"])
+	}
+	if got, _ := res["scroll_performed"].(bool); got {
+		t.Fatalf("scroll_performed=%v, want false", res["scroll_performed"])
+	}
+}
