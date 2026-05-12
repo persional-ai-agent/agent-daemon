@@ -3502,7 +3502,7 @@ func runGatewayManifest(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway manifest -platform <slack> [-command /agent] [-json]")
+		log.Fatal("usage: agentd gateway manifest -platform <slack|discord> [-command /agent] [-json]")
 	}
 	switch strings.ToLower(strings.TrimSpace(*platformName)) {
 	case "slack":
@@ -3512,8 +3512,15 @@ func runGatewayManifest(args []string) {
 			return
 		}
 		printJSON(export)
+	case "discord":
+		export := buildDiscordManifestExport()
+		if *jsonOutput {
+			printJSON(export)
+			return
+		}
+		printJSON(export)
 	default:
-		log.Fatal("supported platforms: slack")
+		log.Fatal("supported platforms: slack, discord")
 	}
 }
 
@@ -3574,6 +3581,53 @@ func buildSlackManifestExport(command string) slackManifestExport {
 			command + " approvals": "/approvals",
 			command + " grant 300": "/grant 300",
 			command + " revoke":    "/revoke",
+		},
+	}
+}
+
+func buildDiscordManifestExport() map[string]any {
+	commands := make([]map[string]any, 0, len(platforms.DiscordApplicationCommands()))
+	for _, cmd := range platforms.DiscordApplicationCommands() {
+		item := map[string]any{
+			"name":        cmd.Name,
+			"description": cmd.Description,
+			"type":        cmd.Type,
+		}
+		if len(cmd.Options) > 0 {
+			opts := make([]map[string]any, 0, len(cmd.Options))
+			for _, opt := range cmd.Options {
+				if opt == nil {
+					continue
+				}
+				opts = append(opts, map[string]any{
+					"name":        opt.Name,
+					"description": opt.Description,
+					"type":        opt.Type,
+					"required":    opt.Required,
+				})
+			}
+			item["options"] = opts
+		}
+		commands = append(commands, item)
+	}
+	return map[string]any{
+		"platform": "discord",
+		"commands": commands,
+		"permissions": []string{
+			"applications.commands",
+			"bot",
+		},
+		"bot_permissions": []string{
+			"SendMessages",
+			"ReadMessageHistory",
+			"UseApplicationCommands",
+			"AttachFiles",
+		},
+		"install_url_hint": "https://discord.com/oauth2/authorize?scope=bot%20applications.commands&permissions=379968&client_id=<APP_ID>",
+		"next_actions": []string{
+			"为 Discord 应用勾选 bot 与 applications.commands scopes",
+			"确保 bot 拥有 Send Messages、Read Message History、Use Application Commands、Attach Files 权限",
+			"启动 gateway 后会自动 bulk overwrite 注册这些全局 slash 命令",
 		},
 	}
 }

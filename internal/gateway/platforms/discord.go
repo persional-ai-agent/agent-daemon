@@ -260,11 +260,11 @@ func (d *DiscordAdapter) registerCommands() error {
 	if appID == "" {
 		return fmt.Errorf("discord: missing application id")
 	}
-	_, err := d.session.ApplicationCommandBulkOverwrite(appID, "", discordApplicationCommands())
+	_, err := d.session.ApplicationCommandBulkOverwrite(appID, "", DiscordApplicationCommands())
 	return err
 }
 
-func discordApplicationCommands() []*discordgo.ApplicationCommand {
+func DiscordApplicationCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{Name: "pair", Description: "pair with gateway using a code", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "pair code", Required: true}}},
 		{Name: "unpair", Description: "remove current gateway pairing"},
