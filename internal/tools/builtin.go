@@ -74,7 +74,7 @@ func (b *BuiltinTools) retrievePending(id string) (pendingApproval, bool) {
 func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	b := &BuiltinTools{proc: proc}
 	r.Register(toolDef{name: "terminal", desc: "Execute shell commands on Linux", params: terminalParams(), call: b.terminal})
-	r.Register(toolDef{name: "process", desc: "Process management wrapper (status/stop)", params: processParams(), call: b.process})
+	r.Register(toolDef{name: "process", desc: "Process management wrapper (list/status/poll/log/wait/stop/kill/write)", params: processParams(), call: b.process})
 	r.Register(toolDef{name: "process_status", desc: "Poll background process status by session_id", params: processStatusParams(), call: b.processStatus})
 	r.Register(toolDef{name: "stop_process", desc: "Stop a background process", params: stopProcessParams(), call: b.stopProcess})
 	r.Register(toolDef{name: "read_file", desc: "Read file from filesystem", params: readFileParams(), call: b.readFile})
@@ -1816,7 +1816,7 @@ func processParams() map[string]any {
 		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log"},
 		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return"},
 		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait"},
-		"input":           map[string]any{"type": "string", "description": "For action=write (not supported)"},
+		"input":           map[string]any{"type": "string", "description": "For action=write"},
 	}, "required": []string{}}
 }
 func processStatusParams() map[string]any {

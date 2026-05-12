@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -259,6 +260,25 @@ func TestApprovalToolStatusAndRevoke(t *testing.T) {
 	if revoked["revoked"] != true {
 		t.Fatalf("expected revoked=true, got %+v", revoked)
 	}
+}
+
+func TestProcessSchemaActionEnumIncludesExtendedActions(t *testing.T) {
+	registry := NewRegistry()
+	RegisterBuiltins(registry, NewProcessRegistry(t.TempDir()))
+	for _, schema := range registry.Schemas() {
+		if schema.Function.Name != "process" {
+			continue
+		}
+		props, _ := schema.Function.Parameters["properties"].(map[string]any)
+		action, _ := props["action"].(map[string]any)
+		enum, _ := action["enum"].([]string)
+		want := []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}
+		if !reflect.DeepEqual(enum, want) {
+			t.Fatalf("process action enum=%v, want=%v", enum, want)
+		}
+		return
+	}
+	t.Fatal("process schema not found")
 }
 
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
