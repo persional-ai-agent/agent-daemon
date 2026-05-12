@@ -1233,8 +1233,35 @@ func runUpdateBundle(args []string) {
 		if *strict && anyString(info["status"]) != "ok" {
 			os.Exit(1)
 		}
+	case "status":
+		fs := flag.NewFlagSet("update bundle status", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update bundle status [-file <bundle.tar.gz|manifest.json>] [-dest <dir>] [-json]")
+		}
+		info, err := bundleStatusSummary(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("status=%v\n", info["status"])
+		if bundle, ok := info["bundle"].(map[string]any); ok {
+			fmt.Printf("bundle=%v\n", bundle["bundle_path"])
+		}
+		if backup, ok := info["backups"].(map[string]any); ok {
+			fmt.Printf("backup_count=%v\n", backup["count"])
+		}
+		if nextActions, ok := info["next_actions"].([]string); ok {
+			fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status]")
 	}
 }
 
@@ -1727,6 +1754,67 @@ func doctorBundleBackups(dest string) (map[string]any, error) {
 	}, nil
 }
 
+func bundleStatusSummary(path, dest string) (map[string]any, error) {
+	status := "ok"
+	issues := make([]string, 0, 6)
+	nextActions := make([]string, 0, 6)
+	result := map[string]any{
+		"status": status,
+	}
+	if path != "" {
+		bundle, err := verifyUpdateBundle(path)
+		if err != nil {
+			return nil, err
+		}
+		result["bundle"] = bundle
+		if anyString(bundle["status"]) != "ok" {
+			status = "warn"
+			if bundleIssues, ok := bundle["issues"].([]string); ok {
+				issues = append(issues, bundleIssues...)
+			}
+			if bundleActions, ok := bundle["next_actions"].([]string); ok {
+				nextActions = append(nextActions, bundleActions...)
+			}
+		}
+	}
+	if dest != "" {
+		backups, err := listBundleBackups(dest, 5)
+		if err != nil {
+			return nil, err
+		}
+		result["backups"] = backups
+		doctor, err := doctorBundleBackups(dest)
+		if err != nil {
+			return nil, err
+		}
+		result["doctor"] = doctor
+		if anyString(doctor["status"]) != "ok" {
+			status = "warn"
+			if doctorIssues, ok := doctor["issues"].([]string); ok {
+				issues = append(issues, doctorIssues...)
+			}
+			if doctorActions, ok := doctor["next_actions"].([]string); ok {
+				nextActions = append(nextActions, doctorActions...)
+			}
+		}
+		if count, _ := backups["count"].(int); count > 0 {
+			if latest, err := latestBundleBackupPath(dest); err == nil {
+				result["latest_backup_path"] = latest
+				result["rollback_ready"] = true
+			}
+		} else {
+			result["rollback_ready"] = false
+		}
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "bundle 状态正常，可继续 apply、rollback 或按需 prune")
+	}
+	result["status"] = status
+	result["issues"] = dedupeStrings(issues)
+	result["next_actions"] = dedupeStrings(nextActions)
+	return result, nil
+}
+
 func bundleBackupLabel(bundlePath string) string {
 	label := strings.TrimSuffix(filepath.Base(bundlePath), ".tar.gz")
 	label = strings.TrimSuffix(label, ".tgz")
@@ -1754,6 +1842,23 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func dedupeStrings(items []string) []string {
+	if len(items) == 0 {
+		return items
+	}
+	seen := make(map[string]bool, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 func listBundleRegularEntries(path string) ([]string, error) {

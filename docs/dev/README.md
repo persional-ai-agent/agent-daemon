@@ -317,3 +317,4 @@
 - `192-summary-cli-update-bundle-backups-command.md`：新增 `update bundle backups` 备份列表命令
 - `193-summary-cli-update-bundle-prune-command.md`：新增 `update bundle prune` 备份清理命令
 - `194-summary-cli-update-bundle-doctor-command.md`：新增 `update bundle doctor` 备份诊断命令
+- `195-summary-cli-update-bundle-status-command.md`：新增 `update bundle status` 聚合状态命令
