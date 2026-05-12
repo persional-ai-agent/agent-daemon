@@ -282,3 +282,4 @@
 - `157-summary-cli-gateway-process-management.md`：新增 `gateway run/start/stop/restart` 最小进程管理
 - `158-summary-cli-bootstrap-command.md`：新增 `bootstrap init/status` 最小工作区初始化命令
 - `159-summary-cli-gateway-install-uninstall.md`：新增 `gateway install/uninstall` 最小脚本安装命令
+- `160-summary-cli-update-install-uninstall.md`：新增 `update install/uninstall` 最小脚本安装命令

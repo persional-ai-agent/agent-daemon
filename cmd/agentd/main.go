@@ -849,9 +849,164 @@ func runUpdate(args []string) {
 		fmt.Printf("before=%s\n", result["before"])
 		fmt.Printf("after=%s\n", result["after"])
 		fmt.Printf("updated=%v\n", result["updated"])
+	case "install":
+		fs := flag.NewFlagSet("update install", flag.ExitOnError)
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update install [-repo path] [-json]")
+		}
+		result, err := installUpdateScripts(strings.TrimSpace(*repoPath))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Printf("installed update scripts in %s\n", result.InstallDir)
+		fmt.Println("manifest=" + result.ManifestPath)
+		fmt.Println("scripts=" + strings.Join(result.Scripts, ","))
+	case "uninstall":
+		fs := flag.NewFlagSet("update uninstall", flag.ExitOnError)
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update uninstall [-repo path] [-json]")
+		}
+		result, err := uninstallUpdateScripts(strings.TrimSpace(*repoPath))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Printf("uninstalled update scripts from %s\n", result.InstallDir)
+		if len(result.Removed) > 0 {
+			fmt.Println("removed=" + strings.Join(result.Removed, ","))
+		} else {
+			fmt.Println("removed=")
+		}
 	default:
-		log.Fatal("usage: agentd update [check|apply]")
+		log.Fatal("usage: agentd update [check|apply|install|uninstall]")
 	}
+}
+
+type updateInstallInfo struct {
+	Success      bool     `json:"success"`
+	Installed    bool     `json:"installed"`
+	Repo         string   `json:"repo"`
+	InstallDir   string   `json:"install_dir"`
+	ManifestPath string   `json:"manifest_path"`
+	Scripts      []string `json:"scripts,omitempty"`
+	Removed      []string `json:"removed,omitempty"`
+}
+
+func installUpdateScripts(repoPath string) (updateInstallInfo, error) {
+	repo, err := resolveUpdateRepoRoot(repoPath)
+	if err != nil {
+		return updateInstallInfo{}, err
+	}
+	installDir := updateInstallDir(repo)
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return updateInstallInfo{}, err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return updateInstallInfo{}, err
+	}
+	scriptSpecs := []struct {
+		name string
+		args string
+	}{
+		{name: "update-check.sh", args: "update -fetch"},
+		{name: "update-apply.sh", args: "update apply"},
+	}
+	scripts := make([]string, 0, len(scriptSpecs))
+	for _, spec := range scriptSpecs {
+		target := filepath.Join(installDir, spec.name)
+		content := "#!/usr/bin/env bash\nset -euo pipefail\ncd " + shellQuote(repo) + "\nexec " + shellQuote(exe) + " " + spec.args + " \"$@\"\n"
+		if err := os.WriteFile(target, []byte(content), 0o755); err != nil {
+			return updateInstallInfo{}, err
+		}
+		scripts = append(scripts, target)
+	}
+	manifestPath := updateManifestPath(repo)
+	manifest := map[string]any{
+		"installed":    true,
+		"installed_at": time.Now().Format(time.RFC3339Nano),
+		"repo":         repo,
+		"executable":   exe,
+		"scripts":      scripts,
+	}
+	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		return updateInstallInfo{}, err
+	}
+	return updateInstallInfo{
+		Success:      true,
+		Installed:    true,
+		Repo:         repo,
+		InstallDir:   installDir,
+		ManifestPath: manifestPath,
+		Scripts:      scripts,
+	}, nil
+}
+
+func uninstallUpdateScripts(repoPath string) (updateInstallInfo, error) {
+	repo, err := resolveUpdateRepoRoot(repoPath)
+	if err != nil {
+		return updateInstallInfo{}, err
+	}
+	removed := make([]string, 0, 3)
+	for _, name := range []string{"update-check.sh", "update-apply.sh"} {
+		target := filepath.Join(updateInstallDir(repo), name)
+		if err := os.Remove(target); err == nil {
+			removed = append(removed, target)
+		} else if err != nil && !os.IsNotExist(err) {
+			return updateInstallInfo{}, err
+		}
+	}
+	manifestPath := updateManifestPath(repo)
+	if err := os.Remove(manifestPath); err == nil {
+		removed = append(removed, manifestPath)
+	} else if err != nil && !os.IsNotExist(err) {
+		return updateInstallInfo{}, err
+	}
+	return updateInstallInfo{
+		Success:      true,
+		Installed:    false,
+		Repo:         repo,
+		InstallDir:   updateInstallDir(repo),
+		ManifestPath: manifestPath,
+		Removed:      removed,
+	}, nil
+}
+
+func resolveUpdateRepoRoot(repoPath string) (string, error) {
+	if strings.TrimSpace(repoPath) != "" {
+		return gitRepoRootAt(strings.TrimSpace(repoPath))
+	}
+	return gitRepoRoot()
+}
+
+func gitRepoRootAt(workdir string) (string, error) {
+	repo, err := runGit(workdir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("update is only available in a git checkout: %w", err)
+	}
+	return repo, nil
+}
+
+func updateInstallDir(repo string) string {
+	return filepath.Join(repo, ".agent-daemon", "bin")
+}
+
+func updateManifestPath(repo string) string {
+	return filepath.Join(updateInstallDir(repo), "update-install.json")
 }
 
 func runBootstrap(cfg config.Config, args []string) {
