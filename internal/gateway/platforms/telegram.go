@@ -31,6 +31,9 @@ func (t *TelegramAdapter) Name() string { return "telegram" }
 
 func (t *TelegramAdapter) Connect(ctx context.Context) error {
 	log.Printf("[gateway:telegram] connected as @%s", t.bot.Self.UserName)
+	if err := t.registerCommands(); err != nil {
+		log.Printf("[gateway:telegram] register commands: %v", err)
+	}
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -235,4 +238,26 @@ func approvalKeyboard(meta map[string]any) any {
 			tgbotapi.NewInlineKeyboardButtonData("Deny", "/deny "+approvalID),
 		),
 	)
+}
+
+func (t *TelegramAdapter) registerCommands() error {
+	_, err := t.bot.Request(tgbotapi.NewSetMyCommands(telegramCommands()...))
+	return err
+}
+
+func telegramCommands() []tgbotapi.BotCommand {
+	return []tgbotapi.BotCommand{
+		{Command: "pair", Description: "pair with gateway using a code"},
+		{Command: "unpair", Description: "remove current gateway pairing"},
+		{Command: "cancel", Description: "cancel the running task"},
+		{Command: "queue", Description: "show queued task count"},
+		{Command: "status", Description: "show current session status"},
+		{Command: "pending", Description: "show latest pending approval"},
+		{Command: "approvals", Description: "show active approvals"},
+		{Command: "grant", Description: "grant session or pattern approval"},
+		{Command: "revoke", Description: "revoke session or pattern approval"},
+		{Command: "approve", Description: "approve a pending approval id"},
+		{Command: "deny", Description: "deny a pending approval id"},
+		{Command: "help", Description: "show supported commands"},
+	}
 }

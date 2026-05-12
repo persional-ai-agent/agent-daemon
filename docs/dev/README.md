@@ -291,3 +291,4 @@
 - `166-summary-gateway-status-command.md`：新增 gateway 文本状态命令 `/status`
 - `167-summary-gateway-pending-command.md`：新增 gateway 待审批查看命令 `/pending`
 - `168-summary-gateway-telegram-approval-buttons.md`：新增 Telegram 原生审批按钮最小闭环
+- `169-summary-gateway-telegram-command-menu.md`：新增 Telegram 原生命令菜单最小闭环
