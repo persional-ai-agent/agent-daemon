@@ -2086,6 +2086,13 @@ func runGateway(cfg config.Config, args []string) {
 			fmt.Println("lock_pid=")
 		}
 		fmt.Println("lock_path=" + status.LockPath)
+		fmt.Printf("token_locked=%t\n", status.TokenLocked)
+		if status.TokenLockPID > 0 {
+			fmt.Printf("token_lock_pid=%d\n", status.TokenLockPID)
+		} else {
+			fmt.Println("token_lock_pid=")
+		}
+		fmt.Println("token_lock_path=" + status.TokenLockPath)
 		fmt.Printf("installed=%t\n", status.Installed)
 		fmt.Println("install_dir=" + status.InstallDir)
 		fmt.Println("manifest_path=" + status.ManifestPath)
@@ -2277,6 +2284,18 @@ func runGatewayStart(cfg config.Config, args []string) {
 		fmt.Println("log_path=" + logPath)
 		return
 	}
+	if tokenLockPath := gatewayTokenLockPath(startCfg); tokenLockPath != "" {
+		if lockPID := readGatewayLockPID(tokenLockPath); lockPID > 0 && processAlive(lockPID) {
+			result := map[string]any{"success": true, "started": false, "running": true, "token_locked": true, "token_lock_pid": lockPID, "token_lock_path": tokenLockPath, "pid_path": pidPath, "log_path": logPath}
+			if *jsonOutput {
+				printJSON(result)
+				return
+			}
+			fmt.Printf("gateway token already locked pid=%d\n", lockPID)
+			fmt.Println("log_path=" + logPath)
+			return
+		}
+	}
 	_ = os.Remove(pidPath)
 	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
 		log.Fatal(err)
@@ -2419,6 +2438,11 @@ type gatewayRuntimeLock struct {
 	pid  int
 }
 
+type gatewayLockSet struct {
+	runtime *gatewayRuntimeLock
+	token   *gatewayRuntimeLock
+}
+
 func installGatewayScripts(cfg config.Config, configPath string) (gatewayInstallInfo, error) {
 	installDir := gatewayInstallDir(cfg)
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
@@ -2511,7 +2535,7 @@ func runGatewayForeground(cfg config.Config) {
 	if !cfg.GatewayEnabled {
 		log.Printf("gateway.enabled=false; continuing because gateway run was requested explicitly")
 	}
-	lock, err := acquireGatewayRuntimeLock(cfg)
+	lock, err := acquireGatewayLocks(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -2549,8 +2573,45 @@ func runGatewayForeground(cfg config.Config) {
 	runner.Stop()
 }
 
+func acquireGatewayLocks(cfg config.Config) (*gatewayLockSet, error) {
+	runtimeLock, err := acquireGatewayRuntimeLock(cfg)
+	if err != nil {
+		return nil, err
+	}
+	tokenLock, err := acquireGatewayTokenLock(cfg)
+	if err != nil {
+		runtimeLock.Release()
+		return nil, err
+	}
+	return &gatewayLockSet{runtime: runtimeLock, token: tokenLock}, nil
+}
+
+func (s *gatewayLockSet) Release() {
+	if s == nil {
+		return
+	}
+	if s.token != nil {
+		s.token.Release()
+	}
+	if s.runtime != nil {
+		s.runtime.Release()
+	}
+}
+
 func acquireGatewayRuntimeLock(cfg config.Config) (*gatewayRuntimeLock, error) {
 	lockPath := gatewayLockPath(cfg)
+	return acquirePIDFileLock(lockPath, "gateway lock")
+}
+
+func acquireGatewayTokenLock(cfg config.Config) (*gatewayRuntimeLock, error) {
+	lockPath := gatewayTokenLockPath(cfg)
+	if lockPath == "" {
+		return nil, nil
+	}
+	return acquirePIDFileLock(lockPath, "gateway token lock")
+}
+
+func acquirePIDFileLock(lockPath, label string) (*gatewayRuntimeLock, error) {
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		return nil, err
 	}
@@ -2562,9 +2623,9 @@ func acquireGatewayRuntimeLock(cfg config.Config) (*gatewayRuntimeLock, error) {
 		lockPID := readGatewayLockPID(lockPath)
 		_ = file.Close()
 		if lockPID > 0 {
-			return nil, fmt.Errorf("gateway lock is already held by pid=%d (%s)", lockPID, lockPath)
+			return nil, fmt.Errorf("%s is already held by pid=%d (%s)", label, lockPID, lockPath)
 		}
-		return nil, fmt.Errorf("gateway lock is already held (%s)", lockPath)
+		return nil, fmt.Errorf("%s is already held (%s)", label, lockPath)
 	}
 	pid := os.Getpid()
 	if err := file.Truncate(0); err != nil {
@@ -3455,6 +3516,9 @@ type gatewayStatusInfo struct {
 	Locked              bool     `json:"locked"`
 	LockPID             int      `json:"lock_pid,omitempty"`
 	LockPath            string   `json:"lock_path,omitempty"`
+	TokenLocked         bool     `json:"token_locked"`
+	TokenLockPID        int      `json:"token_lock_pid,omitempty"`
+	TokenLockPath       string   `json:"token_lock_path,omitempty"`
 	Installed           bool     `json:"installed"`
 	InstallDir          string   `json:"install_dir,omitempty"`
 	ManifestPath        string   `json:"manifest_path,omitempty"`
@@ -3463,6 +3527,8 @@ type gatewayStatusInfo struct {
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 	running, pid := gatewayProcessStatus(cfg)
 	lockPID := readGatewayLockPID(gatewayLockPath(cfg))
+	tokenLockPath := gatewayTokenLockPath(cfg)
+	tokenLockPID := readGatewayLockPID(tokenLockPath)
 	return gatewayStatusInfo{
 		Enabled:             cfg.GatewayEnabled,
 		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
@@ -3474,6 +3540,9 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 		Locked:              lockPID > 0 && processAlive(lockPID),
 		LockPID:             lockPID,
 		LockPath:            gatewayLockPath(cfg),
+		TokenLocked:         tokenLockPID > 0 && processAlive(tokenLockPID),
+		TokenLockPID:        tokenLockPID,
+		TokenLockPath:       tokenLockPath,
 		Installed:           fileExists(gatewayManifestPath(cfg)),
 		InstallDir:          gatewayInstallDir(cfg),
 		ManifestPath:        gatewayManifestPath(cfg),
@@ -3490,6 +3559,36 @@ func gatewayLogPath(cfg config.Config) string {
 
 func gatewayLockPath(cfg config.Config) string {
 	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.lock")
+}
+
+func gatewayTokenLockPath(cfg config.Config) string {
+	fingerprint := gatewayTokenFingerprint(cfg)
+	if fingerprint == "" {
+		return ""
+	}
+	return filepath.Join(os.TempDir(), "agent-daemon-gateway-locks", fingerprint+".lock")
+}
+
+func gatewayTokenFingerprint(cfg config.Config) string {
+	parts := make([]string, 0, 4)
+	if strings.TrimSpace(cfg.TelegramToken) != "" {
+		parts = append(parts, "telegram:"+strings.TrimSpace(cfg.TelegramToken))
+	}
+	if strings.TrimSpace(cfg.DiscordToken) != "" {
+		parts = append(parts, "discord:"+strings.TrimSpace(cfg.DiscordToken))
+	}
+	if strings.TrimSpace(cfg.SlackBotToken) != "" || strings.TrimSpace(cfg.SlackAppToken) != "" {
+		parts = append(parts, "slack:"+strings.TrimSpace(cfg.SlackBotToken)+":"+strings.TrimSpace(cfg.SlackAppToken))
+	}
+	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
+		parts = append(parts, "yuanbao:"+strings.TrimSpace(cfg.YuanbaoToken)+":"+strings.TrimSpace(cfg.YuanbaoAppID))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	sort.Strings(parts)
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(sum[:16])
 }
 
 func gatewayInstallDir(cfg config.Config) string {
@@ -3829,7 +3928,7 @@ func runServe(cfg config.Config) {
 
 		adapters := buildGatewayAdapters(cfg)
 		if len(adapters) > 0 {
-			lock, err := acquireGatewayRuntimeLock(cfg)
+			lock, err := acquireGatewayLocks(cfg)
 			if err != nil {
 				log.Printf("gateway start skipped: %v", err)
 			} else {
