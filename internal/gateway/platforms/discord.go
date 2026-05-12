@@ -61,18 +61,45 @@ func (d *DiscordAdapter) Connect(ctx context.Context) error {
 		d.handler(ctx, event)
 	})
 	d.session.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		if d.handler == nil || ic == nil || ic.Type != discordgo.InteractionMessageComponent || ic.Member == nil && ic.User == nil {
+		if d.handler == nil || ic == nil || ic.Member == nil && ic.User == nil {
 			return
 		}
-		data := ic.MessageComponentData()
-		customID := strings.TrimSpace(data.CustomID)
-		if !strings.HasPrefix(customID, "/") {
+		var (
+			cmdText string
+			replyTo string
+		)
+		switch ic.Type {
+		case discordgo.InteractionMessageComponent:
+			data := ic.MessageComponentData()
+			customID := strings.TrimSpace(data.CustomID)
+			if !strings.HasPrefix(customID, "/") {
+				return
+			}
+			cmdText = customID
+			if ic.Message != nil {
+				replyTo = ic.Message.ID
+			}
+			if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}); err != nil {
+				log.Printf("[gateway:discord] acknowledge interaction: %v", err)
+			}
+		case discordgo.InteractionApplicationCommand:
+			cmdText = renderDiscordSlashCommand(ic.ApplicationCommandData())
+			if strings.TrimSpace(cmdText) == "" {
+				return
+			}
+			if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Accepted. Check the next bot reply.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			}); err != nil {
+				log.Printf("[gateway:discord] acknowledge slash command: %v", err)
+			}
+		default:
 			return
-		}
-		if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		}); err != nil {
-			log.Printf("[gateway:discord] acknowledge interaction: %v", err)
 		}
 		userID := ""
 		userName := ""
@@ -92,13 +119,12 @@ func (d *DiscordAdapter) Connect(ctx context.Context) error {
 			threadID = ic.Message.Thread.ID
 		}
 		messageID := ""
-		replyToID := ""
+		replyToID := replyTo
 		if ic.Message != nil {
 			messageID = ic.Message.ID
-			replyToID = ic.Message.ID
 		}
 		d.handler(ctx, gateway.MessageEvent{
-			Text:      customID,
+			Text:      cmdText,
 			MessageID: messageID,
 			ChatID:    ic.ChannelID,
 			ChatType:  chatType,
@@ -112,6 +138,9 @@ func (d *DiscordAdapter) Connect(ctx context.Context) error {
 
 	if err := d.session.Open(); err != nil {
 		return fmt.Errorf("discord: connect: %w", err)
+	}
+	if err := d.registerCommands(); err != nil {
+		log.Printf("[gateway:discord] register commands: %v", err)
 	}
 	log.Printf("[gateway:discord] connected as @%s", d.session.State.User.Username)
 
@@ -220,5 +249,56 @@ func approvalComponents(meta map[string]any) []discordgo.MessageComponent {
 				},
 			},
 		},
+	}
+}
+
+func (d *DiscordAdapter) registerCommands() error {
+	appID := ""
+	if d.session != nil && d.session.State != nil && d.session.State.User != nil {
+		appID = strings.TrimSpace(d.session.State.User.ID)
+	}
+	if appID == "" {
+		return fmt.Errorf("discord: missing application id")
+	}
+	_, err := d.session.ApplicationCommandBulkOverwrite(appID, "", discordApplicationCommands())
+	return err
+}
+
+func discordApplicationCommands() []*discordgo.ApplicationCommand {
+	return []*discordgo.ApplicationCommand{
+		{Name: "pair", Description: "pair with gateway using a code", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "pair code", Required: true}}},
+		{Name: "unpair", Description: "remove current gateway pairing"},
+		{Name: "cancel", Description: "cancel the running task"},
+		{Name: "queue", Description: "show queued task count"},
+		{Name: "status", Description: "show current session status"},
+		{Name: "pending", Description: "show latest pending approval"},
+		{Name: "approvals", Description: "show active approvals"},
+		{Name: "approve", Description: "approve a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
+		{Name: "deny", Description: "deny a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
+		{Name: "help", Description: "show supported commands"},
+	}
+}
+
+func renderDiscordSlashCommand(data discordgo.ApplicationCommandInteractionData) string {
+	name := "/" + strings.TrimSpace(data.Name)
+	switch name {
+	case "/pair":
+		if opt := data.GetOption("code"); opt != nil {
+			if value, ok := opt.Value.(string); ok && strings.TrimSpace(value) != "" {
+				return name + " " + strings.TrimSpace(value)
+			}
+		}
+		return name
+	case "/approve", "/deny":
+		if opt := data.GetOption("id"); opt != nil {
+			if value, ok := opt.Value.(string); ok && strings.TrimSpace(value) != "" {
+				return name + " " + strings.TrimSpace(value)
+			}
+		}
+		return name
+	case "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/help":
+		return name
+	default:
+		return ""
 	}
 }

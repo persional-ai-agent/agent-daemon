@@ -295,3 +295,4 @@
 - `170-summary-gateway-discord-approval-buttons.md`：新增 Discord 原生审批按钮最小闭环
 - `171-summary-gateway-slack-approval-buttons.md`：新增 Slack 原生审批按钮最小闭环
 - `172-summary-gateway-yuanbao-approval-quick-replies.md`：新增 Yuanbao 审批快捷回复最小闭环
+- `173-summary-gateway-discord-slash-commands.md`：新增 Discord 原生 slash 命令最小闭环
