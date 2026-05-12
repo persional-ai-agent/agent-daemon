@@ -1141,8 +1141,31 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("created_files=%v\n", info["created_files"])
 		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
 		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
+	case "rollback":
+		fs := flag.NewFlagSet("update bundle rollback", flag.ExitOnError)
+		path := fs.String("file", "", "backup bundle tar.gz path or manifest json path (defaults to latest backup under dest)")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle rollback -dest <dir> [-file <backup.tar.gz|manifest.json>] [-json]")
+		}
+		info, err := rollbackUpdateBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("rollback_bundle=%s\n", info["rollback_bundle_path"])
+		fmt.Printf("dest=%s\n", info["dest"])
+		fmt.Printf("applied_files=%v\n", info["applied_files"])
+		fmt.Printf("created_files=%v\n", info["created_files"])
+		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
+		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback]")
 	}
 }
 
@@ -1359,6 +1382,45 @@ func applyUpdateBundle(path, dest string) (map[string]any, error) {
 	if entries, _ := info["archive_entries"].(int); entries == 0 {
 		return nil, fmt.Errorf("bundle archive has no entries: %s", bundlePath)
 	}
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	result, err := applyBundleArchive(bundlePath, dest, backupDir, path)
+	if err != nil {
+		return nil, err
+	}
+	result["bundle_path"] = bundlePath
+	return result, nil
+}
+
+func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
+	bundlePath := strings.TrimSpace(path)
+	if bundlePath == "" {
+		var err error
+		bundlePath, err = latestBundleBackupPath(dest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	info, err := inspectUpdateBundle(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	resolvedPath := strings.TrimSpace(anyString(info["bundle_path"]))
+	if resolvedPath == "" || !anyBool(info["bundle_exists"]) {
+		return nil, fmt.Errorf("rollback bundle file missing: %s", bundlePath)
+	}
+	if entries, _ := info["archive_entries"].(int); entries == 0 {
+		return nil, fmt.Errorf("rollback bundle archive has no entries: %s", resolvedPath)
+	}
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	result, err := applyBundleArchive(resolvedPath, dest, backupDir, bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	result["rollback_bundle_path"] = resolvedPath
+	return result, nil
+}
+
+func applyBundleArchive(bundlePath, dest, backupDir, sourcePath string) (map[string]any, error) {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return nil, err
 	}
@@ -1377,20 +1439,17 @@ func applyUpdateBundle(path, dest string) (map[string]any, error) {
 	backupPath := ""
 	backupManifestPath := ""
 	if len(backupFiles) > 0 {
-		label := strings.TrimSuffix(filepath.Base(bundlePath), ".tar.gz")
-		label = strings.TrimSuffix(label, ".tgz")
-		label = sanitizeBundleLabel(label)
-		backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+		label := bundleBackupLabel(bundlePath)
 		if err := os.MkdirAll(backupDir, 0o755); err != nil {
 			return nil, err
 		}
-		backupPath = filepath.Join(backupDir, time.Now().Format("20060102-150405")+"-"+label+".tar.gz")
+		backupPath = filepath.Join(backupDir, fmt.Sprintf("%d-%s.tar.gz", time.Now().UnixNano(), label))
 		if err := writeRepoBundle(dest, backupPath, backupFiles); err != nil {
 			return nil, err
 		}
 		backupManifestPath = strings.TrimSuffix(backupPath, ".tar.gz") + ".json"
 		backupManifest := map[string]any{
-			"source_bundle_path": path,
+			"source_bundle_path": sourcePath,
 			"bundle_path":        backupPath,
 			"file_count":         len(backupFiles),
 			"generated_at":       time.Now().Format(time.RFC3339Nano),
@@ -1456,7 +1515,6 @@ func applyUpdateBundle(path, dest string) (map[string]any, error) {
 		}
 	}
 	return map[string]any{
-		"bundle_path":          bundlePath,
 		"dest":                 dest,
 		"applied_files":        applied,
 		"created_files":        created,
@@ -1465,6 +1523,40 @@ func applyUpdateBundle(path, dest string) (map[string]any, error) {
 		"backup_bundle_path":   backupPath,
 		"backup_manifest_path": backupManifestPath,
 	}, nil
+}
+
+func latestBundleBackupPath(dest string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(dest, ".agent-daemon", "release-backups", "*.tar.gz"))
+	if err != nil {
+		return "", err
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no bundle backups found under %s", filepath.Join(dest, ".agent-daemon", "release-backups"))
+	}
+	sort.Strings(matches)
+	return matches[len(matches)-1], nil
+}
+
+func bundleBackupLabel(bundlePath string) string {
+	label := strings.TrimSuffix(filepath.Base(bundlePath), ".tar.gz")
+	label = strings.TrimSuffix(label, ".tgz")
+	if len(label) > 16 && label[8] == '-' && label[15] == '-' {
+		label = label[16:]
+	}
+	if idx := strings.Index(label, "-"); idx > 0 {
+		prefix := label[:idx]
+		allDigits := true
+		for _, r := range prefix {
+			if r < '0' || r > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			label = label[idx+1:]
+		}
+	}
+	return sanitizeBundleLabel(label)
 }
 
 func listBundleRegularEntries(path string) ([]string, error) {
