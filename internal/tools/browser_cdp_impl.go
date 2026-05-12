@@ -206,13 +206,20 @@ func (b *BuiltinTools) browserNavigateCDP(ctx context.Context, args map[string]a
 	}, nil
 }
 
-func (b *BuiltinTools) browserSnapshotCDP(ctx context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserSnapshotCDP(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	st, err := getCDPBrowser(ctx, tc.SessionID)
 	if err != nil {
 		return nil, err
 	}
+	maxChars := intArg(args, "max_chars", 120_000)
+	if maxChars <= 0 {
+		maxChars = 120_000
+	}
+	if maxChars > 300_000 {
+		maxChars = 300_000
+	}
 	// Evaluate a snapshot script and return by value.
-	script := `(function(){
+	script := fmt.Sprintf(`(function(){
   const out=[];
   const push=(o)=>{ out.push(o); };
   const links=[...document.querySelectorAll('a[href]')];
@@ -222,8 +229,8 @@ func (b *BuiltinTools) browserSnapshotCDP(ctx context.Context, _ map[string]any,
   const buttons=[...document.querySelectorAll('button')];
   for(const b of buttons){ if(out.length>=80) break; push({kind:'button', text:((b.innerText||b.textContent||'').trim()).slice(0,200)}); }
   const text=((document.body && (document.body.innerText||document.body.textContent))||'').toString();
-  return {url: location.href, elements: out, text: text.slice(0,120000)};
-})()`
+  return {url: location.href, elements: out, text: text.slice(0,%d)};
+})()`, maxChars)
 
 	var evalRes struct {
 		Result struct {
