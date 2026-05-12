@@ -1892,6 +1892,10 @@ func runGateway(cfg config.Config, args []string) {
 		runGatewayStop(cfg, args[1:])
 	case "restart":
 		runGatewayRestart(cfg, args[1:])
+	case "install":
+		runGatewayInstall(cfg, args[1:])
+	case "uninstall":
+		runGatewayUninstall(cfg, args[1:])
 	case "status":
 		fs := flag.NewFlagSet("gateway status", flag.ExitOnError)
 		path := fs.String("file", "", "config file path")
@@ -1920,6 +1924,9 @@ func runGateway(cfg config.Config, args []string) {
 		} else {
 			fmt.Println("pid=")
 		}
+		fmt.Printf("installed=%t\n", status.Installed)
+		fmt.Println("install_dir=" + status.InstallDir)
+		fmt.Println("manifest_path=" + status.ManifestPath)
 		fmt.Println("pid_path=" + status.PIDPath)
 		fmt.Println("log_path=" + status.LogPath)
 		if len(status.ConfiguredPlatforms) == 0 {
@@ -1990,6 +1997,84 @@ func runGatewayRun(cfg config.Config, args []string) {
 		}
 	}
 	runGatewayForeground(runCfg)
+}
+
+func runGatewayInstall(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway install", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway install [-file path] [-workdir dir] [-json]")
+	}
+	installCfg := cfg
+	if strings.TrimSpace(*path) != "" {
+		var err error
+		installCfg, err = config.LoadFile(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if strings.TrimSpace(*workdir) != "" {
+		installCfg.Workdir = strings.TrimSpace(*workdir)
+	}
+	result, err := installGatewayScripts(installCfg, *path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *jsonOutput {
+		printJSON(result)
+		return
+	}
+	fmt.Printf("installed gateway scripts in %s\n", result.InstallDir)
+	fmt.Println("manifest=" + result.ManifestPath)
+	fmt.Println("scripts=" + strings.Join(result.Scripts, ","))
+}
+
+func runGatewayUninstall(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway uninstall", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+	stopFirst := fs.Bool("stop", false, "stop running gateway before uninstall")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway uninstall [-file path] [-workdir dir] [-stop] [-json]")
+	}
+	uninstallCfg := cfg
+	if strings.TrimSpace(*path) != "" {
+		var err error
+		uninstallCfg, err = config.LoadFile(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if strings.TrimSpace(*workdir) != "" {
+		uninstallCfg.Workdir = strings.TrimSpace(*workdir)
+	}
+	if *stopFirst {
+		stopArgs := make([]string, 0, 3)
+		if strings.TrimSpace(*path) != "" {
+			stopArgs = append(stopArgs, "-file", *path)
+		}
+		_ = stopArgs
+		runGatewayStop(uninstallCfg, stopArgs)
+	}
+	result, err := uninstallGatewayScripts(uninstallCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *jsonOutput {
+		printJSON(result)
+		return
+	}
+	fmt.Printf("uninstalled gateway scripts from %s\n", result.InstallDir)
+	if len(result.Removed) > 0 {
+		fmt.Println("removed=" + strings.Join(result.Removed, ","))
+	} else {
+		fmt.Println("removed=")
+	}
 }
 
 func runGatewayStart(cfg config.Config, args []string) {
@@ -2145,6 +2230,97 @@ func runGatewayRestart(cfg config.Config, args []string) {
 		restartArgs = append(restartArgs, "-json")
 	}
 	runGatewayStart(cfg, restartArgs)
+}
+
+type gatewayInstallInfo struct {
+	Success      bool     `json:"success"`
+	Installed    bool     `json:"installed"`
+	InstallDir   string   `json:"install_dir"`
+	ManifestPath string   `json:"manifest_path"`
+	Scripts      []string `json:"scripts,omitempty"`
+	Removed      []string `json:"removed,omitempty"`
+}
+
+func installGatewayScripts(cfg config.Config, configPath string) (gatewayInstallInfo, error) {
+	installDir := gatewayInstallDir(cfg)
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return gatewayInstallInfo{}, err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return gatewayInstallInfo{}, err
+	}
+	scriptSpecs := []struct {
+		name string
+		args string
+	}{
+		{name: "gateway-start.sh", args: "gateway start"},
+		{name: "gateway-stop.sh", args: "gateway stop"},
+		{name: "gateway-restart.sh", args: "gateway restart"},
+		{name: "gateway-status.sh", args: "gateway status"},
+	}
+	scripts := make([]string, 0, len(scriptSpecs))
+	configArg := ""
+	if strings.TrimSpace(configPath) != "" {
+		configArg = " -file " + shellQuote(config.ConfigFilePath(configPath))
+	}
+	for _, spec := range scriptSpecs {
+		target := filepath.Join(installDir, spec.name)
+		content := "#!/usr/bin/env bash\nset -euo pipefail\nexec " + shellQuote(exe) + " " + spec.args + configArg + " \"$@\"\n"
+		if err := os.WriteFile(target, []byte(content), 0o755); err != nil {
+			return gatewayInstallInfo{}, err
+		}
+		scripts = append(scripts, target)
+	}
+	manifest := map[string]any{
+		"installed":    true,
+		"installed_at": time.Now().Format(time.RFC3339Nano),
+		"executable":   exe,
+		"config_path":  config.ConfigFilePath(configPath),
+		"workdir":      cfg.Workdir,
+		"scripts":      scripts,
+	}
+	manifestPath := gatewayManifestPath(cfg)
+	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		return gatewayInstallInfo{}, err
+	}
+	return gatewayInstallInfo{
+		Success:      true,
+		Installed:    true,
+		InstallDir:   installDir,
+		ManifestPath: manifestPath,
+		Scripts:      scripts,
+	}, nil
+}
+
+func uninstallGatewayScripts(cfg config.Config) (gatewayInstallInfo, error) {
+	removed := make([]string, 0, 5)
+	for _, name := range []string{"gateway-start.sh", "gateway-stop.sh", "gateway-restart.sh", "gateway-status.sh"} {
+		target := filepath.Join(gatewayInstallDir(cfg), name)
+		if err := os.Remove(target); err == nil {
+			removed = append(removed, target)
+		} else if err != nil && !os.IsNotExist(err) {
+			return gatewayInstallInfo{}, err
+		}
+	}
+	manifestPath := gatewayManifestPath(cfg)
+	if err := os.Remove(manifestPath); err == nil {
+		removed = append(removed, manifestPath)
+	} else if err != nil && !os.IsNotExist(err) {
+		return gatewayInstallInfo{}, err
+	}
+	return gatewayInstallInfo{
+		Success:      true,
+		Installed:    false,
+		InstallDir:   gatewayInstallDir(cfg),
+		ManifestPath: manifestPath,
+		Removed:      removed,
+	}, nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
 func runGatewayForeground(cfg config.Config) {
@@ -2998,6 +3174,8 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway start [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway stop [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway restart [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway install [-file path] [-workdir dir] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway uninstall [-file path] [-workdir dir] [-stop] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
@@ -3045,6 +3223,9 @@ type gatewayStatusInfo struct {
 	PID                 int      `json:"pid,omitempty"`
 	PIDPath             string   `json:"pid_path,omitempty"`
 	LogPath             string   `json:"log_path,omitempty"`
+	Installed           bool     `json:"installed"`
+	InstallDir          string   `json:"install_dir,omitempty"`
+	ManifestPath        string   `json:"manifest_path,omitempty"`
 }
 
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
@@ -3057,6 +3238,9 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 		PID:                 pid,
 		PIDPath:             gatewayPIDPath(cfg),
 		LogPath:             gatewayLogPath(cfg),
+		Installed:           fileExists(gatewayManifestPath(cfg)),
+		InstallDir:          gatewayInstallDir(cfg),
+		ManifestPath:        gatewayManifestPath(cfg),
 	}
 }
 
@@ -3066,6 +3250,14 @@ func gatewayPIDPath(cfg config.Config) string {
 
 func gatewayLogPath(cfg config.Config) string {
 	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.log")
+}
+
+func gatewayInstallDir(cfg config.Config) string {
+	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "bin")
+}
+
+func gatewayManifestPath(cfg config.Config) string {
+	return filepath.Join(gatewayInstallDir(cfg), "gateway-install.json")
 }
 
 func gatewayProcessStatus(cfg config.Config) (bool, int) {
