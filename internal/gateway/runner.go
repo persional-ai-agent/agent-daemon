@@ -334,8 +334,16 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			reply := w.confirmApproval(ctx, approvalID, approve)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0], "approval_id": approvalID})
 			return
+		case "/approvals", "/approval":
+			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+				return
+			}
+			reply := w.approvalStatus(ctx)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
+			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /approvals, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -652,6 +660,53 @@ func (w *sessionWorker) confirmApproval(ctx context.Context, approvalID string, 
 		return "Approved: " + command
 	}
 	return "Approved."
+}
+
+func (w *sessionWorker) approvalStatus(ctx context.Context) string {
+	raw := w.engine.Registry.Dispatch(ctx, "approval", map[string]any{
+		"action": "status",
+	}, tools.ToolContext{
+		SessionID:      w.key,
+		SessionStore:   w.engine.SearchStore,
+		MemoryStore:    w.engine.MemoryStore,
+		TodoStore:      w.engine.TodoStore,
+		ApprovalStore:  w.engine.ApprovalStore,
+		DelegateRunner: w.engine,
+		Workdir:        w.engine.Workdir,
+	})
+	parsed := tools.ParseJSONArgs(raw)
+	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+		return "Approval status failed: " + errText
+	}
+	approvals, _ := parsed["approvals"].([]any)
+	if len(approvals) == 0 {
+		return "No active approvals."
+	}
+	lines := make([]string, 0, len(approvals)+1)
+	if approved, _ := parsed["approved"].(bool); approved {
+		lines = append(lines, "Session approval: active")
+	}
+	for _, item := range approvals {
+		m, _ := item.(map[string]any)
+		if len(m) == 0 {
+			continue
+		}
+		scope, _ := m["scope"].(string)
+		pattern, _ := m["pattern"].(string)
+		expiresAt, _ := m["expires_at"].(string)
+		line := scope
+		if strings.TrimSpace(pattern) != "" {
+			line += ":" + pattern
+		}
+		if strings.TrimSpace(expiresAt) != "" {
+			line += " until " + expiresAt
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return "No active approvals."
+	}
+	return strings.Join(lines, "\n")
 }
 
 func parseIntEnv(key string, def int) int {
