@@ -1073,8 +1073,33 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("manifest_exists=%v\n", info["manifest_exists"])
 		fmt.Printf("archive_entries=%v\n", info["archive_entries"])
 		fmt.Printf("manifest_matches=%v\n", info["manifest_matches"])
+	case "verify":
+		fs := flag.NewFlagSet("update bundle verify", flag.ExitOnError)
+		path := fs.String("file", "", "bundle tar.gz path or manifest json path")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		strict := fs.Bool("strict", false, "exit non-zero when verify status is not ok")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*path) == "" {
+			log.Fatal("usage: agentd update bundle verify -file <bundle.tar.gz|manifest.json> [-strict] [-json]")
+		}
+		info, err := verifyUpdateBundle(strings.TrimSpace(*path))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+		} else {
+			fmt.Printf("status=%v\n", info["status"])
+			fmt.Printf("bundle=%v\n", info["bundle_path"])
+			if nextActions, ok := info["next_actions"].([]string); ok {
+				fmt.Printf("next_actions=%s\n", strings.Join(nextActions, " | "))
+			}
+		}
+		if *strict && info["status"] != "ok" {
+			os.Exit(1)
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify]")
 	}
 }
 
@@ -1177,6 +1202,48 @@ func inspectUpdateBundle(path string) (map[string]any, error) {
 		}
 	}
 	return info, nil
+}
+
+func verifyUpdateBundle(path string) (map[string]any, error) {
+	info, err := inspectUpdateBundle(path)
+	if err != nil {
+		return nil, err
+	}
+	status := "ok"
+	issues := make([]string, 0, 4)
+	nextActions := make([]string, 0, 4)
+	if exists, _ := info["bundle_exists"].(bool); !exists {
+		status = "warn"
+		issues = append(issues, "bundle file missing")
+		nextActions = append(nextActions, "确认 `update bundle` 输出路径，或重新执行 `agentd update bundle` 生成 bundle")
+	}
+	if exists, _ := info["manifest_exists"].(bool); !exists {
+		status = "warn"
+		issues = append(issues, "bundle manifest missing")
+		nextActions = append(nextActions, "保留 bundle 旁的 `.json` manifest，便于后续校验与分发")
+	}
+	if matches, _ := info["manifest_matches"].(bool); !matches && anyBool(info["manifest_exists"]) {
+		status = "warn"
+		issues = append(issues, "bundle manifest does not match bundle path")
+		nextActions = append(nextActions, "检查 bundle 与 manifest 是否来自同一次打包输出")
+	}
+	if entries, _ := info["archive_entries"].(int); entries == 0 && anyBool(info["bundle_exists"]) {
+		status = "warn"
+		issues = append(issues, "bundle archive has no entries")
+		nextActions = append(nextActions, "重新执行 `agentd update bundle`，确认打包内容不是空归档")
+	}
+	if len(nextActions) == 0 {
+		nextActions = append(nextActions, "bundle 校验通过，可继续用于分发或后续安装流程")
+	}
+	info["status"] = status
+	info["issues"] = issues
+	info["next_actions"] = nextActions
+	return info, nil
+}
+
+func anyBool(value any) bool {
+	flag, _ := value.(bool)
+	return flag
 }
 
 func countBundleEntries(path string) (int, error) {
