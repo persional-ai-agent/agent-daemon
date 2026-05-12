@@ -283,3 +283,4 @@
 - `158-summary-cli-bootstrap-command.md`：新增 `bootstrap init/status` 最小工作区初始化命令
 - `159-summary-cli-gateway-install-uninstall.md`：新增 `gateway install/uninstall` 最小脚本安装命令
 - `160-summary-cli-update-install-uninstall.md`：新增 `update install/uninstall` 最小脚本安装命令
+- `161-summary-gateway-single-instance-lock.md`：新增 gateway 同 workdir 单实例锁

@@ -2079,6 +2079,13 @@ func runGateway(cfg config.Config, args []string) {
 		} else {
 			fmt.Println("pid=")
 		}
+		fmt.Printf("locked=%t\n", status.Locked)
+		if status.LockPID > 0 {
+			fmt.Printf("lock_pid=%d\n", status.LockPID)
+		} else {
+			fmt.Println("lock_pid=")
+		}
+		fmt.Println("lock_path=" + status.LockPath)
 		fmt.Printf("installed=%t\n", status.Installed)
 		fmt.Println("install_dir=" + status.InstallDir)
 		fmt.Println("manifest_path=" + status.ManifestPath)
@@ -2260,6 +2267,16 @@ func runGatewayStart(cfg config.Config, args []string) {
 		fmt.Println("log_path=" + logPath)
 		return
 	}
+	if lockPID := readGatewayLockPID(gatewayLockPath(startCfg)); lockPID > 0 && processAlive(lockPID) {
+		result := map[string]any{"success": true, "started": false, "running": true, "locked": true, "lock_pid": lockPID, "lock_path": gatewayLockPath(startCfg), "pid_path": pidPath, "log_path": logPath}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Printf("gateway already locked pid=%d\n", lockPID)
+		fmt.Println("log_path=" + logPath)
+		return
+	}
 	_ = os.Remove(pidPath)
 	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
 		log.Fatal(err)
@@ -2396,6 +2413,12 @@ type gatewayInstallInfo struct {
 	Removed      []string `json:"removed,omitempty"`
 }
 
+type gatewayRuntimeLock struct {
+	file *os.File
+	path string
+	pid  int
+}
+
 func installGatewayScripts(cfg config.Config, configPath string) (gatewayInstallInfo, error) {
 	installDir := gatewayInstallDir(cfg)
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
@@ -2488,6 +2511,11 @@ func runGatewayForeground(cfg config.Config) {
 	if !cfg.GatewayEnabled {
 		log.Printf("gateway.enabled=false; continuing because gateway run was requested explicitly")
 	}
+	lock, err := acquireGatewayRuntimeLock(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer lock.Release()
 	runner := gateway.NewRunner(adapters, eng, func(platform string) string {
 		switch platform {
 		case "telegram":
@@ -2519,6 +2547,52 @@ func runGatewayForeground(cfg config.Config) {
 	<-sigCh
 	cancel()
 	runner.Stop()
+}
+
+func acquireGatewayRuntimeLock(cfg config.Config) (*gatewayRuntimeLock, error) {
+	lockPath := gatewayLockPath(cfg)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lockPID := readGatewayLockPID(lockPath)
+		_ = file.Close()
+		if lockPID > 0 {
+			return nil, fmt.Errorf("gateway lock is already held by pid=%d (%s)", lockPID, lockPath)
+		}
+		return nil, fmt.Errorf("gateway lock is already held (%s)", lockPath)
+	}
+	pid := os.Getpid()
+	if err := file.Truncate(0); err != nil {
+		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = file.Close()
+		return nil, err
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = file.Close()
+		return nil, err
+	}
+	if _, err := file.WriteString(strconv.Itoa(pid) + "\n"); err != nil {
+		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = file.Close()
+		return nil, err
+	}
+	return &gatewayRuntimeLock{file: file, path: lockPath, pid: pid}, nil
+}
+
+func (l *gatewayRuntimeLock) Release() {
+	if l == nil || l.file == nil {
+		return
+	}
+	_ = l.file.Truncate(0)
+	_ = syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	_ = l.file.Close()
+	removePIDFileIfOwned(l.path, l.pid)
 }
 
 func runGatewayHookDoctor(cfg config.Config, args []string) {
@@ -3378,6 +3452,9 @@ type gatewayStatusInfo struct {
 	PID                 int      `json:"pid,omitempty"`
 	PIDPath             string   `json:"pid_path,omitempty"`
 	LogPath             string   `json:"log_path,omitempty"`
+	Locked              bool     `json:"locked"`
+	LockPID             int      `json:"lock_pid,omitempty"`
+	LockPath            string   `json:"lock_path,omitempty"`
 	Installed           bool     `json:"installed"`
 	InstallDir          string   `json:"install_dir,omitempty"`
 	ManifestPath        string   `json:"manifest_path,omitempty"`
@@ -3385,6 +3462,7 @@ type gatewayStatusInfo struct {
 
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 	running, pid := gatewayProcessStatus(cfg)
+	lockPID := readGatewayLockPID(gatewayLockPath(cfg))
 	return gatewayStatusInfo{
 		Enabled:             cfg.GatewayEnabled,
 		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
@@ -3393,6 +3471,9 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 		PID:                 pid,
 		PIDPath:             gatewayPIDPath(cfg),
 		LogPath:             gatewayLogPath(cfg),
+		Locked:              lockPID > 0 && processAlive(lockPID),
+		LockPID:             lockPID,
+		LockPath:            gatewayLockPath(cfg),
 		Installed:           fileExists(gatewayManifestPath(cfg)),
 		InstallDir:          gatewayInstallDir(cfg),
 		ManifestPath:        gatewayManifestPath(cfg),
@@ -3405,6 +3486,10 @@ func gatewayPIDPath(cfg config.Config) string {
 
 func gatewayLogPath(cfg config.Config) string {
 	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.log")
+}
+
+func gatewayLockPath(cfg config.Config) string {
+	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.lock")
 }
 
 func gatewayInstallDir(cfg config.Config) string {
@@ -3429,6 +3514,18 @@ func gatewayProcessStatus(cfg config.Config) (bool, int) {
 		return false, 0
 	}
 	return true, pid
+}
+
+func readGatewayLockPID(path string) int {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(bs)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
 }
 
 func processAlive(pid int) bool {
@@ -3732,21 +3829,27 @@ func runServe(cfg config.Config) {
 
 		adapters := buildGatewayAdapters(cfg)
 		if len(adapters) > 0 {
-			runner := gateway.NewRunner(adapters, eng, func(platform string) string {
-				switch platform {
-				case "telegram":
-					return cfg.TelegramAllowed
-				case "discord":
-					return cfg.DiscordAllowed
-				case "slack":
-					return cfg.SlackAllowed
-				case "yuanbao":
-					return cfg.YuanbaoAllowed
+			lock, err := acquireGatewayRuntimeLock(cfg)
+			if err != nil {
+				log.Printf("gateway start skipped: %v", err)
+			} else {
+				defer lock.Release()
+				runner := gateway.NewRunner(adapters, eng, func(platform string) string {
+					switch platform {
+					case "telegram":
+						return cfg.TelegramAllowed
+					case "discord":
+						return cfg.DiscordAllowed
+					case "slack":
+						return cfg.SlackAllowed
+					case "yuanbao":
+						return cfg.YuanbaoAllowed
+					}
+					return ""
+				})
+				if err := runner.Start(gatewayCtx); err != nil {
+					log.Printf("gateway start failed: %v", err)
 				}
-				return ""
-			})
-			if err := runner.Start(gatewayCtx); err != nil {
-				log.Printf("gateway start failed: %v", err)
 			}
 		} else {
 			log.Printf("gateway enabled but no platform adapters configured")
