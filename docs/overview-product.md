@@ -62,7 +62,7 @@
 | Skills | 已对齐核心能力 | 支持本地列表/查看/管理、条件过滤、预加载、同步与 GitHub 搜索 |
 | API 服务 | 已对齐核心能力 | HTTP、SSE、WebSocket、取消接口 |
 | Gateway | 部分对齐 | 支持 Telegram、Discord、Slack、Yuanbao；已补最小 `send_message` + Telegram/Discord/Slack 本地文件投递（`MEDIA:` / `media_path`）+ Yuanbao best-effort 媒体投递（COS 上传链路，依赖网络与凭证）+ 最小 pairing/slash command/队列中断/hooks 运维 + `gateway run/start/stop/restart` 进程管理；未覆盖 Hermes 的完整平台矩阵、原生平台 slash UI、审批按钮流和 token lock |
-| CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`version`、最小 `update`、gateway 与最小 `gateway setup/run/start/stop/restart`；未实现 Hermes 全屏 TUI、安装器级 update 与更完整命令体系 |
+| CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`bootstrap`、`version`、最小 `update`、gateway 与最小 `gateway setup/run/start/stop/restart`；未实现 Hermes 全屏 TUI、安装器级 update 与更完整命令体系 |
 | 工具全集 | 部分对齐 | 已对齐 Hermes 文档中的 68 个内置工具“工具名/Toolsets 名称”（含 `discord`、`yb_*`、`process` 动作面等）；其中 browser/vision/image_generate 等仍存在能力级差距，但 browser 已支持可选 CDP 后端（配置 `BROWSER_CDP_URL`）以执行 JS/DOM |
 | 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
 | 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；暂无通用插件系统、ACP adapter、batch/RL/trajectory 链路 |
@@ -71,7 +71,7 @@
 
 以下能力属于 Hermes 完整产品体验的一部分，但当前项目未实现或只保留最小骨架：
 
-- 全屏 TUI、安装器级 update / bootstrap 流程和更完整的 CLI 管理面
+- 全屏 TUI、安装器级 update 流程和更完整的 CLI 管理面
 - 18+ provider 与 provider 插件加载机制
 - 52 个 Hermes toolsets 的完整动态行为（按平台/环境动态过滤、UI 交互管理）
 - browser（真实浏览器/JS/DOM）、vision（模型推理）、tts（真实语音合成）、image_generate（真实 FAL 后端）等“能力级”实现
@@ -81,4 +81,4 @@
 
 ## 当前范围
 
-- 已实现：核心闭环、系统提示词动态装配、记忆回灌、工作区规则注入、上下文压缩、Hermes 68 工具名对齐 + toolsets 名称兼容（另含若干额外辅助工具）、并发子 Agent 委派、结构化事件流、持久化（SQLite）、CLI + HTTP API（同步/SSE/WebSocket）、CLI 配置管理（`config list|get|set` + `model show|providers|set` + `tools list|show|schemas|enable|disable` + `doctor` + `setup` + `setup wizard` + `version` + `update` + `gateway status|platforms|enable|disable|setup|run|start|stop|restart`）、安全护栏（hardline 阻断 + 审批门禁 + 交互确认 + pattern 级授权 + tirith 可选预扫描）、MCP（http/stdio/OAuth CC/授权码/`/call` 流式 + 事件透传）、技能（索引注入 + 条件过滤 + sync 同步 + 预加载 + GitHub 搜索）、Provider（OpenAI/Anthropic/Codex 流式聚合 + 故障切换 + 熔断 + 并行竞速 + 多级级联 + 成本感知 + `model_stream_event` v2 完整字典）、多平台网关（Telegram + Discord + Slack + Yuanbao，含最小 pairing/queue/cancel/hooks 运维与最小进程管理）
+- 已实现：核心闭环、系统提示词动态装配、记忆回灌、工作区规则注入、上下文压缩、Hermes 68 工具名对齐 + toolsets 名称兼容（另含若干额外辅助工具）、并发子 Agent 委派、结构化事件流、持久化（SQLite）、CLI + HTTP API（同步/SSE/WebSocket）、CLI 配置管理（`config list|get|set` + `model show|providers|set` + `tools list|show|schemas|enable|disable` + `doctor` + `setup` + `setup wizard` + `bootstrap` + `version` + `update` + `gateway status|platforms|enable|disable|setup|run|start|stop|restart`）、安全护栏（hardline 阻断 + 审批门禁 + 交互确认 + pattern 级授权 + tirith 可选预扫描）、MCP（http/stdio/OAuth CC/授权码/`/call` 流式 + 事件透传）、技能（索引注入 + 条件过滤 + sync 同步 + 预加载 + GitHub 搜索）、Provider（OpenAI/Anthropic/Codex 流式聚合 + 故障切换 + 熔断 + 并行竞速 + 多级级联 + 成本感知 + `model_stream_event` v2 完整字典）、多平台网关（Telegram + Discord + Slack + Yuanbao，含最小 pairing/queue/cancel/hooks 运维与最小进程管理）

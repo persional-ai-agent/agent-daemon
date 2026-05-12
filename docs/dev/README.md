@@ -280,3 +280,4 @@
 - `155-summary-cli-update-command.md`：新增最小 `update` 命令（git checkout 检查/快进更新）
 - `156-summary-cli-version-command.md`：新增 `version` 命令（含可选更新状态检查）
 - `157-summary-cli-gateway-process-management.md`：新增 `gateway run/start/stop/restart` 最小进程管理
+- `158-summary-cli-bootstrap-command.md`：新增 `bootstrap init/status` 最小工作区初始化命令

@@ -651,6 +651,8 @@ func main() {
 		runDoctor(cfg, os.Args[2:])
 	case "setup":
 		runSetup(cfg, os.Args[2:])
+	case "bootstrap":
+		runBootstrap(cfg, os.Args[2:])
 	case "update":
 		runUpdate(os.Args[2:])
 	case "version":
@@ -850,6 +852,200 @@ func runUpdate(args []string) {
 	default:
 		log.Fatal("usage: agentd update [check|apply]")
 	}
+}
+
+func runBootstrap(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		runBootstrapInit(cfg, nil)
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "init":
+		runBootstrapInit(cfg, args[1:])
+	case "status":
+		runBootstrapStatus(cfg, args[1:])
+	default:
+		printBootstrapUsage()
+		os.Exit(2)
+	}
+}
+
+func runBootstrapInit(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("bootstrap init", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+	dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd bootstrap init [-file path] [-workdir dir] [-data-dir dir] [-json]")
+	}
+	status, err := bootstrapWorkspace(*path, strings.TrimSpace(*workdir), strings.TrimSpace(*dataDir))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *jsonOutput {
+		printJSON(status)
+		return
+	}
+	fmt.Printf("bootstrapped config=%s\n", status.ConfigPath)
+	fmt.Printf("workdir=%s\n", status.Workdir)
+	fmt.Printf("data_dir=%s\n", status.DataDir)
+	if len(status.Created) > 0 {
+		fmt.Println("created=" + strings.Join(status.Created, ","))
+	} else {
+		fmt.Println("created=")
+	}
+	if len(status.Existing) > 0 {
+		fmt.Println("existing=" + strings.Join(status.Existing, ","))
+	} else {
+		fmt.Println("existing=")
+	}
+}
+
+func runBootstrapStatus(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("bootstrap status", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
+	dataDir := fs.String("data-dir", cfg.DataDir, "agent data dir")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd bootstrap status [-file path] [-workdir dir] [-data-dir dir] [-json]")
+	}
+	status := inspectBootstrapStatus(*path, strings.TrimSpace(*workdir), strings.TrimSpace(*dataDir))
+	if *jsonOutput {
+		printJSON(status)
+		return
+	}
+	fmt.Printf("config=%s exists=%t\n", status.ConfigPath, status.ConfigExists)
+	fmt.Printf("workdir=%s exists=%t\n", status.Workdir, status.WorkdirExists)
+	fmt.Printf("state_dir=%s exists=%t\n", status.StateDir, status.StateDirExists)
+	fmt.Printf("data_dir=%s exists=%t\n", status.DataDir, status.DataDirExists)
+	fmt.Printf("processes_dir=%s exists=%t\n", status.ProcessesDir, status.ProcessesDirExists)
+	fmt.Printf("memory_file=%s exists=%t\n", status.MemoryFile, status.MemoryFileExists)
+	fmt.Printf("user_file=%s exists=%t\n", status.UserFile, status.UserFileExists)
+}
+
+type bootstrapStatus struct {
+	Success            bool     `json:"success"`
+	ConfigPath         string   `json:"config_path"`
+	ConfigExists       bool     `json:"config_exists"`
+	Workdir            string   `json:"workdir"`
+	WorkdirExists      bool     `json:"workdir_exists"`
+	StateDir           string   `json:"state_dir"`
+	StateDirExists     bool     `json:"state_dir_exists"`
+	DataDir            string   `json:"data_dir"`
+	DataDirExists      bool     `json:"data_dir_exists"`
+	ProcessesDir       string   `json:"processes_dir"`
+	ProcessesDirExists bool     `json:"processes_dir_exists"`
+	MemoryFile         string   `json:"memory_file"`
+	MemoryFileExists   bool     `json:"memory_file_exists"`
+	UserFile           string   `json:"user_file"`
+	UserFileExists     bool     `json:"user_file_exists"`
+	Created            []string `json:"created,omitempty"`
+	Existing           []string `json:"existing,omitempty"`
+}
+
+func bootstrapWorkspace(path, workdir, dataDir string) (bootstrapStatus, error) {
+	status := inspectBootstrapStatus(path, workdir, dataDir)
+	created := make([]string, 0, 8)
+	existing := make([]string, 0, 8)
+	ensureDir := func(label, target string) error {
+		if target == "" {
+			return nil
+		}
+		if fileExists(target) {
+			existing = append(existing, label)
+			return nil
+		}
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			return err
+		}
+		created = append(created, label)
+		return nil
+	}
+	ensureFile := func(label, target string) error {
+		if target == "" {
+			return nil
+		}
+		if fileExists(target) {
+			existing = append(existing, label)
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, []byte(""), 0o644); err != nil {
+			return err
+		}
+		created = append(created, label)
+		return nil
+	}
+	if err := ensureDir("workdir", status.Workdir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := ensureDir("state_dir", status.StateDir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := ensureDir("data_dir", status.DataDir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := ensureDir("processes_dir", status.ProcessesDir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := ensureFile("memory_file", status.MemoryFile); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := ensureFile("user_file", status.UserFile); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := config.SaveConfigValue(path, "agent.workdir", status.Workdir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	if err := config.SaveConfigValue(path, "agent.data_dir", status.DataDir); err != nil {
+		return bootstrapStatus{}, err
+	}
+	status = inspectBootstrapStatus(path, workdir, dataDir)
+	status.Success = true
+	status.Created = created
+	status.Existing = existing
+	return status, nil
+}
+
+func inspectBootstrapStatus(path, workdir, dataDir string) bootstrapStatus {
+	configPath := config.ConfigFilePath(path)
+	if strings.TrimSpace(workdir) == "" {
+		workdir = "."
+	}
+	if strings.TrimSpace(dataDir) == "" {
+		dataDir = filepath.Join(workdir, ".agent-daemon")
+	}
+	return bootstrapStatus{
+		Success:            true,
+		ConfigPath:         configPath,
+		ConfigExists:       fileExists(configPath),
+		Workdir:            workdir,
+		WorkdirExists:      fileExists(workdir),
+		StateDir:           filepath.Join(workdir, ".agent-daemon"),
+		StateDirExists:     fileExists(filepath.Join(workdir, ".agent-daemon")),
+		DataDir:            dataDir,
+		DataDirExists:      fileExists(dataDir),
+		ProcessesDir:       filepath.Join(dataDir, "processes"),
+		ProcessesDirExists: fileExists(filepath.Join(dataDir, "processes")),
+		MemoryFile:         filepath.Join(dataDir, "MEMORY.md"),
+		MemoryFileExists:   fileExists(filepath.Join(dataDir, "MEMORY.md")),
+		UserFile:           filepath.Join(dataDir, "USER.md"),
+		UserFileExists:     fileExists(filepath.Join(dataDir, "USER.md")),
+	}
+}
+
+func fileExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func runVersion(args []string) {
@@ -1207,6 +1403,12 @@ func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd setup wizard [-file path]")
+}
+
+func printBootstrapUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd bootstrap init [-file path] [-workdir dir] [-data-dir dir] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd bootstrap status [-file path] [-workdir dir] [-data-dir dir] [-json]")
 }
 
 func runModel(cfg config.Config, args []string) {
