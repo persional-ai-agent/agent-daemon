@@ -293,3 +293,4 @@
 - `168-summary-gateway-telegram-approval-buttons.md`：新增 Telegram 原生审批按钮最小闭环
 - `169-summary-gateway-telegram-command-menu.md`：新增 Telegram 原生命令菜单最小闭环
 - `170-summary-gateway-discord-approval-buttons.md`：新增 Discord 原生审批按钮最小闭环
+- `171-summary-gateway-slack-approval-buttons.md`：新增 Slack 原生审批按钮最小闭环

@@ -33,42 +33,76 @@ func (s *SlackAdapter) Name() string { return "slack" }
 func (s *SlackAdapter) Connect(ctx context.Context) error {
 	go func() {
 		for evt := range s.sm.Events {
-			if evt.Type != socketmode.EventTypeEventsAPI {
-				continue
-			}
-			apiEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
-			if !ok {
-				continue
-			}
-			inner := apiEvent.InnerEvent
-			msgEvent, ok := inner.Data.(*slackevents.MessageEvent)
-			if !ok || msgEvent == nil {
-				continue
-			}
-			if msgEvent.BotID != "" || msgEvent.User == "" {
-				continue
-			}
-			if s.handler == nil {
-				continue
-			}
+			switch evt.Type {
+			case socketmode.EventTypeEventsAPI:
+				apiEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
+				if !ok {
+					continue
+				}
+				inner := apiEvent.InnerEvent
+				msgEvent, ok := inner.Data.(*slackevents.MessageEvent)
+				if !ok || msgEvent == nil {
+					continue
+				}
+				if msgEvent.BotID != "" || msgEvent.User == "" {
+					continue
+				}
+				if s.handler == nil {
+					continue
+				}
 
-			chatType := "dm"
-			if strings.HasPrefix(msgEvent.Channel, "C") {
-				chatType = "group"
-			}
+				chatType := "dm"
+				if strings.HasPrefix(msgEvent.Channel, "C") {
+					chatType = "group"
+				}
 
-			event := gateway.MessageEvent{
-				Text:      msgEvent.Text,
-				MessageID: msgEvent.TimeStamp,
-				ChatID:    msgEvent.Channel,
-				ChatType:  chatType,
-				UserID:    msgEvent.User,
-				UserName:  msgEvent.User,
-				ThreadID:  msgEvent.ThreadTimeStamp,
+				event := gateway.MessageEvent{
+					Text:      msgEvent.Text,
+					MessageID: msgEvent.TimeStamp,
+					ChatID:    msgEvent.Channel,
+					ChatType:  chatType,
+					UserID:    msgEvent.User,
+					UserName:  msgEvent.User,
+					ThreadID:  msgEvent.ThreadTimeStamp,
+				}
+				s.handler(ctx, event)
+				s.sm.Ack(*evt.Request)
+			case socketmode.EventTypeInteractive:
+				callback, ok := evt.Data.(slack.InteractionCallback)
+				if !ok {
+					continue
+				}
+				s.sm.Ack(*evt.Request)
+				if s.handler == nil || callback.Type != slack.InteractionTypeBlockActions {
+					continue
+				}
+				if len(callback.ActionCallback.BlockActions) == 0 {
+					continue
+				}
+				action := callback.ActionCallback.BlockActions[0]
+				if action == nil {
+					continue
+				}
+				customID := strings.TrimSpace(action.ActionID)
+				if !strings.HasPrefix(customID, "/") {
+					continue
+				}
+				chatType := "dm"
+				if strings.HasPrefix(callback.Channel.ID, "C") {
+					chatType = "group"
+				}
+				s.handler(ctx, gateway.MessageEvent{
+					Text:      customID,
+					MessageID: callback.Container.MessageTs,
+					ChatID:    callback.Channel.ID,
+					ChatType:  chatType,
+					UserID:    callback.User.ID,
+					UserName:  callback.User.Name,
+					ThreadID:  callback.Container.ThreadTs,
+					ReplyToID: callback.Container.MessageTs,
+					IsCommand: true,
+				})
 			}
-			s.handler(ctx, event)
-
-			s.sm.Ack(*evt.Request)
 		}
 	}()
 
@@ -93,8 +127,15 @@ func (s *SlackAdapter) Disconnect(_ context.Context) error {
 }
 
 func (s *SlackAdapter) Send(_ context.Context, chatID, content, replyTo string) (gateway.SendResult, error) {
+	return s.SendText(context.Background(), chatID, content, replyTo, nil)
+}
+
+func (s *SlackAdapter) SendText(_ context.Context, chatID, content, replyTo string, meta map[string]any) (gateway.SendResult, error) {
 	opts := []slack.MsgOption{
 		slack.MsgOptionText(truncateSlack(content), false),
+	}
+	if blocks := approvalBlocks(meta); len(blocks) > 0 {
+		opts = append(opts, slack.MsgOptionBlocks(blocks...))
 	}
 	if replyTo != "" {
 		opts = append(opts, slack.MsgOptionTS(replyTo))
@@ -155,4 +196,22 @@ func truncateSlack(s string) string {
 		return s
 	}
 	return s[:limit-3] + "..."
+}
+
+func approvalBlocks(meta map[string]any) []slack.Block {
+	if len(meta) == 0 {
+		return nil
+	}
+	approvalID, _ := meta["approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return nil
+	}
+	approve := slack.NewButtonBlockElement("/approve "+approvalID, approvalID, slack.NewTextBlockObject("plain_text", "Approve", false, false))
+	approve.Style = slack.StylePrimary
+	deny := slack.NewButtonBlockElement("/deny "+approvalID, approvalID, slack.NewTextBlockObject("plain_text", "Deny", false, false))
+	deny.Style = slack.StyleDanger
+	return []slack.Block{
+		slack.NewActionBlock("approval_actions_"+approvalID, approve, deny),
+	}
 }
