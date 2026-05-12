@@ -110,9 +110,9 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 	}, nil
 }
 
-func (b *BuiltinTools) browserSnapshot(ctx context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserSnapshot(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	if cdpEnabled() {
-		return b.browserSnapshotCDP(ctx, nil, tc)
+		return b.browserSnapshotCDP(ctx, args, tc)
 	}
 	st := getLightBrowser(tc.SessionID)
 	if len(st.stack) == 0 {
@@ -135,8 +135,15 @@ func (b *BuiltinTools) browserSnapshot(ctx context.Context, _ map[string]any, tc
 			sb.WriteString("[" + ref + "] button: " + el.Text + "\n")
 		}
 	}
+	maxChars := intArg(args, "max_chars", 120_000)
+	if maxChars <= 0 {
+		maxChars = 120_000
+	}
+	if maxChars > 300_000 {
+		maxChars = 300_000
+	}
 	sb.WriteString("\n")
-	sb.WriteString(htmlToTextLite(p.HTML, 120_000))
+	sb.WriteString(htmlToTextLite(p.HTML, maxChars))
 	return map[string]any{
 		"success":   true,
 		"url":       p.URL,
@@ -333,9 +340,9 @@ func (b *BuiltinTools) browserGetImages(_ context.Context, _ map[string]any, tc 
 	return map[string]any{"success": true, "url": p.URL, "images": resolved, "count": len(resolved), "note": "Lightweight browser: image list derived from <img src> only."}, nil
 }
 
-func (b *BuiltinTools) browserConsole(_ context.Context, _ map[string]any, tc ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) browserConsole(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	if cdpEnabled() {
-		return b.browserConsoleCDP(context.Background(), nil, tc)
+		return b.browserConsoleCDP(ctx, args, tc)
 	}
 	// No JS execution -> no console logs.
 	st := getLightBrowser(tc.SessionID)

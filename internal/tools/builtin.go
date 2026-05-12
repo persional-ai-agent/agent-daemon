@@ -1972,7 +1972,8 @@ func browserBackParams() map[string]any {
 }
 func browserSnapshotParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"full": map[string]any{"type": "boolean", "description": "Compatibility hint; ignored by lightweight browser."},
+		"full":      map[string]any{"type": "boolean", "description": "Compatibility hint; ignored by lightweight browser."},
+		"max_chars": map[string]any{"type": "integer", "description": "Maximum snapshot text length for lightweight mode (default 120000)."},
 	}}
 }
 func browserClickParams() map[string]any {
