@@ -276,7 +276,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	authorized := CheckAuthorization(allowed, event.UserID)
 
 	// Minimal slash commands for Hermes parity.
-	cmd := strings.TrimSpace(event.Text)
+	cmd := normalizeGatewayCommand(w.adapter.Name(), strings.TrimSpace(event.Text))
 	if strings.HasPrefix(cmd, "/") {
 		switch strings.ToLower(strings.Fields(cmd)[0]) {
 		case "/pair":
@@ -366,6 +366,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := w.pendingApprovalStatus()
+			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
+				reply += "\nquick_reply: 批准 / 拒绝"
+			}
 			meta := map[string]any{"slash": "/pending"}
 			if approvalID := w.resolveApprovalID(""); strings.TrimSpace(approvalID) != "" {
 				meta["approval_id"] = approvalID
@@ -389,7 +392,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
-			_, _ = w.sendText(ctx, event.ChatID, "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /pending, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help", event.MessageID, map[string]any{"slash": "/help"})
+			helpText := "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /pending, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help"
+			if w.adapter.Name() == "yuanbao" {
+				helpText += "\nQuick reply aliases: 状态, 待审批, 审批, 批准, 拒绝, 帮助"
+			}
+			_, _ = w.sendText(ctx, event.ChatID, helpText, event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}
 	}
@@ -466,9 +473,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				parsed := tools.ParseJSONArgs(evt.Content)
 				if approvalID, command, reason, ok := pendingApprovalDetails(parsed); ok {
 					w.setPendingApproval(approvalID, command, reason)
-					_, _ = w.sendText(context.Background(), event.ChatID, "Pending approval: /approve "+approvalID+" or /deny "+approvalID, event.MessageID, map[string]any{
+					pendingText := "Pending approval: /approve " + approvalID + " or /deny " + approvalID
+					if w.adapter.Name() == "yuanbao" {
+						pendingText += "\nQuick reply: 批准 / 拒绝"
+					}
+					_, _ = w.sendText(context.Background(), event.ChatID, pendingText, event.MessageID, map[string]any{
 						"phase":       "approval",
 						"approval_id": approvalID,
+						"quick_reply": w.adapter.Name() == "yuanbao",
 					})
 				}
 				w.runner.emitHook("gateway.tool_finished", map[string]any{
@@ -645,6 +657,29 @@ func pendingApprovalDetails(parsed map[string]any) (string, string, string, bool
 	command, _ := parsed["command"].(string)
 	reason, _ := parsed["reason"].(string)
 	return id, strings.TrimSpace(command), strings.TrimSpace(reason), true
+}
+
+func normalizeGatewayCommand(platformName, text string) string {
+	cmd := strings.TrimSpace(text)
+	if strings.HasPrefix(cmd, "/") || !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {
+		return cmd
+	}
+	switch cmd {
+	case "批准", "同意", "通过":
+		return "/approve"
+	case "拒绝", "驳回":
+		return "/deny"
+	case "状态":
+		return "/status"
+	case "待审批":
+		return "/pending"
+	case "审批":
+		return "/approvals"
+	case "帮助":
+		return "/help"
+	default:
+		return cmd
+	}
 }
 
 func (w *sessionWorker) setPendingApproval(id, command, reason string) {
