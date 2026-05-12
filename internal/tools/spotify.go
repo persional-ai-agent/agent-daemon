@@ -48,6 +48,21 @@ func spotifyDo(ctx context.Context, method, path, token string, body any) ([]byt
 	return bs, resp.StatusCode, nil
 }
 
+func spotifyLimitOffset(args map[string]any, defaultLimit int) (int, int) {
+	limit := intArg(args, "limit", defaultLimit)
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	offset := intArg(args, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
+
 func (b *BuiltinTools) spotifySearch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	token, ok := spotifyToken()
 	if !ok {
@@ -190,12 +205,16 @@ func (b *BuiltinTools) spotifyQueue(ctx context.Context, args map[string]any, _ 
 	}
 }
 
-func (b *BuiltinTools) spotifyPlaylists(ctx context.Context, _ map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) spotifyPlaylists(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	token, ok := spotifyToken()
 	if !ok {
 		return map[string]any{"success": false, "available": false, "error": "spotify not configured (missing env: SPOTIFY_ACCESS_TOKEN)"}, nil
 	}
-	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/playlists", token, nil)
+	limit, offset := spotifyLimitOffset(args, 20)
+	q := url.Values{}
+	q.Set("limit", fmt.Sprintf("%d", limit))
+	q.Set("offset", fmt.Sprintf("%d", offset))
+	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/playlists?"+q.Encode(), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -204,15 +223,19 @@ func (b *BuiltinTools) spotifyPlaylists(ctx context.Context, _ map[string]any, _
 	}
 	var data any
 	_ = json.Unmarshal(bs, &data)
-	return map[string]any{"success": true, "playlists": data}, nil
+	return map[string]any{"success": true, "limit": limit, "offset": offset, "playlists": data}, nil
 }
 
-func (b *BuiltinTools) spotifyAlbums(ctx context.Context, _ map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) spotifyAlbums(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	token, ok := spotifyToken()
 	if !ok {
 		return map[string]any{"success": false, "available": false, "error": "spotify not configured (missing env: SPOTIFY_ACCESS_TOKEN)"}, nil
 	}
-	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/albums", token, nil)
+	limit, offset := spotifyLimitOffset(args, 20)
+	q := url.Values{}
+	q.Set("limit", fmt.Sprintf("%d", limit))
+	q.Set("offset", fmt.Sprintf("%d", offset))
+	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/albums?"+q.Encode(), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -221,15 +244,19 @@ func (b *BuiltinTools) spotifyAlbums(ctx context.Context, _ map[string]any, _ To
 	}
 	var data any
 	_ = json.Unmarshal(bs, &data)
-	return map[string]any{"success": true, "albums": data}, nil
+	return map[string]any{"success": true, "limit": limit, "offset": offset, "albums": data}, nil
 }
 
-func (b *BuiltinTools) spotifyLibrary(ctx context.Context, _ map[string]any, _ ToolContext) (map[string]any, error) {
+func (b *BuiltinTools) spotifyLibrary(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	token, ok := spotifyToken()
 	if !ok {
 		return map[string]any{"success": false, "available": false, "error": "spotify not configured (missing env: SPOTIFY_ACCESS_TOKEN)"}, nil
 	}
-	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/tracks", token, nil)
+	limit, offset := spotifyLimitOffset(args, 20)
+	q := url.Values{}
+	q.Set("limit", fmt.Sprintf("%d", limit))
+	q.Set("offset", fmt.Sprintf("%d", offset))
+	bs, code, err := spotifyDo(ctx, http.MethodGet, "/me/tracks?"+q.Encode(), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +265,7 @@ func (b *BuiltinTools) spotifyLibrary(ctx context.Context, _ map[string]any, _ T
 	}
 	var data any
 	_ = json.Unmarshal(bs, &data)
-	return map[string]any{"success": true, "tracks": data}, nil
+	return map[string]any{"success": true, "limit": limit, "offset": offset, "tracks": data}, nil
 }
 
 func spotifySearchParams() map[string]any {
@@ -258,15 +285,15 @@ func spotifyDevicesParams() map[string]any {
 }
 
 func spotifyPlaylistsParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}, "offset": map[string]any{"type": "integer"}}}
 }
 
 func spotifyAlbumsParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}, "offset": map[string]any{"type": "integer"}}}
 }
 
 func spotifyLibraryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}, "offset": map[string]any{"type": "integer"}}}
 }
 
 var _ = errors.New
