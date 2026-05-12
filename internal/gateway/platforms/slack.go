@@ -107,7 +107,10 @@ func (s *SlackAdapter) Connect(ctx context.Context) error {
 				if !ok {
 					continue
 				}
-				s.sm.Ack(*evt.Request)
+				_ = s.sm.Ack(*evt.Request, map[string]any{
+					"response_type": "ephemeral",
+					"text":          "Accepted. Check the next bot reply.",
+				})
 				if s.handler == nil {
 					continue
 				}
@@ -254,5 +257,18 @@ func renderSlackSlashCommand(cmd slack.SlashCommand) string {
 	if text == "" {
 		return command
 	}
-	return command + " " + text
+	base := strings.TrimPrefix(command, "/")
+	if isBuiltInGatewaySlashCommand(base) {
+		return command + " " + text
+	}
+	return "/" + text
+}
+
+func isBuiltInGatewaySlashCommand(name string) bool {
+	switch strings.TrimSpace(strings.ToLower(name)) {
+	case "pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help":
+		return true
+	default:
+		return false
+	}
 }
