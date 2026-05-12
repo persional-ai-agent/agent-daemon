@@ -307,3 +307,4 @@
 - `182-summary-cli-update-status-command.md`：新增 `update status` 聚合状态命令
 - `183-summary-cli-update-install-script-expansion.md`：扩展 update 安装脚本集合到 `status/check/release/apply`
 - `184-summary-cli-update-doctor-command.md`：新增 `update doctor` 诊断与 next actions 命令
+- `185-summary-cli-update-changelog-command.md`：新增 `update changelog` 本地变更摘要命令

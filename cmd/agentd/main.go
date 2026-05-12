@@ -805,6 +805,33 @@ func runUpdate(args []string) {
 		args = args[1:]
 	}
 	switch mode {
+	case "changelog":
+		fs := flag.NewFlagSet("update changelog", flag.ExitOnError)
+		fetchTags := fs.Bool("fetch-tags", false, "run git fetch --tags before checking releases")
+		limit := fs.Int("limit", 20, "max commits to return")
+		repoPath := fs.String("repo", "", "git repo path (defaults to current checkout root)")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd update changelog [-fetch-tags] [-limit N] [-repo path] [-json]")
+		}
+		info, err := gitChangelogInfo(strings.TrimSpace(*repoPath), *fetchTags, *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("repo=%v\n", info["repo"])
+		fmt.Printf("from=%v\n", info["from"])
+		fmt.Printf("to=%v\n", info["to"])
+		fmt.Printf("commit_count=%v\n", info["commit_count"])
+		if commits, ok := info["commits"].([]map[string]string); ok {
+			for _, commit := range commits {
+				fmt.Printf("- %s %s\n", commit["short"], commit["subject"])
+			}
+		}
 	case "doctor":
 		fs := flag.NewFlagSet("update doctor", flag.ExitOnError)
 		fetch := fs.Bool("fetch", false, "run git fetch before checking upstream")
@@ -983,8 +1010,62 @@ func runUpdate(args []string) {
 			fmt.Println("removed=")
 		}
 	default:
-		log.Fatal("usage: agentd update [doctor|status|check|apply|release|install|uninstall]")
+		log.Fatal("usage: agentd update [changelog|doctor|status|check|apply|release|install|uninstall]")
 	}
+}
+
+func gitChangelogInfo(repoPath string, fetchTags bool, limit int) (map[string]any, error) {
+	repo, err := resolveUpdateRepoRoot(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	releaseInfo, err := gitReleaseInfoAt(repo, fetchTags, limit)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	toCommit, err := runGit(repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	fromRef := strings.TrimSpace(anyString(releaseInfo["latest_tag"]))
+	logRange := toCommit
+	if fromRef != "" {
+		logRange = fromRef + "..HEAD"
+	}
+	logOut, err := runGit(repo, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H%x09%h%x09%s", logRange)
+	if err != nil {
+		return nil, err
+	}
+	commits := make([]map[string]string, 0)
+	if strings.TrimSpace(logOut) != "" {
+		for _, line := range strings.Split(logOut, "\n") {
+			parts := strings.SplitN(line, "\t", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			commits = append(commits, map[string]string{
+				"commit":  strings.TrimSpace(parts[0]),
+				"short":   strings.TrimSpace(parts[1]),
+				"subject": strings.TrimSpace(parts[2]),
+			})
+		}
+	}
+	return map[string]any{
+		"repo":         repo,
+		"from":         fromRef,
+		"to":           toCommit,
+		"commit_count": len(commits),
+		"commits":      commits,
+		"has_tag_base": fromRef != "",
+	}, nil
+}
+
+func anyString(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func updateDoctorReport(repoPath string, fetch bool, fetchTags bool, limit int) (map[string]any, error) {
