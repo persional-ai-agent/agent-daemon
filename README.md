@@ -71,6 +71,9 @@ go run ./cmd/agentd version
 go run ./cmd/agentd version -check-update -json
 go run ./cmd/agentd update -fetch
 go run ./cmd/agentd update apply
+go run ./cmd/agentd gateway status -json
+go run ./cmd/agentd gateway start
+go run ./cmd/agentd gateway stop
 ```
 
 说明：`AGENT_MODEL_USE_STREAMING=true` 当前可用于 `openai` / `anthropic` / `codex` 三种 provider 的流式聚合调用。

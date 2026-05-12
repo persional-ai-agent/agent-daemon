@@ -1682,6 +1682,14 @@ func runGateway(cfg config.Config, args []string) {
 		os.Exit(2)
 	}
 	switch args[0] {
+	case "run":
+		runGatewayRun(cfg, args[1:])
+	case "start":
+		runGatewayStart(cfg, args[1:])
+	case "stop":
+		runGatewayStop(cfg, args[1:])
+	case "restart":
+		runGatewayRestart(cfg, args[1:])
 	case "status":
 		fs := flag.NewFlagSet("gateway status", flag.ExitOnError)
 		path := fs.String("file", "", "config file path")
@@ -1704,6 +1712,14 @@ func runGateway(cfg config.Config, args []string) {
 			return
 		}
 		fmt.Printf("enabled=%t\n", status.Enabled)
+		fmt.Printf("running=%t\n", status.Running)
+		if status.PID > 0 {
+			fmt.Printf("pid=%d\n", status.PID)
+		} else {
+			fmt.Println("pid=")
+		}
+		fmt.Println("pid_path=" + status.PIDPath)
+		fmt.Println("log_path=" + status.LogPath)
 		if len(status.ConfiguredPlatforms) == 0 {
 			fmt.Println("configured_platforms=")
 		} else {
@@ -1754,6 +1770,222 @@ func runGatewayHooks(cfg config.Config, args []string) {
 		printGatewayHooksUsage()
 		os.Exit(2)
 	}
+}
+
+func runGatewayRun(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway run", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway run [-file path]")
+	}
+	runCfg := cfg
+	if strings.TrimSpace(*path) != "" {
+		var err error
+		runCfg, err = config.LoadFile(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	runGatewayForeground(runCfg)
+}
+
+func runGatewayStart(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway start", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway start [-file path] [-json]")
+	}
+	startCfg := cfg
+	if strings.TrimSpace(*path) != "" {
+		var err error
+		startCfg, err = config.LoadFile(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	pidPath := gatewayPIDPath(startCfg)
+	logPath := gatewayLogPath(startCfg)
+	if running, pid := gatewayProcessStatus(startCfg); running {
+		result := map[string]any{"success": true, "started": false, "running": true, "pid": pid, "pid_path": pidPath, "log_path": logPath}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Printf("gateway already running pid=%d\n", pid)
+		fmt.Println("log_path=" + logPath)
+		return
+	}
+	_ = os.Remove(pidPath)
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0o755); err != nil {
+		log.Fatal(err)
+	}
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logFile.Close()
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	cmdArgs := []string{"gateway", "run"}
+	if strings.TrimSpace(*path) != "" {
+		cmdArgs = append(cmdArgs, "-file", *path)
+	}
+	cmd := exec.Command(exe, cmdArgs...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Dir = startCfg.Workdir
+	cmd.Env = os.Environ()
+	if strings.TrimSpace(*path) != "" {
+		cmd.Env = append(cmd.Env, "AGENT_CONFIG_FILE="+*path)
+	}
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	running := false
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if alive, currentPID := gatewayProcessStatus(startCfg); alive {
+			pid = currentPID
+			running = true
+			break
+		}
+		if !processAlive(pid) {
+			break
+		}
+	}
+	if !running && processAlive(pid) {
+		running = true
+	}
+	result := map[string]any{"success": running, "started": running, "running": running, "pid": pid, "pid_path": pidPath, "log_path": logPath}
+	if *jsonOutput {
+		printJSON(result)
+		return
+	}
+	if !running {
+		log.Fatalf("gateway failed to start; inspect %s", logPath)
+	}
+	fmt.Printf("gateway started pid=%d\n", pid)
+	fmt.Println("log_path=" + logPath)
+}
+
+func runGatewayStop(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway stop", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway stop [-file path] [-json]")
+	}
+	stopCfg := cfg
+	if strings.TrimSpace(*path) != "" {
+		var err error
+		stopCfg, err = config.LoadFile(*path)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	pidPath := gatewayPIDPath(stopCfg)
+	running, pid := gatewayProcessStatus(stopCfg)
+	if !running {
+		_ = os.Remove(pidPath)
+		result := map[string]any{"success": true, "stopped": false, "running": false, "pid": 0, "pid_path": pidPath}
+		if *jsonOutput {
+			printJSON(result)
+			return
+		}
+		fmt.Println("gateway not running")
+		return
+	}
+	proc, err := os.FindProcess(pid)
+	if err == nil {
+		_ = proc.Signal(syscall.SIGTERM)
+	}
+	for i := 0; i < 40; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if !processAlive(pid) {
+			break
+		}
+	}
+	_ = os.Remove(pidPath)
+	stopped := !processAlive(pid)
+	result := map[string]any{"success": stopped, "stopped": stopped, "running": !stopped, "pid": pid, "pid_path": pidPath}
+	if *jsonOutput {
+		printJSON(result)
+		return
+	}
+	if !stopped {
+		log.Fatalf("gateway stop timeout pid=%d", pid)
+	}
+	fmt.Printf("gateway stopped pid=%d\n", pid)
+}
+
+func runGatewayRestart(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("gateway restart", flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	jsonOutput := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 0 {
+		log.Fatal("usage: agentd gateway restart [-file path] [-json]")
+	}
+	restartArgs := make([]string, 0, 3)
+	if strings.TrimSpace(*path) != "" {
+		restartArgs = append(restartArgs, "-file", *path)
+	}
+	_ = jsonOutput
+	runGatewayStop(cfg, restartArgs)
+	if *jsonOutput {
+		restartArgs = append(restartArgs, "-json")
+	}
+	runGatewayStart(cfg, restartArgs)
+}
+
+func runGatewayForeground(cfg config.Config) {
+	cfg.ModelUseStreaming = true
+	eng, _ := mustBuildEngine(cfg)
+	adapters := buildGatewayAdapters(cfg)
+	if len(adapters) == 0 {
+		log.Fatal("gateway run requires at least one configured platform adapter")
+	}
+	if !cfg.GatewayEnabled {
+		log.Printf("gateway.enabled=false; continuing because gateway run was requested explicitly")
+	}
+	runner := gateway.NewRunner(adapters, eng, func(platform string) string {
+		switch platform {
+		case "telegram":
+			return cfg.TelegramAllowed
+		case "discord":
+			return cfg.DiscordAllowed
+		case "slack":
+			return cfg.SlackAllowed
+		case "yuanbao":
+			return cfg.YuanbaoAllowed
+		}
+		return ""
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := runner.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(gatewayPIDPath(cfg)), 0o755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(gatewayPIDPath(cfg), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		log.Fatal(err)
+	}
+	defer removePIDFileIfOwned(gatewayPIDPath(cfg), os.Getpid())
+	log.Printf("gateway running adapters=%s pid=%d", strings.Join(gatewayAdapterNames(adapters), ","), os.Getpid())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+	cancel()
+	runner.Stop()
 }
 
 func runGatewayHookDoctor(cfg config.Config, args []string) {
@@ -2560,6 +2792,10 @@ func uniqueSortedNames(names []string) []string {
 
 func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd gateway run [-file path]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway start [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway stop [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway restart [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway status [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
@@ -2603,14 +2839,79 @@ type gatewayStatusInfo struct {
 	Enabled             bool     `json:"enabled"`
 	ConfiguredPlatforms []string `json:"configured_platforms"`
 	SupportedPlatforms  []string `json:"supported_platforms"`
+	Running             bool     `json:"running"`
+	PID                 int      `json:"pid,omitempty"`
+	PIDPath             string   `json:"pid_path,omitempty"`
+	LogPath             string   `json:"log_path,omitempty"`
 }
 
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
+	running, pid := gatewayProcessStatus(cfg)
 	return gatewayStatusInfo{
 		Enabled:             cfg.GatewayEnabled,
 		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
 		SupportedPlatforms:  supportedGatewayPlatforms(),
+		Running:             running,
+		PID:                 pid,
+		PIDPath:             gatewayPIDPath(cfg),
+		LogPath:             gatewayLogPath(cfg),
 	}
+}
+
+func gatewayPIDPath(cfg config.Config) string {
+	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.pid")
+}
+
+func gatewayLogPath(cfg config.Config) string {
+	return filepath.Join(strings.TrimSpace(cfg.Workdir), ".agent-daemon", "gateway.log")
+}
+
+func gatewayProcessStatus(cfg config.Config) (bool, int) {
+	pidPath := gatewayPIDPath(cfg)
+	bs, err := os.ReadFile(pidPath)
+	if err != nil {
+		return false, 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(bs)))
+	if err != nil || pid <= 0 {
+		return false, 0
+	}
+	if !processAlive(pid) {
+		return false, 0
+	}
+	return true, pid
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+func removePIDFileIfOwned(path string, pid int) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	currentPID, err := strconv.Atoi(strings.TrimSpace(string(bs)))
+	if err != nil || currentPID != pid {
+		return
+	}
+	_ = os.Remove(path)
+}
+
+func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
+	names := make([]string, 0, len(adapters))
+	for _, adapter := range adapters {
+		names = append(names, adapter.Name())
+	}
+	sort.Strings(names)
+	return names
 }
 
 func supportedGatewayPlatforms() []string {
