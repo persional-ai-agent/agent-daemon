@@ -1347,8 +1347,32 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("bundle=%v\n", info["bundle_path"])
 		fmt.Printf("manifest=%v\n", info["manifest_path"])
 		fmt.Printf("file_count=%v\n", info["file_count"])
+	case "snapshots":
+		fs := flag.NewFlagSet("update bundle snapshots", flag.ExitOnError)
+		dest := fs.String("dest", "", "target directory")
+		limit := fs.Int("limit", 10, "max snapshots to return")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots -dest <dir> [-limit N] [-json]")
+		}
+		info, err := listSnapshotBundles(strings.TrimSpace(*dest), *limit)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("snapshot_dir=%s\n", info["snapshot_dir"])
+		fmt.Printf("count=%v\n", info["count"])
+		if items, ok := info["items"].([]map[string]any); ok {
+			for _, item := range items {
+				fmt.Printf("%s %v files=%v\n", anyString(item["bundle_path"]), item["generated_at"], item["file_count"])
+			}
+		}
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots]")
 	}
 }
 
@@ -1678,6 +1702,50 @@ func snapshotTargetBundle(dest, outPath string) (map[string]any, error) {
 	}
 	manifest["manifest_path"] = manifestPath
 	return manifest, nil
+}
+
+func listSnapshotBundles(dest string, limit int) (map[string]any, error) {
+	backupDir := filepath.Join(dest, ".agent-daemon", "release-backups")
+	matches, err := filepath.Glob(filepath.Join(backupDir, "*-manual-snapshot.tar.gz"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+	if limit <= 0 {
+		limit = len(matches)
+	}
+	items := make([]map[string]any, 0, minInt(limit, len(matches)))
+	for idx := len(matches) - 1; idx >= 0 && len(items) < limit; idx-- {
+		bundlePath := matches[idx]
+		manifestPath := strings.TrimSuffix(bundlePath, ".tar.gz") + ".json"
+		item := map[string]any{
+			"bundle_path":     bundlePath,
+			"manifest_path":   manifestPath,
+			"manifest_exists": fileExists(manifestPath),
+		}
+		if stat, err := os.Stat(bundlePath); err == nil {
+			item["bundle_size"] = stat.Size()
+		}
+		if fileExists(manifestPath) {
+			bs, err := os.ReadFile(manifestPath)
+			if err != nil {
+				return nil, err
+			}
+			var manifest map[string]any
+			if err := json.Unmarshal(bs, &manifest); err != nil {
+				return nil, err
+			}
+			item["generated_at"] = manifest["generated_at"]
+			item["file_count"] = manifest["file_count"]
+			item["snapshot_type"] = manifest["snapshot_type"]
+		}
+		items = append(items, item)
+	}
+	return map[string]any{
+		"snapshot_dir": backupDir,
+		"count":        len(items),
+		"items":        items,
+	}, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
