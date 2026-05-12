@@ -327,3 +327,4 @@
 - `202-summary-cli-update-bundle-snapshots-doctor-command.md`：新增 `update bundle snapshots-doctor` 快照诊断命令
 - `203-summary-cli-update-bundle-snapshots-status-command.md`：新增 `update bundle snapshots-status` 快照聚合状态命令
 - `204-summary-cli-update-bundle-snapshots-restore-command.md`：新增 `update bundle snapshots-restore` 快照恢复命令
+- `205-summary-cli-update-bundle-snapshots-restore-plan-command.md`：新增 `update bundle snapshots-restore-plan` 快照恢复预演命令

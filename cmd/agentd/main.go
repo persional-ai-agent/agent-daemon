@@ -1462,8 +1462,30 @@ func runUpdateBundle(args []string) {
 		fmt.Printf("created_files=%v\n", info["created_files"])
 		fmt.Printf("overwritten_files=%v\n", info["overwritten_files"])
 		fmt.Printf("backup_bundle=%v\n", info["backup_bundle_path"])
+	case "snapshots-restore-plan":
+		fs := flag.NewFlagSet("update bundle snapshots-restore-plan", flag.ExitOnError)
+		path := fs.String("file", "", "manual snapshot tar.gz path or manifest json path (defaults to latest snapshot under dest)")
+		dest := fs.String("dest", "", "target directory")
+		jsonOutput := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args)
+		if fs.NArg() != 0 || strings.TrimSpace(*dest) == "" {
+			log.Fatal("usage: agentd update bundle snapshots-restore-plan -dest <dir> [-file <snapshot.tar.gz|manifest.json>] [-json]")
+		}
+		info, err := planRestoreSnapshotBundle(strings.TrimSpace(*path), strings.TrimSpace(*dest))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *jsonOutput {
+			printJSON(info)
+			return
+		}
+		fmt.Printf("snapshot_bundle=%v\n", info["snapshot_bundle_path"])
+		fmt.Printf("dest=%v\n", info["dest"])
+		fmt.Printf("create=%v\n", info["create_count"])
+		fmt.Printf("overwrite=%v\n", info["overwrite_count"])
+		fmt.Printf("backup=%v\n", info["backup_count"])
 	default:
-		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status|snapshots-restore]")
+		log.Fatal("usage: agentd update bundle [build|inspect|verify|unpack|apply|rollback|backups|prune|doctor|status|manifest|plan|rollback-plan|snapshot|snapshots|snapshots-prune|snapshots-doctor|snapshots-status|snapshots-restore|snapshots-restore-plan]")
 	}
 }
 
@@ -1998,6 +2020,28 @@ func restoreSnapshotBundle(path, dest string) (map[string]any, error) {
 	}
 	result["snapshot_bundle_path"] = resolvedPath
 	return result, nil
+}
+
+func planRestoreSnapshotBundle(path, dest string) (map[string]any, error) {
+	snapshotPath := strings.TrimSpace(path)
+	if snapshotPath == "" {
+		var err error
+		snapshotPath, err = latestSnapshotBundlePath(dest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	info, err := planUpdateBundle(snapshotPath, dest)
+	if err != nil {
+		return nil, err
+	}
+	info["snapshot_bundle_path"] = info["bundle_path"]
+	delete(info, "bundle_path")
+	if nextActions, ok := info["next_actions"].([]string); ok {
+		nextActions = append([]string{"这是 snapshot restore 预演；确认后可执行 `agentd update bundle snapshots-restore` 恢复目标目录"}, nextActions...)
+		info["next_actions"] = nextActions
+	}
+	return info, nil
 }
 
 func rollbackUpdateBundle(path, dest string) (map[string]any, error) {
