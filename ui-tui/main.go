@@ -81,6 +81,9 @@ type appState struct {
 	wsMaxReconnect  int
 	viewMode        string
 	autoDoctor      bool
+	reconnectEnabled bool
+	reconnectState   string
+	timeoutAction    string
 }
 
 const (
@@ -152,6 +155,9 @@ func newState() *appState {
 		wsMaxReconnect:  cfg.UITUIReconnectMax,
 		viewMode:        "human",
 		autoDoctor:      true,
+		reconnectEnabled: true,
+		reconnectState:   "connecting",
+		timeoutAction:    "wait",
 	}
 	st.loadRuntimeState()
 	return st
@@ -356,6 +362,10 @@ func printHelp() {
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
 	fmt.Println("/version              show ui-tui build metadata")
+	fmt.Println("/reconnect status     show reconnect status")
+	fmt.Println("/reconnect on|off     enable/disable auto reconnect")
+	fmt.Println("/reconnect now        probe websocket endpoint immediately")
+	fmt.Println("/reconnect timeout wait|reconnect|cancel")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -915,15 +925,22 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 	}
 	turnID := uuid.NewString()
 	startedAt := time.Now()
+	s.reconnectState = "connecting"
 	seenPayload := map[string]struct{}{}
 	dedupeEnabled := false
-	for attempt := 0; attempt <= s.wsMaxReconnect; attempt++ {
+	maxReconnect := s.wsMaxReconnect
+	if !s.reconnectEnabled {
+		maxReconnect = 0
+	}
+	for attempt := 0; attempt <= maxReconnect; attempt++ {
 		if attempt > 0 {
 			dedupeEnabled = true
+			s.reconnectState = "degraded"
 		}
 		conn, _, dialErr := websocket.DefaultDialer.Dial(u.String(), nil)
 		if dialErr != nil {
-			if attempt >= s.wsMaxReconnect {
+			if attempt >= maxReconnect {
+				s.reconnectState = "failed"
 				return dialErr
 			}
 			fmt.Printf("[ws-reconnect] dial failed, retry=%d err=%v\n", attempt+1, dialErr)
@@ -938,7 +955,8 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 		}
 		if err := conn.WriteJSON(req); err != nil {
 			_ = conn.Close()
-			if attempt >= s.wsMaxReconnect {
+			if attempt >= maxReconnect {
+				s.reconnectState = "failed"
 				return err
 			}
 			fmt.Printf("[ws-reconnect] write failed, retry=%d err=%v\n", attempt+1, err)
@@ -948,6 +966,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 		if attempt > 0 {
 			fmt.Printf("[ws-reconnect] resumed session=%s turn=%s attempt=%d\n", s.session, turnID, attempt+1)
 		}
+		forceReconnect := false
 		for {
 			if s.wsReadTimeout > 0 {
 				_ = conn.SetReadDeadline(time.Now().Add(s.wsReadTimeout))
@@ -958,16 +977,39 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				if errors.As(err, &netErr) && netErr.Timeout() {
 					fmt.Printf("[ws-timeout] %s 内未收到事件，等待服务端响应中\n", s.wsReadTimeout.String())
 					if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
-						_ = conn.Close()
-						return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
+						switch s.timeoutAction {
+						case "wait":
+							startedAt = time.Now()
+							fmt.Printf("[ws-timeout] timeout action=wait, continue waiting\n")
+						case "reconnect":
+							_ = conn.Close()
+							fmt.Printf("[ws-timeout] timeout action=reconnect, forcing reconnect\n")
+							s.reconnectState = "degraded"
+							time.Sleep(300 * time.Millisecond)
+							forceReconnect = true
+						case "cancel":
+							_ = conn.Close()
+							_, _ = httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
+							s.reconnectState = "failed"
+							return fmt.Errorf("turn timeout exceeded and cancelled: %s", s.wsTurnTimeout.String())
+						default:
+							_ = conn.Close()
+							s.reconnectState = "failed"
+							return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
+						}
+					}
+					if forceReconnect {
+						break
 					}
 					continue
 				}
 				_ = conn.Close()
 				if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
+					s.reconnectState = "failed"
 					return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
 				}
-				if attempt >= s.wsMaxReconnect {
+				if attempt >= maxReconnect {
+					s.reconnectState = "failed"
 					return err
 				}
 				fmt.Printf("[ws-reconnect] stream dropped, retry=%d err=%v\n", attempt+1, err)
@@ -985,6 +1027,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			}
 			if evtType == "resumed" {
 				dedupeEnabled = true
+				s.reconnectState = "resumed"
 			}
 			key := string(payload)
 			if _, ok := seenPayload[key]; ok {
@@ -999,10 +1042,22 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			}
 			if evtType == "result" || evtType == "error" || evtType == "cancelled" {
 				_ = conn.Close()
+				if evtType == "result" {
+					if s.reconnectState != "resumed" && s.reconnectState != "degraded" {
+						s.reconnectState = "connecting"
+					}
+				}
+				if evtType == "error" || evtType == "cancelled" {
+					s.reconnectState = "failed"
+				}
 				return nil
 			}
 		}
+		if forceReconnect {
+			continue
+		}
 	}
+	s.reconnectState = "failed"
 	return fmt.Errorf("unable to complete turn after reconnect attempts")
 }
 
@@ -1095,6 +1150,48 @@ func main() {
 			s.setStatus(true, "ok", "config reloaded")
 		case text == "/status":
 			fmt.Printf("status=%s code=%s detail=%s\n", s.lastStatus, s.lastCode, s.lastDetail)
+			fmt.Printf("reconnect enabled=%v state=%s max=%d timeout_action=%s\n", s.reconnectEnabled, s.reconnectState, s.wsMaxReconnect, s.timeoutAction)
+		case text == "/reconnect status":
+			out := map[string]any{
+				"enabled":        s.reconnectEnabled,
+				"state":          s.reconnectState,
+				"max_reconnect":  s.wsMaxReconnect,
+				"timeout_action": s.timeoutAction,
+			}
+			s.lastJSON = out
+			s.printData(out)
+			s.setStatus(true, "ok", "reconnect status shown")
+		case text == "/reconnect on":
+			s.reconnectEnabled = true
+			fmt.Println("reconnect: on")
+			s.setStatus(true, "ok", "reconnect enabled")
+		case text == "/reconnect off":
+			s.reconnectEnabled = false
+			fmt.Println("reconnect: off")
+			s.setStatus(true, "ok", "reconnect disabled")
+		case text == "/reconnect now":
+			conn, _, err := websocket.DefaultDialer.Dial(s.wsBase, nil)
+			if err != nil {
+				fmt.Printf("[ws-error] %v\n", err)
+				s.reconnectState = "failed"
+				s.setErrStatus(err)
+				continue
+			}
+			_ = conn.Close()
+			s.reconnectState = "connecting"
+			fmt.Println("reconnect probe ok")
+			s.setStatus(true, "ok", "reconnect probe ok")
+		case strings.HasPrefix(text, "/reconnect timeout "):
+			mode := strings.TrimSpace(strings.TrimPrefix(text, "/reconnect timeout "))
+			switch mode {
+			case "wait", "reconnect", "cancel":
+				s.timeoutAction = mode
+				fmt.Printf("reconnect timeout action: %s\n", mode)
+				s.setStatus(true, "ok", "reconnect timeout action updated")
+			default:
+				fmt.Println("usage: /reconnect timeout wait|reconnect|cancel")
+				s.setStatus(false, "invalid_input", "invalid reconnect timeout action")
+			}
 		case text == "/health":
 			out, err := httpJSON(http.MethodGet, s.httpBase+"/health", nil)
 			if err != nil {

@@ -369,3 +369,4 @@
 - `242-summary-chat-stream-contract-replay.md`：纳入 /v1/chat/stream 契约与回放校验
 - `243-summary-ws-contract-replay.md`：WS 实时链路契约化与回放覆盖
 - `244-summary-resume-and-reconnect-alignment.md`：SSE/WS 恢复与重连一致性补全
+- `245-summary-ui-tui-reconnect-controls.md`：ui-tui 重连状态可视化与人工恢复控制
