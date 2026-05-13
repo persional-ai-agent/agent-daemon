@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -43,6 +44,17 @@ type cancelRequest struct {
 	SessionID string `json:"session_id"`
 }
 
+type acpSessionCreateRequest struct {
+	SessionID string `json:"session_id,omitempty"`
+}
+
+type acpMessageRequest struct {
+	SessionID string `json:"session_id"`
+	Input     string `json:"input"`
+	TurnID    string `json:"turn_id,omitempty"`
+	Resume    bool   `json:"resume,omitempty"`
+}
+
 type chatResponsePayload struct {
 	SessionID         string         `json:"session_id"`
 	FinalResponse     string         `json:"final_response"`
@@ -67,6 +79,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/stream", s.handleChatStream)
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
+	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
+	mux.HandleFunc("/v1/acp/message", s.handleACPMessage)
+	mux.HandleFunc("/v1/acp/message/stream", s.handleACPMessageStream)
+	mux.HandleFunc("/v1/acp/cancel", s.handleACPCancel)
 	mux.HandleFunc("/v1/ui/tools", s.handleUITools)
 	mux.HandleFunc("/v1/ui/tools/", s.handleUIToolSchema)
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
@@ -77,6 +93,89 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
 	return mux
+}
+
+func (s *Server) handleACPSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req acpSessionCreateRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"session_id": sessionID,
+		"result": map[string]any{
+			"session_id": sessionID,
+		},
+	})
+}
+
+func (s *Server) handleACPMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req acpMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	chatReq := chatRequest{
+		SessionID: strings.TrimSpace(req.SessionID),
+		Message:   req.Input,
+		TurnID:    req.TurnID,
+		Resume:    req.Resume,
+	}
+	s.handleChat(w, cloneRequestWithJSONBody(r, chatReq))
+}
+
+func (s *Server) handleACPMessageStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req acpMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	chatReq := chatRequest{
+		SessionID: strings.TrimSpace(req.SessionID),
+		Message:   req.Input,
+		TurnID:    req.TurnID,
+		Resume:    req.Resume,
+	}
+	s.handleChatStream(w, cloneRequestWithJSONBody(r, chatReq))
+}
+
+func (s *Server) handleACPCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req cancelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	s.handleCancel(w, cloneRequestWithJSONBody(r, req))
+}
+
+func cloneRequestWithJSONBody(r *http.Request, v any) *http.Request {
+	bs, _ := json.Marshal(v)
+	req := r.Clone(r.Context())
+	req.Body = io.NopCloser(strings.NewReader(string(bs)))
+	req.ContentLength = int64(len(bs))
+	req.Header = req.Header.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }
 
 type recentSessionsStore interface {

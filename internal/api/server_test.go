@@ -303,6 +303,45 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("acp_sessions", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/acp/sessions", bytes.NewBufferString(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"session_id":"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("acp_message", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/acp/message", bytes.NewBufferString(`{"session_id":"acp-1","input":"hello"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"ok":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("acp_stream", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/acp/message/stream", bytes.NewBufferString(`{"session_id":"acp-2","input":"ping"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+			t.Fatalf("expected stream content type, got %q", got)
+		}
+	})
+
 	t.Run("approval_confirm", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/v1/ui/approval/confirm", bytes.NewBufferString(`{"session_id":"s-1","approval_id":"ap-1","approve":true}`))
