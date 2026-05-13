@@ -281,6 +281,16 @@ func TestProcessSchemaActionEnumIncludesExtendedActions(t *testing.T) {
 	t.Fatal("process schema not found")
 }
 
+func TestApprovalSchemaDocumentsDefaultAction(t *testing.T) {
+	params := approvalParams()
+	props, _ := params["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	desc, _ := action["description"].(string)
+	if !strings.Contains(desc, "default: status") {
+		t.Fatalf("approval action description=%q, want default hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
