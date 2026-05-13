@@ -65,6 +65,23 @@ func TestFindPendingApprovals(t *testing.T) {
 	}
 }
 
+func TestParseStartupFlags(t *testing.T) {
+	old := os.Getenv("AGENT_UI_TUI_FULLSCREEN")
+	defer func() { _ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", old) }()
+
+	_ = os.Unsetenv("AGENT_UI_TUI_FULLSCREEN")
+	noDoctor, fullscreen := parseStartupFlags([]string{"--no-doctor", "--fullscreen"})
+	if !noDoctor || !fullscreen {
+		t.Fatalf("unexpected flags: noDoctor=%v fullscreen=%v", noDoctor, fullscreen)
+	}
+
+	_ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", "1")
+	noDoctor, fullscreen = parseStartupFlags(nil)
+	if noDoctor || !fullscreen {
+		t.Fatalf("unexpected env parse: noDoctor=%v fullscreen=%v", noDoctor, fullscreen)
+	}
+}
+
 func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
 	dir := t.TempDir()
 	s := newState()

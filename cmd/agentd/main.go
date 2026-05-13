@@ -648,8 +648,9 @@ func main() {
 		sessionID := fs.String("session", uuid.NewString(), "session id")
 		skills := fs.String("skills", "", "comma-separated skill names to preload")
 		mode := fs.String("mode", "auto", "tui mode: auto|standalone|lite")
+		fullscreen := fs.Bool("fullscreen", false, "enable fullscreen dashboard mode when using standalone ui-tui")
 		_ = fs.Parse(os.Args[2:])
-		runTUI(cfg, *message, *mode, *sessionID, *skills)
+		runTUI(cfg, *message, *mode, *fullscreen, *sessionID, *skills)
 	case "serve":
 		runServe(cfg)
 	case "tools":
@@ -750,7 +751,7 @@ func printResearchUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd research stats -in trajectories.jsonl")
 }
 
-func runTUI(cfg config.Config, first, mode string, sessionID ...string) {
+func runTUI(cfg config.Config, first, mode string, fullscreen bool, sessionID ...string) {
 	id := uuid.NewString()
 	skills := ""
 	if len(sessionID) > 0 && sessionID[0] != "" {
@@ -767,7 +768,7 @@ func runTUI(cfg config.Config, first, mode string, sessionID ...string) {
 		log.Fatalf("invalid tui mode: %s (allowed: auto|standalone|lite)", mode)
 	}
 	if mode != "lite" {
-		if err := runStandaloneUITUI(first, id); err == nil {
+		if err := runStandaloneUITUI(first, id, fullscreen); err == nil {
 			return
 		} else if mode == "standalone" {
 			log.Fatalf("standalone ui-tui launch failed: %v", err)
@@ -794,7 +795,7 @@ func runTUI(cfg config.Config, first, mode string, sessionID ...string) {
 	}
 }
 
-func runStandaloneUITUI(firstMessage, sessionID string) error {
+func runStandaloneUITUI(firstMessage, sessionID string, fullscreen bool) error {
 	cmd, err := buildUITUICommand()
 	if err != nil {
 		return err
@@ -808,6 +809,9 @@ func runStandaloneUITUI(firstMessage, sessionID string) error {
 	}
 	if strings.TrimSpace(firstMessage) != "" {
 		cmd.Env = append(cmd.Env, "AGENT_UI_TUI_BOOT_MESSAGE="+firstMessage)
+	}
+	if fullscreen {
+		cmd.Env = append(cmd.Env, "AGENT_UI_TUI_FULLSCREEN=1")
 	}
 	return cmd.Run()
 }

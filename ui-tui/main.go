@@ -91,6 +91,7 @@ type appState struct {
 	lastErrorText    string
 	fallbackHint     string
 	diagUpdatedAt    string
+	fullscreen       bool
 }
 
 const (
@@ -427,6 +428,53 @@ func printJSONMode(v any, pretty bool) {
 		bs, _ = json.Marshal(v)
 	}
 	fmt.Println(string(bs))
+}
+
+func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool) {
+	for _, a := range args {
+		switch strings.TrimSpace(a) {
+		case "--no-doctor":
+			noDoctor = true
+		case "--fullscreen":
+			fullscreen = true
+		}
+	}
+	if !fullscreen {
+		if v := strings.TrimSpace(os.Getenv("AGENT_UI_TUI_FULLSCREEN")); v == "1" || strings.EqualFold(v, "true") {
+			fullscreen = true
+		}
+	}
+	return noDoctor, fullscreen
+}
+
+func (s *appState) renderFullscreenFrame() {
+	if !s.fullscreen {
+		return
+	}
+	clear := "\033[2J\033[H"
+	fmt.Print(clear)
+	fmt.Println("ui-tui fullscreen")
+	fmt.Printf("session: %s\n", s.session)
+	fmt.Printf("ws: %s\n", s.wsBase)
+	fmt.Printf("http: %s\n", s.httpBase)
+	fmt.Printf("status: %s/%s  detail: %s\n", s.lastStatus, s.lastCode, s.lastDetail)
+	fmt.Printf("transport: %s  reconnect: %s(%d)  view: %s\n", s.activeTransport, s.reconnectState, s.reconnectCount, s.viewMode)
+	fmt.Printf("hint: /help /diag /sessions /show /tools /gateway status /quit\n")
+	fmt.Println("---- recent events ----")
+	start := len(s.eventLog) - 6
+	if start < 0 {
+		start = 0
+	}
+	for _, evt := range s.eventLog[start:] {
+		typ, _ := evt["type"].(string)
+		turn, _ := evt["turn"].(float64)
+		if turn > 0 {
+			fmt.Printf("- %s turn=%.0f\n", typ, turn)
+		} else {
+			fmt.Printf("- %s\n", typ)
+		}
+	}
+	fmt.Println("---- input ----")
 }
 
 func asMap(v any) map[string]any {
@@ -1141,15 +1189,14 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 
 func main() {
 	s := newState()
-	noDoctor := false
-	for _, a := range os.Args[1:] {
-		if strings.TrimSpace(a) == "--no-doctor" {
-			noDoctor = true
-		}
-	}
+	noDoctor, fullscreen := parseStartupFlags(os.Args[1:])
+	s.fullscreen = fullscreen
 	fmt.Printf("session: %s\n", s.session)
 	fmt.Printf("ws: %s\n", s.wsBase)
 	fmt.Printf("http: %s\n", s.httpBase)
+	if s.fullscreen {
+		fmt.Println("fullscreen: on")
+	}
 	fmt.Println("输入 /help 查看命令")
 	if s.autoDoctor && !noDoctor {
 		items, allOK := s.runDoctor()
@@ -1172,6 +1219,7 @@ func main() {
 	}
 	reader := bufio.NewScanner(os.Stdin)
 	for {
+		s.renderFullscreenFrame()
 		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
 		if !reader.Scan() {
 			fmt.Println("bye")

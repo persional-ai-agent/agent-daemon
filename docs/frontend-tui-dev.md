@@ -54,6 +54,7 @@
   - `standalone`：仅独立 `ui-tui`
   - `lite`：强制内置 `internal/cli/tui.go`
   - 启动优先级：`AGENT_UI_TUI_BIN` > `PATH(ui-tui)` > 仓库源码回退 `go run ./ui-tui`（仅仓库根目录可用）
+  - `-fullscreen`：透传独立 `ui-tui` 全屏看板模式（等价设置 `AGENT_UI_TUI_FULLSCREEN=1`）
 
 ## 3.1 独立 TUI 子工程
 

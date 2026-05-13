@@ -13,6 +13,12 @@ go run .
 go run . --no-doctor
 ```
 
+全屏看板模式：
+
+```bash
+go run . --fullscreen
+```
+
 默认连接：
 
 - `ws://127.0.0.1:8080/v1/chat/ws`
@@ -23,6 +29,7 @@ go run . --no-doctor
 - `AGENT_HTTP_BASE`：自定义 HTTP 管理 API 地址（默认从 WS 地址自动推导）
 - `AGENT_SESSION_ID`：指定会话 ID（默认自动生成）
 - `AGENT_UI_TUI_BOOT_MESSAGE`：启动后自动发送首条消息（由 `agentd tui -message` 注入）
+- `AGENT_UI_TUI_FULLSCREEN`：设为 `1/true` 可启用全屏看板模式
 
 配置文件：
 

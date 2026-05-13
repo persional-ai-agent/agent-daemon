@@ -45,6 +45,7 @@ agentd tui
 ```bash
 agentd tui -mode standalone
 agentd tui -mode lite
+agentd tui -mode standalone -fullscreen
 ```
 
 在 `standalone/auto` 模式下，若无 `ui-tui` 二进制，`agentd tui` 会继续尝试源码回退（`go run ./ui-tui`，需在仓库根目录执行并有 Go 环境）。
