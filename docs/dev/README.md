@@ -385,3 +385,4 @@
 - `258-summary-acp-api-adapter-minimal.md`：ACP/IDE 最小 API 适配闭环（sessions/message/stream/cancel）
 - `259-summary-research-trajectory-runtime-minimal.md`：Research/RL/Trajectory 最小闭环（批跑、轨迹压缩、统计）
 - `260-summary-terminal-environment-matrix-alignment.md`：terminal 执行环境矩阵补齐（podman/singularity/daytona/vercel/modal + schema/test/doc 对齐）
+- `261-summary-cli-tui-standalone-auto-mode.md`：`agentd tui` 增加 standalone/lite/auto 模式，默认优先独立 ui-tui 并可自动回退

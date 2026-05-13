@@ -40,6 +40,13 @@ agentd chat
 agentd tui
 ```
 
+`agentd tui` 默认 `-mode auto`：优先启动独立 `ui-tui`（完整命令面），若本机未安装 `ui-tui` 可执行文件则自动回退到内置 lite 模式。也可显式指定：
+
+```bash
+agentd tui -mode standalone
+agentd tui -mode lite
+```
+
 使用独立 TUI 子工程：
 
 ```bash

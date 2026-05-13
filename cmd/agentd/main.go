@@ -647,8 +647,9 @@ func main() {
 		message := fs.String("message", "", "first message to send")
 		sessionID := fs.String("session", uuid.NewString(), "session id")
 		skills := fs.String("skills", "", "comma-separated skill names to preload")
+		mode := fs.String("mode", "auto", "tui mode: auto|standalone|lite")
 		_ = fs.Parse(os.Args[2:])
-		runTUI(cfg, *message, *sessionID, *skills)
+		runTUI(cfg, *message, *mode, *sessionID, *skills)
 	case "serve":
 		runServe(cfg)
 	case "tools":
@@ -749,8 +750,7 @@ func printResearchUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd research stats -in trajectories.jsonl")
 }
 
-func runTUI(cfg config.Config, first string, sessionID ...string) {
-	eng, cronStore := mustBuildEngine(cfg)
+func runTUI(cfg config.Config, first, mode string, sessionID ...string) {
 	id := uuid.NewString()
 	skills := ""
 	if len(sessionID) > 0 && sessionID[0] != "" {
@@ -759,6 +759,23 @@ func runTUI(cfg config.Config, first string, sessionID ...string) {
 	if len(sessionID) > 1 && sessionID[1] != "" {
 		skills = sessionID[1]
 	}
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode != "auto" && mode != "standalone" && mode != "lite" {
+		log.Fatalf("invalid tui mode: %s (allowed: auto|standalone|lite)", mode)
+	}
+	if mode != "lite" {
+		if err := runStandaloneUITUI(first, id); err == nil {
+			return
+		} else if mode == "standalone" {
+			log.Fatalf("standalone ui-tui launch failed: %v", err)
+		} else {
+			log.Printf("standalone ui-tui unavailable, fallback to lite mode: %v", err)
+		}
+	}
+	eng, cronStore := mustBuildEngine(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if cfg.CronEnabled && cronStore != nil {
@@ -775,6 +792,45 @@ func runTUI(cfg config.Config, first string, sessionID ...string) {
 	if err := cli.RunTUI(ctx, eng, id, first, skills); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func runStandaloneUITUI(firstMessage, sessionID string) error {
+	bin, err := resolveUITUIBinary()
+	if err != nil {
+		return err
+	}
+	args := []string{}
+	if strings.TrimSpace(firstMessage) == "" {
+		// no-op, handled via stdin in ui-tui
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if strings.TrimSpace(sessionID) != "" {
+		cmd.Env = append(cmd.Env, "AGENT_SESSION_ID="+strings.TrimSpace(sessionID))
+	}
+	return cmd.Run()
+}
+
+func resolveUITUIBinary() (string, error) {
+	if fromEnv := strings.TrimSpace(os.Getenv("AGENT_UI_TUI_BIN")); fromEnv != "" {
+		if _, err := os.Stat(fromEnv); err == nil {
+			return fromEnv, nil
+		}
+		return "", fmt.Errorf("AGENT_UI_TUI_BIN not found: %s", fromEnv)
+	}
+	if p, err := exec.LookPath("ui-tui"); err == nil {
+		return p, nil
+	}
+	if wd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(wd, "ui-tui", "tui.run")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("ui-tui binary not found (set AGENT_UI_TUI_BIN or install ui-tui in PATH)")
 }
 
 func runConfig(args []string) {

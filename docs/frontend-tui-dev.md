@@ -49,6 +49,10 @@
 - 模式：单循环读取输入 + slash 命令分发 + `Engine.Run` 对话执行
 - slash 命令扩展：集中在 `handleSlashCommand`
 - 增强入口：`agentd tui` -> `internal/cli/tui.go`，通过 `EventSink` 输出实时事件轨迹（turn/tool/completed/error）
+- `agentd tui` 增加模式参数：`-mode auto|standalone|lite`
+  - `auto`（默认）：优先拉起独立 `ui-tui` 进程；不可用时回退到内置 lite
+  - `standalone`：仅独立 `ui-tui`
+  - `lite`：强制内置 `internal/cli/tui.go`
 
 ## 3.1 独立 TUI 子工程
 
