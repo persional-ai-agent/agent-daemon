@@ -18,3 +18,12 @@ npm run dev
 - Tools 页面：调用 `/v1/ui/tools`
 - Gateway 页面：调用 `/v1/ui/gateway/status`
 - Config 页面：调用 `/v1/ui/config`
+
+## 烟测与诊断样本
+
+```bash
+ARTIFACTS_DIR=./artifacts ./web/e2e_smoke.sh
+```
+
+- 执行 web test/build
+- 生成 `diag.v1` 样本：`artifacts/diag-web.sample.json`

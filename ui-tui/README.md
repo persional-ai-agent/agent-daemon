@@ -109,6 +109,12 @@ go run . --no-doctor
 ./ui-tui/e2e_smoke.sh
 ```
 
+CI 中可通过 `ARTIFACTS_DIR` 导出诊断样本：
+
+```bash
+ARTIFACTS_DIR=./artifacts ./ui-tui/e2e_smoke.sh
+```
+
 发布单文件：
 
 ```bash

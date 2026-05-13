@@ -11,16 +11,20 @@ trap 'chmod -R u+w "$TMP_HOME" >/dev/null 2>&1 || true; rm -rf "$TMP_HOME" >/dev
 
 BASE_HTTP="${AGENT_HTTP_BASE:-http://127.0.0.1:8080}"
 BASE_WS="${AGENT_API_BASE:-ws://127.0.0.1:8080/v1/chat/ws}"
+ARTIFACTS_DIR="${ARTIFACTS_DIR:-}"
+DIAG_OUT="$TMP_HOME/diag-ui-tui.json"
 
 OUT_LOCAL="$(mktemp)"
 HOME="$TMP_HOME" AGENT_HTTP_BASE="$BASE_HTTP" AGENT_API_BASE="$BASE_WS" \
-	timeout 20s go run ./ui-tui <<'EOF' >"$OUT_LOCAL"
+	timeout 20s go run ./ui-tui <<EOF >"$OUT_LOCAL"
 /help
 /doctor
 /status
 /reload-config
 /history 5
 /events 5
+/diag
+/diag export $DIAG_OUT
 /bookmark add smoke
 /bookmark list
 /bookmark use smoke
@@ -29,8 +33,14 @@ EOF
 
 grep -q "commands:" "$OUT_LOCAL"
 grep -q "status=" "$OUT_LOCAL"
+grep -q "diagnostics exported:" "$OUT_LOCAL"
 grep -q "bookmark saved: smoke" "$OUT_LOCAL"
 grep -q "bookmark loaded: smoke" "$OUT_LOCAL"
+go run ./scripts/diag_bundle -file "$DIAG_OUT" >/dev/null
+if [ -n "$ARTIFACTS_DIR" ]; then
+	mkdir -p "$ARTIFACTS_DIR"
+	cp "$DIAG_OUT" "$ARTIFACTS_DIR/diag-ui-tui.sample.json"
+fi
 echo "[ui-tui-smoke] local command path ok"
 
 go test ./ui-tui -run 'TestSendTurnReconnect|TestFindLatestPendingApproval|TestFindPendingApprovals|TestParseEventSaveArgsAndFilter|TestLoadRuntimeStateCorruptBackup' -count=1 >/dev/null

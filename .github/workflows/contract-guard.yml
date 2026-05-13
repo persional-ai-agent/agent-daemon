@@ -17,6 +17,14 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Web Dependencies
+        run: npm --prefix web ci
+
       - name: Contract Regression Tests
         run: go test ./internal/api ./internal/cli ./ui-tui
 
@@ -63,6 +71,21 @@ jobs:
           mkdir -p artifacts
           go run ./scripts/contract_diff.go -base docs/api/versions/v1/ui-chat-contract.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -report artifacts/contract-diff.json
 
+      - name: ui-tui Smoke (diag sample)
+        run: |
+          chmod +x ui-tui/e2e_smoke.sh
+          ARTIFACTS_DIR="$PWD/artifacts" ./ui-tui/e2e_smoke.sh
+
+      - name: Web Smoke (diag sample)
+        run: |
+          chmod +x web/e2e_smoke.sh
+          ARTIFACTS_DIR="$PWD/artifacts" ./web/e2e_smoke.sh
+
+      - name: Diagnostics Replay Reports
+        run: |
+          go run ./scripts/diag_bundle -file artifacts/diag-ui-tui.sample.json -report artifacts/diag-ui-tui.replay.json
+          go run ./scripts/diag_bundle -file artifacts/diag-web.sample.json -report artifacts/diag-web.replay.json
+
       - name: Upload Contract Diff Artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,4 +116,24 @@ jobs:
         with:
           name: contract-coverage-report
           path: artifacts/contract-coverage.json
+          if-no-files-found: warn
+
+      - name: Upload Diagnostics Samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-samples
+          path: |
+            artifacts/diag-ui-tui.sample.json
+            artifacts/diag-web.sample.json
+          if-no-files-found: warn
+
+      - name: Upload Diagnostics Replay Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-replay-report
+          path: |
+            artifacts/diag-ui-tui.replay.json
+            artifacts/diag-web.replay.json
           if-no-files-found: warn
