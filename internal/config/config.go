@@ -71,6 +71,8 @@ type Config struct {
 	UITUIReconnectMax       int
 	UITUIHistoryMaxLines    int
 	UITUIEventMaxItems      int
+	UITUIViewMode           string
+	UITUIAutoDoctor         *bool
 }
 
 type iniValues struct {
@@ -238,6 +240,22 @@ func loadFromINIValues(iv iniValues) Config {
 	if uiEventMaxItems <= 0 {
 		uiEventMaxItems = 2000
 	}
+	uiViewMode := iniStr(iv, "ui-tui", "view_mode", "AGENT_UI_TUI_VIEW_MODE", "human")
+	uiViewMode = strings.ToLower(strings.TrimSpace(uiViewMode))
+	if uiViewMode != "json" && uiViewMode != "human" {
+		uiViewMode = "human"
+	}
+	var autoDoctorPtr *bool
+	if v := os.Getenv("AGENT_UI_TUI_AUTO_DOCTOR"); v != "" {
+		b := strings.EqualFold(v, "true") || v == "1"
+		autoDoctorPtr = &b
+	} else if iv.found && iv.file != nil {
+		if sec := iv.file.Section("ui-tui"); sec != nil && sec.HasKey("auto_doctor") {
+			v := sec.Key("auto_doctor").String()
+			b := strings.EqualFold(v, "true") || v == "1"
+			autoDoctorPtr = &b
+		}
+	}
 
 	return Config{
 		ModelProvider:           apiType,
@@ -301,5 +319,7 @@ func loadFromINIValues(iv iniValues) Config {
 		UITUIReconnectMax:       uiReconnectMax,
 		UITUIHistoryMaxLines:    uiHistoryMaxLines,
 		UITUIEventMaxItems:      uiEventMaxItems,
+		UITUIViewMode:           uiViewMode,
+		UITUIAutoDoctor:         autoDoctorPtr,
 	}
 }

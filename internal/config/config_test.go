@@ -209,6 +209,8 @@ ws_turn_timeout_seconds = 120
 ws_reconnect_max = 5
 history_max_lines = 500
 event_max_items = 800
+view_mode = json
+auto_doctor = false
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -227,6 +229,12 @@ event_max_items = 800
 	}
 	if cfg.UITUIHistoryMaxLines != 500 || cfg.UITUIEventMaxItems != 800 {
 		t.Fatalf("unexpected history/event cfg: %+v", cfg)
+	}
+	if cfg.UITUIViewMode != "json" {
+		t.Fatalf("UITUIViewMode = %q", cfg.UITUIViewMode)
+	}
+	if cfg.UITUIAutoDoctor == nil || *cfg.UITUIAutoDoctor {
+		t.Fatalf("UITUIAutoDoctor = %+v", cfg.UITUIAutoDoctor)
 	}
 }
 

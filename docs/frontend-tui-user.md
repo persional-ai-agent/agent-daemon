@@ -66,6 +66,7 @@ go run .
 - `/tool <name>`：查看工具 schema
 - `/gateway status|enable|disable`：网关状态与启停
 - `/config get`、`/config set <section.key> <value>`：配置查看与设置
+- `/config tui`：查看 ui-tui 配置生效值与来源
 - `/health`、`/cancel`：健康检查与当前会话中断
 - `/history [n]`、`/rerun <index>`：本地历史查看与命令重放
 - `/events [n]`、`/events save <file>`：运行事件查看与导出
@@ -74,6 +75,8 @@ go run .
 - `/pending [n]`、`/approve [id]`、`/deny [id]`：终端内审批闭环（可默认处理最近一条）
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
 - `/doctor`：后端能力预检（接口版本与连通性）
+- `/view human|json`：切换人类视图/JSON 视图
+- `/version`：查看构建版本信息
 
 稳定性与排障：
 
@@ -83,3 +86,4 @@ go run .
 - 启动时会自动恢复上次会话与 endpoint。
 - 若状态文件损坏，会自动备份并重建，避免启动失败。
 - 运行烟测：`./ui-tui/e2e_smoke.sh`。
+- 跳过启动自检：`go run ./ui-tui --no-doctor`。

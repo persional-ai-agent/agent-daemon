@@ -7,6 +7,12 @@ cd ui-tui
 go run .
 ```
 
+跳过启动自检：
+
+```bash
+go run . --no-doctor
+```
+
 默认连接：
 
 - `ws://127.0.0.1:8080/v1/chat/ws`
@@ -50,7 +56,9 @@ go run .
 - `/gateway status|enable|disable` 网关状态与启停
 - `/config get` 查看配置快照
 - `/config set <section.key> <value>` 设置配置项
+- `/config tui` 查看 ui-tui 生效配置与来源（env/config）
 - `/pretty on|off` 开关 JSON 美化输出
+- `/view human|json` 切换人类视图/JSON 视图
 - `/last` 查看最近一次 JSON 响应
 - `/save <file>` 保存最近一次 JSON 响应到文件
 - `/status` 查看最近一次命令状态
@@ -68,6 +76,7 @@ go run .
 - `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）
 - `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/doctor` 后端能力预检（health/sessions/approval/ws/config）
+- `/version` 查看 ui-tui 构建版本信息
 - `/quit` 或 `/exit` 退出
 
 状态诊断：
@@ -76,6 +85,11 @@ go run .
 - `/status` 输出：`status=<ok|err> code=<ok|network|timeout|auth|request|server|unknown> detail=<详情>`
 - 启动时自动恢复最近会话与 endpoint（`~/.agent-daemon/ui-tui-state.json`）
 - 若状态文件损坏，会自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
+- 默认启动会自动执行一次 doctor（可通过 `[ui-tui] auto_doctor=false` 或 `--no-doctor` 关闭）
+
+审计日志：
+
+- 关键操作（`approve`/`deny`/`cancel`/`config set`）会记录到 `~/.agent-daemon/ui-tui-audit.log`
 
 常用别名：
 
@@ -89,4 +103,10 @@ go run .
 
 ```bash
 ./ui-tui/e2e_smoke.sh
+```
+
+发布单文件：
+
+```bash
+./ui-tui/release.sh v1.0.0
 ```

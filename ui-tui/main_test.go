@@ -158,3 +158,39 @@ func TestRunDoctor(t *testing.T) {
 		t.Fatalf("expected >=5 checks, got %d", len(items))
 	}
 }
+
+func TestRunDoctorMissingApprovalEndpoint(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+	})
+	mux.HandleFunc("/v1/ui/sessions/", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"messages": []any{}, "stats": map[string]any{}})
+	})
+	mux.HandleFunc("/v1/chat/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Fatalf("upgrade: %v", err)
+		}
+		_ = conn.Close()
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	s := newState()
+	s.httpBase = ts.URL
+	s.wsBase = "ws" + strings.TrimPrefix(ts.URL, "http") + "/v1/chat/ws"
+	items, ok := s.runDoctor()
+	if ok {
+		t.Fatalf("expected doctor to fail when approval endpoint missing, items=%+v", items)
+	}
+	found := false
+	for _, it := range items {
+		if it.Name == "approval_confirm" && it.Status == "fail" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected approval_confirm fail, items=%+v", items)
+	}
+}

@@ -21,6 +21,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var (
+	BuildVersion = "dev"
+	BuildCommit  = "unknown"
+	BuildTime    = "unknown"
+)
+
 type bookmark struct {
 	Name      string `json:"name"`
 	SessionID string `json:"session_id"`
@@ -39,6 +45,7 @@ type doctorItem struct {
 	Name    string `json:"name"`
 	Status  string `json:"status"`
 	Detail  string `json:"detail"`
+	Suggest string `json:"suggest,omitempty"`
 	Checked string `json:"checked_at"`
 }
 
@@ -59,17 +66,21 @@ type appState struct {
 	lastShowLimit   int
 	lastSessions    []string
 
-	eventLog []map[string]any
+	eventLog     []map[string]any
+	pendingCache []map[string]any
 
 	historyPath  string
 	bookmarkPath string
 	statePath    string
+	auditPath    string
 
 	historyMaxLines int
 	eventMaxItems   int
 	wsReadTimeout   time.Duration
 	wsTurnTimeout   time.Duration
 	wsMaxReconnect  int
+	viewMode        string
+	autoDoctor      bool
 }
 
 const (
@@ -133,11 +144,14 @@ func newState() *appState {
 		historyPath:     filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:    filepath.Join(root, "ui-tui-bookmarks.json"),
 		statePath:       filepath.Join(root, "ui-tui-state.json"),
+		auditPath:       filepath.Join(root, "ui-tui-audit.log"),
 		historyMaxLines: cfg.UITUIHistoryMaxLines,
 		eventMaxItems:   cfg.UITUIEventMaxItems,
 		wsReadTimeout:   time.Duration(cfg.UITUIWSReadTimeoutSec) * time.Second,
 		wsTurnTimeout:   time.Duration(cfg.UITUITurnTimeoutSec) * time.Second,
 		wsMaxReconnect:  cfg.UITUIReconnectMax,
+		viewMode:        "human",
+		autoDoctor:      true,
 	}
 	st.loadRuntimeState()
 	return st
@@ -164,6 +178,46 @@ func (s *appState) applyConfig(cfg appconfig.Config) {
 	}
 	if strings.TrimSpace(cfg.UITUIHTTPBase) != "" {
 		s.httpBase = strings.TrimRight(strings.TrimSpace(cfg.UITUIHTTPBase), "/")
+	}
+	if strings.TrimSpace(cfg.UITUIViewMode) != "" {
+		v := strings.ToLower(strings.TrimSpace(cfg.UITUIViewMode))
+		if v == "json" || v == "human" {
+			s.viewMode = v
+		}
+	}
+	if cfg.UITUIAutoDoctor != nil {
+		s.autoDoctor = *cfg.UITUIAutoDoctor
+	}
+}
+
+func (s *appState) audit(action, detail string) {
+	_ = os.MkdirAll(filepath.Dir(s.auditPath), 0o755)
+	f, err := os.OpenFile(s.auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(fmt.Sprintf("%s\taction=%s\tsession=%s\tdetail=%s\n", time.Now().Format(time.RFC3339), action, s.session, strings.ReplaceAll(detail, "\n", " ")))
+}
+
+func suggestRetry(cmd string) {
+	fmt.Printf("retry suggestion: %s\n", cmd)
+}
+
+func (s *appState) printData(v any) {
+	if s.viewMode == "json" {
+		printJSONMode(v, s.pretty)
+		return
+	}
+	switch data := v.(type) {
+	case []map[string]any:
+		for i, row := range data {
+			fmt.Printf("%d. %v\n", i+1, row)
+		}
+	case map[string]any:
+		printJSONMode(data, s.pretty)
+	default:
+		printJSONMode(v, s.pretty)
 	}
 }
 
@@ -281,7 +335,9 @@ func printHelp() {
 	fmt.Println("/gateway disable      disable gateway")
 	fmt.Println("/config get           show config snapshot")
 	fmt.Println("/config set k v       set config key/value")
+	fmt.Println("/config tui           show effective [ui-tui] config and source")
 	fmt.Println("/pretty on|off        enable/disable pretty json")
+	fmt.Println("/view human|json      switch display mode")
 	fmt.Println("/last                 print last json payload")
 	fmt.Println("/save <file>          save last json payload")
 	fmt.Println("/status               show last command status")
@@ -299,6 +355,7 @@ func printHelp() {
 	fmt.Println("/deny [id]            deny pending approval id (default latest)")
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
+	fmt.Println("/version              show ui-tui build metadata")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -498,6 +555,25 @@ func saveEvents(path, format string, events []map[string]any) error {
 	return os.WriteFile(path, bs, 0o644)
 }
 
+func promptIndex(scanner *bufio.Scanner, prompt string, max int) (int, bool) {
+	if max <= 0 {
+		return 0, false
+	}
+	fmt.Printf("%s [1-%d, Enter skip]: ", prompt, max)
+	if !scanner.Scan() {
+		return 0, false
+	}
+	text := strings.TrimSpace(scanner.Text())
+	if text == "" {
+		return 0, false
+	}
+	v, err := strconv.Atoi(text)
+	if err != nil || v < 1 || v > max {
+		return 0, false
+	}
+	return v, true
+}
+
 func classifyError(err error) (string, string) {
 	if err == nil {
 		return "ok", ""
@@ -602,23 +678,23 @@ func (s *appState) runDoctor() ([]doctorItem, bool) {
 	now := time.Now().Format(time.RFC3339)
 	items := make([]doctorItem, 0, 5)
 	allOK := true
-	add := func(name, status, detail string) {
+	add := func(name, status, detail, suggest string) {
 		if status != "ok" {
 			allOK = false
 		}
-		items = append(items, doctorItem{Name: name, Status: status, Detail: detail, Checked: now})
+		items = append(items, doctorItem{Name: name, Status: status, Detail: detail, Suggest: suggest, Checked: now})
 	}
 
 	if out, err := httpJSON(http.MethodGet, s.httpBase+"/health", nil); err != nil {
-		add("health", "fail", err.Error())
+		add("health", "fail", err.Error(), "check agentd serve and AGENT_HTTP_BASE")
 	} else {
-		add("health", "ok", fmt.Sprintf("status=%v", out["status"]))
+		add("health", "ok", fmt.Sprintf("status=%v", out["status"]), "")
 	}
 
 	if _, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(s.session)), nil); err != nil {
-		add("sessions_detail", "fail", err.Error())
+		add("sessions_detail", "fail", err.Error(), "verify /v1/ui/sessions endpoint and database health")
 	} else {
-		add("sessions_detail", "ok", "session detail endpoint reachable")
+		add("sessions_detail", "ok", "session detail endpoint reachable", "")
 	}
 
 	code, body, err := httpStatus(http.MethodPost, s.httpBase+"/v1/ui/approval/confirm", map[string]any{
@@ -627,31 +703,31 @@ func (s *appState) runDoctor() ([]doctorItem, bool) {
 		"approve":     true,
 	})
 	if err != nil {
-		add("approval_confirm", "fail", err.Error())
+		add("approval_confirm", "fail", err.Error(), "upgrade backend to include /v1/ui/approval/confirm")
 	} else {
 		switch code {
 		case http.StatusNotFound:
-			add("approval_confirm", "fail", "endpoint missing: upgrade backend to support /v1/ui/approval/confirm")
+			add("approval_confirm", "fail", "endpoint missing: upgrade backend to support /v1/ui/approval/confirm", "deploy latest backend")
 		case http.StatusBadRequest, http.StatusOK:
-			add("approval_confirm", "ok", fmt.Sprintf("endpoint reachable (http %d)", code))
+			add("approval_confirm", "ok", fmt.Sprintf("endpoint reachable (http %d)", code), "")
 		default:
-			add("approval_confirm", "warn", fmt.Sprintf("unexpected status=%d body=%s", code, body))
+			add("approval_confirm", "warn", fmt.Sprintf("unexpected status=%d body=%s", code, body), "check backend logs and API compatibility")
 		}
 	}
 
-	add("config_effective", "ok", fmt.Sprintf("ws=%s http=%s reconnect=%d read_timeout=%s turn_timeout=%s history_max=%d event_max=%d", s.wsBase, s.httpBase, s.wsMaxReconnect, s.wsReadTimeout, s.wsTurnTimeout, s.historyMaxLines, s.eventMaxItems))
+	add("config_effective", "ok", fmt.Sprintf("ws=%s http=%s reconnect=%d read_timeout=%s turn_timeout=%s history_max=%d event_max=%d", s.wsBase, s.httpBase, s.wsMaxReconnect, s.wsReadTimeout, s.wsTurnTimeout, s.historyMaxLines, s.eventMaxItems), "")
 
 	u, err := url.Parse(s.wsBase)
 	if err != nil {
-		add("ws_reachable", "fail", err.Error())
+		add("ws_reachable", "fail", err.Error(), "fix ws_base URL format")
 	} else {
 		d := websocket.Dialer{HandshakeTimeout: 3 * time.Second}
 		conn, _, dialErr := d.Dial(u.String(), nil)
 		if dialErr != nil {
-			add("ws_reachable", "warn", dialErr.Error())
+			add("ws_reachable", "warn", dialErr.Error(), "ensure /v1/chat/ws is reachable from current host")
 		} else {
 			_ = conn.Close()
-			add("ws_reachable", "ok", "websocket handshake ok")
+			add("ws_reachable", "ok", "websocket handshake ok", "")
 		}
 	}
 	return items, allOK
@@ -883,10 +959,26 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 
 func main() {
 	s := newState()
+	noDoctor := false
+	for _, a := range os.Args[1:] {
+		if strings.TrimSpace(a) == "--no-doctor" {
+			noDoctor = true
+		}
+	}
 	fmt.Printf("session: %s\n", s.session)
 	fmt.Printf("ws: %s\n", s.wsBase)
 	fmt.Printf("http: %s\n", s.httpBase)
 	fmt.Println("输入 /help 查看命令")
+	if s.autoDoctor && !noDoctor {
+		items, allOK := s.runDoctor()
+		fmt.Println("startup doctor:")
+		s.printData(items)
+		if allOK {
+			s.setStatus(true, "ok", "startup doctor passed")
+		} else {
+			s.setStatus(false, "doctor_failed", "startup doctor found failures")
+		}
+	}
 	reader := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
@@ -912,15 +1004,30 @@ func main() {
 		case text == "/help":
 			printHelp()
 			s.setStatus(true, "ok", "help shown")
+		case text == "/version":
+			out := map[string]any{"version": BuildVersion, "commit": BuildCommit, "build_time": BuildTime}
+			s.lastJSON = out
+			s.printData(out)
+			s.setStatus(true, "ok", "version shown")
 		case text == "/doctor":
 			items, allOK := s.runDoctor()
 			s.lastJSON = map[string]any{"checks": items, "ok": allOK}
-			printJSONMode(s.lastJSON, s.pretty)
+			s.printData(s.lastJSON)
 			if allOK {
 				s.setStatus(true, "ok", "doctor checks passed")
 			} else {
 				s.setStatus(false, "doctor_failed", "doctor checks found failures")
 			}
+		case strings.HasPrefix(text, "/view "):
+			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(text, "/view ")))
+			if mode != "human" && mode != "json" {
+				fmt.Println("usage: /view human|json")
+				s.setStatus(false, "invalid_input", "invalid view mode")
+				continue
+			}
+			s.viewMode = mode
+			fmt.Printf("view mode: %s\n", s.viewMode)
+			s.setStatus(true, "ok", "view mode switched")
 		case text == "/reload-config":
 			cfg := appconfig.Load()
 			s.applyConfig(cfg)
@@ -947,17 +1054,19 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "health checked")
 		case text == "/cancel":
 			out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
+				suggestRetry("/cancel")
 				s.setErrStatus(err)
 				continue
 			}
+			s.audit("cancel", "requested")
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "cancel requested")
 		case strings.HasPrefix(text, "/history"):
 			parts := strings.Fields(text)
@@ -1014,6 +1123,7 @@ func main() {
 				filtered := filterEventsByTime(s.eventLog, since, until)
 				if err := saveEvents(path, format, filtered); err != nil {
 					fmt.Printf("[save-error] %v\n", err)
+					suggestRetry(text)
 					s.setErrStatus(err)
 					continue
 				}
@@ -1035,7 +1145,7 @@ func main() {
 			if start < 0 {
 				start = 0
 			}
-			printJSONMode(s.eventLog[start:], s.pretty)
+			s.printData(s.eventLog[start:])
 			s.setStatus(true, "ok", "events listed")
 		case text == "/pending" || strings.HasPrefix(text, "/pending "):
 			parts := strings.Fields(text)
@@ -1060,9 +1170,45 @@ func main() {
 			}
 			if limit <= 1 {
 				fmt.Printf("pending approval id: %v\n", items[0]["approval_id"])
-				printJSONMode(items[0], s.pretty)
+				s.printData(items[0])
 			} else {
-				printJSONMode(items, s.pretty)
+				s.printData(items)
+			}
+			s.pendingCache = items
+			if idx, ok := promptIndex(reader, "select pending index to approve/deny", len(items)); ok {
+				chosen := items[idx-1]
+				if id, _ := chosen["approval_id"].(string); id != "" {
+					fmt.Printf("selected pending approval: %s\n", id)
+					fmt.Print("action [a=approve,d=deny,Enter skip]: ")
+					if reader.Scan() {
+						act := strings.TrimSpace(strings.ToLower(reader.Text()))
+						if act == "a" {
+							out, err := s.confirmApproval(id, true)
+							if err != nil {
+								fmt.Printf("[approval-error] %v\n", err)
+								suggestRetry("/approve " + id)
+								s.setErrStatus(err)
+							} else {
+								s.audit("approve", "approval_id="+id)
+								s.lastJSON = out
+								s.printData(out)
+								s.setStatus(true, "ok", "approval confirmed")
+							}
+						} else if act == "d" {
+							out, err := s.confirmApproval(id, false)
+							if err != nil {
+								fmt.Printf("[approval-error] %v\n", err)
+								suggestRetry("/deny " + id)
+								s.setErrStatus(err)
+							} else {
+								s.audit("deny", "approval_id="+id)
+								s.lastJSON = out
+								s.printData(out)
+								s.setStatus(true, "ok", "approval denied")
+							}
+						}
+					}
+				}
 			}
 			s.setStatus(true, "ok", "pending approval found")
 		case text == "/approve" || strings.HasPrefix(text, "/approve "):
@@ -1086,11 +1232,13 @@ func main() {
 			out, err := s.confirmApproval(id, true)
 			if err != nil {
 				fmt.Printf("[approval-error] %v\n", err)
+				suggestRetry("/approve " + id)
 				s.setErrStatus(err)
 				continue
 			}
+			s.audit("approve", "approval_id="+id)
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "approval confirmed")
 		case text == "/deny" || strings.HasPrefix(text, "/deny "):
 			id := strings.TrimSpace(strings.TrimPrefix(text, "/deny "))
@@ -1113,11 +1261,13 @@ func main() {
 			out, err := s.confirmApproval(id, false)
 			if err != nil {
 				fmt.Printf("[approval-error] %v\n", err)
+				suggestRetry("/deny " + id)
 				s.setErrStatus(err)
 				continue
 			}
+			s.audit("deny", "approval_id="+id)
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "approval denied")
 		case strings.HasPrefix(text, "/bookmark "):
 			parts := strings.Fields(text)
@@ -1229,6 +1379,7 @@ func main() {
 			}
 			if err := os.WriteFile(path, bs, 0o644); err != nil {
 				fmt.Printf("[save-error] %v\n", err)
+				suggestRetry("/save " + path)
 				s.setErrStatus(err)
 				continue
 			}
@@ -1257,7 +1408,7 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "tools listed")
 		case strings.HasPrefix(text, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
@@ -1273,7 +1424,7 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "tool schema loaded")
 		case strings.HasPrefix(text, "/sessions"):
 			parts := strings.Fields(text)
@@ -1302,7 +1453,14 @@ func main() {
 				}
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
+			if idx, ok := promptIndex(reader, "select session index to switch", len(s.lastSessions)); ok {
+				s.session = s.lastSessions[idx-1]
+				s.lastShowSession = s.session
+				s.lastShowOffset = 0
+				_ = s.saveRuntimeState()
+				fmt.Printf("session switched: %s\n", s.session)
+			}
 			s.setStatus(true, "ok", "sessions listed")
 		case strings.HasPrefix(text, "/pick "):
 			idx, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(text, "/pick ")))
@@ -1350,7 +1508,13 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
+			if msgs, ok := out["messages"].([]any); ok {
+				_ = msgs
+				if idx, choose := promptIndex(reader, "select message index to copy (hint only)", len(msgs)); choose {
+					fmt.Printf("selected message index: %d\n", idx)
+				}
+			}
 			s.setStatus(true, "ok", "show loaded")
 		case text == "/next":
 			s.lastShowOffset += s.lastShowLimit
@@ -1362,7 +1526,7 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "next page loaded")
 		case text == "/prev":
 			s.lastShowOffset -= s.lastShowLimit
@@ -1376,7 +1540,7 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "prev page loaded")
 		case strings.HasPrefix(text, "/stats"):
 			parts := strings.Fields(text)
@@ -1391,7 +1555,7 @@ func main() {
 				continue
 			}
 			s.lastJSON = out["stats"]
-			printJSONMode(out["stats"], s.pretty)
+			s.printData(out["stats"])
 			s.setStatus(true, "ok", "stats loaded")
 		case strings.HasPrefix(text, "/gateway "):
 			parts := strings.Fields(text)
@@ -1409,7 +1573,7 @@ func main() {
 					continue
 				}
 				s.lastJSON = out
-				printJSONMode(out, s.pretty)
+				s.printData(out)
 				s.setStatus(true, "ok", "gateway status loaded")
 			case "enable", "disable":
 				out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
@@ -1419,7 +1583,7 @@ func main() {
 					continue
 				}
 				s.lastJSON = out
-				printJSONMode(out, s.pretty)
+				s.printData(out)
 				s.setStatus(true, "ok", "gateway action applied")
 			default:
 				fmt.Println("usage: /gateway status|enable|disable")
@@ -1433,8 +1597,42 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
 			s.setStatus(true, "ok", "config loaded")
+		case text == "/config tui":
+			cfg := appconfig.Load()
+			src := map[string]string{
+				"ws_base":   "config.ini",
+				"http_base": "config.ini",
+				"view_mode": "config.ini",
+			}
+			if strings.TrimSpace(os.Getenv("AGENT_API_BASE")) != "" {
+				src["ws_base"] = "env"
+			}
+			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) != "" {
+				src["http_base"] = "env"
+			}
+			if strings.TrimSpace(os.Getenv("AGENT_UI_TUI_VIEW_MODE")) != "" {
+				src["view_mode"] = "env"
+			}
+			out := map[string]any{
+				"effective": map[string]any{
+					"ws_base": s.wsBase, "http_base": s.httpBase, "view_mode": s.viewMode,
+					"ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second),
+					"ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second),
+					"ws_reconnect_max":        s.wsMaxReconnect,
+					"history_max_lines":       s.historyMaxLines,
+					"event_max_items":         s.eventMaxItems,
+					"auto_doctor":             s.autoDoctor,
+				},
+				"configured": map[string]any{
+					"ws_base": cfg.UITUIWSBase, "http_base": cfg.UITUIHTTPBase, "view_mode": cfg.UITUIViewMode,
+				},
+				"source": src,
+			}
+			s.lastJSON = out
+			s.printData(out)
+			s.setStatus(true, "ok", "ui-tui config shown")
 		case strings.HasPrefix(text, "/config set "):
 			parts := strings.SplitN(strings.TrimPrefix(text, "/config set "), " ", 2)
 			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
@@ -1451,7 +1649,8 @@ func main() {
 				continue
 			}
 			s.lastJSON = out
-			printJSONMode(out, s.pretty)
+			s.printData(out)
+			s.audit("config_set", "key="+key)
 			s.setStatus(true, "ok", "config updated")
 		default:
 			if err := s.sendTurn(text, s.addEvent); err != nil {

@@ -52,6 +52,8 @@
   - 审批确认直连 API（不依赖模型回合）：`/v1/ui/approval/confirm`
   - 错误分类码（`network/timeout/auth/request/server/unknown`）
   - 本地历史与事件日志滚动上限，避免无界增长
+  - 启动自动 doctor 预检（可通过 `--no-doctor` 或 `[ui-tui] auto_doctor=false` 关闭）
+  - 关键操作审计日志（approve/deny/cancel/config set）
 
 ## 4. 测试策略
 
@@ -59,6 +61,7 @@
 - CLI 命令回归：`internal/cli/chat_test.go`
 - Web 构建自测：`npm --prefix web run build`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
+- ui-tui 发布脚本：`./ui-tui/release.sh <version>`
 
 ## 5. 运维文档
 

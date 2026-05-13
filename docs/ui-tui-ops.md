@@ -36,6 +36,7 @@
 - 配置文件：`config/config.ini` 的 `[ui-tui]` 段。
 - 运行时重载：`/reload-config`。
 - 重载后可用 `/status` 与提示符确认当前状态。
+- 视图模式切换：`/view human|json`。
 
 ## 4. 状态文件修复
 
@@ -49,8 +50,14 @@
 - 全量测试：`go test ./...`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
 - 运行时预检：`/doctor`（检查 health、session detail、approval confirm、ws 握手、配置生效）
+- 启动时默认自动运行 doctor，可通过 `--no-doctor` 或 `[ui-tui] auto_doctor=false` 关闭。
 
-## 6. 升级兼容检查
+## 6. 审计日志
+
+- 审计文件：`~/.agent-daemon/ui-tui-audit.log`
+- 记录操作：`approve`、`deny`、`cancel`、`config set`
+- 用途：追踪敏感操作与排障复盘
+## 7. 升级兼容检查
 
 - ui-tui 审批快捷命令依赖后端接口：`POST /v1/ui/approval/confirm`。
 - 升级后可执行以下探针确认接口已存在：
