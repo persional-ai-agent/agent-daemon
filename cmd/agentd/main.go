@@ -640,6 +640,13 @@ func main() {
 		skills := fs.String("skills", "", "comma-separated skill names to preload")
 		_ = fs.Parse(os.Args[2:])
 		runChat(cfg, *message, *sessionID, *skills)
+	case "tui":
+		fs := flag.NewFlagSet("tui", flag.ExitOnError)
+		message := fs.String("message", "", "first message to send")
+		sessionID := fs.String("session", uuid.NewString(), "session id")
+		skills := fs.String("skills", "", "comma-separated skill names to preload")
+		_ = fs.Parse(os.Args[2:])
+		runTUI(cfg, *message, *sessionID, *skills)
 	case "serve":
 		runServe(cfg)
 	case "tools":
@@ -666,6 +673,34 @@ func main() {
 		runSessions(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
+	}
+}
+
+func runTUI(cfg config.Config, first string, sessionID ...string) {
+	eng, cronStore := mustBuildEngine(cfg)
+	id := uuid.NewString()
+	skills := ""
+	if len(sessionID) > 0 && sessionID[0] != "" {
+		id = sessionID[0]
+	}
+	if len(sessionID) > 1 && sessionID[1] != "" {
+		skills = sessionID[1]
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if cfg.CronEnabled && cronStore != nil {
+		s := &cronrunner.Scheduler{
+			Store:          cronStore,
+			Engine:         eng,
+			Tick:           time.Duration(cfg.CronTickSeconds) * time.Second,
+			MaxConcurrency: cfg.CronMaxConcurrency,
+		}
+		if err := s.Start(ctx); err != nil {
+			log.Printf("cron scheduler start failed: %v", err)
+		}
+	}
+	if err := cli.RunTUI(ctx, eng, id, first, skills); err != nil {
+		log.Fatal(err)
 	}
 }
 

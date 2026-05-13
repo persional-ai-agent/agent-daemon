@@ -37,6 +37,7 @@
 - 文件：`internal/cli/chat.go`
 - 模式：单循环读取输入 + slash 命令分发 + `Engine.Run` 对话执行
 - slash 命令扩展：集中在 `handleSlashCommand`
+- 增强入口：`agentd tui` -> `internal/cli/tui.go`，通过 `EventSink` 输出实时事件轨迹（turn/tool/completed/error）
 
 ## 4. 测试策略
 

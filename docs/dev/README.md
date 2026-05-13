@@ -337,3 +337,4 @@
 - `210-summary-frontend-tui-parity-phase4-detail-pages.md`：Frontend 与 TUI 对齐 Phase 4（详情页与可点击交互）
 - `211-summary-frontend-tui-parity-phase5-config-gateway-actions.md`：Frontend 与 TUI 对齐 Phase 5（配置与网关动作）
 - `212-summary-frontend-tui-parity-phase6-usability-and-docs.md`：Frontend 与 TUI 对齐 Phase 6（可用性增强与文档补齐）
+- `213-summary-frontend-tui-parity-phase7-tui-entry.md`：Frontend 与 TUI 对齐 Phase 7（独立 TUI 入口与实时事件轨迹）

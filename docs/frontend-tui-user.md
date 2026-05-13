@@ -34,6 +34,12 @@ npm run dev
 agentd chat
 ```
 
+进入增强 TUI 模式（带实时事件轨迹）：
+
+```bash
+agentd tui
+```
+
 常用命令：
 
 - `/help`：命令列表
