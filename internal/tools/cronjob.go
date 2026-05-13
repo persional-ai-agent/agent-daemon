@@ -53,7 +53,6 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 					"paused": map[string]any{"type": "boolean", "description": "Pause/resume the job (update only)"},
 					"limit":  map[string]any{"type": "integer", "description": "Limit for runs listing"},
 				},
-				"required": []string{"action"},
 			},
 		},
 	}
@@ -64,6 +63,9 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		return nil, errors.New("cron store not configured")
 	}
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
+	if action == "" {
+		action = "list"
+	}
 	switch action {
 	case "create":
 		prompt := strings.TrimSpace(strArg(args, "prompt"))
