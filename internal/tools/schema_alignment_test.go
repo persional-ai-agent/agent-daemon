@@ -130,6 +130,10 @@ func TestDelegateTaskSchemaDocumentsConditionalRequiredAndDefaults(t *testing.T)
 	if !reflect.DeepEqual(required, []string{"goal"}) {
 		t.Fatalf("delegate_task.tasks.items.required=%v, want [goal]", required)
 	}
+	anyOf, _ := delegateTaskParams()["anyOf"].([]any)
+	if len(anyOf) != 2 {
+		t.Fatalf("delegate_task.anyOf len=%d, want 2", len(anyOf))
+	}
 }
 
 func TestFeishuDriveReplyAndAddSchemasDocumentFileTypeDefault(t *testing.T) {
@@ -144,4 +148,39 @@ func TestFeishuDriveReplyAndAddSchemasDocumentFileTypeDefault(t *testing.T) {
 	}
 	check("feishu_drive_reply_comment", feishuDriveReplyCommentParams())
 	check("feishu_drive_add_comment", feishuDriveAddCommentParams())
+}
+
+func TestSchemaMachineReadableBounds(t *testing.T) {
+	assertBound := func(name string, field map[string]any, key string, want int) {
+		t.Helper()
+		got, _ := field[key].(int)
+		if got != want {
+			t.Fatalf("%s %s=%d, want %d", name, key, got, want)
+		}
+	}
+
+	tp, _ := terminalParams()["properties"].(map[string]any)
+	timeout, _ := tp["timeout"].(map[string]any)
+	ttl, _ := tp["approval_ttl_seconds"].(map[string]any)
+	assertBound("terminal.timeout", timeout, "minimum", 0)
+	assertBound("terminal.approval_ttl_seconds", ttl, "minimum", 0)
+
+	pp, _ := processParams()["properties"].(map[string]any)
+	limit, _ := pp["limit"].(map[string]any)
+	waitTimeout, _ := pp["timeout_seconds"].(map[string]any)
+	assertBound("process.limit", limit, "minimum", 1)
+	assertBound("process.timeout_seconds", waitTimeout, "minimum", 1)
+
+	sp, _ := sessionSearchParams()["properties"].(map[string]any)
+	sLimit, _ := sp["limit"].(map[string]any)
+	assertBound("session_search.limit", sLimit, "minimum", 1)
+
+	wp, _ := webSearchParams()["properties"].(map[string]any)
+	wLimit, _ := wp["limit"].(map[string]any)
+	assertBound("web_search.limit", wLimit, "minimum", 1)
+	assertBound("web_search.limit", wLimit, "maximum", 20)
+
+	ap, _ := approvalParams()["properties"].(map[string]any)
+	aTTL, _ := ap["ttl_seconds"].(map[string]any)
+	assertBound("approval.ttl_seconds", aTTL, "minimum", 0)
 }
