@@ -338,3 +338,4 @@
 - `211-summary-frontend-tui-parity-phase5-config-gateway-actions.md`：Frontend 与 TUI 对齐 Phase 5（配置与网关动作）
 - `212-summary-frontend-tui-parity-phase6-usability-and-docs.md`：Frontend 与 TUI 对齐 Phase 6（可用性增强与文档补齐）
 - `213-summary-frontend-tui-parity-phase7-tui-entry.md`：Frontend 与 TUI 对齐 Phase 7（独立 TUI 入口与实时事件轨迹）
+- `214-summary-frontend-tui-parity-phase8-standalone-ui-tui.md`：Frontend 与 TUI 对齐 Phase 8（独立 ui-tui 子工程）

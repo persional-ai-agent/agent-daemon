@@ -39,6 +39,13 @@
 - slash 命令扩展：集中在 `handleSlashCommand`
 - 增强入口：`agentd tui` -> `internal/cli/tui.go`，通过 `EventSink` 输出实时事件轨迹（turn/tool/completed/error）
 
+## 3.1 独立 TUI 子工程
+
+- 目录：`ui-tui/`
+- 运行方式：Node.js + `ws`，连接 `/v1/chat/ws`
+- 入口：`ui-tui/src/index.mjs`
+- 目标：提供独立于 `agentd` 主进程交互循环的 TUI 客户端基座
+
 ## 4. 测试策略
 
 - API 回归：`internal/api/server_test.go`

@@ -40,6 +40,14 @@ agentd chat
 agentd tui
 ```
 
+使用独立 TUI 子工程：
+
+```bash
+cd ui-tui
+npm install
+npm start
+```
+
 常用命令：
 
 - `/help`：命令列表
