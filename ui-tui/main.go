@@ -36,6 +36,7 @@ func printHelp() {
 	fmt.Println("/tools                list tools")
 	fmt.Println("/tool <name>          show tool schema")
 	fmt.Println("/sessions [n]         list recent sessions")
+	fmt.Println("/pick <index>         switch session from last /sessions result")
 	fmt.Println("/show [sid] [o] [l]   show session messages")
 	fmt.Println("/next                 show next page (based on last /show)")
 	fmt.Println("/prev                 show previous page (based on last /show)")
@@ -187,6 +188,7 @@ func main() {
 	lastShowSession := sessionID
 	lastShowOffset := 0
 	lastShowLimit := 20
+	lastSessions := make([]string, 0)
 	fmt.Printf("session: %s\n", sessionID)
 	fmt.Printf("ws: %s\n", apiBase)
 	fmt.Printf("http: %s\n", httpBase)
@@ -327,8 +329,36 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
+			lastSessions = lastSessions[:0]
+			if rows, ok := out["sessions"].([]any); ok {
+				for _, row := range rows {
+					m, ok := row.(map[string]any)
+					if !ok {
+						continue
+					}
+					if sid, ok := m["session_id"].(string); ok && strings.TrimSpace(sid) != "" {
+						lastSessions = append(lastSessions, sid)
+					}
+				}
+			}
 			lastJSON = out
 			printJSONMode(out, pretty)
+			continue
+		case strings.HasPrefix(text, "/pick "):
+			arg := strings.TrimSpace(strings.TrimPrefix(text, "/pick "))
+			idx, err := strconv.Atoi(arg)
+			if err != nil || idx <= 0 {
+				fmt.Println("usage: /pick <index>")
+				continue
+			}
+			if idx > len(lastSessions) {
+				fmt.Printf("index out of range, max=%d\n", len(lastSessions))
+				continue
+			}
+			sessionID = lastSessions[idx-1]
+			lastShowSession = sessionID
+			lastShowOffset = 0
+			fmt.Printf("session switched: %s\n", sessionID)
 			continue
 		case strings.HasPrefix(text, "/show"):
 			parts := strings.Fields(text)

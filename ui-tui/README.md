@@ -30,6 +30,7 @@ go run .
 - `/tools` 列出工具
 - `/tool <name>` 查看工具 schema
 - `/sessions [n]` 查看最近会话
+- `/pick <index>` 从最近一次 `/sessions` 结果中按序号切换会话
 - `/show [sid] [offset] [limit]` 分页查看会话消息
 - `/next` / `/prev` 基于最近一次 `/show` 做翻页
 - `/stats [sid]` 查看会话统计
