@@ -35,4 +35,7 @@ go run .
 - `/gateway status|enable|disable` 网关状态与启停
 - `/config get` 查看配置快照
 - `/config set <section.key> <value>` 设置配置项
+- `/pretty on|off` 开关 JSON 美化输出
+- `/last` 查看最近一次 JSON 响应
+- `/save <file>` 保存最近一次 JSON 响应到文件
 - `/quit` 或 `/exit` 退出

@@ -43,6 +43,9 @@ func printHelp() {
 	fmt.Println("/gateway disable      disable gateway")
 	fmt.Println("/config get           show config snapshot")
 	fmt.Println("/config set k v       set config key/value")
+	fmt.Println("/pretty on|off        enable/disable pretty json")
+	fmt.Println("/last                 print last json payload")
+	fmt.Println("/save <file>          save last json payload")
 	fmt.Println("/quit                 exit")
 }
 
@@ -164,10 +167,21 @@ func printJSON(v any) {
 	fmt.Println(string(bs))
 }
 
+func printJSONMode(v any, pretty bool) {
+	if pretty {
+		printJSON(v)
+		return
+	}
+	bs, _ := json.Marshal(v)
+	fmt.Println(string(bs))
+}
+
 func main() {
 	apiBase := getenvOr("AGENT_API_BASE", "ws://127.0.0.1:8080/v1/chat/ws")
 	httpBase := getenvOr("AGENT_HTTP_BASE", deriveHTTPBase(apiBase))
 	sessionID := getenvOr("AGENT_SESSION_ID", uuid.NewString())
+	pretty := true
+	var lastJSON any
 	fmt.Printf("session: %s\n", sessionID)
 	fmt.Printf("ws: %s\n", apiBase)
 	fmt.Printf("http: %s\n", httpBase)
@@ -230,13 +244,56 @@ func main() {
 			httpBase = strings.TrimRight(next, "/")
 			fmt.Printf("http switched: %s\n", httpBase)
 			continue
+		case text == "/last":
+			if lastJSON == nil {
+				fmt.Println("no last json payload")
+				continue
+			}
+			printJSONMode(lastJSON, pretty)
+			continue
+		case strings.HasPrefix(text, "/save "):
+			path := strings.TrimSpace(strings.TrimPrefix(text, "/save "))
+			if path == "" {
+				fmt.Println("usage: /save <file>")
+				continue
+			}
+			if lastJSON == nil {
+				fmt.Println("no last json payload")
+				continue
+			}
+			var bs []byte
+			if pretty {
+				bs, _ = json.MarshalIndent(lastJSON, "", "  ")
+			} else {
+				bs, _ = json.Marshal(lastJSON)
+			}
+			if err := os.WriteFile(path, bs, 0o644); err != nil {
+				fmt.Printf("[save-error] %v\n", err)
+				continue
+			}
+			fmt.Printf("saved: %s\n", path)
+			continue
+		case strings.HasPrefix(text, "/pretty "):
+			mode := strings.TrimSpace(strings.TrimPrefix(text, "/pretty "))
+			switch mode {
+			case "on":
+				pretty = true
+				fmt.Println("pretty json: on")
+			case "off":
+				pretty = false
+				fmt.Println("pretty json: off")
+			default:
+				fmt.Println("usage: /pretty on|off")
+			}
+			continue
 		case text == "/tools":
 			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/tools", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		case strings.HasPrefix(text, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
@@ -249,7 +306,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		case strings.HasPrefix(text, "/sessions"):
 			parts := strings.Fields(text)
@@ -264,7 +322,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		case strings.HasPrefix(text, "/show"):
 			parts := strings.Fields(text)
@@ -289,7 +348,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		case strings.HasPrefix(text, "/stats"):
 			parts := strings.Fields(text)
@@ -302,7 +362,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out["stats"])
+			lastJSON = out["stats"]
+			printJSONMode(out["stats"], pretty)
 			continue
 		case strings.HasPrefix(text, "/gateway "):
 			parts := strings.Fields(text)
@@ -317,14 +378,16 @@ func main() {
 					fmt.Printf("[http-error] %v\n", err)
 					continue
 				}
-				printJSON(out)
+				lastJSON = out
+				printJSONMode(out, pretty)
 			case "enable", "disable":
 				out, err := httpJSON(http.MethodPost, httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
 				if err != nil {
 					fmt.Printf("[http-error] %v\n", err)
 					continue
 				}
-				printJSON(out)
+				lastJSON = out
+				printJSONMode(out, pretty)
 			default:
 				fmt.Println("usage: /gateway status|enable|disable")
 			}
@@ -335,7 +398,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		case strings.HasPrefix(text, "/config set "):
 			parts := strings.SplitN(strings.TrimPrefix(text, "/config set "), " ", 2)
@@ -350,7 +414,8 @@ func main() {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
 			}
-			printJSON(out)
+			lastJSON = out
+			printJSONMode(out, pretty)
 			continue
 		default:
 			if err := sendTurn(apiBase, sessionID, text); err != nil {
