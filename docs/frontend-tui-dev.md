@@ -22,6 +22,12 @@
 - `POST /v1/ui/gateway/action`
 - `POST /v1/ui/approval/confirm`
 
+`/v1/ui/*` 响应契约（冻结）：
+
+- Header：`X-Agent-UI-API-Version`、`X-Agent-UI-API-Compat`
+- Success：`{ ok: true, api_version, compat, ...payload }`
+- Error：`{ ok: false, error: { code, message }, api_version, compat }`
+
 ## 2. 后端注入点
 
 `internal/api.Server` 通过回调注入管理面能力：

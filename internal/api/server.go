@@ -86,18 +86,50 @@ type sessionDetailStore interface {
 	SessionStats(sessionID string) (map[string]any, error)
 }
 
+const (
+	uiAPIVersion = "v1"
+	uiCompat     = "2026-05-13"
+)
+
+func writeUIHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Agent-UI-API-Version", uiAPIVersion)
+	w.Header().Set("X-Agent-UI-API-Compat", uiCompat)
+}
+
+func writeUIJSON(w http.ResponseWriter, status int, payload map[string]any) {
+	writeUIHeaders(w)
+	w.WriteHeader(status)
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["api_version"] = uiAPIVersion
+	payload["compat"] = uiCompat
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeUIError(w http.ResponseWriter, status int, code, message string) {
+	writeUIJSON(w, status, map[string]any{
+		"ok": false,
+		"error": map[string]any{
+			"code":    code,
+			"message": message,
+		},
+	})
+}
+
 func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.Registry == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	names := s.Engine.Registry.Names()
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
 		"count": namesCount(names),
 		"tools": names,
 	})
@@ -105,11 +137,11 @@ func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUIToolSchema(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.Registry == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/v1/ui/tools/")
@@ -120,26 +152,28 @@ func (s *Server) handleUIToolSchema(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSuffix(path, "/schema")
 	name = strings.TrimSpace(strings.Trim(name, "/"))
 	if name == "" {
-		http.Error(w, "tool name required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "tool name required")
 		return
 	}
 	for _, schema := range s.Engine.Registry.Schemas() {
 		if schema.Function.Name == name {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(schema)
+			writeUIJSON(w, http.StatusOK, map[string]any{
+				"ok":     true,
+				"schema": schema,
+			})
 			return
 		}
 	}
-	http.Error(w, "tool not found", http.StatusNotFound)
+	writeUIError(w, http.StatusNotFound, "not_found", "tool not found")
 }
 
 func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.SessionStore == nil {
-		http.Error(w, "session store unavailable", http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
 		return
 	}
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	limit := 20
@@ -150,16 +184,16 @@ func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
 	}
 	lister, ok := s.Engine.SessionStore.(recentSessionsStore)
 	if !ok {
-		http.Error(w, "session listing not supported", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session listing not supported")
 		return
 	}
 	rows, err := lister.ListRecentSessions(limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
 		"count":    len(rows),
 		"sessions": rows,
 	})
@@ -167,21 +201,21 @@ func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUISessionDetail(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.SessionStore == nil {
-		http.Error(w, "session store unavailable", http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
 		return
 	}
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	sessionID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/ui/sessions/"))
 	if sessionID == "" {
-		http.Error(w, "session id required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session id required")
 		return
 	}
 	detailer, ok := s.Engine.SessionStore.(sessionDetailStore)
 	if !ok {
-		http.Error(w, "session detail not supported", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session detail not supported")
 		return
 	}
 	offset := 0
@@ -198,16 +232,16 @@ func (s *Server) handleUISessionDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	msgs, err := detailer.LoadMessagesPage(sessionID, offset, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	stats, err := detailer.SessionStats(sessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
 		"session_id": sessionID,
 		"offset":     offset,
 		"limit":      limit,
@@ -219,15 +253,17 @@ func (s *Server) handleUISessionDetail(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUIConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	if s.ConfigSnapshotFn == nil {
-		http.Error(w, "config snapshot unavailable", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "config snapshot unavailable")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.ConfigSnapshotFn())
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"snapshot": s.ConfigSnapshotFn(),
+	})
 }
 
 type uiConfigSetRequest struct {
@@ -237,43 +273,47 @@ type uiConfigSetRequest struct {
 
 func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	if s.ConfigUpdateFn == nil {
-		http.Error(w, "config update unavailable", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "config update unavailable")
 		return
 	}
 	var req uiConfigSetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	req.Key = strings.TrimSpace(req.Key)
 	if req.Key == "" {
-		http.Error(w, "key required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "key required")
 		return
 	}
 	res, err := s.ConfigUpdateFn(req.Key, req.Value)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(res)
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": res,
+	})
 }
 
 func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	if s.GatewayStatusFn == nil {
-		http.Error(w, "gateway status unavailable", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "gateway status unavailable")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.GatewayStatusFn())
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"status": s.GatewayStatusFn(),
+	})
 }
 
 type uiGatewayActionRequest struct {
@@ -288,54 +328,56 @@ type uiApprovalConfirmRequest struct {
 
 func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	if s.GatewayActionFn == nil {
-		http.Error(w, "gateway action unavailable", http.StatusNotImplemented)
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "gateway action unavailable")
 		return
 	}
 	var req uiGatewayActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	req.Action = strings.TrimSpace(req.Action)
 	if req.Action == "" {
-		http.Error(w, "action required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "action required")
 		return
 	}
 	res, err := s.GatewayActionFn(req.Action)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(res)
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": res,
+	})
 }
 
 func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	if s.Engine == nil || s.Engine.Registry == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	var req uiApprovalConfirmRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	req.SessionID = strings.TrimSpace(req.SessionID)
 	req.ApprovalID = strings.TrimSpace(req.ApprovalID)
 	if req.SessionID == "" {
-		http.Error(w, "session_id required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
 		return
 	}
 	if req.ApprovalID == "" {
-		http.Error(w, "approval_id required", http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "approval_id required")
 		return
 	}
 	raw := s.Engine.Registry.Dispatch(r.Context(), "approval", map[string]any{
@@ -353,15 +395,17 @@ func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request)
 	})
 	out := map[string]any{}
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
-		http.Error(w, e, http.StatusBadRequest)
+		writeUIError(w, http.StatusBadRequest, "tool_error", e)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": out,
+	})
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
