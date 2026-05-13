@@ -34,6 +34,11 @@ export function App() {
   const [timeline, setTimeline] = useState<Array<{ ts: string; event: string; data: unknown }>>([]);
   const [streamStatus, setStreamStatus] = useState<StreamReconnectStatus>("connecting");
   const [streamTransport, setStreamTransport] = useState<StreamTransport>("ws");
+  const [activeTransport, setActiveTransport] = useState<StreamTransport>("ws");
+  const [lastTurnID, setLastTurnID] = useState("");
+  const [reconnectCount, setReconnectCount] = useState(0);
+  const [lastErrorCode, setLastErrorCode] = useState("ok");
+  const [fallbackHint, setFallbackHint] = useState("");
   const [reconnectEnabled, setReconnectEnabled] = useState(true);
   const [reconnectMax, setReconnectMax] = useState(2);
   const [timeoutAction, setTimeoutAction] = useState<StreamTimeoutAction>("wait");
@@ -59,6 +64,11 @@ export function App() {
     setError("");
     setTimeline([]);
     setStreamStatus("connecting");
+    setActiveTransport(streamTransport);
+    setFallbackHint("");
+    setReconnectCount(0);
+    const thisTurnID = `web-${Math.random().toString(36).slice(2)}`;
+    setLastTurnID(thisTurnID);
     try {
       if (streamMode) {
         const seen = new Set<string>();
@@ -67,6 +77,10 @@ export function App() {
           if (seen.has(dedupeKey)) return;
           seen.add(dedupeKey);
           setTimeline((prev) => prev.concat([{ ts: new Date().toISOString(), event: evt.event, data: evt.data }]));
+          if (evt.event === "transport_fallback" && evt.data && typeof evt.data === "object") {
+            const d = evt.data as any;
+            setFallbackHint(`fallback ${d.from}->${d.to} at ${d.at} (${d.reason})`);
+          }
           if (evt.event === "result" && typeof evt.data === "object" && evt.data !== null) {
             const finalResponse = (evt.data as any).final_response;
             if (typeof finalResponse === "string") {
@@ -81,7 +95,13 @@ export function App() {
           readTimeoutMs: Math.max(1, readTimeoutSec) * 1000,
           turnTimeoutMs: Math.max(1, turnTimeoutSec) * 1000,
           timeoutAction,
-          onStatus: setStreamStatus
+          onStatus: (s) => {
+            setStreamStatus(s);
+            if (s === "resumed" || s === "degraded") {
+              setReconnectCount((n) => n + 1);
+            }
+          },
+          onTransport: setActiveTransport
         });
       } else {
         const res = await sendChat(input, sessionID);
@@ -90,6 +110,7 @@ export function App() {
     } catch (e) {
       const n = normalizeAPIError(e instanceof Error ? e.message : String(e));
       setError(`[${n.code}] ${n.message}`);
+      setLastErrorCode(n.code);
       setStreamStatus("failed");
     } finally {
       setBusy(false);
@@ -110,6 +131,33 @@ export function App() {
   async function reconnectNow() {
     if (!streamMode || busy || !input.trim()) return;
     await onSend();
+  }
+
+  function exportDiagnostics() {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      session_id: sessionID,
+      turn_id: lastTurnID,
+      stream_mode: streamMode,
+      configured_transport: streamTransport,
+      active_transport: activeTransport,
+      reconnect_status: streamStatus,
+      reconnect_count: reconnectCount,
+      timeout_action: timeoutAction,
+      read_timeout_sec: readTimeoutSec,
+      turn_timeout_sec: turnTimeoutSec,
+      fallback_hint: fallbackHint,
+      last_error_code: lastErrorCode,
+      error_text: error,
+      timeline
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `diagnostics-${sessionID}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(href);
   }
 
   useEffect(() => {
@@ -226,9 +274,10 @@ export function App() {
             )}
             {streamMode && (
               <div className={`conn-state conn-${streamStatus}`}>
-                连接状态：{streamStatus} / transport={streamTransport}
+                连接状态：{streamStatus} / transport={activeTransport}
               </div>
             )}
+            {streamMode && fallbackHint && <div className="fallback-note">{fallbackHint}</div>}
             {streamMode && (
               <div className="control-box">
                 <h3>重连控制</h3>
@@ -260,7 +309,21 @@ export function App() {
                     </select>
                   </label>
                   <button onClick={reconnectNow} disabled={busy || !input.trim()}>手动重连</button>
+                  <button onClick={exportDiagnostics}>导出诊断包</button>
                 </div>
+              </div>
+            )}
+            {streamMode && (
+              <div className="control-box">
+                <h3>实时诊断</h3>
+                <pre>{JSON.stringify({
+                  active_transport: activeTransport,
+                  reconnect_status: streamStatus,
+                  reconnect_count: reconnectCount,
+                  last_error_code: lastErrorCode,
+                  last_turn_id: lastTurnID,
+                  fallback_hint: fallbackHint || null
+                }, null, 2)}</pre>
               </div>
             )}
             <div className="row">

@@ -161,3 +161,19 @@ pre {
 .control-box select {
   min-width: 110px;
 }
+
+.fallback-note {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 8px 10px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.control-box pre {
+  background: #fafaf9;
+  border: 1px solid var(--line);
+  padding: 10px;
+  border-radius: 4px;
+}

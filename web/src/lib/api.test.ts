@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAPIError, streamEventDedupeKey } from "./api";
+import { createTransportFallbackEvent, normalizeAPIError, streamEventDedupeKey } from "./api";
 
 describe("normalizeAPIError", () => {
   it("prefers structured error fields", () => {
@@ -35,5 +35,18 @@ describe("ws payload shape", () => {
     const a = { event: "resumed", data: { resumed: true, turn_id: "t1" } };
     const b = { event: "session", data: { session_id: "s1" } };
     expect(streamEventDedupeKey(a)).not.toBe(streamEventDedupeKey(b));
+  });
+});
+
+describe("createTransportFallbackEvent", () => {
+  it("creates schema-stable fallback event", () => {
+    const out = createTransportFallbackEvent("ws", "sse", "WS_CLOSED", "2026-05-13T10:00:00.000Z");
+    expect(out.event).toBe("transport_fallback");
+    expect(out.data).toEqual({
+      from: "ws",
+      to: "sse",
+      reason: "WS_CLOSED",
+      at: "2026-05-13T10:00:00.000Z"
+    });
   });
 });

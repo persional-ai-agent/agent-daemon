@@ -372,3 +372,4 @@
 - `245-summary-ui-tui-reconnect-controls.md`：ui-tui 重连状态可视化与人工恢复控制
 - `246-summary-web-reconnect-controls.md`：Web Chat 重连状态可视化与控制对齐
 - `247-summary-web-ws-primary-fallback-sse.md`：Web Chat 升级 WS 主通道并保留 SSE 降级
+- `248-summary-web-realtime-diagnostics-panel.md`：Web Chat 实时诊断面板与诊断包导出

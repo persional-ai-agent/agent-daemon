@@ -76,6 +76,23 @@ export type StreamEvent = {
   data: unknown;
 };
 
+export function createTransportFallbackEvent(
+  from: StreamTransport,
+  to: StreamTransport,
+  reason: string,
+  at?: string
+): StreamEvent {
+  return {
+    event: "transport_fallback",
+    data: {
+      from,
+      to,
+      reason,
+      at: at ?? new Date().toISOString()
+    }
+  };
+}
+
 export function streamEventDedupeKey(evt: StreamEvent): string {
   return `${evt.event}:${JSON.stringify(evt.data)}`;
 }
@@ -93,6 +110,7 @@ export type StreamChatOptions = {
   turnTimeoutMs?: number;
   timeoutAction?: StreamTimeoutAction;
   onStatus?: (status: StreamReconnectStatus) => void;
+  onTransport?: (transport: StreamTransport) => void;
 };
 
 async function streamOnce(
@@ -159,6 +177,7 @@ export async function streamChat(
   options?: StreamChatOptions
 ) {
   const transport = options?.transport ?? "ws";
+  options?.onTransport?.(transport);
   if (transport === "ws") {
     try {
       await streamChatWS(message, sessionID, onEvent, options);
@@ -167,6 +186,8 @@ export async function streamChat(
       if (!options?.fallbackToSSE) {
         throw e;
       }
+      options?.onTransport?.("sse");
+      onEvent(createTransportFallbackEvent("ws", "sse", e instanceof Error ? e.message : String(e)));
     }
   }
   await streamChatSSE(message, sessionID, onEvent, options);
