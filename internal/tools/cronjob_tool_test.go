@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,5 +46,13 @@ func TestCronjobDefaultActionList(t *testing.T) {
 	}
 	if count, _ := res["count"].(int); count < 1 {
 		t.Fatalf("expected at least one job in default list response: %+v", res)
+	}
+}
+
+func TestCronjobSchemaDescriptionIncludesRunActions(t *testing.T) {
+	schema := NewCronJobTool(nil).Schema()
+	desc := schema.Function.Description
+	if !strings.Contains(desc, "runs") || !strings.Contains(desc, "run_get") {
+		t.Fatalf("unexpected cronjob description: %q", desc)
 	}
 }

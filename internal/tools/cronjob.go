@@ -29,7 +29,7 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 		Type: "function",
 		Function: core.ToolSchemaDetail{
 			Name:        t.Name(),
-			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, update, pause, resume, remove, trigger.",
+			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, update, pause, resume, remove, trigger, runs, run_get.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
