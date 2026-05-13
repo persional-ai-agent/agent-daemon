@@ -20,7 +20,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	}
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	if action == "" {
-		return nil, errors.New("action required")
+		action = "list_guilds"
 	}
 
 	switch action {
@@ -193,6 +193,5 @@ func discordToolParams() map[string]any {
 			"content":    map[string]any{"type": "string"},
 			"message":    map[string]any{"type": "string"},
 		},
-		"required": []string{"action"},
 	}
 }

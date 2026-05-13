@@ -54,7 +54,7 @@ func (b *BuiltinTools) discordAdmin(ctx context.Context, args map[string]any, _ 
 	}
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	if action == "" {
-		return nil, errors.New("action required")
+		action = "list_guilds"
 	}
 	switch action {
 	case "list_guilds":
@@ -134,7 +134,5 @@ func discordAdminParams() map[string]any {
 			"name":       map[string]any{"type": "string"},
 			"topic":      map[string]any{"type": "string"},
 		},
-		"required": []string{"action"},
 	}
 }
-
