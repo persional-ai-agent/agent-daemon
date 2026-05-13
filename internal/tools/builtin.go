@@ -1821,7 +1821,17 @@ func processParams() map[string]any {
 		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
 		"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "description": "For action=wait, timeout seconds (default 60)."},
 		"input":           map[string]any{"type": "string", "description": "For action=write (required)."},
-	}, "required": []string{}}
+	}, "required": []string{}, "oneOf": []any{
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "list"}}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "status"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "poll"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "log"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "wait"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "stop"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "kill"}}, "required": []string{"session_id"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"const": "write"}}, "required": []string{"session_id", "input"}},
+		map[string]any{"not": map[string]any{"required": []string{"action"}}, "required": []string{"session_id"}},
+	}}
 }
 func processStatusParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}

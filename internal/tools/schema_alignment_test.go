@@ -251,3 +251,54 @@ func TestExternalToolSchemasMachineReadableBounds(t *testing.T) {
 		assertBound(tc.name+".page_size", pageSize, "maximum", 100)
 	}
 }
+
+func TestProcessSchemaOneOfConditionalRequirements(t *testing.T) {
+	oneOf, _ := processParams()["oneOf"].([]any)
+	if len(oneOf) < 9 {
+		t.Fatalf("process.oneOf len=%d, want at least 9", len(oneOf))
+	}
+}
+
+func TestRegistrySchemasLint(t *testing.T) {
+	registry := NewRegistry()
+	RegisterBuiltins(registry, NewProcessRegistry(t.TempDir()))
+	for _, schema := range registry.Schemas() {
+		params := schema.Function.Parameters
+		props, _ := params["properties"].(map[string]any)
+		if props == nil {
+			t.Fatalf("%s missing properties", schema.Function.Name)
+		}
+		if required, ok := params["required"].([]string); ok {
+			for _, k := range required {
+				if _, exists := props[k]; !exists {
+					t.Fatalf("%s required field %q missing from properties", schema.Function.Name, k)
+				}
+			}
+		}
+		for key, raw := range props {
+			field, _ := raw.(map[string]any)
+			if field == nil {
+				continue
+			}
+			if enum, ok := field["enum"]; ok {
+				switch vv := enum.(type) {
+				case []string:
+					if len(vv) == 0 {
+						t.Fatalf("%s.%s enum empty", schema.Function.Name, key)
+					}
+				case []any:
+					if len(vv) == 0 {
+						t.Fatalf("%s.%s enum empty", schema.Function.Name, key)
+					}
+				default:
+					t.Fatalf("%s.%s enum has unsupported type %T", schema.Function.Name, key, enum)
+				}
+			}
+			minV, minOK := field["minimum"].(int)
+			maxV, maxOK := field["maximum"].(int)
+			if minOK && maxOK && minV > maxV {
+				t.Fatalf("%s.%s minimum=%d > maximum=%d", schema.Function.Name, key, minV, maxV)
+			}
+		}
+	}
+}
