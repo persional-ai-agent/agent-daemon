@@ -114,3 +114,17 @@ export function getUIConfig() {
 export function getUIGatewayStatus() {
   return request<Record<string, unknown>>("/v1/ui/gateway/status");
 }
+
+export function setUIConfig(key: string, value: string) {
+  return request<Record<string, unknown>>("/v1/ui/config/set", {
+    method: "POST",
+    body: JSON.stringify({ key, value })
+  });
+}
+
+export function postUIGatewayAction(action: "enable" | "disable") {
+  return request<Record<string, unknown>>("/v1/ui/gateway/action", {
+    method: "POST",
+    body: JSON.stringify({ action })
+  });
+}

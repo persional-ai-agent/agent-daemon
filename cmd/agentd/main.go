@@ -6150,6 +6150,48 @@ func runServe(cfg config.Config) {
 				"installed":            status.Installed,
 			}
 		},
+		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
+			path := config.ConfigFilePath("")
+			if err := config.SaveConfigValue(path, key, value); err != nil {
+				return nil, err
+			}
+			return map[string]any{
+				"success": true,
+				"key":     key,
+				"value":   value,
+				"path":    path,
+			}, nil
+		},
+		GatewayActionFn: func(action string) (map[string]any, error) {
+			path := config.ConfigFilePath("")
+			switch strings.ToLower(strings.TrimSpace(action)) {
+			case "enable":
+				if err := config.SaveConfigValue(path, "gateway.enabled", "true"); err != nil {
+					return nil, err
+				}
+				cfg.GatewayEnabled = true
+			case "disable":
+				if err := config.SaveConfigValue(path, "gateway.enabled", "false"); err != nil {
+					return nil, err
+				}
+				cfg.GatewayEnabled = false
+			default:
+				return nil, fmt.Errorf("unsupported gateway action: %s", action)
+			}
+			status := gatewayStatus(cfg)
+			return map[string]any{
+				"success": true,
+				"action":  action,
+				"status": map[string]any{
+					"enabled":              status.Enabled,
+					"configured_platforms": status.ConfiguredPlatforms,
+					"supported_platforms":  status.SupportedPlatforms,
+					"running":              status.Running,
+					"pid":                  status.PID,
+					"log_path":             status.LogPath,
+				},
+			}, nil
+		},
 	}
 	srv := &http.Server{Addr: cfg.ListenAddr, Handler: apiSrv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("agent-daemon listening on %s", cfg.ListenAddr)

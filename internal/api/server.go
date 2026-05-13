@@ -25,6 +25,8 @@ type Server struct {
 	// Optional UI helpers for dashboard pages.
 	ConfigSnapshotFn func() map[string]any
 	GatewayStatusFn  func() map[string]any
+	ConfigUpdateFn   func(key, value string) (map[string]any, error)
+	GatewayActionFn  func(action string) (map[string]any, error)
 	mu     sync.Mutex
 	active map[string]activeRun
 }
@@ -67,7 +69,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
 	mux.HandleFunc("/v1/ui/sessions/", s.handleUISessionDetail)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
+	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
+	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	return mux
 }
 
@@ -224,6 +228,39 @@ func (s *Server) handleUIConfig(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(s.ConfigSnapshotFn())
 }
 
+type uiConfigSetRequest struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ConfigUpdateFn == nil {
+		http.Error(w, "config update unavailable", http.StatusNotImplemented)
+		return
+	}
+	var req uiConfigSetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Key = strings.TrimSpace(req.Key)
+	if req.Key == "" {
+		http.Error(w, "key required", http.StatusBadRequest)
+		return
+	}
+	res, err := s.ConfigUpdateFn(req.Key, req.Value)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
 func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -235,6 +272,38 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(s.GatewayStatusFn())
+}
+
+type uiGatewayActionRequest struct {
+	Action string `json:"action"`
+}
+
+func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.GatewayActionFn == nil {
+		http.Error(w, "gateway action unavailable", http.StatusNotImplemented)
+		return
+	}
+	var req uiGatewayActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Action = strings.TrimSpace(req.Action)
+	if req.Action == "" {
+		http.Error(w, "action required", http.StatusBadRequest)
+		return
+	}
+	res, err := s.GatewayActionFn(req.Action)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {

@@ -183,8 +183,14 @@ func TestUIEndpoints(t *testing.T) {
 		ConfigSnapshotFn: func() map[string]any {
 			return map[string]any{"model_provider": "openai"}
 		},
+		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
+			return map[string]any{"success": true, "key": key, "value": value}, nil
+		},
 		GatewayStatusFn: func() map[string]any {
 			return map[string]any{"enabled": true, "running": false}
+		},
+		GatewayActionFn: func(action string) (map[string]any, error) {
+			return map[string]any{"success": true, "action": action}, nil
 		},
 	}
 
@@ -248,6 +254,19 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("config_set", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/config/set", bytes.NewBufferString(`{"key":"api.type","value":"openai"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"success":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("gateway", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/v1/ui/gateway/status", nil)
@@ -256,6 +275,19 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"enabled":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("gateway_action", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/gateway/action", bytes.NewBufferString(`{"action":"enable"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"action":"enable"`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

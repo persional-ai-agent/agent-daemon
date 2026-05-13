@@ -5,6 +5,8 @@ import {
   getUIGatewayStatus,
   getUISessionDetail,
   getUISessions,
+  postUIGatewayAction,
+  setUIConfig,
   getUIToolSchema,
   getUITools,
   sendChat,
@@ -31,6 +33,8 @@ export function App() {
   const [toolSchema, setToolSchema] = useState<Record<string, unknown> | null>(null);
   const [gatewayStatus, setGatewayStatus] = useState<Record<string, unknown> | null>(null);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
+  const [configKey, setConfigKey] = useState("api.type");
+  const [configValue, setConfigValue] = useState("openai");
 
   async function onSend() {
     if (!input.trim()) return;
@@ -110,6 +114,27 @@ export function App() {
     getUIToolSchema(name).then(setToolSchema).catch((e) => setError(String(e)));
   }
 
+  async function applyConfig() {
+    setError("");
+    try {
+      await setUIConfig(configKey, configValue);
+      const next = await getUIConfig();
+      setConfig(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function gatewayAction(action: "enable" | "disable") {
+    setError("");
+    try {
+      const res = await postUIGatewayAction(action);
+      setGatewayStatus((res.status as Record<string, unknown>) || res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="page">
       <header className="header">
@@ -181,12 +206,23 @@ export function App() {
         {tab === "gateway" && (
           <section>
             <h2>gateway status</h2>
+            <div className="row">
+              <button onClick={() => gatewayAction("enable")}>启用网关</button>
+              <button onClick={() => gatewayAction("disable")}>禁用网关</button>
+            </div>
             <pre>{JSON.stringify(gatewayStatus, null, 2)}</pre>
           </section>
         )}
         {tab === "config" && (
           <section>
             <h2>config snapshot</h2>
+            <label>配置键（section.key）</label>
+            <input value={configKey} onChange={(e) => setConfigKey(e.target.value)} />
+            <label>配置值</label>
+            <input value={configValue} onChange={(e) => setConfigValue(e.target.value)} />
+            <div className="row">
+              <button onClick={applyConfig}>写入配置</button>
+            </div>
             <pre>{JSON.stringify(config, null, 2)}</pre>
           </section>
         )}
