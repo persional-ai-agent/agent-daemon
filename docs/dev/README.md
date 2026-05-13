@@ -397,3 +397,4 @@
 - `270-summary-ui-tui-workbench-drilldown-and-approvals-panel.md`：ui-tui 工作台新增 approvals 面板与 `/open <index>` 条目钻取动作
 - `271-summary-ui-tui-workbench-open-action-closure.md`：ui-tui 工作台补齐统一 `/open <index>` 钻取闭环（sessions/tools/approvals）
 - `272-summary-ui-tui-workbench-profiles-bundle.md`：ui-tui 工作台新增 profile 方案（workbench save/list/load/delete）
+- `273-summary-ui-tui-workflow-orchestration-bundle.md`：ui-tui 新增 workflow 编排（save/list/run/delete + 命令队列执行）

@@ -86,6 +86,10 @@ go run . --fullscreen
 - `/workbench list` 列出工作台配置
 - `/workbench load <name>` 加载工作台配置
 - `/workbench delete <name>` 删除工作台配置
+- `/workflow save <name> <cmd1;cmd2;...>` 保存命令编排
+- `/workflow list` 列出命令编排
+- `/workflow run <name> [dry]` 执行/预演命令编排
+- `/workflow delete <name>` 删除命令编排
 - `/pending [n]` 查看最近待审批项（支持列表）
 - `/approve [approval_id]` 同意待审批项（不传 id 默认最近一条）
 - `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）

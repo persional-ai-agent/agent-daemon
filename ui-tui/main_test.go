@@ -118,13 +118,17 @@ func TestActionCommandByIndex(t *testing.T) {
 		t.Fatalf("idx12 cmd=%q ok=%v", cmd, ok)
 	}
 	cmd, ok = actionCommandByIndex(s, 13)
-	if !ok || cmd != "/fullscreen on" {
+	if !ok || cmd != "/workflow list" {
 		t.Fatalf("idx13 cmd=%q ok=%v", cmd, ok)
 	}
+	cmd, ok = actionCommandByIndex(s, 14)
+	if !ok || cmd != "/fullscreen on" {
+		t.Fatalf("idx14 cmd=%q ok=%v", cmd, ok)
+	}
 	s.fullscreen = true
-	cmd, ok = actionCommandByIndex(s, 13)
+	cmd, ok = actionCommandByIndex(s, 14)
 	if !ok || cmd != "/fullscreen off" {
-		t.Fatalf("idx13 fullscreen cmd=%q ok=%v", cmd, ok)
+		t.Fatalf("idx14 fullscreen cmd=%q ok=%v", cmd, ok)
 	}
 	_, ok = actionCommandByIndex(s, 99)
 	if ok {
@@ -223,6 +227,43 @@ func TestWorkbenchProfileSaveLoadDelete(t *testing.T) {
 	}
 	if len(list) != 0 {
 		t.Fatalf("expected empty list after delete: %+v", list)
+	}
+}
+
+func TestParseWorkflowCommands(t *testing.T) {
+	got := parseWorkflowCommands("tools; panel next ;/refresh;;")
+	if len(got) != 3 {
+		t.Fatalf("unexpected len=%d cmds=%v", len(got), got)
+	}
+	if got[0] != "/tools" || got[1] != "/panel next" || got[2] != "/refresh" {
+		t.Fatalf("unexpected cmds=%v", got)
+	}
+}
+
+func TestWorkflowSaveRunDelete(t *testing.T) {
+	dir := t.TempDir()
+	s := newState()
+	s.workflowPath = filepath.Join(dir, "ui-tui-workflows.json")
+	cmds := []string{"/tools", "/panel next"}
+	if err := s.saveWorkflow("daily", cmds); err != nil {
+		t.Fatal(err)
+	}
+	wf, ok, err := s.getWorkflow("daily")
+	if err != nil || !ok {
+		t.Fatalf("getWorkflow err=%v ok=%v", err, ok)
+	}
+	if len(wf.Commands) != 2 || wf.Commands[0] != "/tools" {
+		t.Fatalf("unexpected workflow %+v", wf)
+	}
+	if err := s.deleteWorkflow("daily"); err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err = s.getWorkflow("daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected workflow deleted")
 	}
 }
 

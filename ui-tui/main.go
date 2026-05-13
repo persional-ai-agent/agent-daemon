@@ -47,6 +47,12 @@ type workbenchProfile struct {
 	UpdatedAt        string `json:"updated_at"`
 }
 
+type workflowProfile struct {
+	Name      string   `json:"name"`
+	Commands  []string `json:"commands"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
 type runtimeState struct {
 	SessionID       string `json:"session_id"`
 	WSBase          string `json:"ws_base"`
@@ -89,6 +95,7 @@ type appState struct {
 	historyPath  string
 	bookmarkPath string
 	workbenchPath string
+	workflowPath  string
 	statePath    string
 	auditPath    string
 
@@ -117,6 +124,7 @@ type appState struct {
 	panelAutoRefresh bool
 	panelRefreshSec  int
 	lastPanelRefresh time.Time
+	commandQueue     []string
 }
 
 const (
@@ -182,6 +190,7 @@ func newState() *appState {
 		historyPath:      filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:     filepath.Join(root, "ui-tui-bookmarks.json"),
 		workbenchPath:    filepath.Join(root, "ui-tui-workbenches.json"),
+		workflowPath:     filepath.Join(root, "ui-tui-workflows.json"),
 		statePath:        filepath.Join(root, "ui-tui-state.json"),
 		auditPath:        filepath.Join(root, "ui-tui-audit.log"),
 		historyMaxLines:  cfg.UITUIHistoryMaxLines,
@@ -203,6 +212,7 @@ func newState() *appState {
 		panelData:        make(map[string]any),
 		panelAutoRefresh: true,
 		panelRefreshSec:  defaultPanelRefreshSec,
+		commandQueue:     make([]string, 0),
 	}
 	st.loadRuntimeState()
 	return st
@@ -426,6 +436,10 @@ func printHelp() {
 	fmt.Println("/workbench list       list workbench profiles")
 	fmt.Println("/workbench load <name> load workbench profile")
 	fmt.Println("/workbench delete <name> delete workbench profile")
+	fmt.Println("/workflow save <name> <cmd1;cmd2;...>")
+	fmt.Println("/workflow list")
+	fmt.Println("/workflow run <name> [dry]")
+	fmt.Println("/workflow delete <name>")
 	fmt.Println("/pending [n]          show latest pending approval(s) in session")
 	fmt.Println("/approve [id]         approve pending approval id (default latest)")
 	fmt.Println("/deny [id]            deny pending approval id (default latest)")
@@ -471,6 +485,7 @@ func actionMenuItems(s *appState) []string {
 		"/panel next",
 		"/panel status",
 		"/workbench list",
+		"/workflow list",
 		"/" + fullscreenAction,
 		"/help",
 	}
@@ -1414,6 +1429,96 @@ func (s *appState) deleteWorkbench(name string) error {
 	return s.saveWorkbenchProfiles(next)
 }
 
+func (s *appState) loadWorkflows() ([]workflowProfile, error) {
+	bs, err := os.ReadFile(s.workflowPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []workflowProfile{}, nil
+		}
+		return nil, err
+	}
+	var out []workflowProfile
+	if err := json.Unmarshal(bs, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *appState) saveWorkflows(list []workflowProfile) error {
+	_ = os.MkdirAll(filepath.Dir(s.workflowPath), 0o755)
+	bs, _ := json.MarshalIndent(list, "", "  ")
+	return os.WriteFile(s.workflowPath, bs, 0o644)
+}
+
+func parseWorkflowCommands(raw string) []string {
+	parts := strings.Split(raw, ";")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v == "" {
+			continue
+		}
+		if !strings.HasPrefix(v, "/") {
+			v = "/" + v
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func (s *appState) saveWorkflow(name string, commands []string) error {
+	list, err := s.loadWorkflows()
+	if err != nil {
+		return err
+	}
+	next := workflowProfile{Name: name, Commands: append([]string(nil), commands...), UpdatedAt: time.Now().Format(time.RFC3339)}
+	replaced := false
+	for i := range list {
+		if strings.EqualFold(strings.TrimSpace(list[i].Name), strings.TrimSpace(name)) {
+			list[i] = next
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		list = append(list, next)
+	}
+	return s.saveWorkflows(list)
+}
+
+func (s *appState) getWorkflow(name string) (workflowProfile, bool, error) {
+	list, err := s.loadWorkflows()
+	if err != nil {
+		return workflowProfile{}, false, err
+	}
+	for _, wf := range list {
+		if strings.EqualFold(strings.TrimSpace(wf.Name), strings.TrimSpace(name)) {
+			return wf, true, nil
+		}
+	}
+	return workflowProfile{}, false, nil
+}
+
+func (s *appState) deleteWorkflow(name string) error {
+	list, err := s.loadWorkflows()
+	if err != nil {
+		return err
+	}
+	next := make([]workflowProfile, 0, len(list))
+	removed := false
+	for _, wf := range list {
+		if strings.EqualFold(strings.TrimSpace(wf.Name), strings.TrimSpace(name)) {
+			removed = true
+			continue
+		}
+		next = append(next, wf)
+	}
+	if !removed {
+		return fmt.Errorf("workflow not found: %s", name)
+	}
+	return s.saveWorkflows(next)
+}
+
 func (s *appState) addEvent(evt map[string]any) {
 	if evt != nil {
 		if _, ok := evt["_captured_at"]; !ok {
@@ -1636,12 +1741,19 @@ func main() {
 	for {
 		s.maybeAutoRefreshPanel()
 		s.renderFullscreenFrame()
-		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
-		if !reader.Scan() {
-			fmt.Println("bye")
-			return
+		text := ""
+		if len(s.commandQueue) > 0 {
+			text = strings.TrimSpace(s.commandQueue[0])
+			s.commandQueue = s.commandQueue[1:]
+			fmt.Printf("tui[%s/%s]> %s\n", s.lastStatus, s.lastCode, text)
+		} else {
+			fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
+			if !reader.Scan() {
+				fmt.Println("bye")
+				return
+			}
+			text = strings.TrimSpace(reader.Text())
 		}
-		text := strings.TrimSpace(reader.Text())
 		if text == "" {
 			continue
 		}
@@ -2246,6 +2358,94 @@ func main() {
 			default:
 				fmt.Println("usage: /workbench save|list|load|delete ...")
 				s.setStatus(false, "invalid_input", "invalid workbench args")
+			}
+		case strings.HasPrefix(text, "/workflow "):
+			parts := strings.Fields(text)
+			if len(parts) < 2 {
+				fmt.Println("usage: /workflow save|list|run|delete ...")
+				s.setStatus(false, "invalid_input", "invalid workflow args")
+				continue
+			}
+			switch parts[1] {
+			case "list":
+				list, err := s.loadWorkflows()
+				if err != nil {
+					fmt.Printf("[workflow-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				s.lastJSON = map[string]any{"count": len(list), "workflows": list}
+				s.printData(s.lastJSON)
+				s.setStatus(true, "ok", "workflow listed")
+			case "save":
+				if len(parts) < 4 {
+					fmt.Println("usage: /workflow save <name> <cmd1;cmd2;...>")
+					s.setStatus(false, "invalid_input", "invalid workflow save args")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				raw := strings.TrimSpace(strings.TrimPrefix(text, "/workflow save "+name))
+				cmds := parseWorkflowCommands(raw)
+				if len(cmds) == 0 {
+					fmt.Println("workflow commands empty")
+					s.setStatus(false, "invalid_input", "empty workflow commands")
+					continue
+				}
+				if err := s.saveWorkflow(name, cmds); err != nil {
+					fmt.Printf("[workflow-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				fmt.Printf("workflow saved: %s (%d commands)\n", name, len(cmds))
+				s.audit("workflow_save", fmt.Sprintf("name=%s count=%d", name, len(cmds)))
+				s.setStatus(true, "ok", "workflow saved")
+			case "run":
+				if len(parts) < 3 {
+					fmt.Println("usage: /workflow run <name> [dry]")
+					s.setStatus(false, "invalid_input", "missing workflow name")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				wf, ok, err := s.getWorkflow(name)
+				if err != nil {
+					fmt.Printf("[workflow-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				if !ok {
+					fmt.Printf("workflow not found: %s\n", name)
+					s.setStatus(false, "not_found", "workflow not found")
+					continue
+				}
+				dry := len(parts) > 3 && strings.EqualFold(strings.TrimSpace(parts[3]), "dry")
+				if dry {
+					s.lastJSON = map[string]any{"name": wf.Name, "commands": wf.Commands, "dry_run": true}
+					s.printData(s.lastJSON)
+					s.setStatus(true, "ok", "workflow dry-run shown")
+					continue
+				}
+				s.commandQueue = append(s.commandQueue, wf.Commands...)
+				fmt.Printf("workflow queued: %s (%d commands)\n", wf.Name, len(wf.Commands))
+				s.audit("workflow_run", fmt.Sprintf("name=%s count=%d", wf.Name, len(wf.Commands)))
+				s.setStatus(true, "ok", "workflow queued")
+			case "delete":
+				if len(parts) < 3 {
+					fmt.Println("usage: /workflow delete <name>")
+					s.setStatus(false, "invalid_input", "missing workflow name")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				if err := s.deleteWorkflow(name); err != nil {
+					fmt.Printf("[workflow-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				fmt.Printf("workflow deleted: %s\n", name)
+				s.audit("workflow_delete", "name="+name)
+				s.setStatus(true, "ok", "workflow deleted")
+			default:
+				fmt.Println("usage: /workflow save|list|run|delete ...")
+				s.setStatus(false, "invalid_input", "invalid workflow args")
 			}
 		case text == "/session":
 			fmt.Printf("session: %s\n", s.session)
