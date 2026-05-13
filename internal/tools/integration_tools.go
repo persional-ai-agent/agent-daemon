@@ -39,7 +39,12 @@ func (b *BuiltinTools) rlNotImplemented(_ context.Context, args map[string]any, 
 }
 
 func rlParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string"}}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{"type": "string", "description": "RL action name (default: unknown)."},
+		},
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +63,13 @@ func (b *BuiltinTools) spotifyNotImplemented(_ context.Context, args map[string]
 }
 
 func spotifyParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"q":    map[string]any{"type": "string"},
+			"tool": map[string]any{"type": "string", "description": "Tool name hint (default: spotify)."},
+		},
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +88,12 @@ func (b *BuiltinTools) ybNotImplemented(_ context.Context, args map[string]any, 
 }
 
 func ybParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"tool": map[string]any{"type": "string"}}}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"tool": map[string]any{"type": "string", "description": "Tool name hint (default: yb)."},
+		},
+	}
 }
 
 var _ = errors.New
