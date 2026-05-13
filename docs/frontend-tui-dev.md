@@ -42,8 +42,8 @@
 ## 3.1 独立 TUI 子工程
 
 - 目录：`ui-tui/`
-- 运行方式：Node.js + `ws`，连接 `/v1/chat/ws`
-- 入口：`ui-tui/src/index.mjs`
+- 运行方式：Go（`go run ./ui-tui`），连接 `/v1/chat/ws`
+- 入口：`ui-tui/main.go`
 - 目标：提供独立于 `agentd` 主进程交互循环的 TUI 客户端基座
 
 ## 4. 测试策略

@@ -44,8 +44,7 @@ agentd tui
 
 ```bash
 cd ui-tui
-npm install
-npm start
+go run .
 ```
 
 常用命令：

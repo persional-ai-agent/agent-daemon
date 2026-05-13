@@ -1,11 +1,10 @@
 # ui-tui
 
-独立 TUI 子工程（Node.js），通过 WebSocket 连接 `agentd`：
+独立 TUI 子工程（Go），通过 WebSocket 连接 `agentd`：
 
 ```bash
 cd ui-tui
-npm install
-npm start
+go run .
 ```
 
 默认连接：
