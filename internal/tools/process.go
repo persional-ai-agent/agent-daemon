@@ -19,12 +19,17 @@ import (
 type ForegroundBackendOptions struct {
 	Backend           string
 	DockerImage       string
+	PodmanImage       string
+	SingularityImage  string
 	SSHHost           string
 	SSHUser           string
 	SSHPort           int
 	SSHKeyPath        string
 	SSHStrictHostKey  bool
 	SSHKnownHostsFile string
+	DaytonaWorkspace  string
+	VercelSandboxID   string
+	ModalRef          string
 }
 
 type ProcessSession struct {
@@ -265,6 +270,29 @@ func buildForegroundCommand(ctx context.Context, command, cwd string, opt Foregr
 		}
 		args = append(args, image, "sh", "-lc", command)
 		return exec.CommandContext(ctx, "docker", args...), nil
+	case "podman":
+		image := strings.TrimSpace(opt.PodmanImage)
+		if image == "" {
+			image = "alpine:3.20"
+		}
+		workdir := "/workspace"
+		args := []string{"run", "--rm", "-i"}
+		if strings.TrimSpace(cwd) != "" {
+			args = append(args, "-v", fmt.Sprintf("%s:%s", cwd, workdir), "-w", workdir)
+		}
+		args = append(args, image, "sh", "-lc", command)
+		return exec.CommandContext(ctx, "podman", args...), nil
+	case "singularity":
+		image := strings.TrimSpace(opt.SingularityImage)
+		if image == "" {
+			return nil, fmt.Errorf("singularity backend requires singularity_image")
+		}
+		args := []string{"exec"}
+		if strings.TrimSpace(cwd) != "" {
+			args = append(args, "--pwd", cwd)
+		}
+		args = append(args, image, "sh", "-lc", command)
+		return exec.CommandContext(ctx, "singularity", args...), nil
 	case "ssh":
 		host := strings.TrimSpace(opt.SSHHost)
 		if host == "" {
@@ -293,6 +321,25 @@ func buildForegroundCommand(ctx context.Context, command, cwd string, opt Foregr
 		}
 		sshArgs = append(sshArgs, target, "sh", "-lc", remoteCmd)
 		return exec.CommandContext(ctx, "ssh", sshArgs...), nil
+	case "daytona":
+		workspace := strings.TrimSpace(opt.DaytonaWorkspace)
+		if workspace == "" {
+			return nil, fmt.Errorf("daytona backend requires daytona_workspace")
+		}
+		return exec.CommandContext(ctx, "daytona", "ssh", workspace, "--", "sh", "-lc", command), nil
+	case "vercel":
+		sandboxID := strings.TrimSpace(opt.VercelSandboxID)
+		if sandboxID == "" {
+			return nil, fmt.Errorf("vercel backend requires vercel_sandbox_id")
+		}
+		// Sandbox CLI is docker-like and supports exec on existing sandbox.
+		return exec.CommandContext(ctx, "sandbox", "exec", sandboxID, "sh", "-lc", command), nil
+	case "modal":
+		ref := strings.TrimSpace(opt.ModalRef)
+		if ref == "" {
+			return nil, fmt.Errorf("modal backend requires modal_ref")
+		}
+		return exec.CommandContext(ctx, "modal", "shell", ref, "-c", command), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", backend)
 	}

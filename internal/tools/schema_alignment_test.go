@@ -51,6 +51,11 @@ func TestFeishuDriveSchemasDocumentPagingDefaults(t *testing.T) {
 
 func TestBuiltinSchemasDocumentDefaultsAndBounds(t *testing.T) {
 	terminalProps, _ := terminalParams()["properties"].(map[string]any)
+	backend, _ := terminalProps["backend"].(map[string]any)
+	backendEnum, _ := backend["enum"].([]string)
+	if !reflect.DeepEqual(backendEnum, []string{"local", "docker", "podman", "singularity", "ssh", "daytona", "vercel", "modal"}) {
+		t.Fatalf("terminal.backend enum=%v", backendEnum)
+	}
 	timeout, _ := terminalProps["timeout"].(map[string]any)
 	if desc, _ := timeout["description"].(string); !strings.Contains(desc, "default 120") {
 		t.Fatalf("terminal.timeout description=%q", desc)

@@ -227,6 +227,34 @@ func TestTerminalSSHBackendRequiresHost(t *testing.T) {
 	}
 }
 
+func TestTerminalExtendedBackendsRequireMandatoryArgs(t *testing.T) {
+	b := &BuiltinTools{proc: NewProcessRegistry(t.TempDir())}
+	cases := []struct {
+		name    string
+		backend string
+	}{
+		{name: "singularity", backend: "singularity"},
+		{name: "daytona", backend: "daytona"},
+		{name: "vercel", backend: "vercel"},
+		{name: "modal", backend: "modal"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := b.terminal(context.Background(), map[string]any{
+				"command": "echo hi",
+				"backend": tc.backend,
+			}, ToolContext{Workdir: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if success, _ := res["success"].(bool); success {
+				t.Fatalf("expected failure without required args for backend=%s: %#v", tc.backend, res)
+			}
+		})
+	}
+}
+
 func TestTerminalAllowsDangerousCommandWithSessionApprovalGrant(t *testing.T) {
 	b := &BuiltinTools{}
 	workdir := t.TempDir()

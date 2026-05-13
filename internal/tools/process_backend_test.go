@@ -63,3 +63,56 @@ func TestBuildForegroundCommandSSH(t *testing.T) {
 		t.Fatalf("ssh port not set: %v", cmd.Args)
 	}
 }
+
+func TestBuildForegroundCommandPodman(t *testing.T) {
+	cmd, err := buildForegroundCommand(context.Background(), "echo hi", "/work", ForegroundBackendOptions{
+		Backend:     "podman",
+		PodmanImage: "alpine:3.20",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "podman run") {
+		t.Fatalf("unexpected podman args: %v", cmd.Args)
+	}
+	if !strings.Contains(joined, "alpine:3.20") {
+		t.Fatalf("expected image in args: %v", cmd.Args)
+	}
+}
+
+func TestBuildForegroundCommandSingularityRequiresImage(t *testing.T) {
+	_, err := buildForegroundCommand(context.Background(), "echo hi", "/work", ForegroundBackendOptions{
+		Backend: "singularity",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires singularity_image") {
+		t.Fatalf("expected singularity image required error, got %v", err)
+	}
+}
+
+func TestBuildForegroundCommandDaytonaRequiresWorkspace(t *testing.T) {
+	_, err := buildForegroundCommand(context.Background(), "echo hi", "", ForegroundBackendOptions{
+		Backend: "daytona",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires daytona_workspace") {
+		t.Fatalf("expected daytona workspace required error, got %v", err)
+	}
+}
+
+func TestBuildForegroundCommandVercelRequiresSandboxID(t *testing.T) {
+	_, err := buildForegroundCommand(context.Background(), "echo hi", "", ForegroundBackendOptions{
+		Backend: "vercel",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires vercel_sandbox_id") {
+		t.Fatalf("expected vercel sandbox required error, got %v", err)
+	}
+}
+
+func TestBuildForegroundCommandModalRequiresRef(t *testing.T) {
+	_, err := buildForegroundCommand(context.Background(), "echo hi", "", ForegroundBackendOptions{
+		Backend: "modal",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires modal_ref") {
+		t.Fatalf("expected modal ref required error, got %v", err)
+	}
+}
