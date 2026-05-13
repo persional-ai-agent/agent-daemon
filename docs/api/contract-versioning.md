@@ -52,9 +52,19 @@
 - 本地检查：`make contract-check`
 - 基线发布：`make contract-release`
 - CI：`.github/workflows/contract-guard.yml`
+- Diff 报告产物：`artifacts/contract-diff.json`
 
 ## Breaking 变更声明
 
 - 当 `contract_diff` 检测到 breaking 变更时，PR 必须包含：
   - `.contract/breaking-change-ack.md`
 - 模板说明见：`.contract/README.md`
+
+## Diff 检测范围（当前）
+
+- operation 增删
+- response code 增删
+- request/response required 字段变化
+- request/response 字段 `type` 变化（breaking）
+- 参数（path/query）`required` 与 `type` 变化
+- enum 收缩（删除已有值，breaking）

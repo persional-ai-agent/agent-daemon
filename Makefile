@@ -11,7 +11,8 @@ contract-test:
 contract-diff:
 	go run ./scripts/contract_diff.go \
 		-base docs/api/versions/v1/ui-chat-contract.openapi.yaml \
-		-target docs/api/ui-chat-contract.openapi.yaml
+		-target docs/api/ui-chat-contract.openapi.yaml \
+		-report artifacts/contract-diff.json
 
 contract-check: contract-test contract-diff
 

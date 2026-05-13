@@ -363,3 +363,4 @@
 - `236-summary-contract-consumer-regression.md`：契约消费者回归补齐（UI/Chat/CLI）
 - `237-summary-contract-governance-automation.md`：契约治理自动化（快照测试/CI/OpenAPI/版本策略）
 - `238-summary-contract-toolchain-and-breaking-gate.md`：契约工具链与 Breaking 门禁（Make/diff/baseline/CI）
+- `239-summary-contract-diff-field-level-and-report.md`：契约 Diff 字段级检测与报告产物

@@ -23,6 +23,7 @@ jobs:
       - name: Contract Diff (PR)
         if: github.event_name == 'pull_request'
         run: |
+          mkdir -p artifacts
           git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
           git show "origin/${{ github.base_ref }}:docs/api/ui-chat-contract.openapi.yaml" > /tmp/base.openapi.yaml
           ACK_FILE=""
@@ -30,11 +31,21 @@ jobs:
             ACK_FILE=".contract/breaking-change-ack.md"
           fi
           if [ -n "$ACK_FILE" ]; then
-            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -ack "$ACK_FILE"
+            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -ack "$ACK_FILE" -report artifacts/contract-diff.json
           else
-            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml
+            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -report artifacts/contract-diff.json
           fi
 
       - name: Contract Diff (push baseline)
         if: github.event_name != 'pull_request'
-        run: go run ./scripts/contract_diff.go -base docs/api/versions/v1/ui-chat-contract.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml
+        run: |
+          mkdir -p artifacts
+          go run ./scripts/contract_diff.go -base docs/api/versions/v1/ui-chat-contract.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -report artifacts/contract-diff.json
+
+      - name: Upload Contract Diff Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-diff-report
+          path: artifacts/contract-diff.json
+          if-no-files-found: warn
