@@ -40,6 +40,8 @@ type runtimeState struct {
 	HTTPBase        string `json:"http_base"`
 	Fullscreen      bool   `json:"fullscreen,omitempty"`
 	FullscreenPanel string `json:"fullscreen_panel,omitempty"`
+	PanelAuto       bool   `json:"panel_auto,omitempty"`
+	PanelInterval   int    `json:"panel_interval_seconds,omitempty"`
 	UpdatedAt       string `json:"updated_at"`
 }
 
@@ -98,12 +100,16 @@ type appState struct {
 	chatMaxLines     int
 	fullscreenPanel  string
 	panelData        map[string]any
+	panelAutoRefresh bool
+	panelRefreshSec  int
+	lastPanelRefresh time.Time
 }
 
 const (
 	defaultHistoryMaxLines = 2000
 	defaultEventMaxItems   = 2000
 	defaultChatMaxLines    = 2000
+	defaultPanelRefreshSec = 8
 )
 
 func getenvOr(key, def string) string {
@@ -180,6 +186,8 @@ func newState() *appState {
 		chatMaxLines:     defaultChatMaxLines,
 		fullscreenPanel:  "overview",
 		panelData:        make(map[string]any),
+		panelAutoRefresh: true,
+		panelRefreshSec:  defaultPanelRefreshSec,
 	}
 	st.loadRuntimeState()
 	return st
@@ -257,6 +265,8 @@ func (s *appState) saveRuntimeState() error {
 		HTTPBase:        s.httpBase,
 		Fullscreen:      s.fullscreen,
 		FullscreenPanel: s.fullscreenPanel,
+		PanelAuto:       s.panelAutoRefresh,
+		PanelInterval:   s.panelRefreshSec,
 		UpdatedAt:       time.Now().Format(time.RFC3339),
 	}
 	bs, _ := json.MarshalIndent(st, "", "  ")
@@ -289,6 +299,10 @@ func (s *appState) loadRuntimeState() {
 	s.fullscreen = st.Fullscreen
 	if strings.TrimSpace(st.FullscreenPanel) != "" {
 		s.fullscreenPanel = strings.TrimSpace(st.FullscreenPanel)
+	}
+	s.panelAutoRefresh = st.PanelAuto
+	if st.PanelInterval > 0 {
+		s.panelRefreshSec = st.PanelInterval
 	}
 }
 
@@ -402,6 +416,9 @@ func printHelp() {
 	fmt.Println("/panel [name]         switch fullscreen panel (overview/dashboard/sessions/tools/gateway/diag)")
 	fmt.Println("/panel list           list available fullscreen panels")
 	fmt.Println("/panel next|prev      cycle fullscreen panels")
+	fmt.Println("/panel status         show panel runtime status")
+	fmt.Println("/panel auto on|off    toggle panel auto refresh")
+	fmt.Println("/panel interval <sec> set panel auto refresh interval")
 	fmt.Println("/refresh              refresh current fullscreen panel data")
 	fmt.Println("/version              show ui-tui build metadata")
 	fmt.Println("/reconnect status     show reconnect status")
@@ -432,6 +449,7 @@ func actionMenuItems(s *appState) []string {
 		"/reconnect status",
 		"/pending 5",
 		"/panel next",
+		"/panel status",
 		"/" + fullscreenAction,
 		"/help",
 	}
@@ -561,7 +579,7 @@ func (s *appState) renderFullscreenFrame() {
 	fmt.Printf("http: %s\n", s.httpBase)
 	fmt.Printf("status: %s/%s  detail: %s\n", s.lastStatus, s.lastCode, s.lastDetail)
 	fmt.Printf("transport: %s  reconnect: %s(%d)  view: %s\n", s.activeTransport, s.reconnectState, s.reconnectCount, s.viewMode)
-	fmt.Printf("panel: %s  hint: /panel next|prev|<name> /refresh /actions /quit\n", s.fullscreenPanel)
+	fmt.Printf("panel: %s  auto=%v/%ds  hint: /panel next|prev|<name> /panel status /refresh /actions /quit\n", s.fullscreenPanel, s.panelAutoRefresh, s.panelRefreshSec)
 	if s.fullscreenPanel != "overview" {
 		fmt.Println("---- panel data ----")
 		if payload, ok := s.panelData[s.fullscreenPanel]; ok {
@@ -595,6 +613,18 @@ func (s *appState) renderFullscreenFrame() {
 		fmt.Printf("%s\n", ln)
 	}
 	fmt.Println("---- input ----")
+}
+
+func (s *appState) maybeAutoRefreshPanel() {
+	if !s.fullscreen || !s.panelAutoRefresh || s.panelRefreshSec <= 0 {
+		return
+	}
+	if !s.lastPanelRefresh.IsZero() && time.Since(s.lastPanelRefresh) < time.Duration(s.panelRefreshSec)*time.Second {
+		return
+	}
+	if err := s.refreshCurrentPanel(); err == nil {
+		s.lastPanelRefresh = time.Now()
+	}
 }
 
 func (s *appState) refreshCurrentPanel() error {
@@ -644,6 +674,7 @@ func (s *appState) refreshCurrentPanel() error {
 	default:
 		return fmt.Errorf("unsupported panel: %s", s.fullscreenPanel)
 	}
+	s.lastPanelRefresh = time.Now()
 	return nil
 }
 
@@ -1423,6 +1454,7 @@ func main() {
 	}
 	reader := bufio.NewScanner(os.Stdin)
 	for {
+		s.maybeAutoRefreshPanel()
 		s.renderFullscreenFrame()
 		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
 		if !reader.Scan() {
@@ -1482,6 +1514,58 @@ func main() {
 				continue
 			}
 			target := strings.ToLower(strings.TrimSpace(parts[1]))
+			if target == "status" {
+				out := map[string]any{
+					"panel":                 s.fullscreenPanel,
+					"auto_refresh":          s.panelAutoRefresh,
+					"refresh_interval_sec":  s.panelRefreshSec,
+					"last_refresh_at":       s.lastPanelRefresh.Format(time.RFC3339),
+					"available_panel_names": panelNames(),
+				}
+				s.lastJSON = out
+				s.printData(out)
+				s.setStatus(true, "ok", "panel status shown")
+				continue
+			}
+			if target == "auto" {
+				if len(parts) < 3 {
+					fmt.Println("usage: /panel auto on|off")
+					s.setStatus(false, "invalid_input", "invalid panel auto args")
+					continue
+				}
+				switch strings.ToLower(strings.TrimSpace(parts[2])) {
+				case "on":
+					s.panelAutoRefresh = true
+				case "off":
+					s.panelAutoRefresh = false
+				default:
+					fmt.Println("usage: /panel auto on|off")
+					s.setStatus(false, "invalid_input", "invalid panel auto args")
+					continue
+				}
+				_ = s.saveRuntimeState()
+				fmt.Printf("panel auto refresh: %v\n", s.panelAutoRefresh)
+				s.setStatus(true, "ok", "panel auto updated")
+				continue
+			}
+			if target == "interval" {
+				if len(parts) < 3 {
+					fmt.Println("usage: /panel interval <sec>")
+					s.setStatus(false, "invalid_input", "invalid panel interval args")
+					continue
+				}
+				sec, err := strconv.Atoi(parts[2])
+				if err != nil || sec < 1 || sec > 300 {
+					fmt.Println("panel interval must be 1..300 seconds")
+					s.setStatus(false, "invalid_input", "invalid panel interval")
+					continue
+				}
+				s.panelRefreshSec = sec
+				_ = s.saveRuntimeState()
+				fmt.Printf("panel refresh interval: %ds\n", s.panelRefreshSec)
+				s.setStatus(true, "ok", "panel interval updated")
+				continue
+			}
 			if target == "list" {
 				fmt.Printf("panels: %s\n", strings.Join(panelNames(), ", "))
 				s.setStatus(true, "ok", "panel list shown")

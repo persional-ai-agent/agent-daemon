@@ -110,13 +110,17 @@ func TestActionCommandByIndex(t *testing.T) {
 		t.Fatalf("idx10 cmd=%q ok=%v", cmd, ok)
 	}
 	cmd, ok = actionCommandByIndex(s, 11)
-	if !ok || cmd != "/fullscreen on" {
+	if !ok || cmd != "/panel status" {
 		t.Fatalf("idx11 cmd=%q ok=%v", cmd, ok)
 	}
+	cmd, ok = actionCommandByIndex(s, 12)
+	if !ok || cmd != "/fullscreen on" {
+		t.Fatalf("idx12 cmd=%q ok=%v", cmd, ok)
+	}
 	s.fullscreen = true
-	cmd, ok = actionCommandByIndex(s, 11)
+	cmd, ok = actionCommandByIndex(s, 12)
 	if !ok || cmd != "/fullscreen off" {
-		t.Fatalf("idx11 fullscreen cmd=%q ok=%v", cmd, ok)
+		t.Fatalf("idx12 fullscreen cmd=%q ok=%v", cmd, ok)
 	}
 	_, ok = actionCommandByIndex(s, 99)
 	if ok {
@@ -156,6 +160,8 @@ func TestRuntimeStatePersistsFullscreenPanel(t *testing.T) {
 	s.httpBase = "http://127.0.0.1:8080"
 	s.fullscreen = true
 	s.fullscreenPanel = "dashboard"
+	s.panelAutoRefresh = true
+	s.panelRefreshSec = 12
 	if err := s.saveRuntimeState(); err != nil {
 		t.Fatal(err)
 	}
@@ -163,9 +169,11 @@ func TestRuntimeStatePersistsFullscreenPanel(t *testing.T) {
 	s2.statePath = s.statePath
 	s2.fullscreen = false
 	s2.fullscreenPanel = "overview"
+	s2.panelAutoRefresh = false
+	s2.panelRefreshSec = 3
 	s2.loadRuntimeState()
-	if !s2.fullscreen || s2.fullscreenPanel != "dashboard" {
-		t.Fatalf("runtime restore failed: fullscreen=%v panel=%s", s2.fullscreen, s2.fullscreenPanel)
+	if !s2.fullscreen || s2.fullscreenPanel != "dashboard" || !s2.panelAutoRefresh || s2.panelRefreshSec != 12 {
+		t.Fatalf("runtime restore failed: fullscreen=%v panel=%s auto=%v sec=%d", s2.fullscreen, s2.fullscreenPanel, s2.panelAutoRefresh, s2.panelRefreshSec)
 	}
 }
 

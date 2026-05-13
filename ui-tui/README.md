@@ -91,6 +91,9 @@ go run . --fullscreen
 - `/panel [name]` 切换全屏面板（overview/dashboard/sessions/tools/gateway/diag）
 - `/panel list` 列出全屏面板
 - `/panel next|prev` 循环切换全屏面板
+- `/panel status` 查看面板运行状态（自动刷新、间隔、最近刷新时间）
+- `/panel auto on|off` 开关面板自动刷新
+- `/panel interval <sec>` 设置面板刷新间隔（1..300 秒）
 - `/refresh` 刷新当前全屏面板数据
 - `/diag` 查看实时诊断（transport/reconnect/fallback/error）
 - `/diag export <file>` 导出诊断包（含 recent_events）
@@ -104,6 +107,7 @@ go run . --fullscreen
 - `/diag` 输出：`active_transport/reconnect_count/fallback_hint/last_error_code` 等实时字段
 - 诊断包 schema：`diag.v1`（见 `docs/api/diagnostics.bundle.schema.json`，与 Web 导出对齐）
 - 启动时自动恢复最近会话与 endpoint（`~/.agent-daemon/ui-tui-state.json`）
+- 同步恢复全屏与面板偏好（`fullscreen/fullscreen_panel/panel_auto/panel_interval_seconds`）
 - 若状态文件损坏，会自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
 - 默认启动会自动执行一次 doctor（可通过 `[ui-tui] auto_doctor=false` 或 `--no-doctor` 关闭）
 

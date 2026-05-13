@@ -89,6 +89,7 @@ go run .
 - `/actions`：打开快捷操作面板（编号选择常用动作）
 - `/panel [name]`、`/panel next|prev`：切换全屏面板（overview/dashboard/sessions/tools/gateway/diag）
 - `/panel list`：查看全屏面板清单
+- `/panel status`、`/panel auto on|off`、`/panel interval <sec>`：管理全屏面板自动刷新策略
 - `/refresh`：刷新当前全屏面板数据
 - `/view human|json`：切换人类视图/JSON 视图
 - `/fullscreen on|off`：运行时切换全屏看板
