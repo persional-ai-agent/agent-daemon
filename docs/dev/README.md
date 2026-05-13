@@ -358,3 +358,4 @@
 - `231-summary-ui-tui-efficiency-observability-bundle.md`：ui-tui 交互效率/可读性/审计/测试/发布一次性补全
 - `232-summary-ui-api-contract-freeze.md`：冻结 /v1/ui/* 接口契约、兼容策略与错误码规范
 - `233-summary-ui-tui-adapt-ui-api-contract.md`：ui-tui 适配冻结后的 /v1/ui/* 契约
+- `234-summary-cli-align-ui-contract-semantics.md`：CLI 输出语义对齐 UI 契约（ok/error.code/error.message）

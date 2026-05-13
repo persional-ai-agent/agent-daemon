@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,26 @@ type sessionLister interface {
 type sessionDetailer interface {
 	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
 	SessionStats(sessionID string) (map[string]any, error)
+}
+
+func printCLIEnvelope(ok bool, payload map[string]any, errCode, errMsg string) {
+	out := map[string]any{
+		"ok":          ok,
+		"api_version": "v1",
+		"compat":      "2026-05-13",
+	}
+	if ok {
+		for k, v := range payload {
+			out[k] = v
+		}
+	} else {
+		out["error"] = map[string]any{
+			"code":    errCode,
+			"message": errMsg,
+		}
+	}
+	bs, _ := json.Marshal(out)
+	fmt.Println(string(bs))
 }
 
 func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, preloadSkills string) error {
@@ -92,18 +113,18 @@ func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Mes
 		printSlashHelp()
 		return history, systemPrompt, true, nil
 	case "/session":
-		fmt.Printf("当前 session: %s\n", sessionID)
+		printCLIEnvelope(true, map[string]any{"session_id": sessionID}, "", "")
 		return history, systemPrompt, true, nil
 	case "/tools":
 		names := eng.Registry.Names()
-		fmt.Printf("可用工具 (%d): %s\n", len(names), strings.Join(names, ", "))
+		printCLIEnvelope(true, map[string]any{"count": len(names), "tools": names}, "", "")
 		return history, systemPrompt, true, nil
 	case "/history":
 		limit := 10
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				fmt.Println("用法: /history [n]  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /history [n]  (n 必须是正整数)")
 				return history, systemPrompt, true, nil
 			}
 			limit = v
@@ -115,28 +136,25 @@ func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Mes
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				fmt.Println("用法: /sessions [n]  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sessions [n]  (n 必须是正整数)")
 				return history, systemPrompt, true, nil
 			}
 			limit = v
 		}
 		if eng.SessionStore == nil {
-			fmt.Println("session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
 			return history, systemPrompt, true, nil
 		}
 		lister, ok := eng.SessionStore.(sessionLister)
 		if !ok {
-			fmt.Println("当前会话存储不支持会话列表。")
+			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持会话列表。")
 			return history, systemPrompt, true, nil
 		}
 		rows, err := lister.ListRecentSessions(limit)
 		if err != nil {
 			return history, systemPrompt, true, err
 		}
-		fmt.Printf("最近会话（%d）\n", len(rows))
-		for i, row := range rows {
-			fmt.Printf("%d. %v  %v\n", i+1, row["session_id"], row["last_seen"])
-		}
+		printCLIEnvelope(true, map[string]any{"count": len(rows), "sessions": rows}, "", "")
 		return history, systemPrompt, true, nil
 	case "/stats":
 		target := sessionID
@@ -144,19 +162,19 @@ func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Mes
 			target = strings.TrimSpace(fields[1])
 		}
 		if eng.SessionStore == nil {
-			fmt.Println("session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
 			return history, systemPrompt, true, nil
 		}
 		detailer, ok := eng.SessionStore.(sessionDetailer)
 		if !ok {
-			fmt.Println("当前会话存储不支持统计信息。")
+			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持统计信息。")
 			return history, systemPrompt, true, nil
 		}
 		stats, err := detailer.SessionStats(target)
 		if err != nil {
 			return history, systemPrompt, true, err
 		}
-		fmt.Printf("session stats: %+v\n", stats)
+		printCLIEnvelope(true, map[string]any{"stats": stats}, "", "")
 		return history, systemPrompt, true, nil
 	case "/show":
 		target := sessionID
@@ -176,43 +194,36 @@ func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Mes
 			}
 		}
 		if eng.SessionStore == nil {
-			fmt.Println("session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
 			return history, systemPrompt, true, nil
 		}
 		detailer, ok := eng.SessionStore.(sessionDetailer)
 		if !ok {
-			fmt.Println("当前会话存储不支持消息分页查看。")
+			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持消息分页查看。")
 			return history, systemPrompt, true, nil
 		}
 		msgs, err := detailer.LoadMessagesPage(target, offset, limit)
 		if err != nil {
 			return history, systemPrompt, true, err
 		}
-		fmt.Printf("session=%s offset=%d limit=%d count=%d\n", target, offset, limit, len(msgs))
-		for i, msg := range msgs {
-			content := strings.TrimSpace(msg.Content)
-			if len(content) > 120 {
-				content = content[:120] + "..."
-			}
-			fmt.Printf("%d. [%s] %s\n", offset+i+1, msg.Role, content)
-		}
+		printCLIEnvelope(true, map[string]any{"session_id": target, "offset": offset, "limit": limit, "count": len(msgs), "messages": msgs}, "", "")
 		return history, systemPrompt, true, nil
 	case "/reload":
 		loaded, err := eng.SessionStore.LoadMessages(sessionID, 500)
 		if err != nil {
 			return history, systemPrompt, true, err
 		}
-		fmt.Printf("已从存储重载历史消息: %d 条\n", len(loaded))
+		printCLIEnvelope(true, map[string]any{"count": len(loaded), "messages": loaded}, "", "")
 		return loaded, systemPrompt, true, nil
 	case "/clear":
 		// 仅清空当前进程内上下文；不会删除持久化会话。
-		fmt.Println("已清空当前进程内历史上下文（持久化会话未删除）。")
+		printCLIEnvelope(true, map[string]any{"cleared": true}, "", "")
 		return nil, systemPrompt, true, nil
 	case "/tui":
 		printTUIStatus(eng)
 		return history, systemPrompt, true, nil
 	default:
-		fmt.Printf("未知命令: %s（输入 /help 查看命令）\n", fields[0])
+		printCLIEnvelope(false, nil, "unknown_command", fmt.Sprintf("未知命令: %s（输入 /help 查看命令）", fields[0]))
 		return history, systemPrompt, true, nil
 	}
 }
