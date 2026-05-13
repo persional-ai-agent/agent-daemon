@@ -15,6 +15,42 @@ export type UIToolsResponse = {
 
 const BASE = (globalThis as any).__AGENT_API_BASE__ || "http://127.0.0.1:8080";
 
+export type APIErrorNormalized = {
+  code: string;
+  message: string;
+};
+
+export function normalizeAPIError(input: unknown): APIErrorNormalized {
+  if (typeof input === "string") {
+    return { code: "unknown", message: input };
+  }
+  if (!input || typeof input !== "object") {
+    return { code: "unknown", message: "unknown error" };
+  }
+  const obj = input as Record<string, unknown>;
+  const detail = (obj.error_detail && typeof obj.error_detail === "object") ? (obj.error_detail as Record<string, unknown>) : null;
+  const code =
+    (typeof obj.error_code === "string" && obj.error_code) ||
+    (typeof detail?.code === "string" && detail.code) ||
+    "unknown";
+  const message =
+    (typeof obj.error === "string" && obj.error) ||
+    (typeof detail?.message === "string" && detail.message) ||
+    (typeof obj.reason === "string" && obj.reason) ||
+    "unknown error";
+  return { code, message };
+}
+
+function errorFromHTTP(status: number, rawBody: string): Error {
+  try {
+    const parsed = JSON.parse(rawBody);
+    const e = normalizeAPIError(parsed);
+    return new Error(`HTTP ${status} [${e.code}]: ${e.message}`);
+  } catch {
+    return new Error(`HTTP ${status}: ${rawBody}`);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -22,7 +58,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    throw errorFromHTTP(res.status, text);
   }
   return (await res.json()) as T;
 }
@@ -39,25 +75,52 @@ export type StreamEvent = {
   data: unknown;
 };
 
-export async function streamChat(
+export function streamEventDedupeKey(evt: StreamEvent): string {
+  return `${evt.event}:${JSON.stringify(evt.data)}`;
+}
+
+export type StreamReconnectStatus = "connecting" | "resumed" | "degraded" | "failed";
+export type StreamTimeoutAction = "wait" | "reconnect" | "cancel";
+
+export type StreamChatOptions = {
+  reconnectEnabled?: boolean;
+  maxReconnect?: number;
+  readTimeoutMs?: number;
+  turnTimeoutMs?: number;
+  timeoutAction?: StreamTimeoutAction;
+  onStatus?: (status: StreamReconnectStatus) => void;
+};
+
+async function streamOnce(
   message: string,
   sessionID: string,
-  onEvent: (evt: StreamEvent) => void
+  turnID: string,
+  resume: boolean,
+  onEvent: (evt: StreamEvent) => void,
+  readTimeoutMs: number,
+  turnDeadline: number
 ) {
   const res = await fetch(`${BASE}/v1/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionID })
+    body: JSON.stringify({ message, session_id: sessionID, turn_id: turnID, resume })
   });
   if (!res.ok || !res.body) {
     const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    throw errorFromHTTP(res.status, text);
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   while (true) {
-    const { done, value } = await reader.read();
+    const now = Date.now();
+    if (now > turnDeadline) {
+      throw new Error("TURN_TIMEOUT");
+    }
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("READ_TIMEOUT")), readTimeoutMs);
+    });
+    const { done, value } = await Promise.race([reader.read(), timeoutPromise]) as ReadableStreamReadResult<Uint8Array>;
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let split = buffer.indexOf("\n\n");
@@ -76,8 +139,55 @@ export async function streamChat(
           // keep raw string
         }
         onEvent({ event, data });
+        if (event === "result" || event === "error" || event === "cancelled") {
+          return;
+        }
       }
       split = buffer.indexOf("\n\n");
+    }
+  }
+}
+
+export async function streamChat(
+  message: string,
+  sessionID: string,
+  onEvent: (evt: StreamEvent) => void,
+  options?: StreamChatOptions
+) {
+  const reconnectEnabled = options?.reconnectEnabled ?? true;
+  const maxReconnect = reconnectEnabled ? (options?.maxReconnect ?? 2) : 0;
+  const readTimeoutMs = options?.readTimeoutMs ?? 15_000;
+  const turnTimeoutMs = options?.turnTimeoutMs ?? 120_000;
+  const timeoutAction = options?.timeoutAction ?? "wait";
+  const onStatus = options?.onStatus;
+  const turnID = `web-${Math.random().toString(36).slice(2)}`;
+  const started = Date.now();
+  onStatus?.("connecting");
+
+  for (let attempt = 0; attempt <= maxReconnect; attempt++) {
+    const resume = attempt > 0;
+    if (resume) onStatus?.("degraded");
+    try {
+      await streamOnce(message, sessionID, turnID, resume, onEvent, readTimeoutMs, started + turnTimeoutMs);
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "READ_TIMEOUT" || msg === "TURN_TIMEOUT") {
+        if (timeoutAction === "wait") {
+          continue;
+        }
+        if (timeoutAction === "cancel") {
+          await cancelChat(sessionID);
+          onStatus?.("failed");
+          throw new Error("timeout cancelled");
+        }
+      }
+      if (attempt >= maxReconnect) {
+        onStatus?.("failed");
+        throw e;
+      }
+      await new Promise((r) => setTimeout(r, 300));
+      onStatus?.("resumed");
     }
   }
 }

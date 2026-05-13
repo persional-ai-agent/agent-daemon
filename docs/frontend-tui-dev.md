@@ -6,6 +6,7 @@
 - 技术栈：Vite + React + TypeScript
 - API 封装：`web/src/lib/api.ts`
 - 页面入口：`web/src/App.tsx`
+- 重连控制：Chat 页内置连接状态条与重连策略控制（wait/reconnect/cancel）
 
 ### 当前 API 契约
 
@@ -67,6 +68,7 @@
 
 - API 回归：`internal/api/server_test.go`
 - CLI 命令回归：`internal/cli/chat_test.go`
+- Web 单测：`npm --prefix web run test`
 - Web 构建自测：`npm --prefix web run build`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
 - ui-tui 发布脚本：`./ui-tui/release.sh <version>`

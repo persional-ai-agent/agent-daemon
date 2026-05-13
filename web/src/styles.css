@@ -67,6 +67,7 @@ input, textarea {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 button {
@@ -108,4 +109,55 @@ pre {
   display: grid;
   align-content: start;
   gap: 8px;
+}
+
+.conn-state {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  margin: 8px 0 12px;
+  font-weight: 600;
+}
+
+.conn-connecting {
+  border-color: #0ea5e9;
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.conn-resumed {
+  border-color: #16a34a;
+  color: #166534;
+  background: #dcfce7;
+}
+
+.conn-degraded {
+  border-color: #f59e0b;
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.conn-failed {
+  border-color: #dc2626;
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.control-box {
+  border: 1px dashed var(--line);
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.control-box h3 {
+  margin: 0 0 8px;
+}
+
+.control-box label {
+  display: grid;
+  gap: 4px;
+}
+
+.control-box input,
+.control-box select {
+  min-width: 110px;
 }

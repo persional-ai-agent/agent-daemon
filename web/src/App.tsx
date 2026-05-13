@@ -11,6 +11,10 @@ import {
   getUITools,
   sendChat,
   streamChat,
+  streamEventDedupeKey,
+  normalizeAPIError,
+  type StreamReconnectStatus,
+  type StreamTimeoutAction,
   type StreamEvent
 } from "./lib/api";
 
@@ -27,6 +31,12 @@ export function App() {
   const [error, setError] = useState("");
   const [streamMode, setStreamMode] = useState(true);
   const [timeline, setTimeline] = useState<Array<{ ts: string; event: string; data: unknown }>>([]);
+  const [streamStatus, setStreamStatus] = useState<StreamReconnectStatus>("connecting");
+  const [reconnectEnabled, setReconnectEnabled] = useState(true);
+  const [reconnectMax, setReconnectMax] = useState(2);
+  const [timeoutAction, setTimeoutAction] = useState<StreamTimeoutAction>("wait");
+  const [readTimeoutSec, setReadTimeoutSec] = useState(15);
+  const [turnTimeoutSec, setTurnTimeoutSec] = useState(120);
   const [sessions, setSessions] = useState<Array<{ session_id: string; last_seen?: string }>>([]);
   const [sessionDetail, setSessionDetail] = useState<Record<string, unknown> | null>(null);
   const [sessionOffset, setSessionOffset] = useState(0);
@@ -46,9 +56,14 @@ export function App() {
     setBusy(true);
     setError("");
     setTimeline([]);
+    setStreamStatus("connecting");
     try {
       if (streamMode) {
+        const seen = new Set<string>();
         await streamChat(input, sessionID, (evt: StreamEvent) => {
+          const dedupeKey = streamEventDedupeKey(evt);
+          if (seen.has(dedupeKey)) return;
+          seen.add(dedupeKey);
           setTimeline((prev) => prev.concat([{ ts: new Date().toISOString(), event: evt.event, data: evt.data }]));
           if (evt.event === "result" && typeof evt.data === "object" && evt.data !== null) {
             const finalResponse = (evt.data as any).final_response;
@@ -56,13 +71,22 @@ export function App() {
               setOutput(finalResponse || "(empty)");
             }
           }
+        }, {
+          reconnectEnabled,
+          maxReconnect: reconnectMax,
+          readTimeoutMs: Math.max(1, readTimeoutSec) * 1000,
+          turnTimeoutMs: Math.max(1, turnTimeoutSec) * 1000,
+          timeoutAction,
+          onStatus: setStreamStatus
         });
       } else {
         const res = await sendChat(input, sessionID);
         setOutput(res.final_response || "(empty)");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const n = normalizeAPIError(e instanceof Error ? e.message : String(e));
+      setError(`[${n.code}] ${n.message}`);
+      setStreamStatus("failed");
     } finally {
       setBusy(false);
     }
@@ -74,8 +98,14 @@ export function App() {
       await cancelChat(sessionID);
       setOutput("已发送取消请求。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const n = normalizeAPIError(e instanceof Error ? e.message : String(e));
+      setError(`[${n.code}] ${n.message}`);
     }
+  }
+
+  async function reconnectNow() {
+    if (!streamMode || busy || !input.trim()) return;
+    await onSend();
   }
 
   useEffect(() => {
@@ -179,6 +209,45 @@ export function App() {
               <input type="checkbox" checked={streamMode} onChange={(e) => setStreamMode(e.target.checked)} />
               流式模式（/v1/chat/stream）
             </label>
+            {streamMode && (
+              <div className={`conn-state conn-${streamStatus}`}>
+                连接状态：{streamStatus}
+              </div>
+            )}
+            {streamMode && (
+              <div className="control-box">
+                <h3>重连控制</h3>
+                <label className="checkbox">
+                  <input type="checkbox" checked={reconnectEnabled} onChange={(e) => setReconnectEnabled(e.target.checked)} />
+                  启用自动重连
+                </label>
+                <div className="row">
+                  <label>
+                    最大重连
+                    <input type="number" min={0} value={reconnectMax} onChange={(e) => setReconnectMax(Number(e.target.value || 0))} />
+                  </label>
+                  <label>
+                    读超时(秒)
+                    <input type="number" min={1} value={readTimeoutSec} onChange={(e) => setReadTimeoutSec(Number(e.target.value || 15))} />
+                  </label>
+                  <label>
+                    轮次超时(秒)
+                    <input type="number" min={1} value={turnTimeoutSec} onChange={(e) => setTurnTimeoutSec(Number(e.target.value || 120))} />
+                  </label>
+                </div>
+                <div className="row">
+                  <label>
+                    超时策略
+                    <select value={timeoutAction} onChange={(e) => setTimeoutAction(e.target.value as StreamTimeoutAction)}>
+                      <option value="wait">wait</option>
+                      <option value="reconnect">reconnect</option>
+                      <option value="cancel">cancel</option>
+                    </select>
+                  </label>
+                  <button onClick={reconnectNow} disabled={busy || !input.trim()}>手动重连</button>
+                </div>
+              </div>
+            )}
             <div className="row">
               <button onClick={onSend} disabled={busy}>发送</button>
               <button onClick={onCancel} disabled={busy}>取消会话</button>
