@@ -99,6 +99,27 @@ func TestAddChatLineTruncateAndCap(t *testing.T) {
 	}
 }
 
+func TestActionCommandByIndex(t *testing.T) {
+	s := newState()
+	cmd, ok := actionCommandByIndex(s, 1)
+	if !ok || cmd != "/tools" {
+		t.Fatalf("idx1 cmd=%q ok=%v", cmd, ok)
+	}
+	cmd, ok = actionCommandByIndex(s, 10)
+	if !ok || cmd != "/fullscreen on" {
+		t.Fatalf("idx10 cmd=%q ok=%v", cmd, ok)
+	}
+	s.fullscreen = true
+	cmd, ok = actionCommandByIndex(s, 10)
+	if !ok || cmd != "/fullscreen off" {
+		t.Fatalf("idx10 fullscreen cmd=%q ok=%v", cmd, ok)
+	}
+	_, ok = actionCommandByIndex(s, 99)
+	if ok {
+		t.Fatal("expected invalid index")
+	}
+}
+
 func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
 	dir := t.TempDir()
 	s := newState()

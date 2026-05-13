@@ -85,6 +85,7 @@ go run .
 - `/pending [n]`、`/approve [id]`、`/deny [id]`：终端内审批闭环（可默认处理最近一条）
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
 - `/doctor`：后端能力预检（接口版本与连通性）
+- `/actions`：打开快捷操作面板（编号选择常用动作）
 - `/view human|json`：切换人类视图/JSON 视图
 - `/fullscreen on|off`：运行时切换全屏看板
 - `/version`：查看构建版本信息

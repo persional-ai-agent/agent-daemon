@@ -71,6 +71,7 @@
   - 启动自动 doctor 预检（可通过 `--no-doctor` 或 `[ui-tui] auto_doctor=false` 关闭）
   - 关键操作审计日志（approve/deny/cancel/config set）
   - 全屏看板模式（`--fullscreen` / `AGENT_UI_TUI_FULLSCREEN=1`）支持实时状态 + 最近事件 + 时间线
+  - 快捷操作面板（`/actions`）支持编号选择高频管理动作，降低命令输入成本
 
 ## 4. 测试策略
 

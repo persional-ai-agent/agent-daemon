@@ -86,6 +86,7 @@ go run . --fullscreen
 - `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）
 - `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/doctor` 后端能力预检（health/sessions/approval/ws/config）
+- `/actions` 打开快捷操作面板（编号选择常用管理动作）
 - `/diag` 查看实时诊断（transport/reconnect/fallback/error）
 - `/diag export <file>` 导出诊断包（含 recent_events）
 - `/version` 查看 ui-tui 构建版本信息

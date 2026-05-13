@@ -385,6 +385,7 @@ func printHelp() {
 	fmt.Println("/deny [id]            deny pending approval id (default latest)")
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
+	fmt.Println("/actions              open quick action palette")
 	fmt.Println("/version              show ui-tui build metadata")
 	fmt.Println("/reconnect status     show reconnect status")
 	fmt.Println("/reconnect on|off     enable/disable auto reconnect")
@@ -396,6 +397,34 @@ func printHelp() {
 	fmt.Println("/fullscreen on|off    toggle fullscreen dashboard mode")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
+}
+
+func actionMenuItems(s *appState) []string {
+	fullscreenAction := "fullscreen on"
+	if s != nil && s.fullscreen {
+		fullscreenAction = "fullscreen off"
+	}
+	return []string{
+		"/tools",
+		"/sessions 20",
+		"/show",
+		"/gateway status",
+		"/config get",
+		"/doctor",
+		"/diag",
+		"/reconnect status",
+		"/pending 5",
+		"/" + fullscreenAction,
+		"/help",
+	}
+}
+
+func actionCommandByIndex(s *appState, idx int) (string, bool) {
+	items := actionMenuItems(s)
+	if idx <= 0 || idx > len(items) {
+		return "", false
+	}
+	return items[idx-1], true
 }
 
 func printEvent(evt map[string]any) string {
@@ -1281,6 +1310,25 @@ func main() {
 		case text == "/help":
 			printHelp()
 			s.setStatus(true, "ok", "help shown")
+		case text == "/actions":
+			items := actionMenuItems(s)
+			for i, cmd := range items {
+				fmt.Printf("%d. %s\n", i+1, cmd)
+			}
+			idx, ok := promptIndex(reader, "select action", len(items))
+			if !ok {
+				s.setStatus(true, "ok", "actions cancelled")
+				continue
+			}
+			next, ok := actionCommandByIndex(s, idx)
+			if !ok {
+				s.setStatus(false, "invalid_input", "invalid action index")
+				continue
+			}
+			fmt.Printf("run action: %s\n", next)
+			text = next
+			fromRerun = true
+			goto REPROCESS
 		case text == "/version":
 			out := map[string]any{"version": BuildVersion, "commit": BuildCommit, "build_time": BuildTime}
 			s.lastJSON = out
