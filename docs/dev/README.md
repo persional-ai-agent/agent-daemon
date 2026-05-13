@@ -383,3 +383,4 @@
 - `256-summary-terminal-ssh-backend-alignment.md`：终端多环境补齐（新增 SSH 后端，形成 local/docker/ssh）
 - `257-summary-gateway-command-matrix-and-stale-lock-closure.md`：Gateway 命令矩阵与僵尸锁收口（跨平台命令一致性 + stale lock 自动清理）
 - `258-summary-acp-api-adapter-minimal.md`：ACP/IDE 最小 API 适配闭环（sessions/message/stream/cancel）
+- `259-summary-research-trajectory-runtime-minimal.md`：Research/RL/Trajectory 最小闭环（批跑、轨迹压缩、统计）

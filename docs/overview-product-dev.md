@@ -198,4 +198,4 @@
 | Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 已有 JSON manifest 发现、校验、启停（`plugins.disabled`）与 CLI 管理（`plugins list/show/validate/enable/disable`）；支持 `type=tool` 运行时工具注册 + `type=provider` 模型提供方插件注册 | 部分对齐 | 后续补插件签名校验、沙箱隔离、版本兼容与安装发布流程 |
 | ACP/IDE | `acp_adapter/` | 已有最小 ACP API 适配层（`/v1/acp/sessions`、`/v1/acp/message`、`/v1/acp/message/stream`、`/v1/acp/cancel`）复用现有 engine | 部分对齐 | 后续补 ACP 完整协议能力（更细事件、鉴权、能力声明） |
 | Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 当前先覆盖 interval/one-shot 作业存储与调度；后续补 cron expr 计算、平台投递与链式上下文 |
-| Research/RL/trajectory | `batch_runner.py`、`environments/`、`trajectory_compressor.py` | 无 | 未覆盖 | 与 daemon 主路径解耦，作为独立扩展 |
+| Research/RL/trajectory | `batch_runner.py`、`environments/`、`trajectory_compressor.py` | 已有最小闭环：`agentd research run/compress/stats` + `internal/research`（JSONL 轨迹与压缩） | 部分对齐 | 继续补环境基准、策略评估与训练流水线能力 |

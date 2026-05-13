@@ -39,6 +39,7 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
 	"github.com/dingjingmaster/agent-daemon/internal/model"
 	"github.com/dingjingmaster/agent-daemon/internal/plugins"
+	"github.com/dingjingmaster/agent-daemon/internal/research"
 	"github.com/dingjingmaster/agent-daemon/internal/store"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -674,9 +675,78 @@ func main() {
 		runSessions(cfg, os.Args[2:])
 	case "plugins":
 		runPlugins(cfg, os.Args[2:])
+	case "research":
+		runResearch(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
+}
+
+func runResearch(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		printResearchUsage()
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "run":
+		fs := flag.NewFlagSet("research run", flag.ExitOnError)
+		tasksFile := fs.String("tasks", "", "tasks jsonl file (each line: {input,session_id?,id?,metadata?})")
+		outFile := fs.String("out", "", "trajectory output jsonl file")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*tasksFile) == "" {
+			log.Fatal("usage: agentd research run -tasks file.jsonl [-out trajectories.jsonl]")
+		}
+		tasks, err := research.LoadTasks(strings.TrimSpace(*tasksFile))
+		if err != nil {
+			log.Fatal(err)
+		}
+		outputPath := strings.TrimSpace(*outFile)
+		if outputPath == "" {
+			outputPath = filepath.Join(cfg.DataDir, "research", "trajectories-"+time.Now().Format("20060102-150405")+".jsonl")
+		}
+		eng, _ := mustBuildEngine(cfg)
+		report, err := research.RunBatch(context.Background(), eng, tasks, outputPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(report)
+	case "compress":
+		fs := flag.NewFlagSet("research compress", flag.ExitOnError)
+		inFile := fs.String("in", "", "input trajectory jsonl")
+		outFile := fs.String("out", "", "output compressed trajectory .jsonl.gz")
+		maxChars := fs.Int("max-chars", 4000, "max chars kept for long text fields")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*inFile) == "" || strings.TrimSpace(*outFile) == "" {
+			log.Fatal("usage: agentd research compress -in trajectories.jsonl -out trajectories.compact.jsonl.gz [-max-chars 4000]")
+		}
+		meta, err := research.CompressTrajectories(strings.TrimSpace(*inFile), strings.TrimSpace(*outFile), *maxChars)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(meta)
+	case "stats":
+		fs := flag.NewFlagSet("research stats", flag.ExitOnError)
+		inFile := fs.String("in", "", "input trajectory jsonl")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*inFile) == "" {
+			log.Fatal("usage: agentd research stats -in trajectories.jsonl")
+		}
+		stats, err := research.StatsTrajectories(strings.TrimSpace(*inFile))
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(stats)
+	default:
+		printResearchUsage()
+		os.Exit(2)
+	}
+}
+
+func printResearchUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd research run -tasks file.jsonl [-out trajectories.jsonl]")
+	fmt.Fprintln(os.Stderr, "  agentd research compress -in trajectories.jsonl -out trajectories.compact.jsonl.gz [-max-chars 4000]")
+	fmt.Fprintln(os.Stderr, "  agentd research stats -in trajectories.jsonl")
 }
 
 func runTUI(cfg config.Config, first string, sessionID ...string) {

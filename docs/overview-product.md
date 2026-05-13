@@ -65,7 +65,7 @@
 | CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`bootstrap`、`version`、`update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall` 与最小 update 脚本安装面、gateway 与最小 `gateway setup/run/start/stop/restart/install/uninstall`；未实现 Hermes 全屏 TUI、完整安装器级 update 与更完整命令体系 |
 | 工具全集 | 部分对齐 | 已对齐 Hermes 文档中的 68 个内置工具“工具名/Toolsets 名称”（含 `discord`、`yb_*`、`process` 动作面等）；其中 browser/vision/image_generate 等仍存在能力级差距，但 browser 已支持可选 CDP 后端（配置 `BROWSER_CDP_URL`）以执行 JS/DOM |
 | 终端环境 | 部分对齐 | 当前支持 `local/docker/ssh` 执行后端；未覆盖 Modal、Daytona、Singularity、Vercel Sandbox 等更多环境 |
-| 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；已补最小插件系统（manifest 发现/校验、tool 类型运行时注册、CLI 启停管理）；已补最小 ACP API 适配层；batch/RL/trajectory 链路仍未覆盖 |
+| 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；已补最小插件系统（manifest 发现/校验、tool 类型运行时注册、CLI 启停管理）；已补最小 ACP API 适配层；已补最小 research trajectory 链路（`agentd research run/compress/stats`） |
 
 ## 暂未覆盖能力
 
@@ -77,7 +77,7 @@
 - browser（真实浏览器/JS/DOM）、vision（模型推理）、tts（真实语音合成）、image_generate（真实 FAL 后端）等“能力级”实现
 - Docker、SSH、Singularity、Modal、Daytona、Vercel Sandbox 等终端后端
 - 多平台 Gateway 的原生 slash UI、更完整 token lock 策略和更多平台适配器（当前 Telegram 具备最小原生命令菜单/审批按钮/manifest 导出，Discord 具备最小原生 slash 命令含 `grant` / `revoke`、审批按钮与命令清单导出，Slack 具备最小原生审批按钮、通用 slash 命令入口与 manifest 导出，Yuanbao 具备最小审批快捷回复与 manifest 导出）
-- ACP 完整协议能力、Cron 的平台投递/脚本/链式上下文等高级能力、Web/TUI dashboard、研究/训练数据链路
+- ACP 完整协议能力、Cron 的平台投递/脚本/链式上下文等高级能力、Web/TUI dashboard、完整研究/训练数据链路（当前仅最小 trajectory runtime）
 
 ## 当前范围
 
