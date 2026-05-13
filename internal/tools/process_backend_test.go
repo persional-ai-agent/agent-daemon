@@ -37,8 +37,29 @@ func TestBuildForegroundCommandDocker(t *testing.T) {
 }
 
 func TestBuildForegroundCommandUnsupported(t *testing.T) {
-	_, err := buildForegroundCommand(context.Background(), "echo hi", "", ForegroundBackendOptions{Backend: "ssh"})
+	_, err := buildForegroundCommand(context.Background(), "echo hi", "", ForegroundBackendOptions{Backend: "invalid"})
 	if err == nil {
 		t.Fatal("expected unsupported backend error")
+	}
+}
+
+func TestBuildForegroundCommandSSH(t *testing.T) {
+	cmd, err := buildForegroundCommand(context.Background(), "echo hi", "/work", ForegroundBackendOptions{
+		Backend:          "ssh",
+		SSHHost:          "example.com",
+		SSHUser:          "root",
+		SSHPort:          2222,
+		SSHKeyPath:       "/tmp/key",
+		SSHStrictHostKey: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "ssh") || !strings.Contains(joined, "root@example.com") {
+		t.Fatalf("unexpected ssh args: %v", cmd.Args)
+	}
+	if !strings.Contains(joined, "-p 2222") {
+		t.Fatalf("ssh port not set: %v", cmd.Args)
 	}
 }

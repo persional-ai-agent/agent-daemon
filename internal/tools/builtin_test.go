@@ -213,6 +213,20 @@ func TestTerminalBackgroundRejectsNonLocalBackend(t *testing.T) {
 	}
 }
 
+func TestTerminalSSHBackendRequiresHost(t *testing.T) {
+	b := &BuiltinTools{proc: NewProcessRegistry(t.TempDir())}
+	res, err := b.terminal(context.Background(), map[string]any{
+		"command": "echo hi",
+		"backend": "ssh",
+	}, ToolContext{Workdir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if success, _ := res["success"].(bool); success {
+		t.Fatalf("expected failure without ssh_host: %#v", res)
+	}
+}
+
 func TestTerminalAllowsDangerousCommandWithSessionApprovalGrant(t *testing.T) {
 	b := &BuiltinTools{}
 	workdir := t.TempDir()

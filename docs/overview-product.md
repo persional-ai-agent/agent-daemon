@@ -64,7 +64,7 @@
 | Gateway | 部分对齐 | 支持 Telegram、Discord、Slack、Yuanbao；已补最小 `send_message` + Telegram/Discord/Slack 本地文件投递（`MEDIA:` / `media_path`）+ Yuanbao best-effort 媒体投递（COS 上传链路，依赖网络与凭证）+ 最小 pairing/slash command/队列中断/hooks 运维 + `gateway run/start/stop/restart/install/uninstall` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 `token lock` + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；未覆盖 Hermes 的完整平台矩阵、更多平台原生 slash UI 和更完整 token lock |
 | CLI/TUI | 部分对齐 | 已有交互式 chat、serve、tools list/show/schemas/enable/disable、config、model、doctor、`setup`/`setup wizard`、`bootstrap`、`version`、`update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall` 与最小 update 脚本安装面、gateway 与最小 `gateway setup/run/start/stop/restart/install/uninstall`；未实现 Hermes 全屏 TUI、完整安装器级 update 与更完整命令体系 |
 | 工具全集 | 部分对齐 | 已对齐 Hermes 文档中的 68 个内置工具“工具名/Toolsets 名称”（含 `discord`、`yb_*`、`process` 动作面等）；其中 browser/vision/image_generate 等仍存在能力级差距，但 browser 已支持可选 CDP 后端（配置 `BROWSER_CDP_URL`）以执行 JS/DOM |
-| 终端环境 | 最小覆盖 | 当前为本地 Linux 执行；未覆盖 Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox |
+| 终端环境 | 部分对齐 | 当前支持 `local/docker/ssh` 执行后端；未覆盖 Modal、Daytona、Singularity、Vercel Sandbox 等更多环境 |
 | 插件/ACP/Cron/训练 | 部分对齐 | 已有最小 cron scheduler + 作业存储（需显式开启）；已补最小插件系统（manifest 发现/校验、tool 类型运行时注册、CLI 启停管理）；ACP adapter、batch/RL/trajectory 链路仍未覆盖 |
 
 ## 暂未覆盖能力

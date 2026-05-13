@@ -186,7 +186,7 @@
 | Provider runtime | `hermes_cli/runtime_provider.py`、`plugins/model-providers/` | `internal/model`、`internal/config` + provider 插件运行时（`type=provider` command 插件，`model providers` 可发现） | 部分对齐 | 继续补 provider profile、流式协议、签名/隔离与更丰富 provider 生态 |
 | Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go`、`toolsets.go` | 部分对齐 | 已补最小 toolsets 解析与 registry 过滤；后续补 availability check、动态 schema patch 与插件发现 |
 | Built-in tools | `tools/*`（Hermes tools-reference：68 tools） | 已对齐 68 工具名 + toolsets 名称兼容；部分工具为轻量实现/占位（browser/vision/tts 等） | 部分对齐 | 继续把占位逐步升级为“能力级”实现（真实浏览器、真实 TTS/vision/image backend 等） |
-| Terminal environments | `tools/environments/*` | `internal/tools/process.go` | 最小覆盖 | 抽象 Environment 接口后接 Docker/SSH 等后端 |
+| Terminal environments | `tools/environments/*` | `internal/tools/process.go`（`local/docker/ssh`） | 部分对齐 | 继续抽象 Environment 接口并扩展更多后端（Modal/Daytona/Singularity/Vercel Sandbox） |
 | Session storage | `hermes_state.py`、`gateway/session.py` | `internal/store/session_store.go` | 部分对齐 | 如需高质量检索，补 FTS5 与摘要层 |
 | Memory | `agent/memory_manager.py`、`plugins/memory/*` | `internal/memory/store.go` | 最小覆盖 | 先定义 memory provider 接口，再接外部插件 |
 | Context compression | `agent/context_compressor.py`、context engine plugins | `internal/agent/compressor.go` | 核心对齐 | 后续可加可替换 context engine |

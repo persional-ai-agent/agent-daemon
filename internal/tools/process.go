@@ -17,8 +17,14 @@ import (
 )
 
 type ForegroundBackendOptions struct {
-	Backend     string
-	DockerImage string
+	Backend           string
+	DockerImage       string
+	SSHHost           string
+	SSHUser           string
+	SSHPort           int
+	SSHKeyPath        string
+	SSHStrictHostKey  bool
+	SSHKnownHostsFile string
 }
 
 type ProcessSession struct {
@@ -259,7 +265,42 @@ func buildForegroundCommand(ctx context.Context, command, cwd string, opt Foregr
 		}
 		args = append(args, image, "sh", "-lc", command)
 		return exec.CommandContext(ctx, "docker", args...), nil
+	case "ssh":
+		host := strings.TrimSpace(opt.SSHHost)
+		if host == "" {
+			return nil, fmt.Errorf("ssh backend requires ssh_host")
+		}
+		target := host
+		if user := strings.TrimSpace(opt.SSHUser); user != "" {
+			target = user + "@" + host
+		}
+		sshArgs := make([]string, 0, 12)
+		if opt.SSHPort > 0 {
+			sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", opt.SSHPort))
+		}
+		if key := strings.TrimSpace(opt.SSHKeyPath); key != "" {
+			sshArgs = append(sshArgs, "-i", key)
+		}
+		if !opt.SSHStrictHostKey {
+			sshArgs = append(sshArgs, "-o", "StrictHostKeyChecking=no")
+		}
+		if kh := strings.TrimSpace(opt.SSHKnownHostsFile); kh != "" {
+			sshArgs = append(sshArgs, "-o", "UserKnownHostsFile="+kh)
+		}
+		remoteCmd := command
+		if strings.TrimSpace(cwd) != "" {
+			remoteCmd = "cd " + shellSingleQuote(cwd) + " && " + remoteCmd
+		}
+		sshArgs = append(sshArgs, target, "sh", "-lc", remoteCmd)
+		return exec.CommandContext(ctx, "ssh", sshArgs...), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", backend)
 	}
+}
+
+func shellSingleQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

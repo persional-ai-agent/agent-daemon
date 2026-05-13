@@ -431,6 +431,12 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		backend = "local"
 	}
 	dockerImage := strings.TrimSpace(strArg(args, "docker_image"))
+	sshHost := strings.TrimSpace(strArg(args, "ssh_host"))
+	sshUser := strings.TrimSpace(strArg(args, "ssh_user"))
+	sshPort := intArg(args, "ssh_port", 22)
+	sshKeyPath := strings.TrimSpace(strArg(args, "ssh_key_path"))
+	sshStrictHostKey := boolArg(args, "ssh_strict_host_key", false)
+	sshKnownHosts := strings.TrimSpace(strArg(args, "ssh_known_hosts_file"))
 	cwd := tc.Workdir
 	if v := strArg(args, "workdir"); strings.TrimSpace(v) != "" {
 		var err error
@@ -558,8 +564,14 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		return map[string]any{"success": true, "output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
 	}
 	out, code, err := RunForegroundWithOptions(ctx, command, cwd, timeout, ForegroundBackendOptions{
-		Backend:     backend,
-		DockerImage: dockerImage,
+		Backend:           backend,
+		DockerImage:       dockerImage,
+		SSHHost:           sshHost,
+		SSHUser:           sshUser,
+		SSHPort:           sshPort,
+		SSHKeyPath:        sshKeyPath,
+		SSHStrictHostKey:  sshStrictHostKey,
+		SSHKnownHostsFile: sshKnownHosts,
 	})
 	res := map[string]any{
 		"success":           err == nil && code == 0,
@@ -568,6 +580,11 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		"error":             nil,
 		"requires_approval": requiresApproval,
 		"backend":           backend,
+	}
+	if backend == "ssh" {
+		res["ssh_host"] = sshHost
+		res["ssh_user"] = sshUser
+		res["ssh_port"] = sshPort
 	}
 	if err != nil {
 		res["error"] = err.Error()
@@ -1824,8 +1841,14 @@ func terminalParams() map[string]any {
 		"background":           map[string]any{"type": "boolean", "description": "Run command in background and return immediately (default false)."},
 		"timeout":              map[string]any{"type": "integer", "minimum": 0, "description": "Foreground execution timeout in seconds (default 120)."},
 		"workdir":              map[string]any{"type": "string"},
-		"backend":              map[string]any{"type": "string", "enum": []string{"local", "docker"}, "description": "Execution backend (default local)."},
+		"backend":              map[string]any{"type": "string", "enum": []string{"local", "docker", "ssh"}, "description": "Execution backend (default local)."},
 		"docker_image":         map[string]any{"type": "string", "description": "Docker image when backend=docker (default alpine:3.20)."},
+		"ssh_host":             map[string]any{"type": "string", "description": "SSH host when backend=ssh."},
+		"ssh_user":             map[string]any{"type": "string", "description": "SSH username when backend=ssh."},
+		"ssh_port":             map[string]any{"type": "integer", "minimum": 1, "maximum": 65535, "description": "SSH port when backend=ssh (default 22)."},
+		"ssh_key_path":         map[string]any{"type": "string", "description": "SSH private key path when backend=ssh."},
+		"ssh_strict_host_key":  map[string]any{"type": "boolean", "description": "Enable strict host key checking for backend=ssh (default false)."},
+		"ssh_known_hosts_file": map[string]any{"type": "string", "description": "Known hosts file for backend=ssh."},
 		"requires_approval":    map[string]any{"type": "boolean", "description": "Require explicit approval before execution (default false)."},
 		"approval_ttl_seconds": map[string]any{"type": "integer", "minimum": 0, "description": "Approval validity period in seconds (default 0 uses store default)."},
 		"notify_on_complete":   map[string]any{"type": "boolean", "description": "When background=true, emit a stream event when the process finishes (best-effort)."},
