@@ -56,3 +56,13 @@ func TestCronjobSchemaDescriptionIncludesRunActions(t *testing.T) {
 		t.Fatalf("unexpected cronjob description: %q", desc)
 	}
 }
+
+func TestCronjobSchemaActionDescriptionIncludesDefault(t *testing.T) {
+	schema := NewCronJobTool(nil).Schema()
+	props, _ := schema.Function.Parameters["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	desc, _ := action["description"].(string)
+	if !strings.Contains(desc, "default: list") {
+		t.Fatalf("unexpected cronjob action description: %q", desc)
+	}
+}

@@ -35,7 +35,7 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 				"properties": map[string]any{
 					"action": map[string]any{
 						"type":        "string",
-						"description": "Action to perform",
+						"description": "Action to perform (default: list)",
 						"enum":        []string{"create", "list", "get", "update", "pause", "resume", "remove", "trigger", "runs", "run_get"},
 					},
 					"job_id": map[string]any{"type": "string", "description": "Cron job id"},
