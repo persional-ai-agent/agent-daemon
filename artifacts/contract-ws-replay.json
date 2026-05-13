@@ -1,0 +1,25 @@
+{
+  "contract_version": "v1",
+  "results": [
+    {
+      "name": "chat_ws_success",
+      "pass": true,
+      "seen_events": [
+        "session",
+        "resumed",
+        "user_message",
+        "turn_started",
+        "assistant_message",
+        "completed",
+        "result"
+      ]
+    },
+    {
+      "name": "chat_ws_invalid_json_error",
+      "pass": true,
+      "seen_events": [
+        "error"
+      ]
+    }
+  ]
+}

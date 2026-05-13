@@ -1,0 +1,69 @@
+{
+  "results": [
+    {
+      "name": "ui_tools_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_tool_schema_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_sessions_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_session_detail_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_config_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_config_set_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_gateway_status_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_gateway_action_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_approval_confirm_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "chat_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "chat_stream_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "chat_stream_resume_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "chat_cancel_success",
+      "status": 200,
+      "pass": true
+    }
+  ]
+}
