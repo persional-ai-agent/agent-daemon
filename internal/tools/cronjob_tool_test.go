@@ -66,3 +66,13 @@ func TestCronjobSchemaActionDescriptionIncludesDefault(t *testing.T) {
 		t.Fatalf("unexpected cronjob action description: %q", desc)
 	}
 }
+
+func TestCronjobSchemaDocumentsRunsLimitBounds(t *testing.T) {
+	schema := NewCronJobTool(nil).Schema()
+	props, _ := schema.Function.Parameters["properties"].(map[string]any)
+	limit, _ := props["limit"].(map[string]any)
+	desc, _ := limit["description"].(string)
+	if !strings.Contains(desc, "default 50") || !strings.Contains(desc, "max 200") {
+		t.Fatalf("unexpected cronjob limit description: %q", desc)
+	}
+}

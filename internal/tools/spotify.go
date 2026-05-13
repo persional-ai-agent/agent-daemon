@@ -72,9 +72,14 @@ func (b *BuiltinTools) spotifySearch(ctx context.Context, args map[string]any, _
 	if q == "" {
 		return nil, errors.New("q required")
 	}
-	typ := strings.TrimSpace(strArg(args, "type"))
+	typ := strings.ToLower(strings.TrimSpace(strArg(args, "type")))
 	if typ == "" {
 		typ = "track"
+	}
+	switch typ {
+	case "album", "artist", "playlist", "track", "show", "episode", "audiobook":
+	default:
+		return nil, fmt.Errorf("unsupported search type: %s", typ)
 	}
 	limit := intArg(args, "limit", 10)
 	if limit <= 0 {
@@ -269,7 +274,7 @@ func (b *BuiltinTools) spotifyLibrary(ctx context.Context, args map[string]any, 
 }
 
 func spotifySearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}, "type": map[string]any{"type": "string", "description": "Search type (default: track)."}, "limit": map[string]any{"type": "integer", "description": "Maximum results per request (default 10, max 50)."}}, "required": []string{"q"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}, "type": map[string]any{"type": "string", "enum": []string{"album", "artist", "playlist", "track", "show", "episode", "audiobook"}, "description": "Search type (default: track)."}, "limit": map[string]any{"type": "integer", "description": "Maximum results per request (default 10, max 50)."}}, "required": []string{"q"}}
 }
 
 func spotifyPlaybackParams() map[string]any {

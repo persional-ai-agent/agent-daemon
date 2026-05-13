@@ -1225,15 +1225,19 @@ func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ To
 	if maxChars <= 0 {
 		maxChars = 8000
 	}
+	if maxChars > 200000 {
+		maxChars = 200000
+	}
 	bs, err := fetchHTTPBytes(ctx, rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch url: %w", err)
 	}
 	text := htmlToText(string(bs))
+	truncated := len(text) > maxChars
 	if len(text) > maxChars {
 		text = text[:maxChars]
 	}
-	return map[string]any{"success": true, "url": rawURL, "content": text, "truncated": len(text) == maxChars}, nil
+	return map[string]any{"success": true, "url": rawURL, "content": text, "truncated": truncated}, nil
 }
 
 func (b *BuiltinTools) clarify(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -1906,7 +1910,7 @@ func webSearchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "base_url": map[string]any{"type": "string"}}, "required": []string{"query"}}
 }
 func webExtractParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer"}}, "required": []string{"url"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer", "description": "Maximum extracted text length (default 8000, max 200000)."}}, "required": []string{"url"}}
 }
 func stubParams() map[string]any {
 	// Keep schema footprint minimal while still being callable by name.

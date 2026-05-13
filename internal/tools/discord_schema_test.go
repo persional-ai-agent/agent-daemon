@@ -2,6 +2,7 @@ package tools
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,15 @@ func TestDiscordSchemasDocumentDefaultAction(t *testing.T) {
 	}
 	checkDefaultHint("discord", discordToolParams())
 	checkDefaultHint("discord_admin", discordAdminParams())
+}
+
+func TestDiscordSchemaDocumentsFetchMessagesLimitBounds(t *testing.T) {
+	props, _ := discordToolParams()["properties"].(map[string]any)
+	limit, _ := props["limit"].(map[string]any)
+	desc, _ := limit["description"].(string)
+	if !strings.Contains(desc, "default 50") || !strings.Contains(desc, "max 100") {
+		t.Fatalf("discord.limit description=%q, want default/max hint", desc)
+	}
 }
 
 func containsIgnoreCase(s, sub string) bool {

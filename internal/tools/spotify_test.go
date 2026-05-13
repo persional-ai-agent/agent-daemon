@@ -84,6 +84,9 @@ func TestSpotifySchemasDocumentDefaultsAndBounds(t *testing.T) {
 	if desc, _ := searchType["description"].(string); !strings.Contains(desc, "default: track") {
 		t.Fatalf("spotify_search.type description=%q", desc)
 	}
+	if enum, _ := searchType["enum"].([]string); !reflect.DeepEqual(enum, []string{"album", "artist", "playlist", "track", "show", "episode", "audiobook"}) {
+		t.Fatalf("spotify_search.type enum=%v", enum)
+	}
 	if desc, _ := searchLimit["description"].(string); !strings.Contains(desc, "default 10") || !strings.Contains(desc, "max 50") {
 		t.Fatalf("spotify_search.limit description=%q", desc)
 	}
