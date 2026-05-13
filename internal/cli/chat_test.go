@@ -1,12 +1,34 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+	fn()
+	_ = w.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	return strings.TrimSpace(buf.String())
+}
 
 type testSessionStore struct {
 	msgs []core.Message
@@ -103,5 +125,38 @@ func TestHandleSlashCommandStats(t *testing.T) {
 	}
 	if !handled {
 		t.Fatal("expected handled=true")
+	}
+}
+
+func TestPrintCLIEnvelopeSuccess(t *testing.T) {
+	line := captureStdout(t, func() {
+		printCLIEnvelope(true, map[string]any{"session_id": "s1"}, "", "")
+	})
+	var out map[string]any
+	if err := json.Unmarshal([]byte(line), &out); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if out["ok"] != true || out["api_version"] != "v1" || out["compat"] == "" {
+		t.Fatalf("unexpected envelope: %+v", out)
+	}
+	if out["session_id"] != "s1" {
+		t.Fatalf("missing payload: %+v", out)
+	}
+}
+
+func TestPrintCLIEnvelopeError(t *testing.T) {
+	line := captureStdout(t, func() {
+		printCLIEnvelope(false, nil, "invalid_argument", "bad")
+	})
+	var out map[string]any
+	if err := json.Unmarshal([]byte(line), &out); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if out["ok"] != false || out["api_version"] != "v1" || out["compat"] == "" {
+		t.Fatalf("unexpected envelope: %+v", out)
+	}
+	errObj, _ := out["error"].(map[string]any)
+	if errObj["code"] != "invalid_argument" || errObj["message"] != "bad" {
+		t.Fatalf("unexpected error payload: %+v", out)
 	}
 }

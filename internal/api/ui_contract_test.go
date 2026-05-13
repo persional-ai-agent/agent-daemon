@@ -13,15 +13,29 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
-func assertErrorEnvelope(t *testing.T, rec *httptest.ResponseRecorder, expectedCode string) {
+func decodeJSONMap(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
-	if rec.Header().Get("X-Agent-UI-API-Version") != "v1" {
-		t.Fatalf("missing UI version header: %v", rec.Header())
-	}
 	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("invalid json: %v", err)
 	}
+	return out
+}
+
+func assertUIContractHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Header().Get("X-Agent-UI-API-Version") != "v1" {
+		t.Fatalf("missing UI version header: %v", rec.Header())
+	}
+	if rec.Header().Get("X-Agent-UI-API-Compat") == "" {
+		t.Fatalf("missing UI compat header: %v", rec.Header())
+	}
+}
+
+func assertErrorEnvelope(t *testing.T, rec *httptest.ResponseRecorder, expectedCode string) {
+	t.Helper()
+	assertUIContractHeaders(t, rec)
+	out := decodeJSONMap(t, rec)
 	if out["ok"] != false {
 		t.Fatalf("expected ok=false, got %+v", out)
 	}
@@ -77,16 +91,8 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
-			if rec.Header().Get("X-Agent-UI-API-Version") != "v1" {
-				t.Fatalf("missing UI version header: %v", rec.Header())
-			}
-			if rec.Header().Get("X-Agent-UI-API-Compat") == "" {
-				t.Fatalf("missing UI compat header: %v", rec.Header())
-			}
-			var out map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-				t.Fatalf("invalid json: %v", err)
-			}
+			assertUIContractHeaders(t, rec)
+			out := decodeJSONMap(t, rec)
 			if out["api_version"] != "v1" {
 				t.Fatalf("api_version=%v", out["api_version"])
 			}

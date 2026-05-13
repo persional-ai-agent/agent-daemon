@@ -214,3 +214,29 @@ func TestHTTPJSONParsesUIErrorEnvelope(t *testing.T) {
 		t.Fatalf("expected parsed ui error, got %v", err)
 	}
 }
+
+func TestUIPayloadFallsBackToResultEnvelope(t *testing.T) {
+	out := map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"snapshot": "from-result",
+		},
+		"status": "legacy",
+	}
+	got := uiPayload(out, "snapshot")
+	res, _ := got.(map[string]any)
+	if res["snapshot"] != "from-result" {
+		t.Fatalf("unexpected payload: %v", got)
+	}
+}
+
+func TestUIPayloadFallbackLegacyField(t *testing.T) {
+	out := map[string]any{
+		"ok":     true,
+		"status": "legacy",
+	}
+	got := uiPayload(out, "status")
+	if got != "legacy" {
+		t.Fatalf("unexpected payload: %v", got)
+	}
+}
