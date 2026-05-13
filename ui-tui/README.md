@@ -41,6 +41,15 @@ go run .
 - `/last` 查看最近一次 JSON 响应
 - `/save <file>` 保存最近一次 JSON 响应到文件
 - `/status` 查看最近一次命令状态
+- `/health` 查看后端健康状态
+- `/cancel` 取消当前会话中的运行任务
+- `/history [n]` 查看本地命令历史
+- `/rerun <index>` 重新执行历史命令
+- `/events [n]` 查看最近运行事件
+- `/events save <file>` 保存事件日志到文件
+- `/bookmark add <name> [sid]` 保存会话书签
+- `/bookmark list` 查看会话书签
+- `/bookmark use <name>` 切换到书签会话
 - `/quit` 或 `/exit` 退出
 
 常用别名：
