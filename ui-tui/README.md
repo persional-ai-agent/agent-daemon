@@ -22,6 +22,7 @@ go run . --no-doctor
 - `AGENT_API_BASE`：自定义 WS 地址
 - `AGENT_HTTP_BASE`：自定义 HTTP 管理 API 地址（默认从 WS 地址自动推导）
 - `AGENT_SESSION_ID`：指定会话 ID（默认自动生成）
+- `AGENT_UI_TUI_BOOT_MESSAGE`：启动后自动发送首条消息（由 `agentd tui -message` 注入）
 
 配置文件：
 

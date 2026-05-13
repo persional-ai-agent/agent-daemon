@@ -1161,6 +1161,15 @@ func main() {
 			s.setStatus(false, "doctor_failed", "startup doctor found failures")
 		}
 	}
+	if boot := strings.TrimSpace(os.Getenv("AGENT_UI_TUI_BOOT_MESSAGE")); boot != "" {
+		fmt.Printf("[startup] send first message: %s\n", boot)
+		if err := s.sendTurn(boot, s.addEvent); err != nil {
+			fmt.Printf("[ws-error] %v\n", err)
+			s.setErrStatus(err)
+		} else {
+			s.setStatus(true, "ok", "startup message sent")
+		}
+	}
 	reader := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)

@@ -47,6 +47,8 @@ agentd tui -mode standalone
 agentd tui -mode lite
 ```
 
+在 `standalone/auto` 模式下，若无 `ui-tui` 二进制，`agentd tui` 会继续尝试源码回退（`go run ./ui-tui`，需在仓库根目录执行并有 Go 环境）。
+
 使用独立 TUI 子工程：
 
 ```bash

@@ -58,3 +58,28 @@ func TestResolveUITUIBinaryFromLocalCandidate(t *testing.T) {
 	}
 }
 
+func TestResolveUITUISourceDir(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWD) }()
+
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmp, "ui-tui"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := resolveUITUISourceDir()
+	if !ok {
+		t.Fatal("resolveUITUISourceDir should succeed")
+	}
+	if got != filepath.Join(tmp, "ui-tui") {
+		t.Fatalf("resolveUITUISourceDir=%q", got)
+	}
+}

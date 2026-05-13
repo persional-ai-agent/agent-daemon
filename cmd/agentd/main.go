@@ -795,15 +795,10 @@ func runTUI(cfg config.Config, first, mode string, sessionID ...string) {
 }
 
 func runStandaloneUITUI(firstMessage, sessionID string) error {
-	bin, err := resolveUITUIBinary()
+	cmd, err := buildUITUICommand()
 	if err != nil {
 		return err
 	}
-	args := []string{}
-	if strings.TrimSpace(firstMessage) == "" {
-		// no-op, handled via stdin in ui-tui
-	}
-	cmd := exec.Command(bin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -811,7 +806,20 @@ func runStandaloneUITUI(firstMessage, sessionID string) error {
 	if strings.TrimSpace(sessionID) != "" {
 		cmd.Env = append(cmd.Env, "AGENT_SESSION_ID="+strings.TrimSpace(sessionID))
 	}
+	if strings.TrimSpace(firstMessage) != "" {
+		cmd.Env = append(cmd.Env, "AGENT_UI_TUI_BOOT_MESSAGE="+firstMessage)
+	}
 	return cmd.Run()
+}
+
+func buildUITUICommand() (*exec.Cmd, error) {
+	if bin, err := resolveUITUIBinary(); err == nil {
+		return exec.Command(bin), nil
+	}
+	if dir, ok := resolveUITUISourceDir(); ok {
+		return exec.Command("go", "run", dir), nil
+	}
+	return nil, fmt.Errorf("ui-tui launch target not found (set AGENT_UI_TUI_BIN, install ui-tui in PATH, or run from repository root)")
 }
 
 func resolveUITUIBinary() (string, error) {
@@ -831,6 +839,20 @@ func resolveUITUIBinary() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("ui-tui binary not found (set AGENT_UI_TUI_BIN or install ui-tui in PATH)")
+}
+
+func resolveUITUISourceDir() (string, bool) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	candidate := filepath.Join(wd, "ui-tui")
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 func runConfig(args []string) {
