@@ -76,6 +76,8 @@ go run . --no-doctor
 - `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）
 - `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/doctor` 后端能力预检（health/sessions/approval/ws/config）
+- `/diag` 查看实时诊断（transport/reconnect/fallback/error）
+- `/diag export <file>` 导出诊断包（含 recent_events）
 - `/version` 查看 ui-tui 构建版本信息
 - `/quit` 或 `/exit` 退出
 
@@ -83,6 +85,7 @@ go run . --no-doctor
 
 - 提示符：`tui[ok/ok]`、`tui[err/network]` 这类 `状态/错误码` 组合
 - `/status` 输出：`status=<ok|err> code=<ok|network|timeout|auth|request|server|unknown> detail=<详情>`
+- `/diag` 输出：`active_transport/reconnect_count/fallback_hint/last_error_code` 等实时字段
 - 启动时自动恢复最近会话与 endpoint（`~/.agent-daemon/ui-tui-state.json`）
 - 若状态文件损坏，会自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
 - 默认启动会自动执行一次 doctor（可通过 `[ui-tui] auto_doctor=false` 或 `--no-doctor` 关闭）

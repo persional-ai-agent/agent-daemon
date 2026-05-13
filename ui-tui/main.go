@@ -74,16 +74,23 @@ type appState struct {
 	statePath    string
 	auditPath    string
 
-	historyMaxLines int
-	eventMaxItems   int
-	wsReadTimeout   time.Duration
-	wsTurnTimeout   time.Duration
-	wsMaxReconnect  int
-	viewMode        string
-	autoDoctor      bool
+	historyMaxLines  int
+	eventMaxItems    int
+	wsReadTimeout    time.Duration
+	wsTurnTimeout    time.Duration
+	wsMaxReconnect   int
+	viewMode         string
+	autoDoctor       bool
 	reconnectEnabled bool
 	reconnectState   string
 	timeoutAction    string
+	activeTransport  string
+	lastTurnID       string
+	reconnectCount   int
+	lastErrorCode    string
+	lastErrorText    string
+	fallbackHint     string
+	diagUpdatedAt    string
 }
 
 const (
@@ -133,31 +140,34 @@ func newState() *appState {
 	}
 	root := filepath.Join(home, ".agent-daemon")
 	st := &appState{
-		wsBase:          wsBase,
-		httpBase:        httpBase,
-		session:         session,
-		pretty:          true,
-		lastStatus:      "ok",
-		lastDetail:      "initialized",
-		lastCode:        "ok",
-		lastShowSession: session,
-		lastShowLimit:   20,
-		lastSessions:    make([]string, 0),
-		eventLog:        make([]map[string]any, 0),
-		historyPath:     filepath.Join(root, "ui-tui-history.log"),
-		bookmarkPath:    filepath.Join(root, "ui-tui-bookmarks.json"),
-		statePath:       filepath.Join(root, "ui-tui-state.json"),
-		auditPath:       filepath.Join(root, "ui-tui-audit.log"),
-		historyMaxLines: cfg.UITUIHistoryMaxLines,
-		eventMaxItems:   cfg.UITUIEventMaxItems,
-		wsReadTimeout:   time.Duration(cfg.UITUIWSReadTimeoutSec) * time.Second,
-		wsTurnTimeout:   time.Duration(cfg.UITUITurnTimeoutSec) * time.Second,
-		wsMaxReconnect:  cfg.UITUIReconnectMax,
-		viewMode:        "human",
-		autoDoctor:      true,
+		wsBase:           wsBase,
+		httpBase:         httpBase,
+		session:          session,
+		pretty:           true,
+		lastStatus:       "ok",
+		lastDetail:       "initialized",
+		lastCode:         "ok",
+		lastShowSession:  session,
+		lastShowLimit:    20,
+		lastSessions:     make([]string, 0),
+		eventLog:         make([]map[string]any, 0),
+		historyPath:      filepath.Join(root, "ui-tui-history.log"),
+		bookmarkPath:     filepath.Join(root, "ui-tui-bookmarks.json"),
+		statePath:        filepath.Join(root, "ui-tui-state.json"),
+		auditPath:        filepath.Join(root, "ui-tui-audit.log"),
+		historyMaxLines:  cfg.UITUIHistoryMaxLines,
+		eventMaxItems:    cfg.UITUIEventMaxItems,
+		wsReadTimeout:    time.Duration(cfg.UITUIWSReadTimeoutSec) * time.Second,
+		wsTurnTimeout:    time.Duration(cfg.UITUITurnTimeoutSec) * time.Second,
+		wsMaxReconnect:   cfg.UITUIReconnectMax,
+		viewMode:         "human",
+		autoDoctor:       true,
 		reconnectEnabled: true,
 		reconnectState:   "connecting",
 		timeoutAction:    "wait",
+		activeTransport:  "ws",
+		lastErrorCode:    "ok",
+		diagUpdatedAt:    time.Now().Format(time.RFC3339),
 	}
 	st.loadRuntimeState()
 	return st
@@ -275,6 +285,14 @@ func (s *appState) setStatus(ok bool, code, detail string) {
 	}
 	s.lastCode = code
 	s.lastDetail = detail
+	if ok {
+		s.lastErrorCode = "ok"
+		s.lastErrorText = ""
+	} else {
+		s.lastErrorCode = code
+		s.lastErrorText = detail
+	}
+	s.diagUpdatedAt = time.Now().Format(time.RFC3339)
 }
 
 func canonicalInput(text string) string {
@@ -366,6 +384,8 @@ func printHelp() {
 	fmt.Println("/reconnect on|off     enable/disable auto reconnect")
 	fmt.Println("/reconnect now        probe websocket endpoint immediately")
 	fmt.Println("/reconnect timeout wait|reconnect|cancel")
+	fmt.Println("/diag                 show realtime diagnostics")
+	fmt.Println("/diag export <file>   export diagnostics bundle")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -628,6 +648,44 @@ func classifyError(err error) (string, string) {
 func (s *appState) setErrStatus(err error) {
 	code, detail := classifyError(err)
 	s.setStatus(false, code, detail)
+}
+
+func (s *appState) diagnosticsSnapshot() map[string]any {
+	return map[string]any{
+		"session_id":        s.session,
+		"turn_id":           s.lastTurnID,
+		"active_transport":  s.activeTransport,
+		"reconnect_enabled": s.reconnectEnabled,
+		"reconnect_state":   s.reconnectState,
+		"reconnect_count":   s.reconnectCount,
+		"max_reconnect":     s.wsMaxReconnect,
+		"timeout_action":    s.timeoutAction,
+		"read_timeout_sec":  int(s.wsReadTimeout / time.Second),
+		"turn_timeout_sec":  int(s.wsTurnTimeout / time.Second),
+		"fallback_hint":     s.fallbackHint,
+		"last_error_code":   s.lastErrorCode,
+		"last_error_text":   s.lastErrorText,
+		"event_count":       len(s.eventLog),
+		"updated_at":        s.diagUpdatedAt,
+	}
+}
+
+func (s *appState) exportDiagnostics(path string) error {
+	payload := map[string]any{
+		"exported_at": time.Now().Format(time.RFC3339),
+		"diagnostics": s.diagnosticsSnapshot(),
+		"runtime_state": map[string]any{
+			"ws_base":   s.wsBase,
+			"http_base": s.httpBase,
+			"view_mode": s.viewMode,
+		},
+		"recent_events": s.eventLog,
+	}
+	bs, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, bs, 0o644)
 }
 
 func httpJSON(method, endpoint string, body map[string]any) (map[string]any, error) {
@@ -926,19 +984,31 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 	turnID := uuid.NewString()
 	startedAt := time.Now()
 	s.reconnectState = "connecting"
+	s.activeTransport = "ws"
+	s.lastTurnID = turnID
+	s.reconnectCount = 0
+	s.fallbackHint = ""
+	s.diagUpdatedAt = time.Now().Format(time.RFC3339)
 	seenPayload := map[string]struct{}{}
 	dedupeEnabled := false
 	maxReconnect := s.wsMaxReconnect
 	if !s.reconnectEnabled {
 		maxReconnect = 0
 	}
+	reconnectReason := ""
 	for attempt := 0; attempt <= maxReconnect; attempt++ {
 		if attempt > 0 {
 			dedupeEnabled = true
 			s.reconnectState = "degraded"
+			s.reconnectCount++
+			if strings.TrimSpace(reconnectReason) != "" {
+				s.fallbackHint = fmt.Sprintf("ws reconnect attempt=%d reason=%s", attempt, reconnectReason)
+			}
+			s.diagUpdatedAt = time.Now().Format(time.RFC3339)
 		}
 		conn, _, dialErr := websocket.DefaultDialer.Dial(u.String(), nil)
 		if dialErr != nil {
+			reconnectReason = dialErr.Error()
 			if attempt >= maxReconnect {
 				s.reconnectState = "failed"
 				return dialErr
@@ -954,6 +1024,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			"resume":     attempt > 0,
 		}
 		if err := conn.WriteJSON(req); err != nil {
+			reconnectReason = err.Error()
 			_ = conn.Close()
 			if attempt >= maxReconnect {
 				s.reconnectState = "failed"
@@ -985,6 +1056,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 							_ = conn.Close()
 							fmt.Printf("[ws-timeout] timeout action=reconnect, forcing reconnect\n")
 							s.reconnectState = "degraded"
+							reconnectReason = "read timeout"
 							time.Sleep(300 * time.Millisecond)
 							forceReconnect = true
 						case "cancel":
@@ -1004,6 +1076,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 					continue
 				}
 				_ = conn.Close()
+				reconnectReason = err.Error()
 				if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
 					s.reconnectState = "failed"
 					return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
@@ -1028,6 +1101,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			if evtType == "resumed" {
 				dedupeEnabled = true
 				s.reconnectState = "resumed"
+				s.diagUpdatedAt = time.Now().Format(time.RFC3339)
 			}
 			key := string(payload)
 			if _, ok := seenPayload[key]; ok {
@@ -1049,7 +1123,14 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				}
 				if evtType == "error" || evtType == "cancelled" {
 					s.reconnectState = "failed"
+					if code, ok := evt["error_code"].(string); ok && strings.TrimSpace(code) != "" {
+						s.lastErrorCode = code
+					}
+					if em, ok := evt["error"].(string); ok && strings.TrimSpace(em) != "" {
+						s.lastErrorText = em
+					}
 				}
+				s.diagUpdatedAt = time.Now().Format(time.RFC3339)
 				return nil
 			}
 		}
@@ -1153,14 +1234,37 @@ func main() {
 			fmt.Printf("reconnect enabled=%v state=%s max=%d timeout_action=%s\n", s.reconnectEnabled, s.reconnectState, s.wsMaxReconnect, s.timeoutAction)
 		case text == "/reconnect status":
 			out := map[string]any{
-				"enabled":        s.reconnectEnabled,
-				"state":          s.reconnectState,
-				"max_reconnect":  s.wsMaxReconnect,
-				"timeout_action": s.timeoutAction,
+				"enabled":         s.reconnectEnabled,
+				"state":           s.reconnectState,
+				"max_reconnect":   s.wsMaxReconnect,
+				"timeout_action":  s.timeoutAction,
+				"reconnect_count": s.reconnectCount,
+				"fallback_hint":   s.fallbackHint,
+				"last_error_code": s.lastErrorCode,
 			}
 			s.lastJSON = out
 			s.printData(out)
 			s.setStatus(true, "ok", "reconnect status shown")
+		case text == "/diag":
+			out := s.diagnosticsSnapshot()
+			s.lastJSON = out
+			s.printData(out)
+			s.setStatus(true, "ok", "diagnostics shown")
+		case strings.HasPrefix(text, "/diag export "):
+			path := strings.TrimSpace(strings.TrimPrefix(text, "/diag export "))
+			if path == "" {
+				fmt.Println("usage: /diag export <file>")
+				s.setStatus(false, "invalid_input", "invalid diag export args")
+				continue
+			}
+			if err := s.exportDiagnostics(path); err != nil {
+				fmt.Printf("[save-error] %v\n", err)
+				suggestRetry("/diag export " + path)
+				s.setErrStatus(err)
+				continue
+			}
+			fmt.Printf("diagnostics exported: %s\n", path)
+			s.setStatus(true, "ok", "diagnostics exported")
 		case text == "/reconnect on":
 			s.reconnectEnabled = true
 			fmt.Println("reconnect: on")

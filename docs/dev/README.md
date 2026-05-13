@@ -373,3 +373,4 @@
 - `246-summary-web-reconnect-controls.md`：Web Chat 重连状态可视化与控制对齐
 - `247-summary-web-ws-primary-fallback-sse.md`：Web Chat 升级 WS 主通道并保留 SSE 降级
 - `248-summary-web-realtime-diagnostics-panel.md`：Web Chat 实时诊断面板与诊断包导出
+- `249-summary-ui-tui-realtime-diagnostics-parity.md`：ui-tui 实时诊断能力对齐（/diag + 诊断包导出）

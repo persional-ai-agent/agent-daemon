@@ -135,6 +135,46 @@ func TestSendTurnReconnect(t *testing.T) {
 	if resultSeen != 1 {
 		t.Fatalf("expected resultSeen=1, got %d", resultSeen)
 	}
+	if s.reconnectCount < 1 {
+		t.Fatalf("expected reconnectCount>=1, got %d", s.reconnectCount)
+	}
+	if strings.TrimSpace(s.fallbackHint) == "" {
+		t.Fatalf("expected fallbackHint recorded on reconnect")
+	}
+	if s.lastTurnID == "" {
+		t.Fatal("expected lastTurnID to be set")
+	}
+}
+
+func TestExportDiagnostics(t *testing.T) {
+	s := newState()
+	s.session = "diag-session"
+	s.lastTurnID = "turn-1"
+	s.reconnectState = "degraded"
+	s.reconnectCount = 2
+	s.fallbackHint = "ws reconnect attempt=1 reason=WS_CLOSED"
+	s.lastErrorCode = "network"
+	s.lastErrorText = "connection reset"
+	s.eventLog = []map[string]any{{"type": "assistant_message", "content": "hi"}}
+	path := filepath.Join(t.TempDir(), "diag.json")
+	if err := s.exportDiagnostics(path); err != nil {
+		t.Fatalf("export diagnostics: %v", err)
+	}
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read diag file: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(bs, &payload); err != nil {
+		t.Fatalf("unmarshal diag file: %v", err)
+	}
+	diag, _ := payload["diagnostics"].(map[string]any)
+	if diag["session_id"] != "diag-session" {
+		t.Fatalf("unexpected session_id: %v", diag["session_id"])
+	}
+	if diag["reconnect_count"] != float64(2) {
+		t.Fatalf("unexpected reconnect_count: %v", diag["reconnect_count"])
+	}
 }
 
 func TestRunDoctor(t *testing.T) {
