@@ -1954,8 +1954,9 @@ func visionAnalyzeParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"path":     map[string]any{"type": "string", "description": "Local image file path (within workdir)."},
-			"question": map[string]any{"type": "string", "description": "Optional specific question about the image."},
+			"path":           map[string]any{"type": "string", "description": "Local image file path (within workdir)."},
+			"question":       map[string]any{"type": "string", "description": "Optional specific question about the image."},
+			"strict_backend": map[string]any{"type": "boolean", "description": "If true, do not fall back to metadata-only result when the vision backend fails."},
 		},
 		"required": []string{"path"},
 	}
@@ -1979,6 +1980,7 @@ func imageGenerateParams() map[string]any {
 				"type":        "boolean",
 				"description": "If true and running under a gateway context, deliver the generated image to the current chat (requires adapter media support).",
 			},
+			"strict_backend": map[string]any{"type": "boolean", "description": "If true, return backend error instead of placeholder output."},
 		},
 		"required": []string{"prompt"},
 	}
@@ -1999,12 +2001,21 @@ func textToSpeechParams() map[string]any {
 				"type":        "boolean",
 				"description": "If true and running under a gateway context, immediately deliver the generated file to the current chat (requires adapter media support).",
 			},
+			"strict_backend": map[string]any{"type": "boolean", "description": "If true, return backend error instead of placeholder WAV output."},
 		},
 		"required": []string{"text"},
 	}
 }
 func browserNavigateParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"url":             map[string]any{"type": "string"},
+		"method":          map[string]any{"type": "string", "enum": []string{"GET", "POST"}, "description": "HTTP method for lightweight browser mode (default GET)."},
+		"body":            map[string]any{"type": "string", "description": "Optional request body when method=POST."},
+		"content_type":    map[string]any{"type": "string", "description": "Content-Type for POST body (default application/x-www-form-urlencoded)."},
+		"headers":         map[string]any{"type": "object", "description": "Optional request headers map."},
+		"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 120, "description": "Request timeout in seconds (default 25)."},
+		"max_bytes":       map[string]any{"type": "integer", "minimum": 1024, "maximum": 2000000, "description": "Maximum bytes to read from response body (default 600000)."},
+	}, "required": []string{"url"}}
 }
 func browserBackParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{}}

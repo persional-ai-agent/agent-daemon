@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -103,5 +104,53 @@ func TestBrowserScrollReturnsNormalizedArgs(t *testing.T) {
 	}
 	if got, _ := res["scroll_performed"].(bool); got {
 		t.Fatalf("scroll_performed=%v, want false", res["scroll_performed"])
+	}
+}
+
+func TestBrowserNavigateSupportsPostAndHeaders(t *testing.T) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s want=POST", r.Method)
+		}
+		if got := r.Header.Get("X-Test"); got != "ok" {
+			t.Fatalf("X-Test header=%q", got)
+		}
+		_, _ = w.Write([]byte("<html><body>done</body></html>"))
+	}))
+	defer srv.Close()
+	b := &BuiltinTools{}
+	out, err := b.browserNavigate(context.Background(), map[string]any{
+		"url":          srv.URL,
+		"method":       "POST",
+		"body":         "a=1",
+		"headers":      map[string]any{"X-Test": "ok"},
+		"timeout_seconds": 5,
+	}, ToolContext{SessionID: "browser-post"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := out["success"].(bool); !ok {
+		t.Fatalf("navigate failed: %#v", out)
+	}
+	if got, _ := out["method"].(string); got != "POST" {
+		t.Fatalf("method=%q want POST", got)
+	}
+}
+
+func TestBrowserNavigateRespectsMaxBytes(t *testing.T) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<html><body>" + strings.Repeat("x", 5000) + "</body></html>"))
+	}))
+	defer srv.Close()
+	b := &BuiltinTools{}
+	out, err := b.browserNavigate(context.Background(), map[string]any{
+		"url":       srv.URL,
+		"max_bytes": 256,
+	}, ToolContext{SessionID: "browser-max-bytes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated, _ := out["truncated"].(bool); !truncated {
+		t.Fatalf("expected truncated=true, got %#v", out)
 	}
 }

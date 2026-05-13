@@ -41,4 +41,34 @@ func TestTextToSpeechParamsIncludeModelAndVoice(t *testing.T) {
 	if !strings.Contains(desc, "mp3") {
 		t.Fatalf("unexpected format description: %q", desc)
 	}
+	if _, ok := props["strict_backend"]; !ok {
+		t.Fatal("expected strict_backend property in text_to_speech params")
+	}
+}
+
+func TestMediaParamsIncludeStrictBackend(t *testing.T) {
+	vProps, _ := visionAnalyzeParams()["properties"].(map[string]any)
+	if _, ok := vProps["strict_backend"]; !ok {
+		t.Fatal("vision_analyze params should contain strict_backend")
+	}
+	iProps, _ := imageGenerateParams()["properties"].(map[string]any)
+	if _, ok := iProps["strict_backend"]; !ok {
+		t.Fatal("image_generate params should contain strict_backend")
+	}
+}
+
+func TestTextToSpeechStrictBackendWithoutAPIKey(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	b := &BuiltinTools{}
+	out, err := b.textToSpeech(context.Background(), map[string]any{
+		"text":           "hello",
+		"output_path":    "speech.wav",
+		"strict_backend": true,
+	}, ToolContext{Workdir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := out["success"].(bool); ok {
+		t.Fatalf("expected strict backend failure, got: %#v", out)
+	}
 }

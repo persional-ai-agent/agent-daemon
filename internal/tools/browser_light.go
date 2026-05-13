@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -32,6 +33,7 @@ type lightBrowserState struct {
 	stack      []lightBrowserPage
 	formInputs map[string]string
 	elements   map[string]lightElement
+	client     *http.Client
 }
 
 type lightElement struct {
@@ -52,7 +54,12 @@ func getLightBrowser(sessionID string) *lightBrowserState {
 	}
 	st := lightBrowserSessions[sessionID]
 	if st == nil {
-		st = &lightBrowserState{formInputs: map[string]string{}, elements: map[string]lightElement{}}
+		jar, _ := cookiejar.New(nil)
+		st = &lightBrowserState{
+			formInputs: map[string]string{},
+			elements:   map[string]lightElement{},
+			client:     &http.Client{Timeout: 25 * time.Second, Jar: jar},
+		}
 		lightBrowserSessions[sessionID] = st
 	}
 	return st
@@ -66,21 +73,70 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 	if url == "" {
 		return map[string]any{"success": false, "error": "url required"}, nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	method := strings.ToUpper(strings.TrimSpace(strArg(args, "method")))
+	if method == "" {
+		method = http.MethodGet
+	}
+	if method != http.MethodGet && method != http.MethodPost {
+		return map[string]any{"success": false, "error": "unsupported method: use GET or POST"}, nil
+	}
+	body := strings.TrimSpace(strArg(args, "body"))
+	reqBody := bytes.NewReader(nil)
+	if method == http.MethodPost {
+		reqBody = bytes.NewReader([]byte(body))
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 25 * time.Second}
-	resp, err := client.Do(req)
+	req.Header.Set("User-Agent", "agent-daemon-browser-light/1.0")
+	if method == http.MethodPost {
+		contentType := strings.TrimSpace(strArg(args, "content_type"))
+		if contentType == "" {
+			contentType = "application/x-www-form-urlencoded"
+		}
+		req.Header.Set("Content-Type", contentType)
+	}
+	if rawHeaders, ok := args["headers"].(map[string]any); ok {
+		for k, v := range rawHeaders {
+			key := strings.TrimSpace(k)
+			val := strings.TrimSpace(fmt.Sprintf("%v", v))
+			if key == "" || val == "" {
+				continue
+			}
+			req.Header.Set(key, val)
+		}
+	}
+	timeoutSeconds := intArg(args, "timeout_seconds", 25)
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 25
+	}
+	if timeoutSeconds > 120 {
+		timeoutSeconds = 120
+	}
+	st := getLightBrowser(tc.SessionID)
+	if st.client == nil {
+		jar, _ := cookiejar.New(nil)
+		st.client = &http.Client{Jar: jar}
+	}
+	st.client.Timeout = time.Duration(timeoutSeconds) * time.Second
+	resp, err := st.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	bs, _ := io.ReadAll(resp.Body)
+	maxBytes := intArg(args, "max_bytes", 600_000)
+	if maxBytes <= 0 {
+		maxBytes = 600_000
+	}
+	if maxBytes > 2_000_000 {
+		maxBytes = 2_000_000
+	}
+	bs, _ := io.ReadAll(io.LimitReader(resp.Body, int64(maxBytes)+1))
 	html := string(bs)
 	truncated := false
-	if len(html) > 300_000 {
-		html = html[:300_000]
+	if len(bs) > maxBytes {
+		html = string(bs[:maxBytes])
 		truncated = true
 	}
 	p := lightBrowserPage{
@@ -96,13 +152,13 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 			p.Headers[k] = v[0]
 		}
 	}
-	st := getLightBrowser(tc.SessionID)
 	st.stack = append(st.stack, p)
 	st.formInputs = map[string]string{}
 	st.elements = map[string]lightElement{}
 	return map[string]any{
 		"success":   true,
 		"url":       url,
+		"method":    method,
 		"status":    resp.StatusCode,
 		"loaded_at": p.LoadedAt,
 		"truncated": truncated,

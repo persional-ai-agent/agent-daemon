@@ -85,6 +85,9 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 	if err != nil {
 		return nil, err
 	}
+	strictBackend := boolArg(args, "strict_backend", false)
+	backendConfigured := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != ""
+	var backendErr string
 	// Optional real vision via OpenAI chat.completions when configured.
 	if apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); apiKey != "" {
 		baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
@@ -144,10 +147,27 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 						}, nil
 					}
 					// Fallback to metadata mode below when provider shape changes.
+					backendErr = "invalid OpenAI vision response shape"
+				} else {
+					backendErr = fmt.Sprintf("openai vision http %d: %s", resp.StatusCode, truncateMediaText(string(body), 240))
 				}
+			} else {
+				backendErr = err.Error()
 			}
+		} else {
+			backendErr = err.Error()
 		}
 		// Fall through to metadata-only if the request failed.
+	}
+	if strictBackend {
+		if strings.TrimSpace(backendErr) == "" {
+			if !backendConfigured {
+				backendErr = "vision backend not configured (set OPENAI_API_KEY)"
+			} else {
+				backendErr = "vision backend request failed"
+			}
+		}
+		return map[string]any{"success": false, "error": backendErr, "backend": "openai"}, nil
 	}
 	return map[string]any{
 		"success":  true,
@@ -156,6 +176,13 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 		"width":    cfg.Width,
 		"height":   cfg.Height,
 		"question": question,
+		"backend":  "metadata",
+		"backend_error": func() string {
+			if strictBackend {
+				return ""
+			}
+			return backendErr
+		}(),
 		"note":     "Fallback implementation: returns image metadata only (set OPENAI_API_KEY to enable vision).",
 	}, nil
 }
@@ -192,6 +219,8 @@ func (b *BuiltinTools) imageGenerate(ctx context.Context, args map[string]any, t
 		return nil, err
 	}
 
+	strictBackend := boolArg(args, "strict_backend", false)
+	var backendErr string
 	// Best-effort real backend: OpenAI images generation when configured.
 	if apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); apiKey != "" {
 		baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
@@ -268,10 +297,23 @@ func (b *BuiltinTools) imageGenerate(ctx context.Context, args map[string]any, t
 						out = maybeDeliverMedia(ctx, out, tc, deliver, path, caption)
 						return out, nil
 					}
+					backendErr = "openai image response missing usable data (b64_json/url)"
+				} else {
+					backendErr = fmt.Sprintf("openai image http %d: %s", resp.StatusCode, truncateMediaText(string(body), 240))
 				}
+			} else {
+				backendErr = err.Error()
 			}
+		} else {
+			backendErr = err.Error()
 		}
 		// Fall through to placeholder if OpenAI call fails.
+	}
+	if strictBackend {
+		if strings.TrimSpace(backendErr) == "" {
+			backendErr = "no usable image backend response"
+		}
+		return map[string]any{"success": false, "backend": "openai", "error": backendErr}, nil
 	}
 
 	// Placeholder output (requires FAL_KEY to be set for "available").
@@ -295,7 +337,7 @@ func (b *BuiltinTools) imageGenerate(ctx context.Context, args map[string]any, t
 	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
 		return nil, err
 	}
-	out := map[string]any{"success": true, "path": path, "media": "MEDIA: " + path, "note": "Placeholder output: deterministic solid-color PNG (no real backend available)."}
+	out := map[string]any{"success": true, "path": path, "media": "MEDIA: " + path, "backend": "placeholder", "backend_error": backendErr, "note": "Placeholder output: deterministic solid-color PNG (no real backend available)."}
 	deliver := boolArg(args, "deliver", false)
 	caption := strings.TrimSpace(strArg(args, "caption"))
 	out = maybeDeliverMedia(ctx, out, tc, deliver, path, caption)
@@ -328,6 +370,8 @@ func (b *BuiltinTools) textToSpeech(ctx context.Context, args map[string]any, tc
 	// Best-effort "real" TTS via OpenAI audio/speech when configured.
 	// Otherwise falls back to a placeholder beep WAV.
 	deliver := boolArg(args, "deliver", false)
+	strictBackend := boolArg(args, "strict_backend", false)
+	var backendErr string
 	if apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); apiKey != "" {
 		baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
 		if baseURL == "" {
@@ -381,13 +425,25 @@ func (b *BuiltinTools) textToSpeech(ctx context.Context, args map[string]any, tc
 						"path":    path,
 						"media":   "MEDIA: " + path,
 						"format":  format,
+						"backend": "openai",
 						"note":    "Generated via OpenAI audio/speech.",
 					}
 					out = maybeDeliverMedia(ctx, out, tc, deliver, path, "")
 					return out, nil
 				}
+				backendErr = fmt.Sprintf("openai tts http %d: %s", resp.StatusCode, truncateMediaText(string(body), 240))
+			} else {
+				backendErr = err.Error()
 			}
+		} else {
+			backendErr = err.Error()
 		}
+	}
+	if strictBackend {
+		if strings.TrimSpace(backendErr) == "" {
+			backendErr = "tts backend not configured or request failed"
+		}
+		return map[string]any{"success": false, "backend": "openai", "error": backendErr}, nil
 	}
 
 	seconds := float64(len([]rune(text))) / 12.0
@@ -401,7 +457,7 @@ func (b *BuiltinTools) textToSpeech(ctx context.Context, args map[string]any, tc
 	if err := os.WriteFile(path, wav, 0o644); err != nil {
 		return nil, err
 	}
-	out := map[string]any{"success": true, "path": path, "media": "MEDIA: " + path, "format": "wav", "note": "Placeholder WAV (simple sine beep; no TTS backend)."}
+	out := map[string]any{"success": true, "path": path, "media": "MEDIA: " + path, "format": "wav", "backend": "placeholder", "backend_error": backendErr, "note": "Placeholder WAV (simple sine beep; no TTS backend)."}
 	out = maybeDeliverMedia(ctx, out, tc, deliver, path, "")
 	return out, nil
 }
@@ -486,4 +542,14 @@ func synthBeepWav(d time.Duration) []byte {
 		_ = binary.Write(&buf, binary.LittleEndian, v)
 	}
 	return buf.Bytes()
+}
+
+func truncateMediaText(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	if max <= 3 {
+		return s[:max]
+	}
+	return s[:max-3] + "..."
 }
