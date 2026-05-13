@@ -17,6 +17,14 @@ go run .
 - `AGENT_HTTP_BASE`：自定义 HTTP 管理 API 地址（默认从 WS 地址自动推导）
 - `AGENT_SESSION_ID`：指定会话 ID（默认自动生成）
 
+运行时行为（默认）：
+
+- WS 读超时提示：45s 未收到事件会提示“等待服务端响应中”
+- 单轮最长等待：8m（超时后返回 `timeout`）
+- 自动重连：最多 2 次，重连时保持同一 `session_id`，并携带 `turn_id`/`resume`
+- 历史命令上限：2000 行（滚动清理）
+- 事件日志上限：2000 条（滚动清理）
+
 命令：
 
 - 输入任意文本发送一轮对话
@@ -52,6 +60,11 @@ go run .
 - `/bookmark use <name>` 切换到书签会话
 - `/quit` 或 `/exit` 退出
 
+状态诊断：
+
+- 提示符：`tui[ok/ok]`、`tui[err/network]` 这类 `状态/错误码` 组合
+- `/status` 输出：`status=<ok|err> code=<ok|network|timeout|auth|request|server|unknown> detail=<详情>`
+
 常用别名：
 
 - `:q` / `quit` -> `/quit`
@@ -59,3 +72,9 @@ go run .
 - `show ...` -> `/show ...`
 - `gw` / `gw ...` -> `/gateway status` / `/gateway ...`
 - `cfg` / `cfg ...` -> `/config get` / `/config ...`
+
+烟测：
+
+```bash
+./ui-tui/e2e_smoke.sh
+```

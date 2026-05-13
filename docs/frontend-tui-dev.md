@@ -45,9 +45,15 @@
 - 运行方式：Go（`go run ./ui-tui`），连接 `/v1/chat/ws`
 - 入口：`ui-tui/main.go`
 - 目标：提供独立于 `agentd` 主进程交互循环的 TUI 客户端基座
+- 稳定性机制：
+  - WS 读取超时提示 + 单轮超时中断
+  - 断线自动重连（同 session + `turn_id` + `resume`）
+  - 错误分类码（`network/timeout/auth/request/server/unknown`）
+  - 本地历史与事件日志滚动上限，避免无界增长
 
 ## 4. 测试策略
 
 - API 回归：`internal/api/server_test.go`
 - CLI 命令回归：`internal/cli/chat_test.go`
 - Web 构建自测：`npm --prefix web run build`
+- ui-tui 烟测：`./ui-tui/e2e_smoke.sh`

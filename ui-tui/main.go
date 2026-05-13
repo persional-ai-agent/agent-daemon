@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,6 +37,7 @@ type appState struct {
 	lastJSON   any
 	lastStatus string
 	lastDetail string
+	lastCode   string
 
 	lastShowSession string
 	lastShowOffset  int
@@ -45,7 +48,18 @@ type appState struct {
 
 	historyPath  string
 	bookmarkPath string
+
+	historyMaxLines int
+	eventMaxItems   int
+	wsReadTimeout   time.Duration
+	wsTurnTimeout   time.Duration
+	wsMaxReconnect  int
 }
+
+const (
+	defaultHistoryMaxLines = 2000
+	defaultEventMaxItems   = 2000
+)
 
 func getenvOr(key, def string) string {
 	v := strings.TrimSpace(os.Getenv(key))
@@ -88,21 +102,31 @@ func newState() *appState {
 		pretty:          true,
 		lastStatus:      "ok",
 		lastDetail:      "initialized",
+		lastCode:        "ok",
 		lastShowSession: session,
 		lastShowLimit:   20,
 		lastSessions:    make([]string, 0),
 		eventLog:        make([]map[string]any, 0),
 		historyPath:     filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:    filepath.Join(root, "ui-tui-bookmarks.json"),
+		historyMaxLines: defaultHistoryMaxLines,
+		eventMaxItems:   defaultEventMaxItems,
+		wsReadTimeout:   45 * time.Second,
+		wsTurnTimeout:   8 * time.Minute,
+		wsMaxReconnect:  2,
 	}
 }
 
-func (s *appState) setStatus(ok bool, detail string) {
+func (s *appState) setStatus(ok bool, code, detail string) {
+	if strings.TrimSpace(code) == "" {
+		code = "unknown"
+	}
 	if ok {
 		s.lastStatus = "ok"
 	} else {
 		s.lastStatus = "err"
 	}
+	s.lastCode = code
 	s.lastDetail = detail
 }
 
@@ -226,6 +250,52 @@ func printJSONMode(v any, pretty bool) {
 	fmt.Println(string(bs))
 }
 
+func classifyError(err error) (string, string) {
+	if err == nil {
+		return "ok", ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "context deadline exceeded") || strings.Contains(lower, "timeout") {
+		return "timeout", msg
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "timeout", msg
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return "timeout", msg
+		}
+		return "network", msg
+	}
+	if strings.Contains(lower, "connection refused") ||
+		strings.Contains(lower, "no such host") ||
+		strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "connection reset by peer") {
+		return "network", msg
+	}
+	if strings.Contains(lower, "http 401") || strings.Contains(lower, "http 403") {
+		return "auth", msg
+	}
+	if strings.Contains(lower, "http 400") || strings.Contains(lower, "http 404") {
+		return "request", msg
+	}
+	if strings.Contains(lower, "http 5") {
+		return "server", msg
+	}
+	if strings.Contains(lower, "websocket") || strings.Contains(lower, "close 1006") {
+		return "network", msg
+	}
+	return "unknown", msg
+}
+
+func (s *appState) setErrStatus(err error) {
+	code, detail := classifyError(err)
+	s.setStatus(false, code, detail)
+}
+
 func httpJSON(method, endpoint string, body map[string]any) (map[string]any, error) {
 	var reader io.Reader
 	if body != nil {
@@ -269,6 +339,33 @@ func (s *appState) appendHistory(cmd string) {
 	}
 	defer f.Close()
 	_, _ = f.WriteString(fmt.Sprintf("%s\t%s\n", time.Now().Format(time.RFC3339), cmd))
+	_ = s.pruneHistoryFile()
+}
+
+func (s *appState) pruneHistoryFile() error {
+	if s.historyMaxLines <= 0 {
+		return nil
+	}
+	bs, err := os.ReadFile(s.historyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	raw := strings.Split(strings.TrimSpace(string(bs)), "\n")
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) <= s.historyMaxLines {
+		return nil
+	}
+	lines = lines[len(lines)-s.historyMaxLines:]
+	data := strings.Join(lines, "\n") + "\n"
+	return os.WriteFile(s.historyPath, []byte(data), 0o644)
 }
 
 func (s *appState) readHistory(limit int) ([]string, error) {
@@ -357,48 +454,97 @@ func (s *appState) useBookmark(name string) error {
 }
 
 func (s *appState) addEvent(evt map[string]any) {
-	if len(s.eventLog) > 500 {
-		s.eventLog = s.eventLog[len(s.eventLog)-300:]
+	if s.eventMaxItems > 0 && len(s.eventLog) >= s.eventMaxItems {
+		trim := s.eventMaxItems / 2
+		if trim < 1 {
+			trim = 1
+		}
+		s.eventLog = s.eventLog[len(s.eventLog)-trim:]
 	}
 	s.eventLog = append(s.eventLog, evt)
 }
 
-func sendTurn(wsBase, sessionID, message string, onEvent func(map[string]any)) error {
-	u, err := url.Parse(wsBase)
+func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error {
+	u, err := url.Parse(s.wsBase)
 	if err != nil {
 		return err
 	}
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	req := map[string]any{"session_id": sessionID, "message": message}
-	if err := conn.WriteJSON(req); err != nil {
-		return err
-	}
-	for {
-		_, payload, err := conn.ReadMessage()
-		if err != nil {
-			return nil
-		}
-		var evt map[string]any
-		if err := json.Unmarshal(payload, &evt); err != nil {
-			fmt.Printf("[decode-error] %v\n", err)
+	turnID := uuid.NewString()
+	startedAt := time.Now()
+	for attempt := 0; attempt <= s.wsMaxReconnect; attempt++ {
+		conn, _, dialErr := websocket.DefaultDialer.Dial(u.String(), nil)
+		if dialErr != nil {
+			if attempt >= s.wsMaxReconnect {
+				return dialErr
+			}
+			fmt.Printf("[ws-reconnect] dial failed, retry=%d err=%v\n", attempt+1, dialErr)
+			time.Sleep(800 * time.Millisecond)
 			continue
 		}
-		printEvent(evt)
-		if onEvent != nil {
-			onEvent(evt)
+		req := map[string]any{
+			"session_id": s.session,
+			"message":    message,
+			"turn_id":    turnID,
+			"resume":     attempt > 0,
 		}
-		evtType, _ := evt["type"].(string)
-		if evtType == "" {
-			evtType, _ = evt["Type"].(string)
+		if err := conn.WriteJSON(req); err != nil {
+			_ = conn.Close()
+			if attempt >= s.wsMaxReconnect {
+				return err
+			}
+			fmt.Printf("[ws-reconnect] write failed, retry=%d err=%v\n", attempt+1, err)
+			time.Sleep(800 * time.Millisecond)
+			continue
 		}
-		if evtType == "result" || evtType == "error" || evtType == "cancelled" {
-			return nil
+		if attempt > 0 {
+			fmt.Printf("[ws-reconnect] resumed session=%s turn=%s attempt=%d\n", s.session, turnID, attempt+1)
+		}
+		for {
+			if s.wsReadTimeout > 0 {
+				_ = conn.SetReadDeadline(time.Now().Add(s.wsReadTimeout))
+			}
+			_, payload, err := conn.ReadMessage()
+			if err != nil {
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
+					fmt.Printf("[ws-timeout] %s 内未收到事件，等待服务端响应中\n", s.wsReadTimeout.String())
+					if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
+						_ = conn.Close()
+						return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
+					}
+					continue
+				}
+				_ = conn.Close()
+				if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
+					return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
+				}
+				if attempt >= s.wsMaxReconnect {
+					return err
+				}
+				fmt.Printf("[ws-reconnect] stream dropped, retry=%d err=%v\n", attempt+1, err)
+				time.Sleep(800 * time.Millisecond)
+				break
+			}
+			var evt map[string]any
+			if err := json.Unmarshal(payload, &evt); err != nil {
+				fmt.Printf("[decode-error] %v\n", err)
+				continue
+			}
+			printEvent(evt)
+			if onEvent != nil {
+				onEvent(evt)
+			}
+			evtType, _ := evt["type"].(string)
+			if evtType == "" {
+				evtType, _ = evt["Type"].(string)
+			}
+			if evtType == "result" || evtType == "error" || evtType == "cancelled" {
+				_ = conn.Close()
+				return nil
+			}
 		}
 	}
+	return fmt.Errorf("unable to complete turn after reconnect attempts")
 }
 
 func main() {
@@ -409,7 +555,7 @@ func main() {
 	fmt.Println("输入 /help 查看命令")
 	reader := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Printf("tui[%s]> ", s.lastStatus)
+		fmt.Printf("tui[%s/%s]> ", s.lastStatus, s.lastCode)
 		if !reader.Scan() {
 			fmt.Println("bye")
 			return
@@ -418,8 +564,12 @@ func main() {
 		if text == "" {
 			continue
 		}
+		fromRerun := false
+	REPROCESS:
 		text = canonicalInput(text)
-		s.appendHistory(text)
+		if !fromRerun {
+			s.appendHistory(text)
+		}
 
 		switch {
 		case text == "/quit" || text == "/exit":
@@ -427,29 +577,29 @@ func main() {
 			return
 		case text == "/help":
 			printHelp()
-			s.setStatus(true, "help shown")
+			s.setStatus(true, "ok", "help shown")
 		case text == "/status":
-			fmt.Printf("status=%s detail=%s\n", s.lastStatus, s.lastDetail)
+			fmt.Printf("status=%s code=%s detail=%s\n", s.lastStatus, s.lastCode, s.lastDetail)
 		case text == "/health":
 			out, err := httpJSON(http.MethodGet, s.httpBase+"/health", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "health checked")
+			s.setStatus(true, "ok", "health checked")
 		case text == "/cancel":
 			out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "cancel requested")
+			s.setStatus(true, "ok", "cancel requested")
 		case strings.HasPrefix(text, "/history"):
 			parts := strings.Fields(text)
 			limit := 20
@@ -458,52 +608,58 @@ func main() {
 					limit = v
 				}
 			}
+			if limit > s.historyMaxLines {
+				limit = s.historyMaxLines
+			}
 			items, err := s.readHistory(limit)
 			if err != nil {
 				fmt.Printf("[history-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			for i, item := range items {
 				fmt.Printf("%d. %s\n", i+1, item)
 			}
-			s.setStatus(true, "history loaded")
+			s.setStatus(true, "ok", "history loaded")
 		case strings.HasPrefix(text, "/rerun "):
 			idx, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(text, "/rerun ")))
 			if err != nil || idx <= 0 {
 				fmt.Println("usage: /rerun <index>")
-				s.setStatus(false, "invalid rerun index")
+				s.setStatus(false, "invalid_input", "invalid rerun index")
 				continue
 			}
 			items, err := s.readHistory(500)
 			if err != nil {
 				fmt.Printf("[history-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			if idx > len(items) {
 				fmt.Printf("index out of range, max=%d\n", len(items))
-				s.setStatus(false, "rerun index out of range")
+				s.setStatus(false, "invalid_input", "rerun index out of range")
 				continue
 			}
-			fmt.Printf("rerun: %s\n", items[idx-1])
-			s.setStatus(true, "rerun selected")
+			text = items[idx-1]
+			fromRerun = true
+			fmt.Printf("rerun: %s\n", text)
+			s.setStatus(true, "ok", "rerun selected")
+			goto REPROCESS
 		case strings.HasPrefix(text, "/events"):
 			if strings.HasPrefix(text, "/events save ") {
 				path := strings.TrimSpace(strings.TrimPrefix(text, "/events save "))
 				if path == "" {
 					fmt.Println("usage: /events save <file>")
-					s.setStatus(false, "invalid events save args")
+					s.setStatus(false, "invalid_input", "invalid events save args")
 					continue
 				}
 				bs, _ := json.MarshalIndent(s.eventLog, "", "  ")
 				if err := os.WriteFile(path, bs, 0o644); err != nil {
 					fmt.Printf("[save-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				fmt.Printf("saved events: %s\n", path)
-				s.setStatus(true, "events saved")
+				s.setStatus(true, "ok", "events saved")
 				continue
 			}
 			parts := strings.Fields(text)
@@ -513,68 +669,71 @@ func main() {
 					limit = v
 				}
 			}
+			if limit > s.eventMaxItems {
+				limit = s.eventMaxItems
+			}
 			start := len(s.eventLog) - limit
 			if start < 0 {
 				start = 0
 			}
 			printJSONMode(s.eventLog[start:], s.pretty)
-			s.setStatus(true, "events listed")
+			s.setStatus(true, "ok", "events listed")
 		case strings.HasPrefix(text, "/bookmark "):
 			parts := strings.Fields(text)
 			if len(parts) >= 2 && parts[1] == "list" {
 				list, err := s.loadBookmarks()
 				if err != nil {
 					fmt.Printf("[bookmark-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				printJSONMode(list, s.pretty)
-				s.setStatus(true, "bookmarks listed")
+				s.setStatus(true, "ok", "bookmarks listed")
 				continue
 			}
 			if len(parts) >= 3 && parts[1] == "add" {
 				if err := s.addBookmark(parts[2]); err != nil {
 					fmt.Printf("[bookmark-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				fmt.Printf("bookmark saved: %s\n", parts[2])
-				s.setStatus(true, "bookmark saved")
+				s.setStatus(true, "ok", "bookmark saved")
 				continue
 			}
 			if len(parts) >= 3 && parts[1] == "use" {
 				if err := s.useBookmark(parts[2]); err != nil {
 					fmt.Printf("[bookmark-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				fmt.Printf("bookmark loaded: %s (session=%s)\n", parts[2], s.session)
-				s.setStatus(true, "bookmark loaded")
+				s.setStatus(true, "ok", "bookmark loaded")
 				continue
 			}
 			fmt.Println("usage: /bookmark add <name> | /bookmark list | /bookmark use <name>")
-			s.setStatus(false, "invalid bookmark args")
+			s.setStatus(false, "invalid_input", "invalid bookmark args")
 		case text == "/session":
 			fmt.Printf("session: %s\n", s.session)
-			s.setStatus(true, "session shown")
+			s.setStatus(true, "ok", "session shown")
 		case strings.HasPrefix(text, "/session "):
 			next := strings.TrimSpace(strings.TrimPrefix(text, "/session "))
 			if next == "" {
 				fmt.Println("session id required")
-				s.setStatus(false, "session id required")
+				s.setStatus(false, "invalid_input", "session id required")
 				continue
 			}
 			s.session = next
 			fmt.Printf("session switched: %s\n", s.session)
-			s.setStatus(true, "session switched")
+			s.setStatus(true, "ok", "session switched")
 		case text == "/api":
 			fmt.Printf("ws: %s\n", s.wsBase)
-			s.setStatus(true, "ws shown")
+			s.setStatus(true, "ok", "ws shown")
 		case strings.HasPrefix(text, "/api "):
 			next := strings.TrimSpace(strings.TrimPrefix(text, "/api "))
 			if !strings.HasPrefix(next, "ws://") && !strings.HasPrefix(next, "wss://") {
 				fmt.Println("api must start with ws:// or wss://")
-				s.setStatus(false, "invalid ws url")
+				s.setStatus(false, "invalid_input", "invalid ws url")
 				continue
 			}
 			s.wsBase = next
@@ -583,38 +742,38 @@ func main() {
 				s.httpBase = deriveHTTPBase(s.wsBase)
 				fmt.Printf("http auto-updated: %s\n", s.httpBase)
 			}
-			s.setStatus(true, "ws switched")
+			s.setStatus(true, "ok", "ws switched")
 		case text == "/http":
 			fmt.Printf("http: %s\n", s.httpBase)
-			s.setStatus(true, "http shown")
+			s.setStatus(true, "ok", "http shown")
 		case strings.HasPrefix(text, "/http "):
 			next := strings.TrimSpace(strings.TrimPrefix(text, "/http "))
 			if !strings.HasPrefix(next, "http://") && !strings.HasPrefix(next, "https://") {
 				fmt.Println("http api must start with http:// or https://")
-				s.setStatus(false, "invalid http url")
+				s.setStatus(false, "invalid_input", "invalid http url")
 				continue
 			}
 			s.httpBase = strings.TrimRight(next, "/")
 			fmt.Printf("http switched: %s\n", s.httpBase)
-			s.setStatus(true, "http switched")
+			s.setStatus(true, "ok", "http switched")
 		case text == "/last":
 			if s.lastJSON == nil {
 				fmt.Println("no last json payload")
-				s.setStatus(false, "no last json")
+				s.setStatus(false, "invalid_input", "no last json")
 				continue
 			}
 			printJSONMode(s.lastJSON, s.pretty)
-			s.setStatus(true, "last json shown")
+			s.setStatus(true, "ok", "last json shown")
 		case strings.HasPrefix(text, "/save "):
 			path := strings.TrimSpace(strings.TrimPrefix(text, "/save "))
 			if path == "" {
 				fmt.Println("usage: /save <file>")
-				s.setStatus(false, "invalid save args")
+				s.setStatus(false, "invalid_input", "invalid save args")
 				continue
 			}
 			if s.lastJSON == nil {
 				fmt.Println("no last json payload")
-				s.setStatus(false, "no last json")
+				s.setStatus(false, "invalid_input", "no last json")
 				continue
 			}
 			var bs []byte
@@ -625,52 +784,52 @@ func main() {
 			}
 			if err := os.WriteFile(path, bs, 0o644); err != nil {
 				fmt.Printf("[save-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			fmt.Printf("saved: %s\n", path)
-			s.setStatus(true, "json saved")
+			s.setStatus(true, "ok", "json saved")
 		case strings.HasPrefix(text, "/pretty "):
 			mode := strings.TrimSpace(strings.TrimPrefix(text, "/pretty "))
 			switch mode {
 			case "on":
 				s.pretty = true
 				fmt.Println("pretty json: on")
-				s.setStatus(true, "pretty on")
+				s.setStatus(true, "ok", "pretty on")
 			case "off":
 				s.pretty = false
 				fmt.Println("pretty json: off")
-				s.setStatus(true, "pretty off")
+				s.setStatus(true, "ok", "pretty off")
 			default:
 				fmt.Println("usage: /pretty on|off")
-				s.setStatus(false, "invalid pretty args")
+				s.setStatus(false, "invalid_input", "invalid pretty args")
 			}
 		case text == "/tools":
 			out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "tools listed")
+			s.setStatus(true, "ok", "tools listed")
 		case strings.HasPrefix(text, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
 			if name == "" {
 				fmt.Println("usage: /tool <name>")
-				s.setStatus(false, "invalid tool args")
+				s.setStatus(false, "invalid_input", "invalid tool args")
 				continue
 			}
 			out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "tool schema loaded")
+			s.setStatus(true, "ok", "tool schema loaded")
 		case strings.HasPrefix(text, "/sessions"):
 			parts := strings.Fields(text)
 			limit := 20
@@ -682,7 +841,7 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, limit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastSessions = s.lastSessions[:0]
@@ -699,24 +858,24 @@ func main() {
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "sessions listed")
+			s.setStatus(true, "ok", "sessions listed")
 		case strings.HasPrefix(text, "/pick "):
 			idx, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(text, "/pick ")))
 			if err != nil || idx <= 0 {
 				fmt.Println("usage: /pick <index>")
-				s.setStatus(false, "invalid pick index")
+				s.setStatus(false, "invalid_input", "invalid pick index")
 				continue
 			}
 			if idx > len(s.lastSessions) {
 				fmt.Printf("index out of range, max=%d\n", len(s.lastSessions))
-				s.setStatus(false, "pick index out of range")
+				s.setStatus(false, "invalid_input", "pick index out of range")
 				continue
 			}
 			s.session = s.lastSessions[idx-1]
 			s.lastShowSession = s.session
 			s.lastShowOffset = 0
 			fmt.Printf("session switched: %s\n", s.session)
-			s.setStatus(true, "session switched")
+			s.setStatus(true, "ok", "session switched")
 		case strings.HasPrefix(text, "/show"):
 			parts := strings.Fields(text)
 			sid := s.session
@@ -741,24 +900,24 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(sid), offset, limit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "show loaded")
+			s.setStatus(true, "ok", "show loaded")
 		case text == "/next":
 			s.lastShowOffset += s.lastShowLimit
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
 				s.lastShowOffset -= s.lastShowLimit
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "next page loaded")
+			s.setStatus(true, "ok", "next page loaded")
 		case text == "/prev":
 			s.lastShowOffset -= s.lastShowLimit
 			if s.lastShowOffset < 0 {
@@ -767,12 +926,12 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "prev page loaded")
+			s.setStatus(true, "ok", "prev page loaded")
 		case strings.HasPrefix(text, "/stats"):
 			parts := strings.Fields(text)
 			sid := s.session
@@ -782,17 +941,17 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out["stats"]
 			printJSONMode(out["stats"], s.pretty)
-			s.setStatus(true, "stats loaded")
+			s.setStatus(true, "ok", "stats loaded")
 		case strings.HasPrefix(text, "/gateway "):
 			parts := strings.Fields(text)
 			if len(parts) != 2 {
 				fmt.Println("usage: /gateway status|enable|disable")
-				s.setStatus(false, "invalid gateway args")
+				s.setStatus(false, "invalid_input", "invalid gateway args")
 				continue
 			}
 			switch parts[1] {
@@ -800,41 +959,41 @@ func main() {
 				out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
 				if err != nil {
 					fmt.Printf("[http-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				s.lastJSON = out
 				printJSONMode(out, s.pretty)
-				s.setStatus(true, "gateway status loaded")
+				s.setStatus(true, "ok", "gateway status loaded")
 			case "enable", "disable":
 				out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
 				if err != nil {
 					fmt.Printf("[http-error] %v\n", err)
-					s.setStatus(false, err.Error())
+					s.setErrStatus(err)
 					continue
 				}
 				s.lastJSON = out
 				printJSONMode(out, s.pretty)
-				s.setStatus(true, "gateway action applied")
+				s.setStatus(true, "ok", "gateway action applied")
 			default:
 				fmt.Println("usage: /gateway status|enable|disable")
-				s.setStatus(false, "invalid gateway action")
+				s.setStatus(false, "invalid_input", "invalid gateway action")
 			}
 		case text == "/config get":
 			out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "config loaded")
+			s.setStatus(true, "ok", "config loaded")
 		case strings.HasPrefix(text, "/config set "):
 			parts := strings.SplitN(strings.TrimPrefix(text, "/config set "), " ", 2)
 			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
 				fmt.Println("usage: /config set <section.key> <value>")
-				s.setStatus(false, "invalid config args")
+				s.setStatus(false, "invalid_input", "invalid config args")
 				continue
 			}
 			key := strings.TrimSpace(parts[0])
@@ -842,20 +1001,19 @@ func main() {
 			out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/config/set", map[string]any{"key": key, "value": value})
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 				continue
 			}
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
-			s.setStatus(true, "config updated")
+			s.setStatus(true, "ok", "config updated")
 		default:
-			if err := sendTurn(s.wsBase, s.session, text, s.addEvent); err != nil {
+			if err := s.sendTurn(text, s.addEvent); err != nil {
 				fmt.Printf("[ws-error] %v\n", err)
-				s.setStatus(false, err.Error())
+				s.setErrStatus(err)
 			} else {
-				s.setStatus(true, "chat turn finished")
+				s.setStatus(true, "ok", "chat turn finished")
 			}
 		}
 	}
 }
-

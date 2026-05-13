@@ -348,3 +348,4 @@
 - `221-summary-ui-tui-command-aliases.md`：ui-tui 命令别名与容错输入
 - `222-summary-ui-tui-command-status.md`：ui-tui 命令状态提示与状态查询
 - `223-summary-ui-tui-runtime-ops-and-persistence.md`：ui-tui 运行控制与持久化能力补齐
+- `224-summary-ui-tui-reliability-observability-e2e.md`：ui-tui 稳定性、可观测性与 e2e 烟测补齐
