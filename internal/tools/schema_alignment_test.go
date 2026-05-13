@@ -107,6 +107,10 @@ func TestMemorySchemaActionTargetEnums(t *testing.T) {
 	if !reflect.DeepEqual(targetEnum, []string{"memory", "memory.md", "user", "user.md"}) {
 		t.Fatalf("memory.target enum=%v", targetEnum)
 	}
+	oneOf, _ := memoryParams()["oneOf"].([]any)
+	if len(oneOf) != 2 {
+		t.Fatalf("memory.oneOf len=%d, want 2", len(oneOf))
+	}
 }
 
 func TestDelegateTaskSchemaDocumentsConditionalRequiredAndDefaults(t *testing.T) {
@@ -310,6 +314,13 @@ func TestRegistrySchemasLint(t *testing.T) {
 			if desc, _ := field["description"].(string); maxWithNumber.MatchString(desc) {
 				if _, ok := field["maximum"]; !ok {
 					t.Fatalf("%s.%s description mentions max but maximum missing", schema.Function.Name, key)
+				}
+			}
+			if desc, _ := field["description"].(string); strings.Contains(strings.ToLower(desc), "default ") {
+				if fieldType, _ := field["type"].(string); fieldType == "integer" {
+					if !strings.ContainsAny(desc, "0123456789") && !strings.Contains(strings.ToLower(desc), "length") {
+						t.Fatalf("%s.%s description mentions default but lacks numeric value", schema.Function.Name, key)
+					}
 				}
 			}
 			if key == "limit" || key == "offset" || key == "page_size" {

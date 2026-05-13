@@ -1908,7 +1908,10 @@ func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}
 }
 func memoryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}, "description": "Memory operation action."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}, "description": "Memory operation action."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}, "oneOf": []any{
+		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"add", "delete", "remove"}}}, "required": []string{"content"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"replace", "update"}}}, "required": []string{"content", "old_text"}},
+	}}
 }
 func sessionSearchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum sessions to return (default 5)."}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean", "description": "Include current session in results (default false)."}}, "required": []string{"query"}}
