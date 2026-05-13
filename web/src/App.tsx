@@ -14,6 +14,7 @@ import {
   streamEventDedupeKey,
   normalizeAPIError,
   type StreamReconnectStatus,
+  type StreamTransport,
   type StreamTimeoutAction,
   type StreamEvent
 } from "./lib/api";
@@ -32,6 +33,7 @@ export function App() {
   const [streamMode, setStreamMode] = useState(true);
   const [timeline, setTimeline] = useState<Array<{ ts: string; event: string; data: unknown }>>([]);
   const [streamStatus, setStreamStatus] = useState<StreamReconnectStatus>("connecting");
+  const [streamTransport, setStreamTransport] = useState<StreamTransport>("ws");
   const [reconnectEnabled, setReconnectEnabled] = useState(true);
   const [reconnectMax, setReconnectMax] = useState(2);
   const [timeoutAction, setTimeoutAction] = useState<StreamTimeoutAction>("wait");
@@ -72,6 +74,8 @@ export function App() {
             }
           }
         }, {
+          transport: streamTransport,
+          fallbackToSSE: true,
           reconnectEnabled,
           maxReconnect: reconnectMax,
           readTimeoutMs: Math.max(1, readTimeoutSec) * 1000,
@@ -210,8 +214,19 @@ export function App() {
               流式模式（/v1/chat/stream）
             </label>
             {streamMode && (
+              <div className="row">
+                <label>
+                  传输模式
+                  <select value={streamTransport} onChange={(e) => setStreamTransport(e.target.value as StreamTransport)}>
+                    <option value="ws">WS（主通道）</option>
+                    <option value="sse">SSE（降级）</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            {streamMode && (
               <div className={`conn-state conn-${streamStatus}`}>
-                连接状态：{streamStatus}
+                连接状态：{streamStatus} / transport={streamTransport}
               </div>
             )}
             {streamMode && (

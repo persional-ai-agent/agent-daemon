@@ -6,6 +6,7 @@
 - 技术栈：Vite + React + TypeScript
 - API 封装：`web/src/lib/api.ts`
 - 页面入口：`web/src/App.tsx`
+- 流式通道：默认 WS（`/v1/chat/ws`），失败可降级 SSE（`/v1/chat/stream`）
 - 重连控制：Chat 页内置连接状态条与重连策略控制（wait/reconnect/cancel）
 
 ### 当前 API 契约

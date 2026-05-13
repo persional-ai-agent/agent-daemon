@@ -14,6 +14,7 @@ export type UIToolsResponse = {
 };
 
 const BASE = (globalThis as any).__AGENT_API_BASE__ || "http://127.0.0.1:8080";
+const WS_BASE = BASE.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://");
 
 export type APIErrorNormalized = {
   code: string;
@@ -81,8 +82,11 @@ export function streamEventDedupeKey(evt: StreamEvent): string {
 
 export type StreamReconnectStatus = "connecting" | "resumed" | "degraded" | "failed";
 export type StreamTimeoutAction = "wait" | "reconnect" | "cancel";
+export type StreamTransport = "ws" | "sse";
 
 export type StreamChatOptions = {
+  transport?: StreamTransport;
+  fallbackToSSE?: boolean;
   reconnectEnabled?: boolean;
   maxReconnect?: number;
   readTimeoutMs?: number;
@@ -154,6 +158,26 @@ export async function streamChat(
   onEvent: (evt: StreamEvent) => void,
   options?: StreamChatOptions
 ) {
+  const transport = options?.transport ?? "ws";
+  if (transport === "ws") {
+    try {
+      await streamChatWS(message, sessionID, onEvent, options);
+      return;
+    } catch (e) {
+      if (!options?.fallbackToSSE) {
+        throw e;
+      }
+    }
+  }
+  await streamChatSSE(message, sessionID, onEvent, options);
+}
+
+async function streamChatSSE(
+  message: string,
+  sessionID: string,
+  onEvent: (evt: StreamEvent) => void,
+  options?: StreamChatOptions
+) {
   const reconnectEnabled = options?.reconnectEnabled ?? true;
   const maxReconnect = reconnectEnabled ? (options?.maxReconnect ?? 2) : 0;
   const readTimeoutMs = options?.readTimeoutMs ?? 15_000;
@@ -181,6 +205,129 @@ export async function streamChat(
           onStatus?.("failed");
           throw new Error("timeout cancelled");
         }
+      }
+      if (attempt >= maxReconnect) {
+        onStatus?.("failed");
+        throw e;
+      }
+      await new Promise((r) => setTimeout(r, 300));
+      onStatus?.("resumed");
+    }
+  }
+}
+
+function streamChatWSOnce(
+  wsURL: string,
+  payload: Record<string, unknown>,
+  onEvent: (evt: StreamEvent) => void,
+  readTimeoutMs: number,
+  turnTimeoutAt: number,
+  timeoutAction: StreamTimeoutAction
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsURL);
+    let settled = false;
+    let lastEventAt = Date.now();
+
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      try { ws.close(); } catch {}
+      reject(err);
+    };
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      resolve();
+    };
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      if (now >= turnTimeoutAt) {
+        clearInterval(timer);
+        fail(new Error("TURN_TIMEOUT"));
+        return;
+      }
+      if (now-lastEventAt >= readTimeoutMs) {
+        switch (timeoutAction) {
+          case "wait":
+            lastEventAt = now;
+            break;
+          case "reconnect":
+            clearInterval(timer);
+            fail(new Error("READ_TIMEOUT"));
+            break;
+          case "cancel":
+            clearInterval(timer);
+            fail(new Error("CANCEL_TIMEOUT"));
+            break;
+        }
+      }
+    }, 250);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onerror = () => {
+      clearInterval(timer);
+      fail(new Error("WS_ERROR"));
+    };
+    ws.onmessage = (evt) => {
+      lastEventAt = Date.now();
+      let data: unknown = evt.data;
+      try { data = JSON.parse(String(evt.data)); } catch {}
+      if (data && typeof data === "object") {
+        const obj = data as Record<string, unknown>;
+        const type = typeof obj.type === "string" ? obj.type : "message";
+        onEvent({ event: type, data });
+        if (type === "result" || type === "error" || type === "cancelled") {
+          clearInterval(timer);
+          done();
+        }
+      }
+    };
+    ws.onclose = () => {
+      if (!settled) {
+        clearInterval(timer);
+        fail(new Error("WS_CLOSED"));
+      }
+    };
+  });
+}
+
+async function streamChatWS(
+  message: string,
+  sessionID: string,
+  onEvent: (evt: StreamEvent) => void,
+  options?: StreamChatOptions
+) {
+  const reconnectEnabled = options?.reconnectEnabled ?? true;
+  const maxReconnect = reconnectEnabled ? (options?.maxReconnect ?? 2) : 0;
+  const readTimeoutMs = options?.readTimeoutMs ?? 15_000;
+  const turnTimeoutMs = options?.turnTimeoutMs ?? 120_000;
+  const timeoutAction = options?.timeoutAction ?? "wait";
+  const onStatus = options?.onStatus;
+  const turnID = `web-${Math.random().toString(36).slice(2)}`;
+  const started = Date.now();
+  onStatus?.("connecting");
+  for (let attempt = 0; attempt <= maxReconnect; attempt++) {
+    const resume = attempt > 0;
+    if (resume) onStatus?.("degraded");
+    try {
+      await streamChatWSOnce(`${WS_BASE}/v1/chat/ws`, {
+        message,
+        session_id: sessionID,
+        turn_id: turnID,
+        resume
+      }, onEvent, readTimeoutMs, started + turnTimeoutMs, timeoutAction);
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "CANCEL_TIMEOUT") {
+        await cancelChat(sessionID);
+        onStatus?.("failed");
+        throw new Error("timeout cancelled");
       }
       if (attempt >= maxReconnect) {
         onStatus?.("failed");

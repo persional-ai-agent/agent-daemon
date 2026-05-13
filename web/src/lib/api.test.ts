@@ -29,3 +29,11 @@ describe("streamEventDedupeKey", () => {
     expect(streamEventDedupeKey(a)).toBe(streamEventDedupeKey(b));
   });
 });
+
+describe("ws payload shape", () => {
+  it("dedupe key differs for resumed vs non-resumed event", () => {
+    const a = { event: "resumed", data: { resumed: true, turn_id: "t1" } };
+    const b = { event: "session", data: { session_id: "s1" } };
+    expect(streamEventDedupeKey(a)).not.toBe(streamEventDedupeKey(b));
+  });
+});
