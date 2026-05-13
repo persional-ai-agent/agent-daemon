@@ -1989,6 +1989,8 @@ func textToSpeechParams() map[string]any {
 		"properties": map[string]any{
 			"text":        map[string]any{"type": "string"},
 			"output_path": map[string]any{"type": "string"},
+			"model":       map[string]any{"type": "string", "description": "Optional TTS model override for real backends."},
+			"voice":       map[string]any{"type": "string", "description": "Optional voice override for real backends."},
 			"format": map[string]any{
 				"type":        "string",
 				"description": "Audio format hint for real backends (mp3,wav,opus,aac).",

@@ -12,8 +12,8 @@ import (
 	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
 	"image/png"
+	_ "image/png"
 	"io"
 	"math"
 	"net/http"
@@ -24,6 +24,34 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
 )
+
+func tryWriteImageFromURL(ctx context.Context, rawURL string, outPath string) error {
+	u := strings.TrimSpace(rawURL)
+	if u == "" {
+		return errors.New("empty image url")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 45 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("http status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return errors.New("empty image body")
+	}
+	return os.WriteFile(outPath, body, 0o644)
+}
 
 func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	path, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
@@ -58,7 +86,7 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 		return nil, err
 	}
 	// Optional real vision via OpenAI chat.completions when configured.
-		if apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); apiKey != "" {
+	if apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); apiKey != "" {
 		baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
 		if baseURL == "" {
 			baseURL = "https://api.openai.com/v1"
@@ -105,34 +133,30 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 					}
 					if err := json.Unmarshal(body, &out); err == nil && len(out.Choices) > 0 {
 						return map[string]any{
-							"success": true,
-							"path":    path,
-							"format":  format,
-							"width":   cfg.Width,
-							"height":  cfg.Height,
+							"success":  true,
+							"path":     path,
+							"format":   format,
+							"width":    cfg.Width,
+							"height":   cfg.Height,
 							"question": question,
 							"analysis": out.Choices[0].Message.Content,
-							"note":    "Generated via OpenAI chat.completions vision (best-effort).",
+							"note":     "Generated via OpenAI chat.completions vision (best-effort).",
 						}, nil
 					}
-					return map[string]any{
-						"success": false,
-						"error":   "openai vision: unexpected response shape",
-						"raw":     string(body),
-					}, nil
+					// Fallback to metadata mode below when provider shape changes.
 				}
 			}
 		}
 		// Fall through to metadata-only if the request failed.
 	}
 	return map[string]any{
-		"success": true,
-		"path":    path,
-		"format":  format,
-		"width":   cfg.Width,
-		"height":  cfg.Height,
+		"success":  true,
+		"path":     path,
+		"format":   format,
+		"width":    cfg.Width,
+		"height":   cfg.Height,
 		"question": question,
-		"note":    "Fallback implementation: returns image metadata only (set OPENAI_API_KEY to enable vision).",
+		"note":     "Fallback implementation: returns image metadata only (set OPENAI_API_KEY to enable vision).",
 	}, nil
 }
 
@@ -217,19 +241,33 @@ func (b *BuiltinTools) imageGenerate(ctx context.Context, args map[string]any, t
 							return nil, err
 						}
 						out := map[string]any{
-							"success":  true,
-							"path":     path,
-							"media":    "MEDIA: " + path,
-							"model":    model,
-							"size":     size,
-							"note":     "Generated via OpenAI images/generations (best-effort).",
+							"success": true,
+							"path":    path,
+							"media":   "MEDIA: " + path,
+							"model":   model,
+							"size":    size,
+							"note":    "Generated via OpenAI images/generations (best-effort).",
 						}
 						deliver := boolArg(args, "deliver", false)
 						caption := strings.TrimSpace(strArg(args, "caption"))
 						out = maybeDeliverMedia(ctx, out, tc, deliver, path, caption)
 						return out, nil
 					}
-					return map[string]any{"success": false, "error": "openai image: unexpected response shape", "raw": string(body)}, nil
+					// Support URL-only variants by trying to fetch the image.
+					if err := tryWriteImageFromURL(ctx, outResp.Data[0].URL, path); err == nil {
+						out := map[string]any{
+							"success": true,
+							"path":    path,
+							"media":   "MEDIA: " + path,
+							"model":   model,
+							"size":    size,
+							"note":    "Generated via OpenAI images/generations URL response.",
+						}
+						deliver := boolArg(args, "deliver", false)
+						caption := strings.TrimSpace(strArg(args, "caption"))
+						out = maybeDeliverMedia(ctx, out, tc, deliver, path, caption)
+						return out, nil
+					}
 				}
 			}
 		}
@@ -295,11 +333,17 @@ func (b *BuiltinTools) textToSpeech(ctx context.Context, args map[string]any, tc
 		if baseURL == "" {
 			baseURL = "https://api.openai.com/v1"
 		}
-		model := strings.TrimSpace(os.Getenv("OPENAI_TTS_MODEL"))
+		model := strings.TrimSpace(strArg(args, "model"))
+		if model == "" {
+			model = strings.TrimSpace(os.Getenv("OPENAI_TTS_MODEL"))
+		}
 		if model == "" {
 			model = "gpt-4o-mini-tts"
 		}
-		voice := strings.TrimSpace(os.Getenv("OPENAI_TTS_VOICE"))
+		voice := strings.TrimSpace(strArg(args, "voice"))
+		if voice == "" {
+			voice = strings.TrimSpace(os.Getenv("OPENAI_TTS_VOICE"))
+		}
 		if voice == "" {
 			voice = "alloy"
 		}
