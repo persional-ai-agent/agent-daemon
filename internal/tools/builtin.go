@@ -2128,7 +2128,14 @@ func skillManageParams() map[string]any {
 			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "delete"}}},
 			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "write_file"}}, "required": []string{"file_path", "file_content"}},
 			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "remove_file"}}, "required": []string{"file_path"}},
-			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "sync"}, "source": map[string]any{"enum": []string{"github", "url"}}}},
+			map[string]any{
+				"properties": map[string]any{"action": map[string]any{"const": "sync"}},
+				"required":   []string{"source"},
+				"oneOf": []any{
+					map[string]any{"properties": map[string]any{"source": map[string]any{"const": "url"}}, "required": []string{"url"}},
+					map[string]any{"properties": map[string]any{"source": map[string]any{"const": "github"}}, "required": []string{"repo"}},
+				},
+			},
 		},
 	}
 }

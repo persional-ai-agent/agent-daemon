@@ -141,6 +141,37 @@ func TestDelegateTaskSchemaDocumentsConditionalRequiredAndDefaults(t *testing.T)
 	}
 }
 
+func TestSkillManageSchemaDocumentsActionConditionalRequired(t *testing.T) {
+	oneOf, _ := skillManageParams()["oneOf"].([]any)
+	if len(oneOf) != 7 {
+		t.Fatalf("skill_manage.oneOf len=%d, want 7", len(oneOf))
+	}
+	var syncBranch map[string]any
+	for _, raw := range oneOf {
+		branch, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		props, _ := branch["properties"].(map[string]any)
+		action, _ := props["action"].(map[string]any)
+		if c, _ := action["const"].(string); c == "sync" {
+			syncBranch = branch
+			break
+		}
+	}
+	if syncBranch == nil {
+		t.Fatal("skill_manage.oneOf missing sync action branch")
+	}
+	required, _ := syncBranch["required"].([]string)
+	if !reflect.DeepEqual(required, []string{"source"}) {
+		t.Fatalf("skill_manage.sync.required=%v, want [source]", required)
+	}
+	nested, _ := syncBranch["oneOf"].([]any)
+	if len(nested) != 2 {
+		t.Fatalf("skill_manage.sync.oneOf len=%d, want 2", len(nested))
+	}
+}
+
 func TestFeishuDriveReplyAndAddSchemasDocumentFileTypeDefault(t *testing.T) {
 	check := func(name string, params map[string]any) {
 		t.Helper()
