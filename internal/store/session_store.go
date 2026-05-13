@@ -249,9 +249,9 @@ func (s *SessionStore) SessionStats(sessionID string) (map[string]any, error) {
 	err := s.db.QueryRow(`
 SELECT
   COUNT(*) AS message_count,
-  SUM(CASE WHEN tool_calls_json IS NOT NULL AND tool_calls_json <> '' THEN 1 ELSE 0 END) AS tool_call_messages,
-  MIN(created_at) AS first_seen,
-  MAX(created_at) AS last_seen
+  COALESCE(SUM(CASE WHEN tool_calls_json IS NOT NULL AND tool_calls_json <> '' THEN 1 ELSE 0 END), 0) AS tool_call_messages,
+  COALESCE(MIN(created_at), '') AS first_seen,
+  COALESCE(MAX(created_at), '') AS last_seen
 FROM messages
 WHERE session_id = ?`, sessionID).Scan(&messageCount, &toolCallCount, &firstSeen, &lastSeen)
 	if err != nil {

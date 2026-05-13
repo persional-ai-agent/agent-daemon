@@ -306,3 +306,49 @@ func TestSessionStoreSessionStats(t *testing.T) {
 		t.Fatalf("expected message_count=2, got %#v", stats["message_count"])
 	}
 }
+
+func TestSessionStoreSessionStatsEmptySession(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	stats, err := s.SessionStats("missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats["message_count"] != int64(0) {
+		t.Fatalf("expected message_count=0, got %#v", stats["message_count"])
+	}
+	if stats["tool_call_messages"] != int64(0) {
+		t.Fatalf("expected tool_call_messages=0, got %#v", stats["tool_call_messages"])
+	}
+	if stats["first_seen"] != "" || stats["last_seen"] != "" {
+		t.Fatalf("expected empty first/last seen, got first=%#v last=%#v", stats["first_seen"], stats["last_seen"])
+	}
+}
+
+func TestSessionStoreSessionStatsWithNullToolCallsJSON(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	_, err = s.DB().Exec(`INSERT INTO messages(session_id, role, content, name, tool_call_id, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"s-null", "assistant", "legacy", "", "", nil, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, err := s.SessionStats("s-null")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats["message_count"] != int64(1) {
+		t.Fatalf("expected message_count=1, got %#v", stats["message_count"])
+	}
+	if stats["tool_call_messages"] != int64(0) {
+		t.Fatalf("expected tool_call_messages=0, got %#v", stats["tool_call_messages"])
+	}
+}

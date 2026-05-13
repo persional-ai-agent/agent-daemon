@@ -48,3 +48,16 @@
 
 - 全量测试：`go test ./...`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
+
+## 6. 升级兼容检查
+
+- ui-tui 审批快捷命令依赖后端接口：`POST /v1/ui/approval/confirm`。
+- 升级后可执行以下探针确认接口已存在：
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/v1/ui/approval/confirm \
+  -H 'Content-Type: application/json' \
+  -d '{"session_id":"probe","approval_id":"probe","approve":true}'
+```
+
+- 返回 `404` 说明后端版本过旧，需要先升级后端再使用 `/approve` 与 `/deny`。
