@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -56,4 +57,18 @@ func TestSpotifyActionSchemasDocumentDefaultGet(t *testing.T) {
 	}
 	check("spotify_playback", spotifyPlaybackParams())
 	check("spotify_queue", spotifyQueueParams())
+}
+
+func TestSpotifyActionSchemasExposeEnum(t *testing.T) {
+	check := func(name string, params map[string]any, want []string) {
+		t.Helper()
+		props, _ := params["properties"].(map[string]any)
+		action, _ := props["action"].(map[string]any)
+		enum, _ := action["enum"].([]string)
+		if !reflect.DeepEqual(enum, want) {
+			t.Fatalf("%s action enum=%v, want=%v", name, enum, want)
+		}
+	}
+	check("spotify_playback", spotifyPlaybackParams(), []string{"get", "pause", "play"})
+	check("spotify_queue", spotifyQueueParams(), []string{"get", "add"})
 }

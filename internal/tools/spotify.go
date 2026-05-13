@@ -273,11 +273,11 @@ func spotifySearchParams() map[string]any {
 }
 
 func spotifyPlaybackParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "description": "Action to perform (default: get)"}, "uri": map[string]any{"type": "string"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"get", "pause", "play"}, "description": "Action to perform (default: get)"}, "uri": map[string]any{"type": "string"}}}
 }
 
 func spotifyQueueParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "description": "Action to perform (default: get)"}, "uri": map[string]any{"type": "string"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"get", "add"}, "description": "Action to perform (default: get)"}, "uri": map[string]any{"type": "string"}}}
 }
 
 func spotifyDevicesParams() map[string]any {
