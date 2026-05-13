@@ -356,6 +356,9 @@ func (b *BuiltinTools) browserGetImages(_ context.Context, args map[string]any, 
 	if limit > 1000 {
 		limit = 1000
 	}
+	if limit > 1000 {
+		limit = 1000
+	}
 	srcs := findImageSrcs(p.HTML)
 	resolved := make([]string, 0, len(srcs))
 	for _, s := range srcs {

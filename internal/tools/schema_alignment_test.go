@@ -183,4 +183,71 @@ func TestSchemaMachineReadableBounds(t *testing.T) {
 	ap, _ := approvalParams()["properties"].(map[string]any)
 	aTTL, _ := ap["ttl_seconds"].(map[string]any)
 	assertBound("approval.ttl_seconds", aTTL, "minimum", 0)
+
+	rp, _ := readFileParams()["properties"].(map[string]any)
+	rOffset, _ := rp["offset"].(map[string]any)
+	rMaxChars, _ := rp["max_chars"].(map[string]any)
+	assertBound("read_file.offset", rOffset, "minimum", 1)
+	assertBound("read_file.max_chars", rMaxChars, "minimum", 1)
+	assertBound("read_file.max_chars", rMaxChars, "maximum", 200000)
+
+	bcp, _ := browserConsoleParams()["properties"].(map[string]any)
+	bcLimit, _ := bcp["limit"].(map[string]any)
+	assertBound("browser_console.limit", bcLimit, "minimum", 1)
+	assertBound("browser_console.limit", bcLimit, "maximum", 1000)
+}
+
+func TestExternalToolSchemasMachineReadableBounds(t *testing.T) {
+	assertBound := func(name string, field map[string]any, key string, want int) {
+		t.Helper()
+		got, _ := field[key].(int)
+		if got != want {
+			t.Fatalf("%s %s=%d, want %d", name, key, got, want)
+		}
+	}
+
+	discordProps, _ := discordToolParams()["properties"].(map[string]any)
+	discordLimit, _ := discordProps["limit"].(map[string]any)
+	assertBound("discord.limit", discordLimit, "minimum", 1)
+	assertBound("discord.limit", discordLimit, "maximum", 100)
+
+	spotifySearchProps, _ := spotifySearchParams()["properties"].(map[string]any)
+	spotifySearchLimit, _ := spotifySearchProps["limit"].(map[string]any)
+	assertBound("spotify_search.limit", spotifySearchLimit, "minimum", 1)
+	assertBound("spotify_search.limit", spotifySearchLimit, "maximum", 50)
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+	}{
+		{"spotify_playlists", spotifyPlaylistsParams()},
+		{"spotify_albums", spotifyAlbumsParams()},
+		{"spotify_library", spotifyLibraryParams()},
+	} {
+		props, _ := tc.params["properties"].(map[string]any)
+		limit, _ := props["limit"].(map[string]any)
+		offset, _ := props["offset"].(map[string]any)
+		assertBound(tc.name+".limit", limit, "minimum", 1)
+		assertBound(tc.name+".limit", limit, "maximum", 50)
+		assertBound(tc.name+".offset", offset, "minimum", 0)
+	}
+
+	cronProps, _ := NewCronJobTool(nil).Schema().Function.Parameters["properties"].(map[string]any)
+	cronRepeat, _ := cronProps["repeat"].(map[string]any)
+	cronLimit, _ := cronProps["limit"].(map[string]any)
+	assertBound("cronjob.repeat", cronRepeat, "minimum", 0)
+	assertBound("cronjob.limit", cronLimit, "minimum", 1)
+	assertBound("cronjob.limit", cronLimit, "maximum", 200)
+
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+	}{
+		{"feishu_drive_list_comments", feishuDriveListCommentsParams()},
+		{"feishu_drive_list_comment_replies", feishuDriveListCommentRepliesParams()},
+	} {
+		props, _ := tc.params["properties"].(map[string]any)
+		pageSize, _ := props["page_size"].(map[string]any)
+		assertBound(tc.name+".page_size", pageSize, "minimum", 1)
+		assertBound(tc.name+".page_size", pageSize, "maximum", 100)
+	}
 }

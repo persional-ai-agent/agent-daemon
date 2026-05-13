@@ -1828,7 +1828,7 @@ func processStatusParams() map[string]any {
 }
 func stopProcessParams() map[string]any { return processStatusParams() }
 func readFileParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}, "with_line_numbers": map[string]any{"type": "boolean"}, "max_chars": map[string]any{"type": "integer", "description": "Maximum characters to read (default 100000). When exceeded and reject_on_truncate=true, returns an error."}, "dedup": map[string]any{"type": "boolean", "description": "Return a lightweight stub when the file is unchanged since the previous read in the same session (default true)"}, "reject_on_truncate": map[string]any{"type": "boolean", "description": "When true (default), return an error if the read would exceed max_chars instead of returning truncated content"}}, "required": []string{"path"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "minimum": 1}, "limit": map[string]any{"type": "integer", "minimum": 0, "description": "Line count limit (default 0 means to file end)."}, "with_line_numbers": map[string]any{"type": "boolean"}, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 200000, "description": "Maximum characters to read (default 100000). When exceeded and reject_on_truncate=true, returns an error."}, "dedup": map[string]any{"type": "boolean", "description": "Return a lightweight stub when the file is unchanged since the previous read in the same session (default true)"}, "reject_on_truncate": map[string]any{"type": "boolean", "description": "When true (default), return an error if the read would exceed max_chars instead of returning truncated content"}}, "required": []string{"path"}}
 }
 func writeFileParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}
@@ -2010,7 +2010,7 @@ func browserGetImagesParams() map[string]any {
 }
 func browserConsoleParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"limit": map[string]any{"type": "integer", "description": "Maximum number of latest console entries to return (default 200)."},
+		"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 1000, "description": "Maximum number of latest console entries to return (default 200, max 1000)."},
 	}}
 }
 func browserVisionParams() map[string]any {

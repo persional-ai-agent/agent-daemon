@@ -186,7 +186,7 @@ func discordToolParams() map[string]any {
 			"channel_id": map[string]any{"type": "string"},
 			"message_id": map[string]any{"type": "string"},
 			"emoji":      map[string]any{"type": "string"},
-			"limit":      map[string]any{"type": "integer", "description": "Maximum messages to fetch (default 50, max 100)."},
+			"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Maximum messages to fetch (default 50, max 100)."},
 			"before":     map[string]any{"type": "string"},
 			"after":      map[string]any{"type": "string"},
 			"around":     map[string]any{"type": "string"},

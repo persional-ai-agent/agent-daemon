@@ -501,6 +501,9 @@ func (b *BuiltinTools) browserConsoleCDP(ctx context.Context, args map[string]an
 	if limit <= 0 {
 		limit = 200
 	}
+	if limit > 1000 {
+		limit = 1000
+	}
 	st.mu.Lock()
 	logs := st.logs
 	st.logs = nil

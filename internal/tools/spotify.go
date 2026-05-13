@@ -274,7 +274,7 @@ func (b *BuiltinTools) spotifyLibrary(ctx context.Context, args map[string]any, 
 }
 
 func spotifySearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}, "type": map[string]any{"type": "string", "enum": []string{"album", "artist", "playlist", "track", "show", "episode", "audiobook"}, "description": "Search type (default: track)."}, "limit": map[string]any{"type": "integer", "description": "Maximum results per request (default 10, max 50)."}}, "required": []string{"q"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}, "type": map[string]any{"type": "string", "enum": []string{"album", "artist", "playlist", "track", "show", "episode", "audiobook"}, "description": "Search type (default: track)."}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum results per request (default 10, max 50)."}}, "required": []string{"q"}}
 }
 
 func spotifyPlaybackParams() map[string]any {
@@ -290,15 +290,15 @@ func spotifyDevicesParams() map[string]any {
 }
 
 func spotifyPlaylistsParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "description": "Pagination offset (default 0)."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "minimum": 0, "description": "Pagination offset (default 0)."}}}
 }
 
 func spotifyAlbumsParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "description": "Pagination offset (default 0)."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "minimum": 0, "description": "Pagination offset (default 0)."}}}
 }
 
 func spotifyLibraryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "description": "Pagination offset (default 0)."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "description": "Page size (default 20, max 50)."}, "offset": map[string]any{"type": "integer", "minimum": 0, "description": "Pagination offset (default 0)."}}}
 }
 
 var _ = errors.New

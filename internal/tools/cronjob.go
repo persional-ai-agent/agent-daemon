@@ -48,10 +48,11 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 					},
 					"repeat": map[string]any{
 						"type":        "integer",
+						"minimum":     0,
 						"description": "How many times to run (omit for forever). For one-shot schedules, default is 1.",
 					},
 					"paused": map[string]any{"type": "boolean", "description": "Pause/resume the job (update only)"},
-					"limit":  map[string]any{"type": "integer", "description": "Limit for runs listing (default 50, max 200)."},
+					"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "description": "Limit for runs listing (default 50, max 200)."},
 				},
 			},
 		},
