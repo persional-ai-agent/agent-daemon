@@ -50,6 +50,7 @@ func printHelp() {
 	fmt.Println("/last                 print last json payload")
 	fmt.Println("/save <file>          save last json payload")
 	fmt.Println("/quit                 exit")
+	fmt.Println("aliases: :q, quit, ls, show, gw, cfg")
 }
 
 func printEvent(evt map[string]any) {
@@ -203,6 +204,41 @@ func main() {
 		text := strings.TrimSpace(reader.Text())
 		if text == "" {
 			continue
+		}
+		switch text {
+		case ":q", "quit":
+			text = "/quit"
+		case "ls":
+			text = "/tools"
+		case "sessions":
+			text = "/sessions"
+		case "show":
+			text = "/show"
+		case "next":
+			text = "/next"
+		case "prev":
+			text = "/prev"
+		case "stats":
+			text = "/stats"
+		case "gateway", "gw":
+			text = "/gateway status"
+		case "config", "cfg":
+			text = "/config get"
+		}
+		if strings.HasPrefix(text, "show ") && !strings.HasPrefix(text, "/show ") {
+			text = "/show " + strings.TrimSpace(strings.TrimPrefix(text, "show "))
+		}
+		if strings.HasPrefix(text, "sessions ") && !strings.HasPrefix(text, "/sessions ") {
+			text = "/sessions " + strings.TrimSpace(strings.TrimPrefix(text, "sessions "))
+		}
+		if strings.HasPrefix(text, "tool ") && !strings.HasPrefix(text, "/tool ") {
+			text = "/tool " + strings.TrimSpace(strings.TrimPrefix(text, "tool "))
+		}
+		if strings.HasPrefix(text, "gw ") && !strings.HasPrefix(text, "/gateway ") {
+			text = "/gateway " + strings.TrimSpace(strings.TrimPrefix(text, "gw "))
+		}
+		if strings.HasPrefix(text, "cfg ") && !strings.HasPrefix(text, "/config ") {
+			text = "/config " + strings.TrimSpace(strings.TrimPrefix(text, "cfg "))
 		}
 		switch {
 		case text == "/quit" || text == "/exit":

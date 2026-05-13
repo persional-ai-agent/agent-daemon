@@ -41,3 +41,11 @@ go run .
 - `/last` 查看最近一次 JSON 响应
 - `/save <file>` 保存最近一次 JSON 响应到文件
 - `/quit` 或 `/exit` 退出
+
+常用别名：
+
+- `:q` / `quit` -> `/quit`
+- `ls` -> `/tools`
+- `show ...` -> `/show ...`
+- `gw` / `gw ...` -> `/gateway status` / `/gateway ...`
+- `cfg` / `cfg ...` -> `/config get` / `/config ...`
