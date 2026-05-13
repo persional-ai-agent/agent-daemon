@@ -357,9 +357,9 @@ func feishuDriveListCommentRepliesParams() map[string]any {
 }
 
 func feishuDriveReplyCommentParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "comment_id": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string"}}, "required": []string{"file_token", "comment_id", "content"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "comment_id": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string", "description": "Drive file type (default docx)."}}, "required": []string{"file_token", "comment_id", "content"}}
 }
 
 func feishuDriveAddCommentParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string"}}, "required": []string{"file_token", "content"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string", "description": "Drive file type (default docx)."}}, "required": []string{"file_token", "content"}}
 }

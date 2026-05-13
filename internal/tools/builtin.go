@@ -1814,13 +1814,13 @@ func terminalParams() map[string]any {
 func processParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"action":          map[string]any{"type": "string", "enum": []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}, "description": "Action to perform (default: status)"},
-		"session_id":      map[string]any{"type": "string"},
+		"session_id":      map[string]any{"type": "string", "description": "Required for action=status/poll/log/wait/stop/kill/write."},
 		"include_done":    map[string]any{"type": "boolean", "description": "For action=list, include finished processes (default false)."},
 		"limit":           map[string]any{"type": "integer", "description": "For action=list, maximum processes to return (default 50)."},
-		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log"},
+		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log (default 0)."},
 		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
 		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait, timeout seconds (default 60)."},
-		"input":           map[string]any{"type": "string", "description": "For action=write"},
+		"input":           map[string]any{"type": "string", "description": "For action=write (required)."},
 	}, "required": []string{}}
 }
 func processStatusParams() map[string]any {
@@ -2069,7 +2069,7 @@ func clarifyParams() map[string]any {
 	}
 }
 func delegateTaskParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string", "description": "Single task goal. Required when tasks is empty."}, "context": map[string]any{"type": "string", "description": "Optional context for the single goal."}, "max_iterations": map[string]any{"type": "integer", "description": "Max iterations per subtask (default 0 uses runner default)."}, "max_concurrency": map[string]any{"type": "integer", "description": "Concurrent subtasks when tasks is set (default tasks length)."}, "timeout_seconds": map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 0 disables timeout)."}, "fail_fast": map[string]any{"type": "boolean", "description": "Cancel remaining subtasks after first failure (default false)."}, "tasks": map[string]any{"type": "array", "description": "Batch tasks. Each item may include goal/context. If provided, goal becomes optional."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string", "description": "Single task goal. Required when tasks is empty."}, "context": map[string]any{"type": "string", "description": "Optional context for the single goal."}, "max_iterations": map[string]any{"type": "integer", "description": "Max iterations per subtask (default 0 uses runner default)."}, "max_concurrency": map[string]any{"type": "integer", "description": "Concurrent subtasks when tasks is set (default tasks length)."}, "timeout_seconds": map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 0 disables timeout)."}, "fail_fast": map[string]any{"type": "boolean", "description": "Cancel remaining subtasks after first failure (default false)."}, "tasks": map[string]any{"type": "array", "description": "Batch tasks. Each item may include goal/context. If provided, goal becomes optional.", "items": map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}}, "required": []string{"goal"}}}}}
 }
 func approvalParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke", "confirm"}, "description": "Action to perform (default: status)"}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer", "description": "Approval TTL in seconds (default 0 uses store default)."}, "approval_id": map[string]any{"type": "string", "description": "Pending approval ID for action=confirm"}, "approve": map[string]any{"type": "boolean", "description": "Approve (true) or deny (false) for action=confirm"}}}

@@ -56,17 +56,29 @@ func TestBuiltinSchemasDocumentDefaultsAndBounds(t *testing.T) {
 	}
 
 	processProps, _ := processParams()["properties"].(map[string]any)
+	sessionID, _ := processProps["session_id"].(map[string]any)
 	includeDone, _ := processProps["include_done"].(map[string]any)
 	limit, _ := processProps["limit"].(map[string]any)
+	offset, _ := processProps["offset"].(map[string]any)
 	waitTimeout, _ := processProps["timeout_seconds"].(map[string]any)
+	input, _ := processProps["input"].(map[string]any)
+	if desc, _ := sessionID["description"].(string); !strings.Contains(desc, "Required for action=status/poll/log/wait/stop/kill/write") {
+		t.Fatalf("process.session_id description=%q", desc)
+	}
 	if desc, _ := includeDone["description"].(string); !strings.Contains(desc, "default false") {
 		t.Fatalf("process.include_done description=%q", desc)
 	}
 	if desc, _ := limit["description"].(string); !strings.Contains(desc, "default 50") {
 		t.Fatalf("process.limit description=%q", desc)
 	}
+	if desc, _ := offset["description"].(string); !strings.Contains(desc, "default 0") {
+		t.Fatalf("process.offset description=%q", desc)
+	}
 	if desc, _ := waitTimeout["description"].(string); !strings.Contains(desc, "default 60") {
 		t.Fatalf("process.timeout_seconds description=%q", desc)
+	}
+	if desc, _ := input["description"].(string); !strings.Contains(desc, "required") {
+		t.Fatalf("process.input description=%q", desc)
 	}
 
 	webSearchProps, _ := webSearchParams()["properties"].(map[string]any)
@@ -110,4 +122,26 @@ func TestDelegateTaskSchemaDocumentsConditionalRequiredAndDefaults(t *testing.T)
 	if desc, _ := failFast["description"].(string); !strings.Contains(desc, "default false") {
 		t.Fatalf("delegate_task.fail_fast description=%q", desc)
 	}
+	items, _ := tasks["items"].(map[string]any)
+	if typ, _ := items["type"].(string); typ != "object" {
+		t.Fatalf("delegate_task.tasks.items.type=%q, want object", typ)
+	}
+	required, _ := items["required"].([]string)
+	if !reflect.DeepEqual(required, []string{"goal"}) {
+		t.Fatalf("delegate_task.tasks.items.required=%v, want [goal]", required)
+	}
+}
+
+func TestFeishuDriveReplyAndAddSchemasDocumentFileTypeDefault(t *testing.T) {
+	check := func(name string, params map[string]any) {
+		t.Helper()
+		props, _ := params["properties"].(map[string]any)
+		fileType, _ := props["file_type"].(map[string]any)
+		desc, _ := fileType["description"].(string)
+		if !strings.Contains(desc, "default docx") {
+			t.Fatalf("%s.file_type description=%q, want default docx", name, desc)
+		}
+	}
+	check("feishu_drive_reply_comment", feishuDriveReplyCommentParams())
+	check("feishu_drive_add_comment", feishuDriveAddCommentParams())
 }
