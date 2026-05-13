@@ -18,6 +18,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 type Server struct {
@@ -27,8 +28,8 @@ type Server struct {
 	GatewayStatusFn  func() map[string]any
 	ConfigUpdateFn   func(key, value string) (map[string]any, error)
 	GatewayActionFn  func(action string) (map[string]any, error)
-	mu     sync.Mutex
-	active map[string]activeRun
+	mu               sync.Mutex
+	active           map[string]activeRun
 }
 
 type chatRequest struct {
@@ -72,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
+	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
 	return mux
 }
 
@@ -278,6 +280,12 @@ type uiGatewayActionRequest struct {
 	Action string `json:"action"`
 }
 
+type uiApprovalConfirmRequest struct {
+	SessionID  string `json:"session_id"`
+	ApprovalID string `json:"approval_id"`
+	Approve    bool   `json:"approve"`
+}
+
 func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -304,6 +312,56 @@ func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Engine == nil || s.Engine.Registry == nil {
+		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		return
+	}
+	var req uiApprovalConfirmRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.ApprovalID = strings.TrimSpace(req.ApprovalID)
+	if req.SessionID == "" {
+		http.Error(w, "session_id required", http.StatusBadRequest)
+		return
+	}
+	if req.ApprovalID == "" {
+		http.Error(w, "approval_id required", http.StatusBadRequest)
+		return
+	}
+	raw := s.Engine.Registry.Dispatch(r.Context(), "approval", map[string]any{
+		"action":      "confirm",
+		"approval_id": req.ApprovalID,
+		"approve":     req.Approve,
+	}, tools.ToolContext{
+		SessionID:      req.SessionID,
+		SessionStore:   s.Engine.SearchStore,
+		MemoryStore:    s.Engine.MemoryStore,
+		TodoStore:      s.Engine.TodoStore,
+		ApprovalStore:  s.Engine.ApprovalStore,
+		DelegateRunner: s.Engine,
+		Workdir:        s.Engine.Workdir,
+	})
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
+		http.Error(w, e, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {

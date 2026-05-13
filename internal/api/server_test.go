@@ -173,6 +173,17 @@ func TestUIEndpoints(t *testing.T) {
 			return map[string]any{"success": true}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "approval",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success":     true,
+				"action":      args["action"],
+				"approval_id": args["approval_id"],
+				"approved":    args["approve"],
+			}, nil
+		},
+	})
 	srv := &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
@@ -288,6 +299,19 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"action":"enable"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("approval_confirm", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/approval/confirm", bytes.NewBufferString(`{"session_id":"s-1","approval_id":"ap-1","approve":true}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"approval_id":"ap-1"`) || !strings.Contains(rec.Body.String(), `"approved":true`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

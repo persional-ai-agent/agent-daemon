@@ -69,11 +69,14 @@ go run .
 - `/health`、`/cancel`：健康检查与当前会话中断
 - `/history [n]`、`/rerun <index>`：本地历史查看与命令重放
 - `/events [n]`、`/events save <file>`：运行事件查看与导出
+- `/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]`：按格式和时间范围导出
 - `/bookmark add|list|use`：会话配置书签
+- `/pending`、`/approve <id>`、`/deny <id>`：终端内审批闭环
 
 稳定性与排障：
 
 - 提示符会显示最近状态和错误码，例如 `tui[err/network]`。
 - `/status` 可查看 `status/code/detail` 三元组，快速区分网络、超时、鉴权、请求参数或服务端错误。
 - 长连接在短暂断线时会自动重连（同 session 恢复），并给出重连提示。
+- 启动时会自动恢复上次会话与 endpoint。
 - 运行烟测：`./ui-tui/e2e_smoke.sh`。

@@ -20,6 +20,7 @@
 - `POST /v1/ui/config/set`
 - `GET /v1/ui/gateway/status`
 - `POST /v1/ui/gateway/action`
+- `POST /v1/ui/approval/confirm`
 
 ## 2. 后端注入点
 
@@ -48,6 +49,7 @@
 - 稳定性机制：
   - WS 读取超时提示 + 单轮超时中断
   - 断线自动重连（同 session + `turn_id` + `resume`）
+  - 审批确认直连 API（不依赖模型回合）：`/v1/ui/approval/confirm`
   - 错误分类码（`network/timeout/auth/request/server/unknown`）
   - 本地历史与事件日志滚动上限，避免无界增长
 

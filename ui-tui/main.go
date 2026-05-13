@@ -27,6 +27,13 @@ type bookmark struct {
 	HTTPBase  string `json:"http_base"`
 }
 
+type runtimeState struct {
+	SessionID string `json:"session_id"`
+	WSBase    string `json:"ws_base"`
+	HTTPBase  string `json:"http_base"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type appState struct {
 	wsBase   string
 	httpBase string
@@ -48,6 +55,7 @@ type appState struct {
 
 	historyPath  string
 	bookmarkPath string
+	statePath    string
 
 	historyMaxLines int
 	eventMaxItems   int
@@ -95,7 +103,7 @@ func newState() *appState {
 		home = "."
 	}
 	root := filepath.Join(home, ".agent-daemon")
-	return &appState{
+	st := &appState{
 		wsBase:          wsBase,
 		httpBase:        httpBase,
 		session:         session,
@@ -109,11 +117,47 @@ func newState() *appState {
 		eventLog:        make([]map[string]any, 0),
 		historyPath:     filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:    filepath.Join(root, "ui-tui-bookmarks.json"),
+		statePath:       filepath.Join(root, "ui-tui-state.json"),
 		historyMaxLines: defaultHistoryMaxLines,
 		eventMaxItems:   defaultEventMaxItems,
 		wsReadTimeout:   45 * time.Second,
 		wsTurnTimeout:   8 * time.Minute,
 		wsMaxReconnect:  2,
+	}
+	st.loadRuntimeState()
+	return st
+}
+
+func (s *appState) saveRuntimeState() error {
+	_ = os.MkdirAll(filepath.Dir(s.statePath), 0o755)
+	st := runtimeState{
+		SessionID: s.session,
+		WSBase:    s.wsBase,
+		HTTPBase:  s.httpBase,
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
+	bs, _ := json.MarshalIndent(st, "", "  ")
+	return os.WriteFile(s.statePath, bs, 0o644)
+}
+
+func (s *appState) loadRuntimeState() {
+	bs, err := os.ReadFile(s.statePath)
+	if err != nil {
+		return
+	}
+	var st runtimeState
+	if err := json.Unmarshal(bs, &st); err != nil {
+		return
+	}
+	if strings.TrimSpace(st.SessionID) != "" {
+		s.session = strings.TrimSpace(st.SessionID)
+		s.lastShowSession = s.session
+	}
+	if strings.TrimSpace(st.WSBase) != "" {
+		s.wsBase = strings.TrimSpace(st.WSBase)
+	}
+	if strings.TrimSpace(st.HTTPBase) != "" {
+		s.httpBase = strings.TrimRight(strings.TrimSpace(st.HTTPBase), "/")
 	}
 }
 
@@ -207,6 +251,9 @@ func printHelp() {
 	fmt.Println("/bookmark add <name>  save current session/api profile")
 	fmt.Println("/bookmark list        list bookmarks")
 	fmt.Println("/bookmark use <name>  restore session/api profile")
+	fmt.Println("/pending              show latest pending approval in session")
+	fmt.Println("/approve <id>         approve pending approval id")
+	fmt.Println("/deny <id>            deny pending approval id")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -248,6 +295,118 @@ func printJSONMode(v any, pretty bool) {
 		bs, _ = json.Marshal(v)
 	}
 	fmt.Println(string(bs))
+}
+
+func asMap(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
+}
+
+func findLatestPendingApproval(msgs []any) (string, map[string]any) {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg := asMap(msgs[i])
+		if msg == nil {
+			continue
+		}
+		if role, _ := msg["role"].(string); role != "tool" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(content), &payload); err != nil {
+			continue
+		}
+		if status, _ := payload["status"].(string); status == "pending_approval" {
+			if id, _ := payload["approval_id"].(string); strings.TrimSpace(id) != "" {
+				return id, payload
+			}
+		}
+	}
+	return "", nil
+}
+
+func (s *appState) confirmApproval(approvalID string, approve bool) (map[string]any, error) {
+	body := map[string]any{
+		"session_id":  s.session,
+		"approval_id": approvalID,
+		"approve":     approve,
+	}
+	return httpJSON(http.MethodPost, s.httpBase+"/v1/ui/approval/confirm", body)
+}
+
+func parseEventSaveArgs(text string) (path, format string, since, until time.Time, err error) {
+	rest := strings.TrimSpace(strings.TrimPrefix(text, "/events save "))
+	parts := strings.Fields(rest)
+	if len(parts) == 0 {
+		return "", "", time.Time{}, time.Time{}, fmt.Errorf("usage: /events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]")
+	}
+	path = parts[0]
+	format = "json"
+	for _, p := range parts[1:] {
+		switch {
+		case p == "json" || p == "ndjson":
+			format = p
+		case strings.HasPrefix(p, "since="):
+			v := strings.TrimSpace(strings.TrimPrefix(p, "since="))
+			t, parseErr := time.Parse(time.RFC3339, v)
+			if parseErr != nil {
+				return "", "", time.Time{}, time.Time{}, fmt.Errorf("invalid since: %w", parseErr)
+			}
+			since = t
+		case strings.HasPrefix(p, "until="):
+			v := strings.TrimSpace(strings.TrimPrefix(p, "until="))
+			t, parseErr := time.Parse(time.RFC3339, v)
+			if parseErr != nil {
+				return "", "", time.Time{}, time.Time{}, fmt.Errorf("invalid until: %w", parseErr)
+			}
+			until = t
+		default:
+			return "", "", time.Time{}, time.Time{}, fmt.Errorf("unknown option: %s", p)
+		}
+	}
+	return path, format, since, until, nil
+}
+
+func filterEventsByTime(events []map[string]any, since, until time.Time) []map[string]any {
+	if since.IsZero() && until.IsZero() {
+		return events
+	}
+	out := make([]map[string]any, 0, len(events))
+	for _, evt := range events {
+		raw, _ := evt["_captured_at"].(string)
+		if raw == "" {
+			continue
+		}
+		ts, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			continue
+		}
+		if !since.IsZero() && ts.Before(since) {
+			continue
+		}
+		if !until.IsZero() && ts.After(until) {
+			continue
+		}
+		out = append(out, evt)
+	}
+	return out
+}
+
+func saveEvents(path, format string, events []map[string]any) error {
+	if format == "ndjson" {
+		var b strings.Builder
+		for _, evt := range events {
+			line, _ := json.Marshal(evt)
+			b.Write(line)
+			b.WriteByte('\n')
+		}
+		return os.WriteFile(path, []byte(b.String()), 0o644)
+	}
+	bs, _ := json.MarshalIndent(events, "", "  ")
+	return os.WriteFile(path, bs, 0o644)
 }
 
 func classifyError(err error) (string, string) {
@@ -454,6 +613,11 @@ func (s *appState) useBookmark(name string) error {
 }
 
 func (s *appState) addEvent(evt map[string]any) {
+	if evt != nil {
+		if _, ok := evt["_captured_at"]; !ok {
+			evt["_captured_at"] = time.Now().Format(time.RFC3339)
+		}
+	}
 	if s.eventMaxItems > 0 && len(s.eventLog) >= s.eventMaxItems {
 		trim := s.eventMaxItems / 2
 		if trim < 1 {
@@ -646,19 +810,19 @@ func main() {
 			goto REPROCESS
 		case strings.HasPrefix(text, "/events"):
 			if strings.HasPrefix(text, "/events save ") {
-				path := strings.TrimSpace(strings.TrimPrefix(text, "/events save "))
-				if path == "" {
-					fmt.Println("usage: /events save <file>")
+				path, format, since, until, err := parseEventSaveArgs(text)
+				if err != nil {
+					fmt.Println(err.Error())
 					s.setStatus(false, "invalid_input", "invalid events save args")
 					continue
 				}
-				bs, _ := json.MarshalIndent(s.eventLog, "", "  ")
-				if err := os.WriteFile(path, bs, 0o644); err != nil {
+				filtered := filterEventsByTime(s.eventLog, since, until)
+				if err := saveEvents(path, format, filtered); err != nil {
 					fmt.Printf("[save-error] %v\n", err)
 					s.setErrStatus(err)
 					continue
 				}
-				fmt.Printf("saved events: %s\n", path)
+				fmt.Printf("saved events: %s (format=%s count=%d)\n", path, format, len(filtered))
 				s.setStatus(true, "ok", "events saved")
 				continue
 			}
@@ -678,6 +842,55 @@ func main() {
 			}
 			printJSONMode(s.eventLog[start:], s.pretty)
 			s.setStatus(true, "ok", "events listed")
+		case text == "/pending":
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				s.setErrStatus(err)
+				continue
+			}
+			msgs, _ := out["messages"].([]any)
+			id, payload := findLatestPendingApproval(msgs)
+			if id == "" {
+				fmt.Println("no pending approval found in recent session messages")
+				s.setStatus(false, "not_found", "no pending approval")
+				continue
+			}
+			fmt.Printf("pending approval id: %s\n", id)
+			printJSONMode(payload, s.pretty)
+			s.setStatus(true, "ok", "pending approval found")
+		case strings.HasPrefix(text, "/approve "):
+			id := strings.TrimSpace(strings.TrimPrefix(text, "/approve "))
+			if id == "" {
+				fmt.Println("usage: /approve <approval_id>")
+				s.setStatus(false, "invalid_input", "approval id required")
+				continue
+			}
+			out, err := s.confirmApproval(id, true)
+			if err != nil {
+				fmt.Printf("[approval-error] %v\n", err)
+				s.setErrStatus(err)
+				continue
+			}
+			s.lastJSON = out
+			printJSONMode(out, s.pretty)
+			s.setStatus(true, "ok", "approval confirmed")
+		case strings.HasPrefix(text, "/deny "):
+			id := strings.TrimSpace(strings.TrimPrefix(text, "/deny "))
+			if id == "" {
+				fmt.Println("usage: /deny <approval_id>")
+				s.setStatus(false, "invalid_input", "approval id required")
+				continue
+			}
+			out, err := s.confirmApproval(id, false)
+			if err != nil {
+				fmt.Printf("[approval-error] %v\n", err)
+				s.setErrStatus(err)
+				continue
+			}
+			s.lastJSON = out
+			printJSONMode(out, s.pretty)
+			s.setStatus(true, "ok", "approval denied")
 		case strings.HasPrefix(text, "/bookmark "):
 			parts := strings.Fields(text)
 			if len(parts) >= 2 && parts[1] == "list" {
@@ -708,6 +921,7 @@ func main() {
 					continue
 				}
 				fmt.Printf("bookmark loaded: %s (session=%s)\n", parts[2], s.session)
+				_ = s.saveRuntimeState()
 				s.setStatus(true, "ok", "bookmark loaded")
 				continue
 			}
@@ -724,6 +938,7 @@ func main() {
 				continue
 			}
 			s.session = next
+			_ = s.saveRuntimeState()
 			fmt.Printf("session switched: %s\n", s.session)
 			s.setStatus(true, "ok", "session switched")
 		case text == "/api":
@@ -742,6 +957,7 @@ func main() {
 				s.httpBase = deriveHTTPBase(s.wsBase)
 				fmt.Printf("http auto-updated: %s\n", s.httpBase)
 			}
+			_ = s.saveRuntimeState()
 			s.setStatus(true, "ok", "ws switched")
 		case text == "/http":
 			fmt.Printf("http: %s\n", s.httpBase)
@@ -754,6 +970,7 @@ func main() {
 				continue
 			}
 			s.httpBase = strings.TrimRight(next, "/")
+			_ = s.saveRuntimeState()
 			fmt.Printf("http switched: %s\n", s.httpBase)
 			s.setStatus(true, "ok", "http switched")
 		case text == "/last":
@@ -874,6 +1091,7 @@ func main() {
 			s.session = s.lastSessions[idx-1]
 			s.lastShowSession = s.session
 			s.lastShowOffset = 0
+			_ = s.saveRuntimeState()
 			fmt.Printf("session switched: %s\n", s.session)
 			s.setStatus(true, "ok", "session switched")
 		case strings.HasPrefix(text, "/show"):
