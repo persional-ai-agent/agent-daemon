@@ -60,6 +60,7 @@ type Config struct {
 	ModelCascade            string
 	ModelCostAware          bool
 	DisabledTools           string
+	DisabledPlugins         string
 	CronEnabled             bool
 	CronTickSeconds         int
 	CronMaxConcurrency      int
@@ -308,6 +309,7 @@ func loadFromINIValues(iv iniValues) Config {
 		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
 		ModelCostAware:          costAware,
 		DisabledTools:           iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),
+		DisabledPlugins:         iniStr(iv, "plugins", "disabled", "AGENT_DISABLED_PLUGINS", ""),
 		EnabledToolsets:         iniStr(iv, "tools", "enabled_toolsets", "AGENT_ENABLED_TOOLSETS", ""),
 		CronEnabled:             cronEnabled,
 		CronTickSeconds:         cronTickSeconds,

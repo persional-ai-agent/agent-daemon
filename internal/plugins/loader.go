@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,12 +10,53 @@ import (
 )
 
 type Manifest struct {
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Version string `json:"version,omitempty"`
-	Entry   string `json:"entry,omitempty"`
-	Enabled *bool  `json:"enabled,omitempty"`
-	File    string `json:"file,omitempty"`
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Version     string            `json:"version,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Entry       string            `json:"entry,omitempty"`
+	Enabled     *bool             `json:"enabled,omitempty"`
+	Tool        *ToolManifest     `json:"tool,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	File        string            `json:"file,omitempty"`
+}
+
+type ToolManifest struct {
+	Command        string         `json:"command"`
+	Args           []string       `json:"args,omitempty"`
+	Schema         map[string]any `json:"schema"`
+	TimeoutSeconds int            `json:"timeout_seconds,omitempty"`
+	PassContext    bool           `json:"pass_context,omitempty"`
+}
+
+func (m Manifest) IsEnabled() bool {
+	if m.Enabled == nil {
+		return true
+	}
+	return *m.Enabled
+}
+
+func ValidateManifest(m Manifest) error {
+	if strings.TrimSpace(m.Name) == "" {
+		return fmt.Errorf("name is required")
+	}
+	switch strings.ToLower(strings.TrimSpace(m.Type)) {
+	case "tool":
+	default:
+		return fmt.Errorf("unsupported plugin type: %q", m.Type)
+	}
+	if strings.EqualFold(strings.TrimSpace(m.Type), "tool") {
+		if m.Tool == nil {
+			return fmt.Errorf("tool spec is required for type=tool")
+		}
+		if strings.TrimSpace(m.Tool.Command) == "" {
+			return fmt.Errorf("tool.command is required")
+		}
+		if len(m.Tool.Schema) == 0 {
+			return fmt.Errorf("tool.schema is required")
+		}
+	}
+	return nil
 }
 
 func DefaultDirs(workdir string) []string {
@@ -49,7 +91,7 @@ func LoadFromDirs(dirs []string) ([]Manifest, error) {
 			if err := json.Unmarshal(bs, &m); err != nil {
 				return nil, err
 			}
-			if strings.TrimSpace(m.Name) == "" || strings.TrimSpace(m.Type) == "" {
+			if err := ValidateManifest(m); err != nil {
 				continue
 			}
 			m.File = full

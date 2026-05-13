@@ -3750,18 +3750,67 @@ func runTools(cfg config.Config, args []string) {
 
 func runPlugins(cfg config.Config, args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: agentd plugins list")
+		printPluginsUsage()
 		return
 	}
 	switch args[0] {
 	case "list":
-		items, err := plugins.LoadFromDirs(plugins.DefaultDirs(cfg.Workdir))
+		items, err := loadConfiguredPlugins(cfg)
 		if err != nil {
 			log.Fatal(err)
 		}
 		printJSON(items)
+	case "show":
+		if len(args) != 2 {
+			log.Fatal("usage: agentd plugins show name")
+		}
+		name := strings.TrimSpace(args[1])
+		items, err := loadConfiguredPlugins(cfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, item := range items {
+			if strings.EqualFold(strings.TrimSpace(item.Name), name) {
+				printJSON(item)
+				return
+			}
+		}
+		log.Fatalf("plugin %q not found", name)
+	case "validate":
+		items, err := plugins.LoadFromDirs(plugins.DefaultDirs(cfg.Workdir))
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, item := range items {
+			if err := plugins.ValidateManifest(item); err != nil {
+				log.Fatalf("invalid plugin %s (%s): %v", item.Name, item.File, err)
+			}
+		}
+		fmt.Printf("ok (%d manifests)\n", len(items))
+	case "disable":
+		path, name := parsePluginToggleArgs(args[1:], "plugins disable")
+		disabled, err := readDisabledPluginsConfig(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		disabled = addName(disabled, name)
+		if err := config.SaveConfigValue(path, "plugins.disabled", strings.Join(disabled, ",")); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("disabled plugin %s in %s\n", name, config.ConfigFilePath(path))
+	case "enable":
+		path, name := parsePluginToggleArgs(args[1:], "plugins enable")
+		disabled, err := readDisabledPluginsConfig(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		disabled = removeName(disabled, name)
+		if err := config.SaveConfigValue(path, "plugins.disabled", strings.Join(disabled, ",")); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("enabled plugin %s in %s\n", name, config.ConfigFilePath(path))
 	default:
-		fmt.Println("usage: agentd plugins list")
+		printPluginsUsage()
 	}
 }
 
@@ -3780,6 +3829,15 @@ func printToolsUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd tools disabled [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd tools disable [-file path] tool_name")
 	fmt.Fprintln(os.Stderr, "  agentd tools enable [-file path] tool_name")
+}
+
+func printPluginsUsage() {
+	fmt.Fprintln(os.Stderr, "usage:")
+	fmt.Fprintln(os.Stderr, "  agentd plugins list")
+	fmt.Fprintln(os.Stderr, "  agentd plugins show name")
+	fmt.Fprintln(os.Stderr, "  agentd plugins validate")
+	fmt.Fprintln(os.Stderr, "  agentd plugins disable [-file path] name")
+	fmt.Fprintln(os.Stderr, "  agentd plugins enable [-file path] name")
 }
 
 func findToolSchema(schemas []core.ToolSchema, name string) (core.ToolSchema, bool) {
@@ -3812,6 +3870,53 @@ func parseToolToggleArgs(args []string, name string) (string, string) {
 		log.Fatal("tool_name is required")
 	}
 	return *path, toolName
+}
+
+func parsePluginToggleArgs(args []string, name string) (string, string) {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	path := fs.String("file", "", "config file path")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		log.Fatalf("usage: agentd %s [-file path] name", name)
+	}
+	pluginName := strings.TrimSpace(fs.Arg(0))
+	if pluginName == "" {
+		log.Fatal("name is required")
+	}
+	return *path, pluginName
+}
+
+func readDisabledPluginsConfig(path string) ([]string, error) {
+	value, ok, err := config.ReadConfigValue(path, "plugins.disabled")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []string{}, nil
+	}
+	return parseNameList(value), nil
+}
+
+func loadConfiguredPlugins(cfg config.Config) ([]plugins.Manifest, error) {
+	items, err := plugins.LoadFromDirs(plugins.DefaultDirs(cfg.Workdir))
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.DisabledPlugins) == "" {
+		return items, nil
+	}
+	disabled := map[string]struct{}{}
+	for _, name := range parseNameList(cfg.DisabledPlugins) {
+		disabled[strings.ToLower(name)] = struct{}{}
+	}
+	out := make([]plugins.Manifest, 0, len(items))
+	for _, item := range items {
+		if _, ok := disabled[strings.ToLower(strings.TrimSpace(item.Name))]; ok {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func readDisabledToolsConfig(path string) ([]string, error) {
@@ -3891,6 +3996,7 @@ func buildDoctorChecks(cfg config.Config) []doctorCheck {
 		checkProviderCredentials(cfg),
 		checkMCPConfig(cfg),
 		checkGatewayConfig(cfg),
+		checkPluginsConfig(cfg),
 		checkToolsetsConfig(cfg),
 		checkStubTools(cfg),
 		checkRegisteredTools(),
@@ -4006,6 +4112,23 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 		return doctorCheck{Name: "gateway", Status: "warn", Detail: "enabled but no platform tokens are configured"}
 	}
 	return doctorCheck{Name: "gateway", Status: "ok", Detail: "configured platforms: " + strings.Join(configured, ",")}
+}
+
+func checkPluginsConfig(cfg config.Config) doctorCheck {
+	items, err := loadConfiguredPlugins(cfg)
+	if err != nil {
+		return doctorCheck{Name: "plugins", Status: "error", Detail: err.Error()}
+	}
+	if len(items) == 0 {
+		return doctorCheck{Name: "plugins", Status: "ok", Detail: "none discovered"}
+	}
+	enabled := 0
+	for _, item := range items {
+		if item.IsEnabled() {
+			enabled++
+		}
+	}
+	return doctorCheck{Name: "plugins", Status: "ok", Detail: fmt.Sprintf("discovered=%d enabled=%d", len(items), enabled)}
 }
 
 func checkToolsetsConfig(cfg config.Config) doctorCheck {
@@ -6486,6 +6609,14 @@ func mustBuildEngine(cfg config.Config) (*agent.Engine, *store.CronStore) {
 		log.Printf("enabled_toolsets ignored: %v", err)
 	}
 	applyDisabledTools(registry, cfg.DisabledTools)
+	pluginManifests, err := loadConfiguredPlugins(cfg)
+	if err != nil {
+		log.Printf("plugin manifests ignored: %v", err)
+	} else if n, err := plugins.RegisterToolPlugins(registry, pluginManifests); err != nil {
+		log.Printf("plugin tools ignored: %v", err)
+	} else if n > 0 {
+		log.Printf("registered %d plugin tools", n)
+	}
 	client := buildModelClient(cfg)
 	return &agent.Engine{
 		Client:                  client,

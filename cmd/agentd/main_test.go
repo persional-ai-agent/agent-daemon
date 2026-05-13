@@ -389,3 +389,39 @@ func TestBuildYuanbaoManifestExportContainsApprovalQuickReplies(t *testing.T) {
 		t.Fatalf("approval quick replies mismatch: %#v", routeByText)
 	}
 }
+
+func TestLoadConfiguredPluginsFiltersDisabled(t *testing.T) {
+	workdir := t.TempDir()
+	dir := filepath.Join(workdir, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"demo_tool","type":"tool","tool":{"command":"./plugin.sh","schema":{"type":"object"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "demo.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{Workdir: workdir, DisabledPlugins: "demo_tool"}
+	items, err := loadConfiguredPlugins(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("disabled plugin should be filtered: %#v", items)
+	}
+}
+
+func TestCheckPluginsConfig(t *testing.T) {
+	workdir := t.TempDir()
+	dir := filepath.Join(workdir, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"demo_tool","type":"tool","tool":{"command":"./plugin.sh","schema":{"type":"object"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "demo.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	check := checkPluginsConfig(config.Config{Workdir: workdir})
+	if check.Status != "ok" {
+		t.Fatalf("plugins check status=%q detail=%q", check.Status, check.Detail)
+	}
+}

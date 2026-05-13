@@ -12,7 +12,7 @@ func TestLoadFromDirs(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	okJSON := `{"name":"demo-tool","type":"tool","version":"1.0.0","entry":"./tool.so","enabled":true}`
+	okJSON := `{"name":"demo-tool","type":"tool","version":"1.0.0","tool":{"command":"./tool.sh","schema":{"type":"object"}},"enabled":true}`
 	if err := os.WriteFile(filepath.Join(dir, "tool.json"), []byte(okJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -28,5 +28,23 @@ func TestLoadFromDirs(t *testing.T) {
 	}
 	if items[0].Name != "demo-tool" || items[0].Type != "tool" {
 		t.Fatalf("unexpected manifest: %+v", items[0])
+	}
+}
+
+func TestValidateManifest(t *testing.T) {
+	m := Manifest{
+		Name: "demo",
+		Type: "tool",
+		Tool: &ToolManifest{
+			Command: "./tool.sh",
+			Schema:  map[string]any{"type": "object"},
+		},
+	}
+	if err := ValidateManifest(m); err != nil {
+		t.Fatalf("expected valid manifest: %v", err)
+	}
+	m.Tool.Command = ""
+	if err := ValidateManifest(m); err == nil {
+		t.Fatal("expected missing command error")
 	}
 }
