@@ -1803,11 +1803,11 @@ func statusFromDone(done bool) string {
 func terminalParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"command":              map[string]any{"type": "string"},
-		"background":           map[string]any{"type": "boolean"},
-		"timeout":              map[string]any{"type": "integer"},
+		"background":           map[string]any{"type": "boolean", "description": "Run command in background and return immediately (default false)."},
+		"timeout":              map[string]any{"type": "integer", "description": "Foreground execution timeout in seconds (default 120)."},
 		"workdir":              map[string]any{"type": "string"},
-		"requires_approval":    map[string]any{"type": "boolean"},
-		"approval_ttl_seconds": map[string]any{"type": "integer"},
+		"requires_approval":    map[string]any{"type": "boolean", "description": "Require explicit approval before execution (default false)."},
+		"approval_ttl_seconds": map[string]any{"type": "integer", "description": "Approval validity period in seconds (default 0 uses store default)."},
 		"notify_on_complete":   map[string]any{"type": "boolean", "description": "When background=true, emit a stream event when the process finishes (best-effort)."},
 	}, "required": []string{"command"}}
 }
@@ -1815,11 +1815,11 @@ func processParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"action":          map[string]any{"type": "string", "enum": []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}, "description": "Action to perform (default: status)"},
 		"session_id":      map[string]any{"type": "string"},
-		"include_done":    map[string]any{"type": "boolean"},
-		"limit":           map[string]any{"type": "integer"},
+		"include_done":    map[string]any{"type": "boolean", "description": "For action=list, include finished processes (default false)."},
+		"limit":           map[string]any{"type": "integer", "description": "For action=list, maximum processes to return (default 50)."},
 		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log"},
 		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
-		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait"},
+		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait, timeout seconds (default 60)."},
 		"input":           map[string]any{"type": "string", "description": "For action=write"},
 	}, "required": []string{}}
 }
@@ -1898,16 +1898,16 @@ func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}
 }
 func memoryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string"}, "target": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "old_text": map[string]any{"type": "string"}}, "required": []string{"action", "target"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}}
 }
 func sessionSearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean"}}, "required": []string{"query"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "description": "Maximum sessions to return (default 5)."}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean", "description": "Include current session in results (default false)."}}, "required": []string{"query"}}
 }
 func webFetchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}
 }
 func webSearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}, "base_url": map[string]any{"type": "string"}}, "required": []string{"query"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "description": "Maximum results to return (default 5, max 20)."}, "base_url": map[string]any{"type": "string", "description": "Search endpoint URL (default https://duckduckgo.com/html/)."}}, "required": []string{"query"}}
 }
 func webExtractParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer", "description": "Maximum extracted text length (default 8000, max 200000)."}}, "required": []string{"url"}}
@@ -2052,7 +2052,7 @@ func clarifyParams() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"question": map[string]any{"type": "string"},
-			"allow_freeform": map[string]any{"type": "boolean", "description": "Whether user may answer outside the provided options"},
+			"allow_freeform": map[string]any{"type": "boolean", "description": "Whether user may answer outside the provided options (default true)."},
 			"options": map[string]any{
 				"type": "array",
 				"items": map[string]any{
@@ -2069,10 +2069,10 @@ func clarifyParams() map[string]any {
 	}
 }
 func delegateTaskParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "max_iterations": map[string]any{"type": "integer"}, "max_concurrency": map[string]any{"type": "integer"}, "timeout_seconds": map[string]any{"type": "integer"}, "fail_fast": map[string]any{"type": "boolean"}, "tasks": map[string]any{"type": "array"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"goal": map[string]any{"type": "string", "description": "Single task goal. Required when tasks is empty."}, "context": map[string]any{"type": "string", "description": "Optional context for the single goal."}, "max_iterations": map[string]any{"type": "integer", "description": "Max iterations per subtask (default 0 uses runner default)."}, "max_concurrency": map[string]any{"type": "integer", "description": "Concurrent subtasks when tasks is set (default tasks length)."}, "timeout_seconds": map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 0 disables timeout)."}, "fail_fast": map[string]any{"type": "boolean", "description": "Cancel remaining subtasks after first failure (default false)."}, "tasks": map[string]any{"type": "array", "description": "Batch tasks. Each item may include goal/context. If provided, goal becomes optional."}}}
 }
 func approvalParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke", "confirm"}, "description": "Action to perform (default: status)"}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer"}, "approval_id": map[string]any{"type": "string", "description": "Pending approval ID for action=confirm"}, "approve": map[string]any{"type": "boolean", "description": "Approve (true) or deny (false) for action=confirm"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "grant", "revoke", "confirm"}, "description": "Action to perform (default: status)"}, "scope": map[string]any{"type": "string", "enum": []string{"session", "pattern"}, "description": "Approval scope: session (default) or pattern (category-specific)"}, "pattern": map[string]any{"type": "string", "description": "Dangerous command category when scope=pattern (e.g. recursive_delete, world_writable, root_ownership, remote_pipe_shell, service_lifecycle)"}, "ttl_seconds": map[string]any{"type": "integer", "description": "Approval TTL in seconds (default 0 uses store default)."}, "approval_id": map[string]any{"type": "string", "description": "Pending approval ID for action=confirm"}, "approve": map[string]any{"type": "boolean", "description": "Approve (true) or deny (false) for action=confirm"}}}
 }
 func skillListParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}}
@@ -2091,10 +2091,10 @@ func skillViewParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}}, "required": []string{"name"}}
 }
 func skillManageParams() map[string]any {
-		return map[string]any{
+	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file", "sync"}},
+			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file", "sync"}, "description": "Skill management action."},
 			"name":         map[string]any{"type": "string"},
 			"content":      map[string]any{"type": "string"},
 			"old_string":   map[string]any{"type": "string"},
