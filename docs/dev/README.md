@@ -376,3 +376,4 @@
 - `249-summary-ui-tui-realtime-diagnostics-parity.md`：ui-tui 实时诊断能力对齐（/diag + 诊断包导出）
 - `250-summary-diagnostics-bundle-schema-and-replay.md`：统一 diag.v1 契约并新增诊断包 validate/replay
 - `251-summary-diag-v1-ci-artifacts-and-smoke.md`：diag.v1 接入 CI 烟测产物与 replay 报告上传
+- `252-summary-six-gap-closure-foundations.md`：六类差异基础收口（doctor 能力可观测、terminal backend、插件骨架、检索摘要、网关命令一致性）

@@ -8,12 +8,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+type ForegroundBackendOptions struct {
+	Backend     string
+	DockerImage string
+}
 
 type ProcessSession struct {
 	ID         string
@@ -24,8 +30,8 @@ type ProcessSession struct {
 	OutputFile string
 	Err        string
 	cmd        *exec.Cmd
-	stdinMu   sync.Mutex
-	stdin     io.WriteCloser
+	stdinMu    sync.Mutex
+	stdin      io.WriteCloser
 }
 
 type ProcessRegistry struct {
@@ -199,20 +205,24 @@ func (r *ProcessRegistry) List(includeDone bool, limit int) []ProcessSession {
 }
 
 func RunForeground(ctx context.Context, command, cwd string, timeoutSec int) (string, int, error) {
+	return RunForegroundWithOptions(ctx, command, cwd, timeoutSec, ForegroundBackendOptions{Backend: "local"})
+}
+
+func RunForegroundWithOptions(ctx context.Context, command, cwd string, timeoutSec int, opt ForegroundBackendOptions) (string, int, error) {
 	if timeoutSec <= 0 {
 		timeoutSec = 120
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(cmdCtx, "bash", "-lc", command)
-	if cwd != "" {
-		cmd.Dir = cwd
+	cmd, err := buildForegroundCommand(cmdCtx, command, cwd, opt)
+	if err != nil {
+		return "", -1, err
 	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	err := cmd.Run()
+	err = cmd.Run()
 	if cmdCtx.Err() == context.DeadlineExceeded {
 		return out.String(), 124, fmt.Errorf("command timed out after %d seconds", timeoutSec)
 	}
@@ -223,4 +233,33 @@ func RunForeground(ctx context.Context, command, cwd string, timeoutSec int) (st
 		return out.String(), -1, err
 	}
 	return out.String(), 0, nil
+}
+
+func buildForegroundCommand(ctx context.Context, command, cwd string, opt ForegroundBackendOptions) (*exec.Cmd, error) {
+	backend := strings.ToLower(strings.TrimSpace(opt.Backend))
+	if backend == "" {
+		backend = "local"
+	}
+	switch backend {
+	case "local":
+		cmd := exec.CommandContext(ctx, "bash", "-lc", command)
+		if cwd != "" {
+			cmd.Dir = cwd
+		}
+		return cmd, nil
+	case "docker":
+		image := strings.TrimSpace(opt.DockerImage)
+		if image == "" {
+			image = "alpine:3.20"
+		}
+		workdir := "/workspace"
+		args := []string{"run", "--rm", "-i"}
+		if strings.TrimSpace(cwd) != "" {
+			args = append(args, "-v", fmt.Sprintf("%s:%s", cwd, workdir), "-w", workdir)
+		}
+		args = append(args, image, "sh", "-lc", command)
+		return exec.CommandContext(ctx, "docker", args...), nil
+	default:
+		return nil, fmt.Errorf("unsupported backend: %s", backend)
+	}
 }

@@ -258,11 +258,11 @@ WHERE session_id = ?`, sessionID).Scan(&messageCount, &toolCallCount, &firstSeen
 		return nil, err
 	}
 	return map[string]any{
-		"session_id":          sessionID,
-		"message_count":       messageCount,
-		"tool_call_messages":  toolCallCount,
-		"first_seen":          firstSeen,
-		"last_seen":           lastSeen,
+		"session_id":         sessionID,
+		"message_count":      messageCount,
+		"tool_call_messages": toolCallCount,
+		"first_seen":         firstSeen,
+		"last_seen":          lastSeen,
 	}, nil
 }
 
@@ -327,7 +327,18 @@ func scanSearchRows(rows *sql.Rows) ([]map[string]any, error) {
 		if err := rows.Scan(&sid, &role, &content, &createdAt); err != nil {
 			return nil, err
 		}
-		results = append(results, map[string]any{"session_id": sid, "role": role, "content": content, "created_at": createdAt})
+		snippet := strings.TrimSpace(content)
+		if len([]rune(snippet)) > 180 {
+			r := []rune(snippet)
+			snippet = string(r[:180]) + "..."
+		}
+		results = append(results, map[string]any{
+			"session_id": sid,
+			"role":       role,
+			"content":    content,
+			"summary":    snippet,
+			"created_at": createdAt,
+		})
 	}
 	return results, rows.Err()
 }

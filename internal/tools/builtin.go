@@ -426,6 +426,11 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 
 	background := boolArg(args, "background", false)
 	timeout := intArg(args, "timeout", 120)
+	backend := strings.ToLower(strings.TrimSpace(strArg(args, "backend")))
+	if backend == "" {
+		backend = "local"
+	}
+	dockerImage := strings.TrimSpace(strArg(args, "docker_image"))
 	cwd := tc.Workdir
 	if v := strArg(args, "workdir"); strings.TrimSpace(v) != "" {
 		var err error
@@ -519,6 +524,9 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		}
 	}
 	if background {
+		if backend != "local" {
+			return nil, fmt.Errorf("background mode currently supports backend=local only")
+		}
 		s, err := b.proc.StartBackground(ctx, command, cwd)
 		if err != nil {
 			return nil, err
@@ -549,8 +557,18 @@ func (b *BuiltinTools) terminal(ctx context.Context, args map[string]any, tc Too
 		}
 		return map[string]any{"success": true, "output": "background process started", "session_id": s.ID, "output_file": s.OutputFile, "status": "running", "exit_code": 0, "requires_approval": requiresApproval}, nil
 	}
-	out, code, err := RunForeground(ctx, command, cwd, timeout)
-	res := map[string]any{"success": err == nil && code == 0, "output": out, "exit_code": code, "error": nil, "requires_approval": requiresApproval}
+	out, code, err := RunForegroundWithOptions(ctx, command, cwd, timeout, ForegroundBackendOptions{
+		Backend:     backend,
+		DockerImage: dockerImage,
+	})
+	res := map[string]any{
+		"success":           err == nil && code == 0,
+		"output":            out,
+		"exit_code":         code,
+		"error":             nil,
+		"requires_approval": requiresApproval,
+		"backend":           backend,
+	}
 	if err != nil {
 		res["error"] = err.Error()
 	}
@@ -1806,6 +1824,8 @@ func terminalParams() map[string]any {
 		"background":           map[string]any{"type": "boolean", "description": "Run command in background and return immediately (default false)."},
 		"timeout":              map[string]any{"type": "integer", "minimum": 0, "description": "Foreground execution timeout in seconds (default 120)."},
 		"workdir":              map[string]any{"type": "string"},
+		"backend":              map[string]any{"type": "string", "enum": []string{"local", "docker"}, "description": "Execution backend (default local)."},
+		"docker_image":         map[string]any{"type": "string", "description": "Docker image when backend=docker (default alpine:3.20)."},
 		"requires_approval":    map[string]any{"type": "boolean", "description": "Require explicit approval before execution (default false)."},
 		"approval_ttl_seconds": map[string]any{"type": "integer", "minimum": 0, "description": "Approval validity period in seconds (default 0 uses store default)."},
 		"notify_on_complete":   map[string]any{"type": "boolean", "description": "When background=true, emit a stream event when the process finishes (best-effort)."},
@@ -1954,7 +1974,7 @@ func imageGenerateParams() map[string]any {
 				"type":        "string",
 				"description": "Optional image model override for real backends.",
 			},
-			"caption":     map[string]any{"type": "string", "description": "Optional caption used when deliver=true."},
+			"caption": map[string]any{"type": "string", "description": "Optional caption used when deliver=true."},
 			"deliver": map[string]any{
 				"type":        "boolean",
 				"description": "If true and running under a gateway context, deliver the generated image to the current chat (requires adapter media support).",
@@ -1995,8 +2015,8 @@ func browserSnapshotParams() map[string]any {
 }
 func browserClickParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"ref":          map[string]any{"type": "string", "description": "Ref ID like '@e5' from browser_snapshot."},
-		"text":         map[string]any{"type": "string"},
+		"ref":           map[string]any{"type": "string", "description": "Ref ID like '@e5' from browser_snapshot."},
+		"text":          map[string]any{"type": "string"},
 		"href_contains": map[string]any{"type": "string"},
 	}}
 }
@@ -2052,10 +2072,10 @@ func mixtureOfAgentsParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"user_prompt":       map[string]any{"type": "string"},
-			"reference_agents":  map[string]any{"type": "integer", "minimum": 1, "maximum": 6, "description": "Number of reference subagents (default 3, max 6)"},
-			"max_iterations":    map[string]any{"type": "integer", "description": "Max delegate iterations per subtask (default 12)."},
-			"timeout_seconds":   map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 180)."},
+			"user_prompt":      map[string]any{"type": "string"},
+			"reference_agents": map[string]any{"type": "integer", "minimum": 1, "maximum": 6, "description": "Number of reference subagents (default 3, max 6)"},
+			"max_iterations":   map[string]any{"type": "integer", "description": "Max delegate iterations per subtask (default 12)."},
+			"timeout_seconds":  map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 180)."},
 		},
 		"required": []string{"user_prompt"},
 	}
@@ -2064,7 +2084,7 @@ func clarifyParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"question": map[string]any{"type": "string"},
+			"question":       map[string]any{"type": "string"},
 			"allow_freeform": map[string]any{"type": "boolean", "description": "Whether user may answer outside the provided options (default true)."},
 			"options": map[string]any{
 				"type": "array",

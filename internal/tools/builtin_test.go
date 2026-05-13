@@ -201,6 +201,18 @@ func TestTerminalHardlineStillBlockedWithApproval(t *testing.T) {
 	}
 }
 
+func TestTerminalBackgroundRejectsNonLocalBackend(t *testing.T) {
+	b := &BuiltinTools{proc: NewProcessRegistry(t.TempDir())}
+	_, err := b.terminal(context.Background(), map[string]any{
+		"command":    "echo hi",
+		"background": true,
+		"backend":    "docker",
+	}, ToolContext{Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "background mode currently supports backend=local only") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestTerminalAllowsDangerousCommandWithSessionApprovalGrant(t *testing.T) {
 	b := &BuiltinTools{}
 	workdir := t.TempDir()

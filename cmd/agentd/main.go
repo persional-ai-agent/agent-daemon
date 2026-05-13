@@ -38,6 +38,7 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/gateway/platforms"
 	"github.com/dingjingmaster/agent-daemon/internal/memory"
 	"github.com/dingjingmaster/agent-daemon/internal/model"
+	"github.com/dingjingmaster/agent-daemon/internal/plugins"
 	"github.com/dingjingmaster/agent-daemon/internal/store"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -671,6 +672,8 @@ func main() {
 		runGateway(cfg, os.Args[2:])
 	case "sessions":
 		runSessions(cfg, os.Args[2:])
+	case "plugins":
+		runPlugins(cfg, os.Args[2:])
 	default:
 		runChat(cfg, "", uuid.NewString())
 	}
@@ -3745,6 +3748,23 @@ func runTools(cfg config.Config, args []string) {
 	}
 }
 
+func runPlugins(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		fmt.Println("usage: agentd plugins list")
+		return
+	}
+	switch args[0] {
+	case "list":
+		items, err := plugins.LoadFromDirs(plugins.DefaultDirs(cfg.Workdir))
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(items)
+	default:
+		fmt.Println("usage: agentd plugins list")
+	}
+}
+
 func printToolNames(names []string) {
 	for _, name := range names {
 		fmt.Println(name)
@@ -3874,6 +3894,7 @@ func buildDoctorChecks(cfg config.Config) []doctorCheck {
 		checkToolsetsConfig(cfg),
 		checkStubTools(cfg),
 		checkRegisteredTools(),
+		checkToolCapabilities(cfg),
 	}
 	return checks
 }
@@ -4042,6 +4063,28 @@ func checkRegisteredTools() doctorCheck {
 		return doctorCheck{Name: "tools", Status: "error", Detail: "no tools registered"}
 	}
 	return doctorCheck{Name: "tools", Status: "ok", Detail: fmt.Sprintf("%d builtin tools registered", len(names))}
+}
+
+func checkToolCapabilities(_ config.Config) doctorCheck {
+	items := make([]string, 0, 4)
+	status := "ok"
+	if strings.TrimSpace(os.Getenv("BROWSER_CDP_URL")) != "" {
+		items = append(items, "browser_cdp=on")
+	} else {
+		items = append(items, "browser_cdp=off")
+	}
+	if strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != "" {
+		items = append(items, "openai_media=on")
+	} else {
+		items = append(items, "openai_media=off")
+		status = "warn"
+	}
+	if strings.TrimSpace(os.Getenv("FAL_KEY")) != "" {
+		items = append(items, "fal_image=on")
+	} else {
+		items = append(items, "fal_image=off")
+	}
+	return doctorCheck{Name: "tool_capabilities", Status: status, Detail: strings.Join(items, ",")}
 }
 
 func hasDoctorError(checks []doctorCheck) bool {
@@ -6160,14 +6203,14 @@ func runServe(cfg config.Config) {
 		Engine: eng,
 		ConfigSnapshotFn: func() map[string]any {
 			return map[string]any{
-				"model_provider":     cfg.ModelProvider,
-				"model_name":         selectedModelName(cfg, cfg.ModelProvider),
-				"listen_addr":        cfg.ListenAddr,
-				"workdir":            cfg.Workdir,
-				"data_dir":           cfg.DataDir,
-				"gateway_enabled":    cfg.GatewayEnabled,
-				"enabled_toolsets":   cfg.EnabledToolsets,
-				"disabled_tools":     cfg.DisabledTools,
+				"model_provider":      cfg.ModelProvider,
+				"model_name":          selectedModelName(cfg, cfg.ModelProvider),
+				"listen_addr":         cfg.ListenAddr,
+				"workdir":             cfg.Workdir,
+				"data_dir":            cfg.DataDir,
+				"gateway_enabled":     cfg.GatewayEnabled,
+				"enabled_toolsets":    cfg.EnabledToolsets,
+				"disabled_tools":      cfg.DisabledTools,
 				"model_use_streaming": cfg.ModelUseStreaming,
 			}
 		},
