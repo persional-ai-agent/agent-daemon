@@ -17,6 +17,11 @@ go run .
 - `AGENT_HTTP_BASE`：自定义 HTTP 管理 API 地址（默认从 WS 地址自动推导）
 - `AGENT_SESSION_ID`：指定会话 ID（默认自动生成）
 
+配置文件：
+
+- 支持从 `config/config.ini` 的 `[ui-tui]` 读取运行参数（也支持 `../config/config.ini`，适配在 `ui-tui/` 子目录启动）。
+- 环境变量优先级高于配置文件。
+
 运行时行为（默认）：
 
 - WS 读超时提示：45s 未收到事件会提示“等待服务端响应中”

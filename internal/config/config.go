@@ -64,6 +64,13 @@ type Config struct {
 	CronTickSeconds         int
 	CronMaxConcurrency      int
 	EnabledToolsets         string
+	UITUIWSBase             string
+	UITUIHTTPBase           string
+	UITUIWSReadTimeoutSec   int
+	UITUITurnTimeoutSec     int
+	UITUIReconnectMax       int
+	UITUIHistoryMaxLines    int
+	UITUIEventMaxItems      int
 }
 
 type iniValues struct {
@@ -77,7 +84,7 @@ func loadConfigINI() iniValues {
 			return iniValues{file: f, found: true}
 		}
 	}
-	for _, p := range []string{"config/config.ini", "config.ini"} {
+	for _, p := range []string{"config/config.ini", "config.ini", "../config/config.ini"} {
 		f, err := ini.Load(p)
 		if err == nil {
 			return iniValues{file: f, found: true}
@@ -211,6 +218,26 @@ func loadFromINIValues(iv iniValues) Config {
 	if cronMaxConc <= 0 {
 		cronMaxConc = 1
 	}
+	uiWSReadTimeout := iniInt(iv, "ui-tui", "ws_read_timeout_seconds", "AGENT_UI_TUI_WS_READ_TIMEOUT_SECONDS", 45)
+	if uiWSReadTimeout <= 0 {
+		uiWSReadTimeout = 45
+	}
+	uiTurnTimeout := iniInt(iv, "ui-tui", "ws_turn_timeout_seconds", "AGENT_UI_TUI_WS_TURN_TIMEOUT_SECONDS", 480)
+	if uiTurnTimeout <= 0 {
+		uiTurnTimeout = 480
+	}
+	uiReconnectMax := iniInt(iv, "ui-tui", "ws_reconnect_max", "AGENT_UI_TUI_WS_RECONNECT_MAX", 2)
+	if uiReconnectMax < 0 {
+		uiReconnectMax = 0
+	}
+	uiHistoryMaxLines := iniInt(iv, "ui-tui", "history_max_lines", "AGENT_UI_TUI_HISTORY_MAX_LINES", 2000)
+	if uiHistoryMaxLines <= 0 {
+		uiHistoryMaxLines = 2000
+	}
+	uiEventMaxItems := iniInt(iv, "ui-tui", "event_max_items", "AGENT_UI_TUI_EVENT_MAX_ITEMS", 2000)
+	if uiEventMaxItems <= 0 {
+		uiEventMaxItems = 2000
+	}
 
 	return Config{
 		ModelProvider:           apiType,
@@ -267,5 +294,12 @@ func loadFromINIValues(iv iniValues) Config {
 		CronEnabled:             cronEnabled,
 		CronTickSeconds:         cronTickSeconds,
 		CronMaxConcurrency:      cronMaxConc,
+		UITUIWSBase:             iniStr(iv, "ui-tui", "ws_base", "AGENT_API_BASE", ""),
+		UITUIHTTPBase:           iniStr(iv, "ui-tui", "http_base", "AGENT_HTTP_BASE", ""),
+		UITUIWSReadTimeoutSec:   uiWSReadTimeout,
+		UITUITurnTimeoutSec:     uiTurnTimeout,
+		UITUIReconnectMax:       uiReconnectMax,
+		UITUIHistoryMaxLines:    uiHistoryMaxLines,
+		UITUIEventMaxItems:      uiEventMaxItems,
 	}
 }

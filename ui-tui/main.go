@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -95,8 +96,15 @@ func deriveHTTPBase(wsBase string) string {
 }
 
 func newState() *appState {
-	wsBase := getenvOr("AGENT_API_BASE", "ws://127.0.0.1:8080/v1/chat/ws")
-	httpBase := getenvOr("AGENT_HTTP_BASE", deriveHTTPBase(wsBase))
+	cfg := appconfig.Load()
+	wsBase := strings.TrimSpace(cfg.UITUIWSBase)
+	if wsBase == "" {
+		wsBase = "ws://127.0.0.1:8080/v1/chat/ws"
+	}
+	httpBase := strings.TrimSpace(cfg.UITUIHTTPBase)
+	if httpBase == "" {
+		httpBase = deriveHTTPBase(wsBase)
+	}
 	session := getenvOr("AGENT_SESSION_ID", uuid.NewString())
 	home, _ := os.UserHomeDir()
 	if strings.TrimSpace(home) == "" {
@@ -118,11 +126,11 @@ func newState() *appState {
 		historyPath:     filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:    filepath.Join(root, "ui-tui-bookmarks.json"),
 		statePath:       filepath.Join(root, "ui-tui-state.json"),
-		historyMaxLines: defaultHistoryMaxLines,
-		eventMaxItems:   defaultEventMaxItems,
-		wsReadTimeout:   45 * time.Second,
-		wsTurnTimeout:   8 * time.Minute,
-		wsMaxReconnect:  2,
+		historyMaxLines: cfg.UITUIHistoryMaxLines,
+		eventMaxItems:   cfg.UITUIEventMaxItems,
+		wsReadTimeout:   time.Duration(cfg.UITUIWSReadTimeoutSec) * time.Second,
+		wsTurnTimeout:   time.Duration(cfg.UITUITurnTimeoutSec) * time.Second,
+		wsMaxReconnect:  cfg.UITUIReconnectMax,
 	}
 	st.loadRuntimeState()
 	return st

@@ -197,3 +197,61 @@ func TestLoadDisabledTools(t *testing.T) {
 		t.Fatalf("DisabledTools = %q", cfg.DisabledTools)
 	}
 }
+
+func TestLoadUITUIConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.ini")
+	if err := os.WriteFile(path, []byte(`
+[ui-tui]
+ws_base = ws://10.0.0.1:8080/v1/chat/ws
+http_base = http://10.0.0.1:8080
+ws_read_timeout_seconds = 30
+ws_turn_timeout_seconds = 120
+ws_reconnect_max = 5
+history_max_lines = 500
+event_max_items = 800
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UITUIWSBase != "ws://10.0.0.1:8080/v1/chat/ws" {
+		t.Fatalf("UITUIWSBase = %q", cfg.UITUIWSBase)
+	}
+	if cfg.UITUIHTTPBase != "http://10.0.0.1:8080" {
+		t.Fatalf("UITUIHTTPBase = %q", cfg.UITUIHTTPBase)
+	}
+	if cfg.UITUIWSReadTimeoutSec != 30 || cfg.UITUITurnTimeoutSec != 120 || cfg.UITUIReconnectMax != 5 {
+		t.Fatalf("unexpected timeout/reconnect cfg: %+v", cfg)
+	}
+	if cfg.UITUIHistoryMaxLines != 500 || cfg.UITUIEventMaxItems != 800 {
+		t.Fatalf("unexpected history/event cfg: %+v", cfg)
+	}
+}
+
+func TestLoadFindsParentConfigPath(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.ini"), []byte("[api]\ntype = codex\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	uiDir := filepath.Join(root, "ui-tui")
+	if err := os.MkdirAll(uiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(uiDir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+	os.Unsetenv("AGENT_CONFIG_FILE")
+
+	cfg := Load()
+	if cfg.ModelProvider != "codex" {
+		t.Fatalf("ModelProvider = %q, want codex", cfg.ModelProvider)
+	}
+}
