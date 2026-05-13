@@ -31,6 +31,7 @@ go run .
 - `/tool <name>` 查看工具 schema
 - `/sessions [n]` 查看最近会话
 - `/show [sid] [offset] [limit]` 分页查看会话消息
+- `/next` / `/prev` 基于最近一次 `/show` 做翻页
 - `/stats [sid]` 查看会话统计
 - `/gateway status|enable|disable` 网关状态与启停
 - `/config get` 查看配置快照

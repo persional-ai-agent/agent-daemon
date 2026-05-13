@@ -343,3 +343,4 @@
 - `216-summary-ui-tui-migrate-to-go.md`：ui-tui 从 Node.js 迁移到 Go 实现
 - `217-summary-ui-tui-parity-management-commands.md`：ui-tui 管理命令补齐（工具/会话/网关/配置）
 - `218-summary-ui-tui-ux-output-controls.md`：ui-tui 输出控制增强（pretty/last/save）
+- `219-summary-ui-tui-pagination-shortcuts.md`：ui-tui 分页快捷翻页（next/prev）

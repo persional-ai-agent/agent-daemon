@@ -37,6 +37,8 @@ func printHelp() {
 	fmt.Println("/tool <name>          show tool schema")
 	fmt.Println("/sessions [n]         list recent sessions")
 	fmt.Println("/show [sid] [o] [l]   show session messages")
+	fmt.Println("/next                 show next page (based on last /show)")
+	fmt.Println("/prev                 show previous page (based on last /show)")
 	fmt.Println("/stats [sid]          show session stats")
 	fmt.Println("/gateway status       show gateway status")
 	fmt.Println("/gateway enable       enable gateway")
@@ -182,6 +184,9 @@ func main() {
 	sessionID := getenvOr("AGENT_SESSION_ID", uuid.NewString())
 	pretty := true
 	var lastJSON any
+	lastShowSession := sessionID
+	lastShowOffset := 0
+	lastShowLimit := 20
 	fmt.Printf("session: %s\n", sessionID)
 	fmt.Printf("ws: %s\n", apiBase)
 	fmt.Printf("http: %s\n", httpBase)
@@ -343,7 +348,34 @@ func main() {
 					limit = v
 				}
 			}
+			lastShowSession = sid
+			lastShowOffset = offset
+			lastShowLimit = limit
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", httpBase, url.PathEscape(sid), offset, limit), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			lastJSON = out
+			printJSONMode(out, pretty)
+			continue
+		case text == "/next":
+			lastShowOffset += lastShowLimit
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", httpBase, url.PathEscape(lastShowSession), lastShowOffset, lastShowLimit), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				lastShowOffset -= lastShowLimit
+				continue
+			}
+			lastJSON = out
+			printJSONMode(out, pretty)
+			continue
+		case text == "/prev":
+			lastShowOffset -= lastShowLimit
+			if lastShowOffset < 0 {
+				lastShowOffset = 0
+			}
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", httpBase, url.PathEscape(lastShowSession), lastShowOffset, lastShowLimit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
 				continue
