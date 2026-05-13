@@ -330,6 +330,16 @@ func TestBrowserScrollSchemaDocumentsDefaults(t *testing.T) {
 	}
 }
 
+func TestBrowserSnapshotSchemaDocumentsMaxCharsBounds(t *testing.T) {
+	params := browserSnapshotParams()
+	props, _ := params["properties"].(map[string]any)
+	maxChars, _ := props["max_chars"].(map[string]any)
+	desc, _ := maxChars["description"].(string)
+	if !strings.Contains(desc, "default 120000") || !strings.Contains(desc, "max 300000") {
+		t.Fatalf("max_chars description=%q, want default/max hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
