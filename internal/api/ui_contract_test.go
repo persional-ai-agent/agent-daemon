@@ -13,6 +13,27 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
+func assertErrorEnvelope(t *testing.T, rec *httptest.ResponseRecorder, expectedCode string) {
+	t.Helper()
+	if rec.Header().Get("X-Agent-UI-API-Version") != "v1" {
+		t.Fatalf("missing UI version header: %v", rec.Header())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if out["ok"] != false {
+		t.Fatalf("expected ok=false, got %+v", out)
+	}
+	errObj, _ := out["error"].(map[string]any)
+	if errObj["code"] != expectedCode {
+		t.Fatalf("error.code=%v want %s body=%s", errObj["code"], expectedCode, rec.Body.String())
+	}
+	if errObj["message"] == "" {
+		t.Fatalf("missing error message: %+v", out)
+	}
+}
+
 func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 	reg := tools.NewRegistry()
 	reg.Register(apiTestTool{
@@ -87,15 +108,5 @@ func TestUIContractErrorEnvelope(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	var out map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-		t.Fatalf("invalid json: %v", err)
-	}
-	if out["ok"] != false {
-		t.Fatalf("expected ok=false, got %+v", out)
-	}
-	errObj, _ := out["error"].(map[string]any)
-	if errObj["code"] == "" || errObj["message"] == "" {
-		t.Fatalf("missing error code/message: %+v", out)
-	}
+	assertErrorEnvelope(t, rec, "engine_unavailable")
 }

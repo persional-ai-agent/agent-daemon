@@ -118,6 +118,20 @@ func writeUIError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
+func writeAPIError(w http.ResponseWriter, status int, code, message string) {
+	writeUIHeaders(w)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":          false,
+		"api_version": uiAPIVersion,
+		"compat":      uiCompat,
+		"error": map[string]any{
+			"code":    code,
+			"message": message,
+		},
+	})
+}
+
 func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.Registry == nil {
 		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
@@ -410,16 +424,16 @@ func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	if req.SessionID == "" {
@@ -427,7 +441,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -439,33 +453,47 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	res, err := s.Engine.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			http.Error(w, "request cancelled", http.StatusConflict)
+			writeAPIError(w, http.StatusConflict, "cancelled", "request cancelled")
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(buildChatResponsePayload(res))
+	payload := buildChatResponsePayload(res)
+	out := map[string]any{
+		"ok":          true,
+		"api_version": uiAPIVersion,
+		"compat":      uiCompat,
+		"result":      payload,
+		// Backward-compat: keep legacy top-level fields while introducing result envelope.
+		"session_id":         payload.SessionID,
+		"final_response":     payload.FinalResponse,
+		"messages":           payload.Messages,
+		"turns_used":         payload.TurnsUsed,
+		"finished_naturally": payload.FinishedNaturally,
+		"summary":            payload.Summary,
+	}
+	writeUIHeaders(w)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "streaming_unsupported", "streaming unsupported")
 		return
 	}
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	if req.SessionID == "" {
@@ -473,7 +501,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 
@@ -614,31 +642,35 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	var req cancelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 	if req.SessionID == "" {
-		http.Error(w, "session_id is required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "session_id is required")
 		return
 	}
 	if !s.cancelActiveRun(req.SessionID) {
-		http.Error(w, "active session not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "not_found", "active session not found")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"session_id": req.SessionID, "cancelled": true})
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"result":     map[string]any{"session_id": req.SessionID, "cancelled": true},
+		"session_id": req.SessionID,
+		"cancelled":  true, // backward-compat
+	})
 }
 
 var wsUpgrader = websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
 
 func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil {
-		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
 	}
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
@@ -650,7 +682,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 
 	var req chatRequest
 	if err := conn.ReadJSON(&req); err != nil {
-		_ = conn.WriteJSON(map[string]any{"type": "error", "error": "invalid request: " + err.Error()})
+		_ = conn.WriteJSON(map[string]any{"type": "error", "error": map[string]any{"code": "invalid_json", "message": "invalid request: " + err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
 		return
 	}
 	if req.SessionID == "" {
@@ -659,7 +691,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
-		_ = conn.WriteJSON(map[string]any{"type": "error", "error": err.Error()})
+		_ = conn.WriteJSON(map[string]any{"type": "error", "error": map[string]any{"code": "internal_error", "message": err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
 		return
 	}
 
@@ -685,7 +717,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = conn.WriteJSON(map[string]any{"type": "session", "session_id": req.SessionID})
+	_ = conn.WriteJSON(map[string]any{"type": "session", "session_id": req.SessionID, "api_version": uiAPIVersion, "compat": uiCompat})
 
 	go func() {
 		res, runErr := eng.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
@@ -697,7 +729,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			if !cancelled {
-				_ = conn.WriteJSON(map[string]any{"type": "cancelled", "session_id": req.SessionID, "reason": "request cancelled"})
+				_ = conn.WriteJSON(map[string]any{"type": "cancelled", "session_id": req.SessionID, "reason": "request cancelled", "api_version": uiAPIVersion, "compat": uiCompat})
 			}
 			return
 		case event := <-events:
@@ -717,7 +749,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 				default:
 					if res.Err != nil {
 						if !cancelled {
-							_ = conn.WriteJSON(map[string]any{"type": "error", "session_id": req.SessionID, "error": res.Err.Error()})
+							_ = conn.WriteJSON(map[string]any{"type": "error", "session_id": req.SessionID, "error": map[string]any{"code": "internal_error", "message": res.Err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
 						}
 						return
 					}
