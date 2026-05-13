@@ -2001,12 +2001,12 @@ func browserScrollParams() map[string]any {
 }
 func browserGetImagesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"limit": map[string]any{"type": "integer"},
+		"limit": map[string]any{"type": "integer", "description": "Maximum number of images to return (default 200, max 1000)."},
 	}}
 }
 func browserConsoleParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"limit": map[string]any{"type": "integer"},
+		"limit": map[string]any{"type": "integer", "description": "Maximum number of latest console entries to return (default 200)."},
 	}}
 }
 func browserVisionParams() map[string]any {

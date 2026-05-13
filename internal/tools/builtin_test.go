@@ -301,6 +301,20 @@ func TestProcessSchemaDocumentsDefaultAction(t *testing.T) {
 	}
 }
 
+func TestBrowserSchemasDocumentLimitBehavior(t *testing.T) {
+	check := func(name string, params map[string]any, want string) {
+		t.Helper()
+		props, _ := params["properties"].(map[string]any)
+		limit, _ := props["limit"].(map[string]any)
+		desc, _ := limit["description"].(string)
+		if !strings.Contains(desc, want) {
+			t.Fatalf("%s limit description=%q, want contains %q", name, desc, want)
+		}
+	}
+	check("browser_get_images", browserGetImagesParams(), "default 200")
+	check("browser_console", browserConsoleParams(), "default 200")
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
