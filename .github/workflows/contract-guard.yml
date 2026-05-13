@@ -20,6 +20,11 @@ jobs:
       - name: Contract Regression Tests
         run: go test ./internal/api ./internal/cli ./ui-tui
 
+      - name: Contract Replay
+        run: |
+          mkdir -p artifacts
+          CONTRACT_REPLAY_REPORT="$PWD/artifacts/contract-replay.json" go test ./internal/api -run TestContractReplay -count=1
+
       - name: Contract Diff (PR)
         if: github.event_name == 'pull_request'
         run: |
@@ -48,4 +53,12 @@ jobs:
         with:
           name: contract-diff-report
           path: artifacts/contract-diff.json
+          if-no-files-found: warn
+
+      - name: Upload Contract Replay Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-replay-report
+          path: artifacts/contract-replay.json
           if-no-files-found: warn

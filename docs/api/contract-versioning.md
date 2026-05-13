@@ -53,6 +53,7 @@
 - 基线发布：`make contract-release`
 - CI：`.github/workflows/contract-guard.yml`
 - Diff 报告产物：`artifacts/contract-diff.json`
+- Replay 报告产物：`artifacts/contract-replay.json`
 
 ## Breaking 变更声明
 
@@ -68,3 +69,4 @@
 - request/response 字段 `type` 变化（breaking）
 - 参数（path/query）`required` 与 `type` 变化
 - enum 收缩（删除已有值，breaking）
+- HTTP 回放测试：固定请求样例执行 + OpenAPI + 快照双校验
