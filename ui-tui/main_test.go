@@ -116,12 +116,24 @@ func TestSendTurnReconnect(t *testing.T) {
 	s.wsReadTimeout = 2 * time.Second
 	s.wsTurnTimeout = 10 * time.Second
 	s.wsMaxReconnect = 2
-	seen := 0
-	if err := s.sendTurn("ping", func(_ map[string]any) { seen++ }); err != nil {
+	assistantPartial := 0
+	resultSeen := 0
+	if err := s.sendTurn("ping", func(evt map[string]any) {
+		typ, _ := evt["type"].(string)
+		if typ == "assistant_message" && evt["content"] == "partial" {
+			assistantPartial++
+		}
+		if typ == "result" {
+			resultSeen++
+		}
+	}); err != nil {
 		t.Fatalf("sendTurn failed: %v", err)
 	}
-	if seen < 2 {
-		t.Fatalf("expected >=2 events, got %d", seen)
+	if assistantPartial != 1 {
+		t.Fatalf("expected deduped assistant partial=1, got %d", assistantPartial)
+	}
+	if resultSeen != 1 {
+		t.Fatalf("expected resultSeen=1, got %d", resultSeen)
 	}
 }
 

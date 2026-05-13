@@ -106,6 +106,26 @@
     ]
   },
   {
+    "name": "chat_stream_resume_success",
+    "method": "POST",
+    "path": "/v1/chat/stream",
+    "contract_path": "/v1/chat/stream",
+    "content_type": "application/json",
+    "body": {
+      "session_id": "s-stream-resume",
+      "message": "ping",
+      "resume": true,
+      "turn_id": "turn-sse-1"
+    },
+    "expect_sse": true,
+    "expect_events": [
+      "event: session",
+      "event: resumed",
+      "\"resumed\":true",
+      "event: result"
+    ]
+  },
+  {
     "name": "chat_cancel_success",
     "method": "POST",
     "path": "/v1/chat/cancel",

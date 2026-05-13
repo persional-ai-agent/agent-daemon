@@ -368,3 +368,4 @@
 - `241-summary-contract-coverage-gate.md`：契约覆盖率度量与核心端点 100% 门禁
 - `242-summary-chat-stream-contract-replay.md`：纳入 /v1/chat/stream 契约与回放校验
 - `243-summary-ws-contract-replay.md`：WS 实时链路契约化与回放覆盖
+- `244-summary-resume-and-reconnect-alignment.md`：SSE/WS 恢复与重连一致性补全

@@ -73,6 +73,12 @@
 - enum 收缩（删除已有值，breaking）
 - HTTP 回放测试：固定请求样例执行 + OpenAPI + 快照双校验
 - WS 回放测试：固定握手请求执行 + 关键事件字段校验（见 `docs/api/ws-chat-events.schema.json`）
+- SSE/WS 错误与取消事件字段对齐：
+  - `status`
+  - `error_code`
+  - `error` / `error_detail`
+  - `reason`（cancelled）
+- Resume 对齐：`resume=true` 请求将触发 `resumed` 事件，包含 `turn_id` 与 `transport`
 - 覆盖率门禁：核心端点（`/v1/ui/*` + `POST /v1/chat` + `POST /v1/chat/stream` + `POST /v1/chat/cancel`）必须 100%
 
 ## 新增接口规则

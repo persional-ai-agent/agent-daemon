@@ -4,10 +4,13 @@
     "path": "/v1/chat/ws",
     "request": {
       "session_id": "s-ws",
-      "message": "ping"
+      "message": "ping",
+      "resume": true,
+      "turn_id": "turn-ws-1"
     },
     "expect_events": [
       "session",
+      "resumed",
       "user_message",
       "turn_started",
       "assistant_message",

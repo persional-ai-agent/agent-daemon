@@ -915,7 +915,12 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 	}
 	turnID := uuid.NewString()
 	startedAt := time.Now()
+	seenPayload := map[string]struct{}{}
+	dedupeEnabled := false
 	for attempt := 0; attempt <= s.wsMaxReconnect; attempt++ {
+		if attempt > 0 {
+			dedupeEnabled = true
+		}
 		conn, _, dialErr := websocket.DefaultDialer.Dial(u.String(), nil)
 		if dialErr != nil {
 			if attempt >= s.wsMaxReconnect {
@@ -974,13 +979,23 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				fmt.Printf("[decode-error] %v\n", err)
 				continue
 			}
-			printEvent(evt)
-			if onEvent != nil {
-				onEvent(evt)
-			}
 			evtType, _ := evt["type"].(string)
 			if evtType == "" {
 				evtType, _ = evt["Type"].(string)
+			}
+			if evtType == "resumed" {
+				dedupeEnabled = true
+			}
+			key := string(payload)
+			if _, ok := seenPayload[key]; ok {
+				if dedupeEnabled {
+					continue
+				}
+			}
+			seenPayload[key] = struct{}{}
+			printEvent(evt)
+			if onEvent != nil {
+				onEvent(evt)
 			}
 			if evtType == "result" || evtType == "error" || evtType == "cancelled" {
 				_ = conn.Close()

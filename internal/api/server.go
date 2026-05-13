@@ -35,6 +35,8 @@ type Server struct {
 type chatRequest struct {
 	SessionID string `json:"session_id"`
 	Message   string `json:"message"`
+	TurnID    string `json:"turn_id,omitempty"`
+	Resume    bool   `json:"resume,omitempty"`
 }
 
 type cancelRequest struct {
@@ -130,6 +132,57 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+func runtimeErrorPayload(sessionID, code, message string) map[string]any {
+	return map[string]any{
+		"session_id":  sessionID,
+		"status":      "error",
+		"error_code":  code,
+		"error":       message,
+		"error_detail": map[string]any{
+			"code":    code,
+			"message": message,
+		},
+		"api_version": uiAPIVersion,
+		"compat":      uiCompat,
+	}
+}
+
+func cancelledPayload(sessionID, reason string) map[string]any {
+	return map[string]any{
+		"session_id":  sessionID,
+		"status":      "cancelled",
+		"reason":      reason,
+		"error_code":  "cancelled",
+		"api_version": uiAPIVersion,
+		"compat":      uiCompat,
+	}
+}
+
+func resumedPayload(sessionID, turnID, transport string) map[string]any {
+	return map[string]any{
+		"type":        "resumed",
+		"session_id":  sessionID,
+		"turn_id":     turnID,
+		"resumed":     true,
+		"transport":   transport,
+		"api_version": uiAPIVersion,
+		"compat":      uiCompat,
+	}
+}
+
+func runtimeErrorCode(err error) string {
+	if err == nil {
+		return "internal_error"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "cancelled"
+	}
+	return "internal_error"
 }
 
 func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
@@ -540,6 +593,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if err := writeSSE(w, "session", map[string]any{"session_id": req.SessionID}); err != nil {
 		return
 	}
+	if req.Resume {
+		if err := writeSSE(w, "resumed", resumedPayload(req.SessionID, req.TurnID, "sse")); err != nil {
+			return
+		}
+	}
 	flusher.Flush()
 	cancelledSeen := false
 	errorSeen := false
@@ -567,10 +625,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		doneCtx:
 			if errors.Is(ctx.Err(), context.Canceled) {
 				if !cancelledSeen {
-					_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "status": "cancelled", "reason": "request cancelled"})
+					_ = writeSSE(w, "cancelled", cancelledPayload(req.SessionID, "request cancelled"))
 				}
 			} else if !errorSeen {
-				_ = writeSSE(w, "error", map[string]any{"session_id": req.SessionID, "status": "error", "error": ctx.Err().Error()})
+				code := runtimeErrorCode(ctx.Err())
+				_ = writeSSE(w, "error", runtimeErrorPayload(req.SessionID, code, ctx.Err().Error()))
 			}
 			flusher.Flush()
 			return
@@ -607,10 +666,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			doneErr:
 				if errors.Is(res.Err, context.Canceled) {
 					if !cancelledSeen {
-						_ = writeSSE(w, "cancelled", map[string]any{"session_id": req.SessionID, "status": "cancelled", "reason": "request cancelled"})
+						_ = writeSSE(w, "cancelled", cancelledPayload(req.SessionID, "request cancelled"))
 					}
 				} else if !errorSeen {
-					_ = writeSSE(w, "error", map[string]any{"session_id": req.SessionID, "status": "error", "error": res.Err.Error()})
+					code := runtimeErrorCode(res.Err)
+					_ = writeSSE(w, "error", runtimeErrorPayload(req.SessionID, code, res.Err.Error()))
 				}
 				flusher.Flush()
 				return
@@ -682,7 +742,9 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 
 	var req chatRequest
 	if err := conn.ReadJSON(&req); err != nil {
-		_ = conn.WriteJSON(map[string]any{"type": "error", "error": map[string]any{"code": "invalid_json", "message": "invalid request: " + err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
+		payload := runtimeErrorPayload("", "invalid_json", "invalid request: "+err.Error())
+		payload["type"] = "error"
+		_ = conn.WriteJSON(payload)
 		return
 	}
 	if req.SessionID == "" {
@@ -691,7 +753,9 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
-		_ = conn.WriteJSON(map[string]any{"type": "error", "error": map[string]any{"code": "internal_error", "message": err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
+		payload := runtimeErrorPayload(req.SessionID, "internal_error", err.Error())
+		payload["type"] = "error"
+		_ = conn.WriteJSON(payload)
 		return
 	}
 
@@ -718,6 +782,9 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = conn.WriteJSON(map[string]any{"type": "session", "session_id": req.SessionID, "api_version": uiAPIVersion, "compat": uiCompat})
+	if req.Resume {
+		_ = conn.WriteJSON(resumedPayload(req.SessionID, req.TurnID, "ws"))
+	}
 
 	go func() {
 		res, runErr := eng.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
@@ -729,7 +796,9 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			if !cancelled {
-				_ = conn.WriteJSON(map[string]any{"type": "cancelled", "session_id": req.SessionID, "reason": "request cancelled", "api_version": uiAPIVersion, "compat": uiCompat})
+				payload := cancelledPayload(req.SessionID, "request cancelled")
+				payload["type"] = "cancelled"
+				_ = conn.WriteJSON(payload)
 			}
 			return
 		case event := <-events:
@@ -749,7 +818,10 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 				default:
 					if res.Err != nil {
 						if !cancelled {
-							_ = conn.WriteJSON(map[string]any{"type": "error", "session_id": req.SessionID, "error": map[string]any{"code": "internal_error", "message": res.Err.Error()}, "api_version": uiAPIVersion, "compat": uiCompat})
+							code := runtimeErrorCode(res.Err)
+							payload := runtimeErrorPayload(req.SessionID, code, res.Err.Error())
+							payload["type"] = "error"
+							_ = conn.WriteJSON(payload)
 						}
 						return
 					}

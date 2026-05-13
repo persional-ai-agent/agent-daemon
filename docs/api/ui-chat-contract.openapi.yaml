@@ -292,6 +292,10 @@ paths:
                   type: string
                 message:
                   type: string
+                turn_id:
+                  type: string
+                resume:
+                  type: boolean
       responses:
         "200":
           description: Chat result with compatibility fields
