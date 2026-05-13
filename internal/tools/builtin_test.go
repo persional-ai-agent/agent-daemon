@@ -361,6 +361,16 @@ func TestBrowserVisionSchemaDocumentsLimitBounds(t *testing.T) {
 	}
 }
 
+func TestBrowserCDPSchemaDocumentsIncludeHTMLDefault(t *testing.T) {
+	params := browserCDPParams()
+	props, _ := params["properties"].(map[string]any)
+	includeHTML, _ := props["include_html"].(map[string]any)
+	desc, _ := includeHTML["description"].(string)
+	if !strings.Contains(desc, "default false") {
+		t.Fatalf("browser_cdp include_html description=%q, want default hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
