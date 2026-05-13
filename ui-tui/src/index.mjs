@@ -2,8 +2,8 @@ import readline from "node:readline";
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 
-const apiBase = process.env.AGENT_API_BASE || "ws://127.0.0.1:8080/v1/chat/ws";
-const sessionID = process.env.AGENT_SESSION_ID || randomUUID();
+let apiBase = process.env.AGENT_API_BASE || "ws://127.0.0.1:8080/v1/chat/ws";
+let sessionID = process.env.AGENT_SESSION_ID || randomUUID();
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -30,6 +30,18 @@ function printEvent(evt) {
     return;
   }
   process.stdout.write(`\n[${type}] ${JSON.stringify(evt)}\n`);
+}
+
+function printHelp() {
+  process.stdout.write(
+    "\ncommands:\n" +
+      "/help                 show help\n" +
+      "/session              show current session id\n" +
+      "/session <id>         switch session id\n" +
+      "/api                  show websocket endpoint\n" +
+      "/api <ws-url>         switch websocket endpoint\n" +
+      "/quit                 exit\n\n"
+  );
 }
 
 function sendTurn(message) {
@@ -65,7 +77,7 @@ function sendTurn(message) {
 
 process.stdout.write(`session: ${sessionID}\n`);
 process.stdout.write(`ws: ${apiBase}\n`);
-process.stdout.write("输入 /quit 退出\n");
+process.stdout.write("输入 /help 查看命令\n");
 rl.prompt();
 
 rl.on("line", async (line) => {
@@ -76,6 +88,45 @@ rl.on("line", async (line) => {
   }
   if (text === "/quit" || text === "/exit") {
     rl.close();
+    return;
+  }
+  if (text === "/help") {
+    printHelp();
+    rl.prompt();
+    return;
+  }
+  if (text === "/session") {
+    process.stdout.write(`session: ${sessionID}\n`);
+    rl.prompt();
+    return;
+  }
+  if (text.startsWith("/session ")) {
+    const next = text.slice("/session ".length).trim();
+    if (!next) {
+      process.stdout.write("session id required\n");
+      rl.prompt();
+      return;
+    }
+    sessionID = next;
+    process.stdout.write(`session switched: ${sessionID}\n`);
+    rl.prompt();
+    return;
+  }
+  if (text === "/api") {
+    process.stdout.write(`ws: ${apiBase}\n`);
+    rl.prompt();
+    return;
+  }
+  if (text.startsWith("/api ")) {
+    const next = text.slice("/api ".length).trim();
+    if (!next.startsWith("ws://") && !next.startsWith("wss://")) {
+      process.stdout.write("api must start with ws:// or wss://\n");
+      rl.prompt();
+      return;
+    }
+    apiBase = next;
+    process.stdout.write(`ws switched: ${apiBase}\n`);
+    rl.prompt();
     return;
   }
   try {
@@ -90,4 +141,3 @@ rl.on("close", () => {
   process.stdout.write("bye\n");
   process.exit(0);
 });
-

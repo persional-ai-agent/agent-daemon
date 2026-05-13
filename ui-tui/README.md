@@ -20,4 +20,9 @@ npm start
 命令：
 
 - 输入任意文本发送一轮对话
+- `/help` 查看命令
+- `/session` 查看当前会话 ID
+- `/session <id>` 切换会话 ID
+- `/api` 查看当前 WS 地址
+- `/api <ws-url>` 切换 WS 地址
 - `/quit` 或 `/exit` 退出
