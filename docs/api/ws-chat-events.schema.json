@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "events": {
+    "session": ["type", "session_id", "api_version", "compat"],
+    "user_message": ["type", "session_id", "content"],
+    "turn_started": ["type", "session_id", "turn"],
+    "assistant_message": ["type", "session_id", "content"],
+    "completed": ["type", "session_id", "turn"],
+    "result": ["type", "session_id", "final_response", "turns_used", "finished_naturally", "summary"],
+    "error": ["type", "error"]
+  }
+}

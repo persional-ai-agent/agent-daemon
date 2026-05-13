@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: test contract-test contract-replay contract-coverage contract-diff contract-check contract-release
+.PHONY: test contract-test contract-replay contract-ws-replay contract-coverage contract-diff contract-check contract-release
 
 test:
 	go test ./...
@@ -11,10 +11,15 @@ contract-test:
 contract-replay:
 	CONTRACT_REPLAY_REPORT="$(PWD)/artifacts/contract-replay.json" go test ./internal/api -run TestContractReplay -count=1
 
+contract-ws-replay:
+	CONTRACT_WS_REPLAY_REPORT="$(PWD)/artifacts/contract-ws-replay.json" go test ./internal/api -run TestContractWSReplay -count=1
+
 contract-coverage:
 	go run ./scripts/contract_coverage \
 		-openapi docs/api/ui-chat-contract.openapi.yaml \
 		-replay internal/api/testdata/replay/cases.json \
+		-ws-schema docs/api/ws-chat-events.schema.json \
+		-ws-replay internal/api/testdata/replay/ws_cases.json \
 		-report artifacts/contract-coverage.json \
 		-enforce-core=true
 
@@ -24,7 +29,7 @@ contract-diff:
 		-target docs/api/ui-chat-contract.openapi.yaml \
 		-report artifacts/contract-diff.json
 
-contract-check: contract-test contract-replay contract-coverage contract-diff
+contract-check: contract-test contract-replay contract-ws-replay contract-coverage contract-diff
 
 contract-release: contract-check
 	mkdir -p docs/api/versions/v1

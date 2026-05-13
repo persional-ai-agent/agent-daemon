@@ -25,12 +25,19 @@ jobs:
           mkdir -p artifacts
           CONTRACT_REPLAY_REPORT="$PWD/artifacts/contract-replay.json" go test ./internal/api -run TestContractReplay -count=1
 
+      - name: Contract WS Replay
+        run: |
+          mkdir -p artifacts
+          CONTRACT_WS_REPLAY_REPORT="$PWD/artifacts/contract-ws-replay.json" go test ./internal/api -run TestContractWSReplay -count=1
+
       - name: Contract Coverage Gate
         run: |
           mkdir -p artifacts
           go run ./scripts/contract_coverage \
             -openapi docs/api/ui-chat-contract.openapi.yaml \
             -replay internal/api/testdata/replay/cases.json \
+            -ws-schema docs/api/ws-chat-events.schema.json \
+            -ws-replay internal/api/testdata/replay/ws_cases.json \
             -report artifacts/contract-coverage.json \
             -enforce-core=true
 
@@ -70,6 +77,14 @@ jobs:
         with:
           name: contract-replay-report
           path: artifacts/contract-replay.json
+          if-no-files-found: warn
+
+      - name: Upload Contract WS Replay Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-ws-replay-report
+          path: artifacts/contract-ws-replay.json
           if-no-files-found: warn
 
       - name: Upload Contract Coverage Artifact

@@ -18,6 +18,14 @@ type replayCase struct {
 	ContractPath string `json:"contract_path,omitempty"`
 }
 
+type wsReplayCase struct {
+	ExpectEvents []string `json:"expect_events"`
+}
+
+type wsContract struct {
+	Events map[string][]string `json:"events"`
+}
+
 type coverageReport struct {
 	OpenAPIFile   string            `json:"openapi_file"`
 	ReplayFile    string            `json:"replay_file"`
@@ -28,6 +36,11 @@ type coverageReport struct {
 	Uncovered     []string          `json:"uncovered"`
 	ReplayOps     []string          `json:"replay_ops"`
 	OperationCase map[string]string `json:"operation_case,omitempty"`
+	WSEventTotal  int               `json:"ws_event_total"`
+	WSEventCovered int              `json:"ws_event_covered"`
+	WSEventCoverage float64         `json:"ws_event_coverage"`
+	WSCovered      []string         `json:"ws_covered"`
+	WSUncovered    []string         `json:"ws_uncovered"`
 }
 
 func covAsMap(v any) map[string]any {
@@ -89,6 +102,43 @@ func loadReplayOps(path string) (map[string]struct{}, map[string]string, error) 
 	return out, caseMap, nil
 }
 
+func loadWSEventContract(path string) (map[string]struct{}, error) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var c wsContract
+	if err := json.Unmarshal(bs, &c); err != nil {
+		return nil, err
+	}
+	out := map[string]struct{}{}
+	for k := range c.Events {
+		out[k] = struct{}{}
+	}
+	return out, nil
+}
+
+func loadWSCoveredEvents(path string) (map[string]struct{}, error) {
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cases []wsReplayCase
+	if err := json.Unmarshal(bs, &cases); err != nil {
+		return nil, err
+	}
+	out := map[string]struct{}{}
+	for _, c := range cases {
+		for _, ev := range c.ExpectEvents {
+			ev = strings.TrimSpace(ev)
+			if ev != "" {
+				out[ev] = struct{}{}
+			}
+		}
+	}
+	return out, nil
+}
+
 func sortedKeys(set map[string]struct{}) []string {
 	out := make([]string, 0, len(set))
 	for k := range set {
@@ -112,6 +162,8 @@ func writeCoverageReport(path string, rep coverageReport) error {
 func main() {
 	openapi := flag.String("openapi", "docs/api/ui-chat-contract.openapi.yaml", "openapi file")
 	replay := flag.String("replay", "internal/api/testdata/replay/cases.json", "replay cases file")
+	wsSchema := flag.String("ws-schema", "docs/api/ws-chat-events.schema.json", "ws event contract file")
+	wsReplay := flag.String("ws-replay", "internal/api/testdata/replay/ws_cases.json", "ws replay cases file")
 	report := flag.String("report", "artifacts/contract-coverage.json", "coverage report output")
 	enforce := flag.Bool("enforce-core", true, "enforce core coverage=100%")
 	flag.Parse()
@@ -124,6 +176,16 @@ func main() {
 	replayOps, caseMap, err := loadReplayOps(*replay)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load replay failed: %v\n", err)
+		os.Exit(2)
+	}
+	wsContractEvents, err := loadWSEventContract(*wsSchema)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load ws schema failed: %v\n", err)
+		os.Exit(2)
+	}
+	wsCoveredEvents, err := loadWSCoveredEvents(*wsReplay)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load ws replay failed: %v\n", err)
 		os.Exit(2)
 	}
 
@@ -153,6 +215,26 @@ func main() {
 		ReplayOps:     sortedKeys(replayOps),
 		OperationCase: caseMap,
 	}
+	wsCoveredSet := map[string]struct{}{}
+	wsUncoveredSet := map[string]struct{}{}
+	for ev := range wsContractEvents {
+		if _, ok := wsCoveredEvents[ev]; ok {
+			wsCoveredSet[ev] = struct{}{}
+		} else {
+			wsUncoveredSet[ev] = struct{}{}
+		}
+	}
+	wsTotal := len(wsContractEvents)
+	wsCovered := len(wsCoveredSet)
+	wsCoverage := 100.0
+	if wsTotal > 0 {
+		wsCoverage = float64(wsCovered) * 100.0 / float64(wsTotal)
+	}
+	rep.WSEventTotal = wsTotal
+	rep.WSEventCovered = wsCovered
+	rep.WSEventCoverage = wsCoverage
+	rep.WSCovered = sortedKeys(wsCoveredSet)
+	rep.WSUncovered = sortedKeys(wsUncoveredSet)
 	if err := writeCoverageReport(*report, rep); err != nil {
 		fmt.Fprintf(os.Stderr, "write coverage report failed: %v\n", err)
 		os.Exit(3)
@@ -160,6 +242,7 @@ func main() {
 
 	fmt.Println("== Contract Coverage Report ==")
 	fmt.Printf("Core coverage: %.2f%% (%d/%d)\n", rep.CoreCoverage, rep.CoreCovered, rep.CoreTotal)
+	fmt.Printf("WS coverage: %.2f%% (%d/%d)\n", rep.WSEventCoverage, rep.WSEventCovered, rep.WSEventTotal)
 	fmt.Printf("Report: %s\n", *report)
 	if len(rep.Uncovered) > 0 {
 		fmt.Println("Uncovered core operations:")
@@ -167,8 +250,16 @@ func main() {
 			fmt.Printf("- %s\n", op)
 		}
 	}
-	if *enforce && len(rep.Uncovered) > 0 {
-		fmt.Fprintln(os.Stderr, "core coverage gate failed: uncovered operations found")
+	if *enforce && (len(rep.Uncovered) > 0 || len(rep.WSUncovered) > 0) {
+		if len(rep.Uncovered) > 0 {
+			fmt.Fprintln(os.Stderr, "core coverage gate failed: uncovered operations found")
+		}
+		if len(rep.WSUncovered) > 0 {
+			fmt.Fprintln(os.Stderr, "ws coverage gate failed: uncovered events found")
+			for _, ev := range rep.WSUncovered {
+				fmt.Fprintf(os.Stderr, "- %s\n", ev)
+			}
+		}
 		os.Exit(10)
 	}
 }

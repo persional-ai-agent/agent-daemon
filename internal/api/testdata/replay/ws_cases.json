@@ -1,0 +1,26 @@
+[
+  {
+    "name": "chat_ws_success",
+    "path": "/v1/chat/ws",
+    "request": {
+      "session_id": "s-ws",
+      "message": "ping"
+    },
+    "expect_events": [
+      "session",
+      "user_message",
+      "turn_started",
+      "assistant_message",
+      "completed",
+      "result"
+    ]
+  },
+  {
+    "name": "chat_ws_invalid_json_error",
+    "path": "/v1/chat/ws",
+    "raw_request": "{broken-json",
+    "expect_events": [
+      "error"
+    ]
+  }
+]

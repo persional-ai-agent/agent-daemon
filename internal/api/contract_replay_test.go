@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
+	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,6 +39,19 @@ type replayResult struct {
 
 type openAPISpec struct {
 	Paths map[string]map[string]any `yaml:"paths"`
+}
+
+type wsReplayCase struct {
+	Name         string         `json:"name"`
+	Path         string         `json:"path"`
+	Request      map[string]any `json:"request"`
+	RawRequest   string         `json:"raw_request,omitempty"`
+	ExpectEvents []string       `json:"expect_events"`
+}
+
+type wsContract struct {
+	Version string              `json:"version"`
+	Events  map[string][]string `json:"events"`
 }
 
 func replayAsMap(v any) map[string]any {
@@ -73,6 +88,32 @@ func loadOpenAPISpec(t *testing.T) openAPISpec {
 		t.Fatalf("decode openapi: %v", err)
 	}
 	return spec
+}
+
+func loadWSReplayCases(t *testing.T) []wsReplayCase {
+	t.Helper()
+	bs, err := os.ReadFile(filepath.Join("testdata", "replay", "ws_cases.json"))
+	if err != nil {
+		t.Fatalf("read ws replay cases: %v", err)
+	}
+	var out []wsReplayCase
+	if err := json.Unmarshal(bs, &out); err != nil {
+		t.Fatalf("decode ws replay cases: %v", err)
+	}
+	return out
+}
+
+func loadWSContract(t *testing.T) wsContract {
+	t.Helper()
+	bs, err := os.ReadFile(filepath.Join("..", "..", "docs", "api", "ws-chat-events.schema.json"))
+	if err != nil {
+		t.Fatalf("read ws contract: %v", err)
+	}
+	var out wsContract
+	if err := json.Unmarshal(bs, &out); err != nil {
+		t.Fatalf("decode ws contract: %v", err)
+	}
+	return out
 }
 
 func replayServer() *Server {
@@ -288,4 +329,86 @@ func TestContractReplay(t *testing.T) {
 		})
 	}
 	writeReplayReport(t, results)
+}
+
+func TestContractWSReplay(t *testing.T) {
+	cases := loadWSReplayCases(t)
+	contract := loadWSContract(t)
+	srv := replayServer()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	wsBase := "ws" + strings.TrimPrefix(ts.URL, "http")
+
+	type wsReplayResult struct {
+		Name       string   `json:"name"`
+		Pass       bool     `json:"pass"`
+		SeenEvents []string `json:"seen_events"`
+	}
+	results := make([]wsReplayResult, 0, len(cases))
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			conn, _, err := websocket.DefaultDialer.Dial(wsBase+tc.Path, nil)
+			if err != nil {
+				t.Fatalf("ws dial failed: %v", err)
+			}
+			defer conn.Close()
+			_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			if strings.TrimSpace(tc.RawRequest) != "" {
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(tc.RawRequest)); err != nil {
+					t.Fatalf("ws write raw request failed: %v", err)
+				}
+			} else {
+				if err := conn.WriteJSON(tc.Request); err != nil {
+					t.Fatalf("ws write request failed: %v", err)
+				}
+			}
+			seen := make([]string, 0, 8)
+			seenSet := map[string]struct{}{}
+			for {
+				msg := map[string]any{}
+				if err := conn.ReadJSON(&msg); err != nil {
+					t.Fatalf("ws read failed: %v", err)
+				}
+				typ, _ := msg["type"].(string)
+				if strings.TrimSpace(typ) == "" {
+					t.Fatalf("ws event missing type: %+v", msg)
+				}
+				if _, ok := seenSet[typ]; !ok {
+					seenSet[typ] = struct{}{}
+					seen = append(seen, typ)
+				}
+				reqFields := contract.Events[typ]
+				for _, field := range reqFields {
+					if _, ok := msg[field]; !ok {
+						t.Fatalf("ws event %s missing field %s: %+v", typ, field, msg)
+					}
+				}
+				if typ == "result" || typ == "error" || typ == "cancelled" {
+					break
+				}
+			}
+			for _, ev := range tc.ExpectEvents {
+				if _, ok := seenSet[ev]; !ok {
+					t.Fatalf("expected ws event %s not seen, seen=%v", ev, seen)
+				}
+			}
+			results = append(results, wsReplayResult{Name: tc.Name, Pass: true, SeenEvents: seen})
+		})
+	}
+
+	reportPath := strings.TrimSpace(os.Getenv("CONTRACT_WS_REPLAY_REPORT"))
+	if reportPath == "" {
+		reportPath = filepath.Join("..", "..", "artifacts", "contract-ws-replay.json")
+	}
+	if err := os.MkdirAll(filepath.Dir(reportPath), 0o755); err != nil {
+		t.Fatalf("mkdir ws replay report: %v", err)
+	}
+	bs, err := json.MarshalIndent(map[string]any{"results": results, "contract_version": contract.Version}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal ws replay report: %v", err)
+	}
+	if err := os.WriteFile(reportPath, bs, 0o644); err != nil {
+		t.Fatalf("write ws replay report: %v", err)
+	}
 }
