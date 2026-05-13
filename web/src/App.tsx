@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { cancelChat, sendChat } from "./lib/api";
+import { useEffect, useState } from "react";
+import { cancelChat, getUIConfig, getUIGatewayStatus, getUISessions, getUITools, sendChat } from "./lib/api";
 
 type Tab = "chat" | "sessions" | "tools" | "gateway" | "config";
 
@@ -12,6 +12,10 @@ export function App() {
   const [output, setOutput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sessions, setSessions] = useState<Array<{ session_id: string; last_seen?: string }>>([]);
+  const [tools, setTools] = useState<string[]>([]);
+  const [gatewayStatus, setGatewayStatus] = useState<Record<string, unknown> | null>(null);
+  const [config, setConfig] = useState<Record<string, unknown> | null>(null);
 
   async function onSend() {
     if (!input.trim()) return;
@@ -36,6 +40,21 @@ export function App() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  useEffect(() => {
+    if (tab === "sessions") {
+      getUISessions(30).then((r) => setSessions(r.sessions)).catch((e) => setError(String(e)));
+    }
+    if (tab === "tools") {
+      getUITools().then((r) => setTools(r.tools)).catch((e) => setError(String(e)));
+    }
+    if (tab === "gateway") {
+      getUIGatewayStatus().then(setGatewayStatus).catch((e) => setError(String(e)));
+    }
+    if (tab === "config") {
+      getUIConfig().then(setConfig).catch((e) => setError(String(e)));
+    }
+  }, [tab]);
 
   return (
     <div className="page">
@@ -65,10 +84,28 @@ export function App() {
             <pre>{output || "等待响应..."}</pre>
           </section>
         )}
-        {tab !== "chat" && (
+        {tab === "sessions" && (
           <section>
-            <h2>{tab}</h2>
-            <p>该页面将在后续批次补齐完整交互与数据加载。</p>
+            <h2>sessions</h2>
+            <pre>{JSON.stringify(sessions, null, 2)}</pre>
+          </section>
+        )}
+        {tab === "tools" && (
+          <section>
+            <h2>tools ({tools.length})</h2>
+            <pre>{JSON.stringify(tools, null, 2)}</pre>
+          </section>
+        )}
+        {tab === "gateway" && (
+          <section>
+            <h2>gateway status</h2>
+            <pre>{JSON.stringify(gatewayStatus, null, 2)}</pre>
+          </section>
+        )}
+        {tab === "config" && (
+          <section>
+            <h2>config snapshot</h2>
+            <pre>{JSON.stringify(config, null, 2)}</pre>
           </section>
         )}
       </main>

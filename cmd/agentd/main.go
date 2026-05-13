@@ -6121,7 +6121,37 @@ func runServe(cfg config.Config) {
 		cfg.ModelUseStreaming = true
 	}
 	eng, cronStore := mustBuildEngine(cfg)
-	srv := &http.Server{Addr: cfg.ListenAddr, Handler: (&api.Server{Engine: eng}).Handler(), ReadHeaderTimeout: 10 * time.Second}
+	apiSrv := &api.Server{
+		Engine: eng,
+		ConfigSnapshotFn: func() map[string]any {
+			return map[string]any{
+				"model_provider":     cfg.ModelProvider,
+				"model_name":         selectedModelName(cfg, cfg.ModelProvider),
+				"listen_addr":        cfg.ListenAddr,
+				"workdir":            cfg.Workdir,
+				"data_dir":           cfg.DataDir,
+				"gateway_enabled":    cfg.GatewayEnabled,
+				"enabled_toolsets":   cfg.EnabledToolsets,
+				"disabled_tools":     cfg.DisabledTools,
+				"model_use_streaming": cfg.ModelUseStreaming,
+			}
+		},
+		GatewayStatusFn: func() map[string]any {
+			status := gatewayStatus(cfg)
+			return map[string]any{
+				"enabled":              status.Enabled,
+				"configured_platforms": status.ConfiguredPlatforms,
+				"supported_platforms":  status.SupportedPlatforms,
+				"running":              status.Running,
+				"pid":                  status.PID,
+				"log_path":             status.LogPath,
+				"locked":               status.Locked,
+				"token_locked":         status.TokenLocked,
+				"installed":            status.Installed,
+			}
+		},
+	}
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: apiSrv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("agent-daemon listening on %s", cfg.ListenAddr)
 
 	cronCtx, cronCancel := context.WithCancel(context.Background())

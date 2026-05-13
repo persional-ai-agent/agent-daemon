@@ -13,4 +13,7 @@ npm run dev
 ## 当前范围
 
 - Chat 页面：调用 `/v1/chat` 与 `/v1/chat/cancel`
-- Sessions / Tools / Gateway / Config：页面骨架已建立，后续批次补齐数据与交互
+- Sessions 页面：调用 `/v1/ui/sessions`
+- Tools 页面：调用 `/v1/ui/tools`
+- Gateway 页面：调用 `/v1/ui/gateway/status`
+- Config 页面：调用 `/v1/ui/config`

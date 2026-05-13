@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +22,9 @@ import (
 
 type Server struct {
 	Engine *agent.Engine
+	// Optional UI helpers for dashboard pages.
+	ConfigSnapshotFn func() map[string]any
+	GatewayStatusFn  func() map[string]any
 	mu     sync.Mutex
 	active map[string]activeRun
 }
@@ -57,7 +62,90 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/stream", s.handleChatStream)
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
+	mux.HandleFunc("/v1/ui/tools", s.handleUITools)
+	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
+	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
+	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	return mux
+}
+
+type recentSessionsStore interface {
+	ListRecentSessions(limit int) ([]map[string]any, error)
+}
+
+func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.Registry == nil {
+		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	names := s.Engine.Registry.Names()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"count": namesCount(names),
+		"tools": names,
+	})
+}
+
+func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		http.Error(w, "session store unavailable", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	lister, ok := s.Engine.SessionStore.(recentSessionsStore)
+	if !ok {
+		http.Error(w, "session listing not supported", http.StatusNotImplemented)
+		return
+	}
+	rows, err := lister.ListRecentSessions(limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"count":    len(rows),
+		"sessions": rows,
+	})
+}
+
+func (s *Server) handleUIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.ConfigSnapshotFn == nil {
+		http.Error(w, "config snapshot unavailable", http.StatusNotImplemented)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.ConfigSnapshotFn())
+}
+
+func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.GatewayStatusFn == nil {
+		http.Error(w, "gateway status unavailable", http.StatusNotImplemented)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.GatewayStatusFn())
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -453,6 +541,10 @@ func summarizeRunResult(res *core.RunResult) map[string]any {
 		"delegate_count":          delegateCount,
 		"tool_names":              toolNames,
 	}
+}
+
+func namesCount(items []string) int {
+	return len(items)
 }
 
 func (s *Server) registerActiveRun(sessionID string, cancel context.CancelFunc) string {

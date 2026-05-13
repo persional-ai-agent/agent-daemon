@@ -90,6 +90,16 @@ func (s *stubSessionStore) LoadMessages(string, int) ([]core.Message, error) {
 	return nil, nil
 }
 
+func (s *stubSessionStore) ListRecentSessions(limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return []map[string]any{
+		{"session_id": "s1", "last_seen": "2026-05-13T00:00:00Z"},
+		{"session_id": "s2", "last_seen": "2026-05-12T00:00:00Z"},
+	}, nil
+}
+
 func TestHandleChatStream(t *testing.T) {
 	srv := &Server{
 		Engine: &agent.Engine{
@@ -137,6 +147,78 @@ func TestHandleChatStream(t *testing.T) {
 	if !strings.Contains(body, `"session_id":"`) {
 		t.Fatalf("expected response to contain session id, body=%s", body)
 	}
+}
+
+func TestUIEndpoints(t *testing.T) {
+	reg := tools.NewRegistry()
+	reg.Register(apiTestTool{
+		name: "test_tool",
+		call: func(context.Context, map[string]any, tools.ToolContext) (map[string]any, error) {
+			return map[string]any{"success": true}, nil
+		},
+	})
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     reg,
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+		ConfigSnapshotFn: func() map[string]any {
+			return map[string]any{"model_provider": "openai"}
+		},
+		GatewayStatusFn: func() map[string]any {
+			return map[string]any{"enabled": true, "running": false}
+		},
+	}
+
+	t.Run("tools", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/tools", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"test_tool"`) {
+			t.Fatalf("expected tool in response: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("sessions", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/sessions?limit=2", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"s1"`) {
+			t.Fatalf("expected session in response: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("config", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/config", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"model_provider":"openai"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("gateway", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/gateway/status", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
 }
 
 func TestHandleChatIncludesSummary(t *testing.T) {

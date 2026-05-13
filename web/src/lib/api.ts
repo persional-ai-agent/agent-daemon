@@ -3,6 +3,16 @@ export type ChatResponse = {
   final_response: string;
 };
 
+export type UISessionsResponse = {
+  count: number;
+  sessions: Array<{ session_id: string; last_seen?: string }>;
+};
+
+export type UIToolsResponse = {
+  count: number;
+  tools: string[];
+};
+
 const BASE = (globalThis as any).__AGENT_API_BASE__ || "http://127.0.0.1:8080";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -29,4 +39,20 @@ export function cancelChat(sessionID: string) {
     method: "POST",
     body: JSON.stringify({ session_id: sessionID })
   });
+}
+
+export function getUISessions(limit = 20) {
+  return request<UISessionsResponse>(`/v1/ui/sessions?limit=${limit}`);
+}
+
+export function getUITools() {
+  return request<UIToolsResponse>("/v1/ui/tools");
+}
+
+export function getUIConfig() {
+  return request<Record<string, unknown>>("/v1/ui/config");
+}
+
+export function getUIGatewayStatus() {
+  return request<Record<string, unknown>>("/v1/ui/gateway/status");
 }

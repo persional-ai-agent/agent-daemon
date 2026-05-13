@@ -332,3 +332,4 @@
 - `207-research-frontend-tui-parity.md`：Frontend 与 TUI 功能对齐差距调研（Phase 1）
 - `207-plan-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施计划
 - `207-summary-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施总结
+- `208-summary-frontend-tui-parity-phase2-ui-api.md`：Frontend 与 TUI 对齐 Phase 2（UI API 与页面联通）
