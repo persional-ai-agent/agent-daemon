@@ -24,6 +24,12 @@
   - `/approve <approval_id>` / `/deny <approval_id>`：处理指定项
 - 若提示找不到待审批：
   - 用 `/show <session_id> 0 200` 检查当前会话内是否存在 `pending_approval` 记录。
+- 若 `/approve` 或 `/deny` 返回 `404 page not found`：
+  - 说明当前运行的后端版本未启用 `POST /v1/ui/approval/confirm`。
+  - 先升级后端到最新版本后重试。
+- 若 `/pending` 返回 `http 500` 且包含 `converting NULL to int64`：
+  - 属于历史数据兼容问题（会话统计字段存在旧数据空值）。
+  - 建议先升级后端并执行一次会话存储修复/迁移，再重试该命令。
 
 ## 3. 配置重载
 

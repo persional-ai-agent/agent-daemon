@@ -352,3 +352,4 @@
 - `225-summary-ui-tui-recovery-approval-alignment.md`：ui-tui 会话恢复、审批闭环与导出过滤对齐
 - `226-summary-ui-tui-config-ini-unification.md`：ui-tui 配置统一接入 config.ini
 - `227-summary-ui-tui-usability-finalization.md`：ui-tui 易用性收口（审批列表/默认审批/热更新/自修复）
+- `228-summary-ui-tui-final-audit-and-baseline.md`：ui-tui 最终审计、真实回归与基线标记
