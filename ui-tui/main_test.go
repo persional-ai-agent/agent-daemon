@@ -114,13 +114,17 @@ func TestActionCommandByIndex(t *testing.T) {
 		t.Fatalf("idx11 cmd=%q ok=%v", cmd, ok)
 	}
 	cmd, ok = actionCommandByIndex(s, 12)
-	if !ok || cmd != "/fullscreen on" {
+	if !ok || cmd != "/workbench list" {
 		t.Fatalf("idx12 cmd=%q ok=%v", cmd, ok)
 	}
+	cmd, ok = actionCommandByIndex(s, 13)
+	if !ok || cmd != "/fullscreen on" {
+		t.Fatalf("idx13 cmd=%q ok=%v", cmd, ok)
+	}
 	s.fullscreen = true
-	cmd, ok = actionCommandByIndex(s, 12)
+	cmd, ok = actionCommandByIndex(s, 13)
 	if !ok || cmd != "/fullscreen off" {
-		t.Fatalf("idx12 fullscreen cmd=%q ok=%v", cmd, ok)
+		t.Fatalf("idx13 fullscreen cmd=%q ok=%v", cmd, ok)
 	}
 	_, ok = actionCommandByIndex(s, 99)
 	if ok {
@@ -177,6 +181,48 @@ func TestPanelSelectionHelpers(t *testing.T) {
 	aid, ok := selectApprovalIDFromPanelData(approvals, 1)
 	if !ok || aid != "ap-1" {
 		t.Fatalf("selectApprovalID failed id=%q ok=%v", aid, ok)
+	}
+}
+
+func TestWorkbenchProfileSaveLoadDelete(t *testing.T) {
+	dir := t.TempDir()
+	s := newState()
+	s.workbenchPath = filepath.Join(dir, "ui-tui-workbenches.json")
+	s.session = "s-1"
+	s.wsBase = "ws://x/ws"
+	s.httpBase = "http://x"
+	s.fullscreen = true
+	s.fullscreenPanel = "dashboard"
+	s.panelAutoRefresh = true
+	s.panelRefreshSec = 9
+	s.viewMode = "json"
+	if err := s.saveWorkbench("daily"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.loadWorkbenchProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Name != "daily" {
+		t.Fatalf("unexpected workbench list: %+v", list)
+	}
+	s2 := newState()
+	s2.workbenchPath = s.workbenchPath
+	if err := s2.loadWorkbench("daily"); err != nil {
+		t.Fatal(err)
+	}
+	if s2.session != "s-1" || s2.fullscreenPanel != "dashboard" || s2.panelRefreshSec != 9 || s2.viewMode != "json" {
+		t.Fatalf("workbench load mismatch: %+v", s2)
+	}
+	if err := s2.deleteWorkbench("daily"); err != nil {
+		t.Fatal(err)
+	}
+	list, err = s2.loadWorkbenchProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected empty list after delete: %+v", list)
 	}
 }
 

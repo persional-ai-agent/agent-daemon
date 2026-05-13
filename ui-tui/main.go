@@ -34,6 +34,19 @@ type bookmark struct {
 	HTTPBase  string `json:"http_base"`
 }
 
+type workbenchProfile struct {
+	Name             string `json:"name"`
+	SessionID        string `json:"session_id"`
+	WSBase           string `json:"ws_base"`
+	HTTPBase         string `json:"http_base"`
+	Fullscreen       bool   `json:"fullscreen"`
+	FullscreenPanel  string `json:"fullscreen_panel"`
+	PanelAutoRefresh bool   `json:"panel_auto_refresh"`
+	PanelRefreshSec  int    `json:"panel_refresh_sec"`
+	ViewMode         string `json:"view_mode"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
 type runtimeState struct {
 	SessionID       string `json:"session_id"`
 	WSBase          string `json:"ws_base"`
@@ -75,6 +88,7 @@ type appState struct {
 
 	historyPath  string
 	bookmarkPath string
+	workbenchPath string
 	statePath    string
 	auditPath    string
 
@@ -167,6 +181,7 @@ func newState() *appState {
 		eventLog:         make([]map[string]any, 0),
 		historyPath:      filepath.Join(root, "ui-tui-history.log"),
 		bookmarkPath:     filepath.Join(root, "ui-tui-bookmarks.json"),
+		workbenchPath:    filepath.Join(root, "ui-tui-workbenches.json"),
 		statePath:        filepath.Join(root, "ui-tui-state.json"),
 		auditPath:        filepath.Join(root, "ui-tui-audit.log"),
 		historyMaxLines:  cfg.UITUIHistoryMaxLines,
@@ -407,6 +422,10 @@ func printHelp() {
 	fmt.Println("/bookmark add <name>  save current session/api profile")
 	fmt.Println("/bookmark list        list bookmarks")
 	fmt.Println("/bookmark use <name>  restore session/api profile")
+	fmt.Println("/workbench save <name> save current workbench profile")
+	fmt.Println("/workbench list       list workbench profiles")
+	fmt.Println("/workbench load <name> load workbench profile")
+	fmt.Println("/workbench delete <name> delete workbench profile")
 	fmt.Println("/pending [n]          show latest pending approval(s) in session")
 	fmt.Println("/approve [id]         approve pending approval id (default latest)")
 	fmt.Println("/deny [id]            deny pending approval id (default latest)")
@@ -451,6 +470,7 @@ func actionMenuItems(s *appState) []string {
 		"/pending 5",
 		"/panel next",
 		"/panel status",
+		"/workbench list",
 		"/" + fullscreenAction,
 		"/help",
 	}
@@ -1288,6 +1308,112 @@ func (s *appState) useBookmark(name string) error {
 	return fmt.Errorf("bookmark not found: %s", name)
 }
 
+func (s *appState) loadWorkbenchProfiles() ([]workbenchProfile, error) {
+	bs, err := os.ReadFile(s.workbenchPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []workbenchProfile{}, nil
+		}
+		return nil, err
+	}
+	var out []workbenchProfile
+	if err := json.Unmarshal(bs, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *appState) saveWorkbenchProfiles(list []workbenchProfile) error {
+	_ = os.MkdirAll(filepath.Dir(s.workbenchPath), 0o755)
+	bs, _ := json.MarshalIndent(list, "", "  ")
+	return os.WriteFile(s.workbenchPath, bs, 0o644)
+}
+
+func (s *appState) saveWorkbench(name string) error {
+	list, err := s.loadWorkbenchProfiles()
+	if err != nil {
+		return err
+	}
+	next := workbenchProfile{
+		Name:             name,
+		SessionID:        s.session,
+		WSBase:           s.wsBase,
+		HTTPBase:         s.httpBase,
+		Fullscreen:       s.fullscreen,
+		FullscreenPanel:  s.fullscreenPanel,
+		PanelAutoRefresh: s.panelAutoRefresh,
+		PanelRefreshSec:  s.panelRefreshSec,
+		ViewMode:         s.viewMode,
+		UpdatedAt:        time.Now().Format(time.RFC3339),
+	}
+	replaced := false
+	for i := range list {
+		if strings.EqualFold(strings.TrimSpace(list[i].Name), strings.TrimSpace(name)) {
+			list[i] = next
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		list = append(list, next)
+	}
+	return s.saveWorkbenchProfiles(list)
+}
+
+func (s *appState) loadWorkbench(name string) error {
+	list, err := s.loadWorkbenchProfiles()
+	if err != nil {
+		return err
+	}
+	for _, wb := range list {
+		if strings.EqualFold(strings.TrimSpace(wb.Name), strings.TrimSpace(name)) {
+			if strings.TrimSpace(wb.SessionID) != "" {
+				s.session = wb.SessionID
+				s.lastShowSession = wb.SessionID
+			}
+			if strings.TrimSpace(wb.WSBase) != "" {
+				s.wsBase = wb.WSBase
+			}
+			if strings.TrimSpace(wb.HTTPBase) != "" {
+				s.httpBase = wb.HTTPBase
+			}
+			s.fullscreen = wb.Fullscreen
+			if strings.TrimSpace(wb.FullscreenPanel) != "" {
+				s.fullscreenPanel = wb.FullscreenPanel
+			}
+			s.panelAutoRefresh = wb.PanelAutoRefresh
+			if wb.PanelRefreshSec > 0 {
+				s.panelRefreshSec = wb.PanelRefreshSec
+			}
+			if wb.ViewMode == "json" || wb.ViewMode == "human" {
+				s.viewMode = wb.ViewMode
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("workbench not found: %s", name)
+}
+
+func (s *appState) deleteWorkbench(name string) error {
+	list, err := s.loadWorkbenchProfiles()
+	if err != nil {
+		return err
+	}
+	next := make([]workbenchProfile, 0, len(list))
+	removed := false
+	for _, wb := range list {
+		if strings.EqualFold(strings.TrimSpace(wb.Name), strings.TrimSpace(name)) {
+			removed = true
+			continue
+		}
+		next = append(next, wb)
+	}
+	if !removed {
+		return fmt.Errorf("workbench not found: %s", name)
+	}
+	return s.saveWorkbenchProfiles(next)
+}
+
 func (s *appState) addEvent(evt map[string]any) {
 	if evt != nil {
 		if _, ok := evt["_captured_at"]; !ok {
@@ -2052,6 +2178,75 @@ func main() {
 			}
 			fmt.Println("usage: /bookmark add <name> | /bookmark list | /bookmark use <name>")
 			s.setStatus(false, "invalid_input", "invalid bookmark args")
+		case strings.HasPrefix(text, "/workbench "):
+			parts := strings.Fields(text)
+			if len(parts) < 2 {
+				fmt.Println("usage: /workbench save|list|load|delete ...")
+				s.setStatus(false, "invalid_input", "invalid workbench args")
+				continue
+			}
+			switch parts[1] {
+			case "list":
+				list, err := s.loadWorkbenchProfiles()
+				if err != nil {
+					fmt.Printf("[workbench-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				s.lastJSON = map[string]any{"count": len(list), "workbenches": list}
+				s.printData(s.lastJSON)
+				s.setStatus(true, "ok", "workbench listed")
+			case "save":
+				if len(parts) < 3 {
+					fmt.Println("usage: /workbench save <name>")
+					s.setStatus(false, "invalid_input", "missing workbench name")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				if err := s.saveWorkbench(name); err != nil {
+					fmt.Printf("[workbench-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				fmt.Printf("workbench saved: %s\n", name)
+				s.audit("workbench_save", "name="+name)
+				s.setStatus(true, "ok", "workbench saved")
+			case "load":
+				if len(parts) < 3 {
+					fmt.Println("usage: /workbench load <name>")
+					s.setStatus(false, "invalid_input", "missing workbench name")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				if err := s.loadWorkbench(name); err != nil {
+					fmt.Printf("[workbench-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				_ = s.saveRuntimeState()
+				_ = s.refreshCurrentPanel()
+				fmt.Printf("workbench loaded: %s\n", name)
+				s.audit("workbench_load", "name="+name)
+				s.setStatus(true, "ok", "workbench loaded")
+			case "delete":
+				if len(parts) < 3 {
+					fmt.Println("usage: /workbench delete <name>")
+					s.setStatus(false, "invalid_input", "missing workbench name")
+					continue
+				}
+				name := strings.TrimSpace(parts[2])
+				if err := s.deleteWorkbench(name); err != nil {
+					fmt.Printf("[workbench-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				fmt.Printf("workbench deleted: %s\n", name)
+				s.audit("workbench_delete", "name="+name)
+				s.setStatus(true, "ok", "workbench deleted")
+			default:
+				fmt.Println("usage: /workbench save|list|load|delete ...")
+				s.setStatus(false, "invalid_input", "invalid workbench args")
+			}
 		case text == "/session":
 			fmt.Printf("session: %s\n", s.session)
 			s.setStatus(true, "ok", "session shown")

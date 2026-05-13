@@ -83,6 +83,7 @@ go run .
 - `/events [n]`、`/events save <file>`：运行事件查看与导出
 - `/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]`：按格式和时间范围导出
 - `/bookmark add|list|use`：会话配置书签
+- `/workbench save|list|load|delete`：管理工作台配置方案（会话、endpoint、面板、刷新策略、视图）
 - `/pending [n]`、`/approve [id]`、`/deny [id]`：终端内审批闭环（可默认处理最近一条）
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
 - `/doctor`：后端能力预检（接口版本与连通性）

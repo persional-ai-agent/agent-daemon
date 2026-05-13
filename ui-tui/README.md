@@ -82,6 +82,10 @@ go run . --fullscreen
 - `/bookmark add <name> [sid]` 保存会话书签
 - `/bookmark list` 查看会话书签
 - `/bookmark use <name>` 切换到书签会话
+- `/workbench save <name>` 保存当前工作台配置（session/api/panel/refresh/view）
+- `/workbench list` 列出工作台配置
+- `/workbench load <name>` 加载工作台配置
+- `/workbench delete <name>` 删除工作台配置
 - `/pending [n]` 查看最近待审批项（支持列表）
 - `/approve [approval_id]` 同意待审批项（不传 id 默认最近一条）
 - `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）

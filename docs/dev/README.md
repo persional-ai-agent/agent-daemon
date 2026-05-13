@@ -396,3 +396,4 @@
 - `269-summary-ui-tui-workbench-auto-refresh-and-persistence.md`：ui-tui 工作台补齐自动刷新策略与偏好持久化（panel auto/interval/status）
 - `270-summary-ui-tui-workbench-drilldown-and-approvals-panel.md`：ui-tui 工作台新增 approvals 面板与 `/open <index>` 条目钻取动作
 - `271-summary-ui-tui-workbench-open-action-closure.md`：ui-tui 工作台补齐统一 `/open <index>` 钻取闭环（sessions/tools/approvals）
+- `272-summary-ui-tui-workbench-profiles-bundle.md`：ui-tui 工作台新增 profile 方案（workbench save/list/load/delete）

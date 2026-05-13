@@ -74,6 +74,7 @@
   - 快捷操作面板（`/actions`）支持编号选择高频管理动作，降低命令输入成本
   - 全屏多面板：`overview/dashboard/sessions/tools/approvals/gateway/diag`，支持 `/panel` 切换与 `/refresh` 拉取数据
   - 面板条目钻取：`/open <index>`，在 sessions/tools/approvals 面板执行上下文动作
+  - 工作台配置方案：`/workbench save|list|load|delete`，用于保存/恢复完整工作台状态
   - 面板自动刷新策略：`/panel auto on|off` + `/panel interval <sec>`，并持久化到 `ui-tui-state.json`
 
 ## 4. 测试策略
