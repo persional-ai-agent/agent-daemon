@@ -329,3 +329,6 @@
 - `204-summary-cli-update-bundle-snapshots-restore-command.md`：新增 `update bundle snapshots-restore` 快照恢复命令
 - `205-summary-cli-update-bundle-snapshots-restore-plan-command.md`：新增 `update bundle snapshots-restore-plan` 快照恢复预演命令
 - `206-summary-cli-update-bundle-snapshots-delete-command.md`：新增 `update bundle snapshots-delete` 快照定向删除命令
+- `207-research-frontend-tui-parity.md`：Frontend 与 TUI 功能对齐差距调研（Phase 1）
+- `207-plan-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施计划
+- `207-summary-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施总结

@@ -168,6 +168,16 @@
 - 执行环境：在 `internal/tools/process.go` 之外抽象本地、Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox 等后端。
 - ACP 与自动化：按需新增 ACP adapter、cron scheduler、平台投递和任务状态存储。
 
+## Frontend / TUI 技术现状（Phase 1）
+
+- `web/` 子工程已建立（Vite + React + TypeScript），作为 dashboard 基座：
+  - `src/lib/api.ts` 已封装 `/v1/chat` 与 `/v1/chat/cancel`。
+  - `src/App.tsx` 已提供 `chat/sessions/tools/gateway/config` 五页入口，chat 页打通后端请求。
+  - 其余页面先提供产品骨架，后续继续补齐数据加载与交互。
+- `internal/cli/chat.go` 已新增 slash 命令分发层，用于“类 TUI”交互：
+  - `/help`、`/session`、`/tools`、`/history [n]`、`/reload`、`/clear`、`/tui`、`/quit`。
+  - 目标是在完整 TUI 框架落地前，先提供稳定的终端产品面。
+
 ## Hermes 功能对齐矩阵
 
 | Hermes 能力域 | Hermes 实现参考 | Go 当前实现 | 对齐状态 | 后续补齐建议 |

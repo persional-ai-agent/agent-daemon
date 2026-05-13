@@ -82,3 +82,9 @@
 ## 当前范围
 
 - 已实现：核心闭环、系统提示词动态装配、记忆回灌、工作区规则注入、上下文压缩、Hermes 68 工具名对齐 + toolsets 名称兼容（另含若干额外辅助工具）、并发子 Agent 委派、结构化事件流、持久化（SQLite）、CLI + HTTP API（同步/SSE/WebSocket）、CLI 配置管理（`config list|get|set` + `model show|providers|set` + `tools list|show|schemas|enable|disable` + `doctor` + `setup` + `setup wizard` + `bootstrap` + `version` + `update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall` + `gateway status|platforms|enable|disable|setup|run|start|stop|restart|install|uninstall|manifest`）、安全护栏（hardline 阻断 + 审批门禁 + 交互确认 + pattern 级授权 + tirith 可选预扫描）、MCP（http/stdio/OAuth CC/授权码/`/call` 流式 + 事件透传）、技能（索引注入 + 条件过滤 + sync 同步 + 预加载 + GitHub 搜索）、Provider（OpenAI/Anthropic/Codex 流式聚合 + 故障切换 + 熔断 + 并行竞速 + 多级级联 + 成本感知 + `model_stream_event` v2 完整字典）、多平台网关（Telegram + Discord + Slack + Yuanbao，含最小 pairing/queue/cancel/hooks 运维、最小进程/脚本安装管理、同 workdir 单实例锁、跨工作区 token lock、文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny`、Telegram 最小原生命令菜单/审批按钮/manifest 导出、Discord 最小原生 slash 命令含 `grant` / `revoke`、审批按钮与命令清单导出、Slack 最小原生审批按钮、通用 slash 命令入口与 manifest 导出、Yuanbao 最小审批快捷回复与 manifest 导出）
+
+## Frontend / TUI 迭代状态
+
+- Web（Phase 1）：已新增独立 `web/` 工程骨架（Vite + React），包含 `Chat / Sessions / Tools / Gateway / Config` 五页入口，其中 Chat 已打通 `/v1/chat` 与 `/v1/chat/cancel`。
+- CLI/TUI（Phase 1）：已为交互式 chat 增加 slash 命令面（`/help`、`/session`、`/tools`、`/history`、`/reload`、`/clear`、`/tui`），作为完整 TUI 落地前的过渡产品面。
+- 后续：继续分批补齐 web 数据页与完整 TUI 交互，目标是逐步对齐 Hermes 的前端与 TUI 体验。
