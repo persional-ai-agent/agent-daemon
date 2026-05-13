@@ -54,7 +54,7 @@
 |--------|----------|------|
 | Agent Loop | 已对齐 | 支持多轮推理、工具调用、工具结果回灌与最大迭代控制 |
 | 工具注册与分发 | 部分对齐 | 统一 schema、registry、dispatch、JSON 结果；已补最小 toolsets 过滤（可缩减 schema 面） |
-| 模型 API 模式 | 部分对齐 | 内置 OpenAI、Anthropic、Codex；未覆盖 Hermes 的 provider 插件生态 |
+| 模型 API 模式 | 部分对齐 | 内置 OpenAI、Anthropic、Codex；并支持最小 provider 插件（`type=provider` command 运行时接入）；仍未覆盖 Hermes 的完整 provider 插件生态 |
 | Provider 韧性 | 已对齐核心能力 | 已有 fallback、熔断、竞速、cascade、成本感知与流式事件标准化 |
 | 会话与记忆 | 部分对齐 | SQLite 会话、Markdown 记忆、session search；未实现 Hermes 的 FTS5 + LLM 摘要式检索和 memory provider 插件 |
 | 上下文管理 | 已对齐核心能力 | system prompt 重建、工作区规则注入、长会话压缩 |
@@ -72,7 +72,7 @@
 以下能力属于 Hermes 完整产品体验的一部分，但当前项目未实现或只保留最小骨架：
 
 - 全屏 TUI、完整安装器级 update 流程和更完整的 CLI 管理面
-- 18+ provider 与 provider 插件加载机制
+- 更完整的多 provider 生态能力（当前已支持最小 provider 插件加载，但尚未覆盖 Hermes 规模与流式/隔离能力）
 - 52 个 Hermes toolsets 的完整动态行为（按平台/环境动态过滤、UI 交互管理）
 - browser（真实浏览器/JS/DOM）、vision（模型推理）、tts（真实语音合成）、image_generate（真实 FAL 后端）等“能力级”实现
 - Docker、SSH、Singularity、Modal、Daytona、Vercel Sandbox 等终端后端

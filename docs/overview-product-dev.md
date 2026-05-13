@@ -183,7 +183,7 @@
 | Hermes 能力域 | Hermes 实现参考 | Go 当前实现 | 对齐状态 | 后续补齐建议 |
 |----------------|-----------------|-------------|----------|--------------|
 | Agent Loop | `run_agent.py`、`agent/prompt_builder.py` | `internal/agent` | 已对齐核心 | 保持事件协议稳定，避免把 UI 逻辑塞入 loop |
-| Provider runtime | `hermes_cli/runtime_provider.py`、`plugins/model-providers/` | `internal/model`、`internal/config` | 部分对齐 | 先抽象 provider profile，再增加更多 provider |
+| Provider runtime | `hermes_cli/runtime_provider.py`、`plugins/model-providers/` | `internal/model`、`internal/config` + provider 插件运行时（`type=provider` command 插件，`model providers` 可发现） | 部分对齐 | 继续补 provider profile、流式协议、签名/隔离与更丰富 provider 生态 |
 | Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go`、`toolsets.go` | 部分对齐 | 已补最小 toolsets 解析与 registry 过滤；后续补 availability check、动态 schema patch 与插件发现 |
 | Built-in tools | `tools/*`（Hermes tools-reference：68 tools） | 已对齐 68 工具名 + toolsets 名称兼容；部分工具为轻量实现/占位（browser/vision/tts 等） | 部分对齐 | 继续把占位逐步升级为“能力级”实现（真实浏览器、真实 TTS/vision/image backend 等） |
 | Terminal environments | `tools/environments/*` | `internal/tools/process.go` | 最小覆盖 | 抽象 Environment 接口后接 Docker/SSH 等后端 |
@@ -195,7 +195,7 @@
 | CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 部分对齐 | 已补最小 config/model/tools 查看与启停/doctor/`setup`/`setup wizard`/`bootstrap`/`version`/`update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall`/gateway 开关与 `gateway setup/run/start/stop/restart/install/uninstall`，且 update 安装脚本面已覆盖 `status/check/release/apply`；后续补完整安装器级 update 流，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
 | Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack/Yuanbao + `send_message` | 部分对齐 | 已补 HOME_CHANNEL 默认目标、Yuanbao 最小 inbound、Telegram/Discord/Slack 本地文件投递（MEDIA: / media_path）+ Yuanbao best-effort 媒体投递（COS 上传）+ 最小配对/slash command/队列中断/hooks 运维 + 最小 `gateway run/start/stop/restart/install/uninstall/manifest` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 token lock + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、通用 slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；后续补更多平台原生 slash UI、更完整 token lock 与更多平台 |
-| Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 已有 JSON manifest 发现、校验、启停（`plugins.disabled`）与 CLI 管理（`plugins list/show/validate/enable/disable`）；支持将 `type=tool` 插件按 schema+command 注册为运行时工具 | 部分对齐 | 后续补插件签名校验、沙箱隔离、版本兼容与安装发布流程 |
+| Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 已有 JSON manifest 发现、校验、启停（`plugins.disabled`）与 CLI 管理（`plugins list/show/validate/enable/disable`）；支持 `type=tool` 运行时工具注册 + `type=provider` 模型提供方插件注册 | 部分对齐 | 后续补插件签名校验、沙箱隔离、版本兼容与安装发布流程 |
 | ACP/IDE | `acp_adapter/` | 无 | 未覆盖 | 仅在 IDE 场景明确时补齐 |
 | Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 当前先覆盖 interval/one-shot 作业存储与调度；后续补 cron expr 计算、平台投递与链式上下文 |
 | Research/RL/trajectory | `batch_runner.py`、`environments/`、`trajectory_compressor.py` | 无 | 未覆盖 | 与 daemon 主路径解耦，作为独立扩展 |

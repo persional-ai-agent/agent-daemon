@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,8 +114,12 @@ func TestParseModelSetArgs(t *testing.T) {
 		t.Fatalf("parsed %s %s", provider, modelName)
 	}
 
-	if _, _, err := parseModelSetArgs([]string{"unknown", "model"}); err == nil {
-		t.Fatal("expected unsupported provider error")
+	provider, modelName, err = parseModelSetArgs([]string{"unknown", "model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "unknown" || modelName != "model" {
+		t.Fatalf("parsed %s %s", provider, modelName)
 	}
 }
 
@@ -423,5 +429,53 @@ func TestCheckPluginsConfig(t *testing.T) {
 	check := checkPluginsConfig(config.Config{Workdir: workdir})
 	if check.Status != "ok" {
 		t.Fatalf("plugins check status=%q detail=%q", check.Status, check.Detail)
+	}
+}
+
+func TestAvailableModelProvidersIncludesPluginProvider(t *testing.T) {
+	workdir := t.TempDir()
+	dir := filepath.Join(workdir, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"demo_provider","type":"provider","provider":{"command":"./provider.sh"}}`
+	if err := os.WriteFile(filepath.Join(dir, "provider.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	names := availableModelProviders(config.Config{Workdir: workdir})
+	if !containsName(names, "demo_provider") {
+		t.Fatalf("providers=%#v", names)
+	}
+}
+
+func TestBuildProviderClientFromPlugin(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell provider plugin test not supported on windows")
+	}
+	workdir := t.TempDir()
+	dir := filepath.Join(workdir, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(dir, "provider.sh")
+	body := "#!/usr/bin/env bash\ncat <<'EOF'\n{\"message\":{\"role\":\"assistant\",\"content\":\"plugin-provider-ok\"}}\nEOF\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"demo_provider","type":"provider","provider":{"command":"./provider.sh"}}`
+	if err := os.WriteFile(filepath.Join(dir, "provider.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{Workdir: workdir, ModelName: "x-model"}
+	client := buildProviderClient(cfg, "demo_provider")
+	if client == nil {
+		t.Fatal("expected plugin provider client")
+	}
+	msg, err := client.ChatCompletion(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Content != "plugin-provider-ok" {
+		t.Fatalf("content=%q", msg.Content)
 	}
 }

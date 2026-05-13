@@ -47,4 +47,15 @@ func TestValidateManifest(t *testing.T) {
 	if err := ValidateManifest(m); err == nil {
 		t.Fatal("expected missing command error")
 	}
+
+	pm := Manifest{
+		Name: "demo_provider",
+		Type: "provider",
+		Provider: &ProviderManifest{
+			Command: "./provider.sh",
+		},
+	}
+	if err := ValidateManifest(pm); err != nil {
+		t.Fatalf("expected valid provider manifest: %v", err)
+	}
 }

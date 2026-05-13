@@ -768,7 +768,7 @@ func runSetup(cfg config.Config, args []string) {
 	}
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	provider := fs.String("provider", "", "model provider (openai/anthropic/codex)")
+	provider := fs.String("provider", "", "model provider (openai/anthropic/codex or provider plugin name)")
 	modelName := fs.String("model", "", "model name")
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
@@ -783,7 +783,7 @@ func runSetup(cfg config.Config, args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+		log.Fatal("usage: agentd setup [-file path] -provider <openai|anthropic|codex|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 	}
 	selectedProvider := strings.ToLower(strings.TrimSpace(*provider))
 	if selectedProvider == "" {
@@ -792,7 +792,7 @@ func runSetup(cfg config.Config, args []string) {
 	if selectedProvider == "" {
 		selectedProvider = "openai"
 	}
-	if !containsName(supportedModelProviders(), selectedProvider) {
+	if !isProviderAvailable(cfg, selectedProvider) {
 		log.Fatalf("unsupported provider: %s", selectedProvider)
 	}
 	selectedModel := strings.TrimSpace(*modelName)
@@ -3417,8 +3417,8 @@ func runSetupWizard(cfg config.Config, args []string) {
 		currentProvider = "openai"
 	}
 	currentModel, currentBaseURL := currentModelConfig(cfg, currentProvider)
-	provider := promptInput(reader, "provider [openai/anthropic/codex]", currentProvider)
-	if !containsName(supportedModelProviders(), provider) {
+	provider := promptInput(reader, "provider [openai/anthropic/codex or plugin]", currentProvider)
+	if !isProviderAvailable(cfg, provider) {
 		log.Fatalf("unsupported provider: %s", provider)
 	}
 	if provider != currentProvider {
@@ -3432,7 +3432,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	baseURL := promptInput(reader, "base URL (optional)", currentBaseURL)
 	apiKey := promptInput(reader, "API key (optional)", "")
 	fallback := promptInput(reader, "fallback provider (optional)", strings.ToLower(strings.TrimSpace(cfg.ModelFallbackProvider)))
-	if fallback != "" && !containsName(supportedModelProviders(), fallback) {
+	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
 	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/telegram/discord/slack/yuanbao]", "none")))
@@ -3522,9 +3522,6 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 		written = append(written, apiKeyKey)
 	}
 	if fallback != "" {
-		if !containsName(supportedModelProviders(), fallback) {
-			return nil, "", fmt.Errorf("unsupported fallback provider: %s", fallback)
-		}
 		if err := config.SaveConfigValue(targetPath, "provider.fallback", fallback); err != nil {
 			return nil, "", err
 		}
@@ -3595,7 +3592,7 @@ func printConfigUsage() {
 
 func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd setup wizard [-file path]")
 }
 
@@ -3635,7 +3632,7 @@ func runModel(cfg config.Config, args []string) {
 		fmt.Printf("model=%s\n", modelName)
 		fmt.Printf("base_url=%s\n", baseURL)
 	case "providers":
-		for _, provider := range supportedModelProviders() {
+		for _, provider := range availableModelProviders(cfg) {
 			fmt.Println(provider)
 		}
 	case "set":
@@ -3646,6 +3643,9 @@ func runModel(cfg config.Config, args []string) {
 		provider, modelName, err := parseModelSetArgs(fs.Args())
 		if err != nil {
 			log.Fatal(err)
+		}
+		if !isProviderAvailable(cfg, provider) {
+			log.Fatalf("unsupported provider: %s", provider)
 		}
 		if err := saveModelSelection(*path, provider, modelName, *baseURL); err != nil {
 			log.Fatal(err)
@@ -3664,7 +3664,7 @@ func runModel(cfg config.Config, args []string) {
 func printModelUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd model show [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd model providers")
+	fmt.Fprintln(os.Stderr, "  agentd model providers  # includes builtins + provider plugins")
 	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider model")
 	fmt.Fprintln(os.Stderr, "  agentd model set [-file path] [-base-url url] provider:model")
 }
@@ -4049,6 +4049,9 @@ func checkProviderCredentials(cfg config.Config) doctorCheck {
 	provider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
 	if provider == "" {
 		provider = "openai"
+	}
+	if !containsName(supportedModelProviders(), provider) {
+		return doctorCheck{Name: "provider_credentials", Status: "ok", Detail: "plugin provider credentials managed by plugin runtime"}
 	}
 	keyName, value := selectedProviderKey(cfg, provider)
 	if strings.TrimSpace(value) == "" {
@@ -6206,6 +6209,20 @@ func supportedModelProviders() []string {
 	return []string{"openai", "anthropic", "codex"}
 }
 
+func availableModelProviders(cfg config.Config) []string {
+	out := append([]string{}, supportedModelProviders()...)
+	items, err := loadConfiguredPlugins(cfg)
+	if err != nil {
+		return out
+	}
+	out = append(out, plugins.ProviderNames(items)...)
+	return uniqueSortedNames(out)
+}
+
+func isProviderAvailable(cfg config.Config, provider string) bool {
+	return containsName(availableModelProviders(cfg), strings.ToLower(strings.TrimSpace(provider)))
+}
+
 func currentModelConfig(cfg config.Config, provider string) (string, string) {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "anthropic":
@@ -6237,12 +6254,16 @@ func normalizeModelSelection(provider, modelName string) (string, string, error)
 	if modelName == "" {
 		return "", "", fmt.Errorf("model is required")
 	}
+	if provider == "" {
+		return "", "", fmt.Errorf("provider is required")
+	}
 	for _, supported := range supportedModelProviders() {
 		if provider == supported {
 			return provider, modelName, nil
 		}
 	}
-	return "", "", fmt.Errorf("unsupported provider %q (supported: openai, anthropic, codex)", provider)
+	// Plugin providers are allowed at config level; availability is validated at runtime.
+	return provider, modelName, nil
 }
 
 func saveModelSelection(path, provider, modelName, baseURL string) error {
@@ -6282,8 +6303,10 @@ func providerAPIKeyConfigKey(provider string) string {
 		return "api.anthropic.api_key"
 	case "codex":
 		return "api.codex.api_key"
-	default:
+	case "openai":
 		return "api.api_key"
+	default:
+		return ""
 	}
 }
 
@@ -6641,6 +6664,11 @@ func buildModelClient(cfg config.Config) model.Client {
 
 	primaryProvider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
 	primary := buildProviderClient(cfg, primaryProvider)
+	if primary == nil {
+		log.Printf("primary provider %q unavailable; fallback to openai", primaryProvider)
+		primaryProvider = "openai"
+		primary = buildProviderClient(cfg, primaryProvider)
+	}
 	fallbackProvider := strings.ToLower(strings.TrimSpace(cfg.ModelFallbackProvider))
 	if fallbackProvider == "" || fallbackProvider == primaryProvider {
 		return primary
@@ -6678,9 +6706,22 @@ func buildProviderClient(cfg config.Config, provider string) model.Client {
 		client.UseStreaming = cfg.ModelUseStreaming
 		return client
 	default:
-		client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
-		client.UseStreaming = cfg.ModelUseStreaming
-		return client
+		items, err := loadConfiguredPlugins(cfg)
+		if err != nil {
+			log.Printf("provider plugin discovery failed (%s): %v", provider, err)
+			return nil
+		}
+		selectedModel, _ := currentModelConfig(cfg, provider)
+		pc, ok, err := plugins.NewProviderClient(provider, selectedModel, items)
+		if err != nil {
+			log.Printf("provider plugin load failed (%s): %v", provider, err)
+			return nil
+		}
+		if ok {
+			return pc
+		}
+		log.Printf("unknown provider: %s", provider)
+		return nil
 	}
 }
 

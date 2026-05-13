@@ -17,6 +17,7 @@ type Manifest struct {
 	Entry       string            `json:"entry,omitempty"`
 	Enabled     *bool             `json:"enabled,omitempty"`
 	Tool        *ToolManifest     `json:"tool,omitempty"`
+	Provider    *ProviderManifest `json:"provider,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	File        string            `json:"file,omitempty"`
 }
@@ -27,6 +28,13 @@ type ToolManifest struct {
 	Schema         map[string]any `json:"schema"`
 	TimeoutSeconds int            `json:"timeout_seconds,omitempty"`
 	PassContext    bool           `json:"pass_context,omitempty"`
+}
+
+type ProviderManifest struct {
+	Command        string   `json:"command"`
+	Args           []string `json:"args,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
+	Model          string   `json:"model,omitempty"`
 }
 
 func (m Manifest) IsEnabled() bool {
@@ -42,6 +50,7 @@ func ValidateManifest(m Manifest) error {
 	}
 	switch strings.ToLower(strings.TrimSpace(m.Type)) {
 	case "tool":
+	case "provider":
 	default:
 		return fmt.Errorf("unsupported plugin type: %q", m.Type)
 	}
@@ -54,6 +63,14 @@ func ValidateManifest(m Manifest) error {
 		}
 		if len(m.Tool.Schema) == 0 {
 			return fmt.Errorf("tool.schema is required")
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(m.Type), "provider") {
+		if m.Provider == nil {
+			return fmt.Errorf("provider spec is required for type=provider")
+		}
+		if strings.TrimSpace(m.Provider.Command) == "" {
+			return fmt.Errorf("provider.command is required")
 		}
 	}
 	return nil

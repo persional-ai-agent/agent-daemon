@@ -379,3 +379,4 @@
 - `252-summary-six-gap-closure-foundations.md`：六类差异基础收口（doctor 能力可观测、terminal backend、插件骨架、检索摘要、网关命令一致性）
 - `253-summary-tool-capability-closure-media-backends.md`：第 4 项工具能力收口（vision/image/tts 实后端回退链路完善）
 - `254-summary-plugin-runtime-and-cli-management.md`：插件运行时与 CLI 管理闭环补齐（manifest 校验、运行时注册、启停管理、doctor 检查）
+- `255-summary-provider-plugin-runtime-closure.md`：Provider 插件运行时闭环补齐（type=provider 契约、模型调用接入、CLI/doctor 对齐）
