@@ -85,3 +85,27 @@ pre {
 .error {
   color: #b42318;
 }
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.checkbox input {
+  width: auto;
+  margin: 0;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 12px;
+}
+
+.split > div {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}

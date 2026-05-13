@@ -100,6 +100,22 @@ func (s *stubSessionStore) ListRecentSessions(limit int) ([]map[string]any, erro
 	}, nil
 }
 
+func (s *stubSessionStore) LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error) {
+	_ = offset
+	_ = limit
+	return []core.Message{
+		{Role: "user", Content: "hello " + sessionID},
+		{Role: "assistant", Content: "world"},
+	}, nil
+}
+
+func (s *stubSessionStore) SessionStats(sessionID string) (map[string]any, error) {
+	return map[string]any{
+		"session_id":    sessionID,
+		"message_count": 2,
+	}, nil
+}
+
 func TestHandleChatStream(t *testing.T) {
 	srv := &Server{
 		Engine: &agent.Engine{
@@ -184,6 +200,18 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("tool_schema", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/tools/test_tool/schema", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"name":"test_tool"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("sessions", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/v1/ui/sessions?limit=2", nil)
@@ -193,6 +221,18 @@ func TestUIEndpoints(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), `"s1"`) {
 			t.Fatalf("expected session in response: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("session_detail", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/sessions/s1?offset=0&limit=2", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"session_id":"s1"`) || !strings.Contains(rec.Body.String(), `"messages"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})
 

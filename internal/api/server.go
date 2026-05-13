@@ -63,7 +63,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/ui/tools", s.handleUITools)
+	mux.HandleFunc("/v1/ui/tools/", s.handleUIToolSchema)
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
+	mux.HandleFunc("/v1/ui/sessions/", s.handleUISessionDetail)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	return mux
@@ -71,6 +73,11 @@ func (s *Server) Handler() http.Handler {
 
 type recentSessionsStore interface {
 	ListRecentSessions(limit int) ([]map[string]any, error)
+}
+
+type sessionDetailStore interface {
+	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
+	SessionStats(sessionID string) (map[string]any, error)
 }
 
 func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +95,36 @@ func (s *Server) handleUITools(w http.ResponseWriter, r *http.Request) {
 		"count": namesCount(names),
 		"tools": names,
 	})
+}
+
+func (s *Server) handleUIToolSchema(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.Registry == nil {
+		http.Error(w, "engine unavailable", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/v1/ui/tools/")
+	if !strings.HasSuffix(path, "/schema") {
+		http.NotFound(w, r)
+		return
+	}
+	name := strings.TrimSuffix(path, "/schema")
+	name = strings.TrimSpace(strings.Trim(name, "/"))
+	if name == "" {
+		http.Error(w, "tool name required", http.StatusBadRequest)
+		return
+	}
+	for _, schema := range s.Engine.Registry.Schemas() {
+		if schema.Function.Name == name {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(schema)
+			return
+		}
+	}
+	http.Error(w, "tool not found", http.StatusNotFound)
 }
 
 func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +156,58 @@ func (s *Server) handleUISessions(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"count":    len(rows),
 		"sessions": rows,
+	})
+}
+
+func (s *Server) handleUISessionDetail(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		http.Error(w, "session store unavailable", http.StatusInternalServerError)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sessionID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/ui/sessions/"))
+	if sessionID == "" {
+		http.Error(w, "session id required", http.StatusBadRequest)
+		return
+	}
+	detailer, ok := s.Engine.SessionStore.(sessionDetailStore)
+	if !ok {
+		http.Error(w, "session detail not supported", http.StatusNotImplemented)
+		return
+	}
+	offset := 0
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	msgs, err := detailer.LoadMessagesPage(sessionID, offset, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stats, err := detailer.SessionStats(sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"session_id": sessionID,
+		"offset":     offset,
+		"limit":      limit,
+		"count":      len(msgs),
+		"messages":   msgs,
+		"stats":      stats,
 	})
 }
 

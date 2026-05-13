@@ -93,8 +93,18 @@ export function getUISessions(limit = 20) {
   return request<UISessionsResponse>(`/v1/ui/sessions?limit=${limit}`);
 }
 
+export function getUISessionDetail(sessionID: string, offset = 0, limit = 100) {
+  return request<Record<string, unknown>>(
+    `/v1/ui/sessions/${encodeURIComponent(sessionID)}?offset=${offset}&limit=${limit}`
+  );
+}
+
 export function getUITools() {
   return request<UIToolsResponse>("/v1/ui/tools");
+}
+
+export function getUIToolSchema(name: string) {
+  return request<Record<string, unknown>>(`/v1/ui/tools/${encodeURIComponent(name)}/schema`);
 }
 
 export function getUIConfig() {
