@@ -63,9 +63,10 @@ go run .
 - `/bookmark add <name> [sid]` 保存会话书签
 - `/bookmark list` 查看会话书签
 - `/bookmark use <name>` 切换到书签会话
-- `/pending` 查看最近待审批项
-- `/approve <approval_id>` 同意待审批项
-- `/deny <approval_id>` 拒绝待审批项
+- `/pending [n]` 查看最近待审批项（支持列表）
+- `/approve [approval_id]` 同意待审批项（不传 id 默认最近一条）
+- `/deny [approval_id]` 拒绝待审批项（不传 id 默认最近一条）
+- `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/quit` 或 `/exit` 退出
 
 状态诊断：
@@ -73,6 +74,7 @@ go run .
 - 提示符：`tui[ok/ok]`、`tui[err/network]` 这类 `状态/错误码` 组合
 - `/status` 输出：`status=<ok|err> code=<ok|network|timeout|auth|request|server|unknown> detail=<详情>`
 - 启动时自动恢复最近会话与 endpoint（`~/.agent-daemon/ui-tui-state.json`）
+- 若状态文件损坏，会自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
 
 常用别名：
 

@@ -59,3 +59,7 @@
 - CLI 命令回归：`internal/cli/chat_test.go`
 - Web 构建自测：`npm --prefix web run build`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
+
+## 5. 运维文档
+
+- `docs/ui-tui-ops.md`：ui-tui 专项故障排查与运维手册

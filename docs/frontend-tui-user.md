@@ -71,7 +71,8 @@ go run .
 - `/events [n]`、`/events save <file>`：运行事件查看与导出
 - `/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]`：按格式和时间范围导出
 - `/bookmark add|list|use`：会话配置书签
-- `/pending`、`/approve <id>`、`/deny <id>`：终端内审批闭环
+- `/pending [n]`、`/approve [id]`、`/deny [id]`：终端内审批闭环（可默认处理最近一条）
+- `/reload-config`：运行时重载 `[ui-tui]` 配置
 
 稳定性与排障：
 
@@ -79,4 +80,5 @@ go run .
 - `/status` 可查看 `status/code/detail` 三元组，快速区分网络、超时、鉴权、请求参数或服务端错误。
 - 长连接在短暂断线时会自动重连（同 session 恢复），并给出重连提示。
 - 启动时会自动恢复上次会话与 endpoint。
+- 若状态文件损坏，会自动备份并重建，避免启动失败。
 - 运行烟测：`./ui-tui/e2e_smoke.sh`。

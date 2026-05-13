@@ -3,6 +3,8 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,6 +47,40 @@ func TestFindLatestPendingApproval(t *testing.T) {
 	}
 	if payload["status"] != "pending_approval" {
 		t.Fatalf("unexpected payload: %+v", payload)
+	}
+}
+
+func TestFindPendingApprovals(t *testing.T) {
+	msgs := []any{
+		map[string]any{"role": "tool", "content": `{"status":"pending_approval","approval_id":"ap-1","tool_name":"terminal","command":"rm -rf x"}`},
+		map[string]any{"role": "tool", "content": `{"status":"pending_approval","approval_id":"ap-2","tool_name":"terminal","command":"chmod 777 y"}`},
+	}
+	out := findPendingApprovals(msgs, 2)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(out))
+	}
+	if out[0]["approval_id"] != "ap-2" || out[1]["approval_id"] != "ap-1" {
+		t.Fatalf("unexpected order: %+v", out)
+	}
+}
+
+func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
+	dir := t.TempDir()
+	s := newState()
+	s.statePath = filepath.Join(dir, "ui-tui-state.json")
+	if err := os.WriteFile(s.statePath, []byte("{broken-json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.loadRuntimeState()
+	if _, err := os.Stat(s.statePath); err != nil {
+		t.Fatalf("state file should be recreated: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "ui-tui-state.json.corrupt.*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("expected corrupt backup file")
 	}
 }
 

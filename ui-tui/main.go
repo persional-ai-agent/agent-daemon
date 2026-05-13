@@ -136,6 +136,30 @@ func newState() *appState {
 	return st
 }
 
+func (s *appState) applyConfig(cfg appconfig.Config) {
+	if cfg.UITUIHistoryMaxLines > 0 {
+		s.historyMaxLines = cfg.UITUIHistoryMaxLines
+	}
+	if cfg.UITUIEventMaxItems > 0 {
+		s.eventMaxItems = cfg.UITUIEventMaxItems
+	}
+	if cfg.UITUIWSReadTimeoutSec > 0 {
+		s.wsReadTimeout = time.Duration(cfg.UITUIWSReadTimeoutSec) * time.Second
+	}
+	if cfg.UITUITurnTimeoutSec > 0 {
+		s.wsTurnTimeout = time.Duration(cfg.UITUITurnTimeoutSec) * time.Second
+	}
+	if cfg.UITUIReconnectMax >= 0 {
+		s.wsMaxReconnect = cfg.UITUIReconnectMax
+	}
+	if strings.TrimSpace(cfg.UITUIWSBase) != "" {
+		s.wsBase = strings.TrimSpace(cfg.UITUIWSBase)
+	}
+	if strings.TrimSpace(cfg.UITUIHTTPBase) != "" {
+		s.httpBase = strings.TrimRight(strings.TrimSpace(cfg.UITUIHTTPBase), "/")
+	}
+}
+
 func (s *appState) saveRuntimeState() error {
 	_ = os.MkdirAll(filepath.Dir(s.statePath), 0o755)
 	st := runtimeState{
@@ -155,6 +179,10 @@ func (s *appState) loadRuntimeState() {
 	}
 	var st runtimeState
 	if err := json.Unmarshal(bs, &st); err != nil {
+		backup := s.statePath + ".corrupt." + time.Now().Format("20060102T150405")
+		_ = os.WriteFile(backup, bs, 0o644)
+		_ = os.Remove(s.statePath)
+		_ = s.saveRuntimeState()
 		return
 	}
 	if strings.TrimSpace(st.SessionID) != "" {
@@ -255,13 +283,14 @@ func printHelp() {
 	fmt.Println("/history [n]          show local command history")
 	fmt.Println("/rerun <index>        rerun command from history")
 	fmt.Println("/events [n]           show recent runtime events")
-	fmt.Println("/events save <file>   save runtime events as json")
+	fmt.Println("/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]")
 	fmt.Println("/bookmark add <name>  save current session/api profile")
 	fmt.Println("/bookmark list        list bookmarks")
 	fmt.Println("/bookmark use <name>  restore session/api profile")
-	fmt.Println("/pending              show latest pending approval in session")
-	fmt.Println("/approve <id>         approve pending approval id")
-	fmt.Println("/deny <id>            deny pending approval id")
+	fmt.Println("/pending [n]          show latest pending approval(s) in session")
+	fmt.Println("/approve [id]         approve pending approval id (default latest)")
+	fmt.Println("/deny [id]            deny pending approval id (default latest)")
+	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -334,6 +363,50 @@ func findLatestPendingApproval(msgs []any) (string, map[string]any) {
 		}
 	}
 	return "", nil
+}
+
+func findPendingApprovals(msgs []any, limit int) []map[string]any {
+	if limit <= 0 {
+		limit = 1
+	}
+	out := make([]map[string]any, 0, limit)
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg := asMap(msgs[i])
+		if msg == nil {
+			continue
+		}
+		if role, _ := msg["role"].(string); role != "tool" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(content), &payload); err != nil {
+			continue
+		}
+		if status, _ := payload["status"].(string); status != "pending_approval" {
+			continue
+		}
+		id, _ := payload["approval_id"].(string)
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		item := map[string]any{
+			"approval_id": id,
+			"status":      "pending_approval",
+			"tool_name":   payload["tool_name"],
+			"command":     payload["command"],
+			"category":    payload["category"],
+			"instruction": payload["instruction"],
+		}
+		out = append(out, item)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
 }
 
 func (s *appState) confirmApproval(approvalID string, approve bool) (map[string]any, error) {
@@ -750,6 +823,22 @@ func main() {
 		case text == "/help":
 			printHelp()
 			s.setStatus(true, "ok", "help shown")
+		case text == "/reload-config":
+			cfg := appconfig.Load()
+			s.applyConfig(cfg)
+			_ = s.saveRuntimeState()
+			out := map[string]any{
+				"ws_base":                 s.wsBase,
+				"http_base":               s.httpBase,
+				"ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second),
+				"ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second),
+				"ws_reconnect_max":        s.wsMaxReconnect,
+				"history_max_lines":       s.historyMaxLines,
+				"event_max_items":         s.eventMaxItems,
+			}
+			s.lastJSON = out
+			printJSONMode(out, s.pretty)
+			s.setStatus(true, "ok", "config reloaded")
 		case text == "/status":
 			fmt.Printf("status=%s code=%s detail=%s\n", s.lastStatus, s.lastCode, s.lastDetail)
 		case text == "/health":
@@ -850,7 +939,14 @@ func main() {
 			}
 			printJSONMode(s.eventLog[start:], s.pretty)
 			s.setStatus(true, "ok", "events listed")
-		case text == "/pending":
+		case text == "/pending" || strings.HasPrefix(text, "/pending "):
+			parts := strings.Fields(text)
+			limit := 1
+			if len(parts) > 1 {
+				if v, err := strconv.Atoi(parts[1]); err == nil && v > 0 {
+					limit = v
+				}
+			}
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
@@ -858,21 +954,36 @@ func main() {
 				continue
 			}
 			msgs, _ := out["messages"].([]any)
-			id, payload := findLatestPendingApproval(msgs)
-			if id == "" {
+			items := findPendingApprovals(msgs, limit)
+			if len(items) == 0 {
 				fmt.Println("no pending approval found in recent session messages")
 				s.setStatus(false, "not_found", "no pending approval")
 				continue
 			}
-			fmt.Printf("pending approval id: %s\n", id)
-			printJSONMode(payload, s.pretty)
+			if limit <= 1 {
+				fmt.Printf("pending approval id: %v\n", items[0]["approval_id"])
+				printJSONMode(items[0], s.pretty)
+			} else {
+				printJSONMode(items, s.pretty)
+			}
 			s.setStatus(true, "ok", "pending approval found")
-		case strings.HasPrefix(text, "/approve "):
+		case text == "/approve" || strings.HasPrefix(text, "/approve "):
 			id := strings.TrimSpace(strings.TrimPrefix(text, "/approve "))
 			if id == "" {
-				fmt.Println("usage: /approve <approval_id>")
-				s.setStatus(false, "invalid_input", "approval id required")
-				continue
+				out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+				if err != nil {
+					fmt.Printf("[http-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				msgs, _ := out["messages"].([]any)
+				lastID, _ := findLatestPendingApproval(msgs)
+				if lastID == "" {
+					fmt.Println("no pending approval found; usage: /approve <approval_id>")
+					s.setStatus(false, "not_found", "no pending approval")
+					continue
+				}
+				id = lastID
 			}
 			out, err := s.confirmApproval(id, true)
 			if err != nil {
@@ -883,12 +994,23 @@ func main() {
 			s.lastJSON = out
 			printJSONMode(out, s.pretty)
 			s.setStatus(true, "ok", "approval confirmed")
-		case strings.HasPrefix(text, "/deny "):
+		case text == "/deny" || strings.HasPrefix(text, "/deny "):
 			id := strings.TrimSpace(strings.TrimPrefix(text, "/deny "))
 			if id == "" {
-				fmt.Println("usage: /deny <approval_id>")
-				s.setStatus(false, "invalid_input", "approval id required")
-				continue
+				out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+				if err != nil {
+					fmt.Printf("[http-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				msgs, _ := out["messages"].([]any)
+				lastID, _ := findLatestPendingApproval(msgs)
+				if lastID == "" {
+					fmt.Println("no pending approval found; usage: /deny <approval_id>")
+					s.setStatus(false, "not_found", "no pending approval")
+					continue
+				}
+				id = lastID
 			}
 			out, err := s.confirmApproval(id, false)
 			if err != nil {
