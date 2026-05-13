@@ -86,6 +86,7 @@ go run . --no-doctor
 - 提示符：`tui[ok/ok]`、`tui[err/network]` 这类 `状态/错误码` 组合
 - `/status` 输出：`status=<ok|err> code=<ok|network|timeout|auth|request|server|unknown> detail=<详情>`
 - `/diag` 输出：`active_transport/reconnect_count/fallback_hint/last_error_code` 等实时字段
+- 诊断包 schema：`diag.v1`（见 `docs/api/diagnostics.bundle.schema.json`，与 Web 导出对齐）
 - 启动时自动恢复最近会话与 endpoint（`~/.agent-daemon/ui-tui-state.json`）
 - 若状态文件损坏，会自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
 - 默认启动会自动执行一次 doctor（可通过 `[ui-tui] auto_doctor=false` 或 `--no-doctor` 关闭）

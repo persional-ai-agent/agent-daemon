@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: test contract-test contract-replay contract-ws-replay contract-coverage contract-diff contract-check contract-release
+.PHONY: test contract-test contract-replay contract-ws-replay contract-coverage contract-diff diag-check contract-check contract-release
 
 test:
 	go test ./...
@@ -29,7 +29,10 @@ contract-diff:
 		-target docs/api/ui-chat-contract.openapi.yaml \
 		-report artifacts/contract-diff.json
 
-contract-check: contract-test contract-replay contract-ws-replay contract-coverage contract-diff
+diag-check:
+	go test ./scripts/diag_bundle -count=1
+
+contract-check: contract-test contract-replay contract-ws-replay contract-coverage contract-diff diag-check
 
 contract-release: contract-check
 	mkdir -p docs/api/versions/v1

@@ -5,6 +5,7 @@
 - `/v1/chat`
 - `/v1/chat/cancel`
 - `/v1/chat/ws`（事件内含 `api_version` / `compat`）
+- 诊断包导出（Web/ui-tui）：`diag.v1`
 
 当前冻结值：
 - `api_version = v1`
@@ -50,12 +51,23 @@
 ## 工具链入口
 
 - 本地检查：`make contract-check`
+- 诊断包校验：`go run ./scripts/diag_bundle -file <diag.json>`
 - 基线发布：`make contract-release`
 - CI：`.github/workflows/contract-guard.yml`
 - Diff 报告产物：`artifacts/contract-diff.json`
 - Replay 报告产物：`artifacts/contract-replay.json`
 - Coverage 报告产物：`artifacts/contract-coverage.json`
 - WS Replay 报告产物：`artifacts/contract-ws-replay.json`
+
+## 诊断包契约
+
+- 统一 schema：`docs/api/diagnostics.bundle.schema.json`
+- `source` 枚举：`web | ui-tui`
+- `schema_version` 固定：`diag.v1`
+- 关键枚举字段：
+  - `configured_transport` / `active_transport`：`ws | sse`
+  - `timeout_action`：`wait | reconnect | cancel`
+  - `reconnect_status`：`connecting | resumed | degraded | failed`
 
 ## Breaking 变更声明
 

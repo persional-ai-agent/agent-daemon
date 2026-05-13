@@ -652,35 +652,32 @@ func (s *appState) setErrStatus(err error) {
 
 func (s *appState) diagnosticsSnapshot() map[string]any {
 	return map[string]any{
-		"session_id":        s.session,
-		"turn_id":           s.lastTurnID,
-		"active_transport":  s.activeTransport,
-		"reconnect_enabled": s.reconnectEnabled,
-		"reconnect_state":   s.reconnectState,
-		"reconnect_count":   s.reconnectCount,
-		"max_reconnect":     s.wsMaxReconnect,
-		"timeout_action":    s.timeoutAction,
-		"read_timeout_sec":  int(s.wsReadTimeout / time.Second),
-		"turn_timeout_sec":  int(s.wsTurnTimeout / time.Second),
-		"fallback_hint":     s.fallbackHint,
-		"last_error_code":   s.lastErrorCode,
-		"last_error_text":   s.lastErrorText,
-		"event_count":       len(s.eventLog),
-		"updated_at":        s.diagUpdatedAt,
+		"schema_version":       "diag.v1",
+		"source":               "ui-tui",
+		"exported_at":          time.Now().Format(time.RFC3339),
+		"session_id":           s.session,
+		"turn_id":              s.lastTurnID,
+		"stream_mode":          true,
+		"configured_transport": "ws",
+		"active_transport":     s.activeTransport,
+		"reconnect_status":     s.reconnectState,
+		"reconnect_count":      s.reconnectCount,
+		"timeout_action":       s.timeoutAction,
+		"read_timeout_sec":     int(s.wsReadTimeout / time.Second),
+		"turn_timeout_sec":     int(s.wsTurnTimeout / time.Second),
+		"fallback_hint":        s.fallbackHint,
+		"last_error_code":      s.lastErrorCode,
+		"error_text":           s.lastErrorText,
+		"events":               s.eventLog,
+		"reconnect_enabled":    s.reconnectEnabled,
+		"max_reconnect":        s.wsMaxReconnect,
+		"event_count":          len(s.eventLog),
+		"updated_at":           s.diagUpdatedAt,
 	}
 }
 
 func (s *appState) exportDiagnostics(path string) error {
-	payload := map[string]any{
-		"exported_at": time.Now().Format(time.RFC3339),
-		"diagnostics": s.diagnosticsSnapshot(),
-		"runtime_state": map[string]any{
-			"ws_base":   s.wsBase,
-			"http_base": s.httpBase,
-			"view_mode": s.viewMode,
-		},
-		"recent_events": s.eventLog,
-	}
+	payload := s.diagnosticsSnapshot()
 	bs, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return err

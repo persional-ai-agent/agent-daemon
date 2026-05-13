@@ -168,12 +168,17 @@ func TestExportDiagnostics(t *testing.T) {
 	if err := json.Unmarshal(bs, &payload); err != nil {
 		t.Fatalf("unmarshal diag file: %v", err)
 	}
-	diag, _ := payload["diagnostics"].(map[string]any)
-	if diag["session_id"] != "diag-session" {
-		t.Fatalf("unexpected session_id: %v", diag["session_id"])
+	if payload["schema_version"] != "diag.v1" {
+		t.Fatalf("unexpected schema_version: %v", payload["schema_version"])
 	}
-	if diag["reconnect_count"] != float64(2) {
-		t.Fatalf("unexpected reconnect_count: %v", diag["reconnect_count"])
+	if payload["source"] != "ui-tui" {
+		t.Fatalf("unexpected source: %v", payload["source"])
+	}
+	if payload["session_id"] != "diag-session" {
+		t.Fatalf("unexpected session_id: %v", payload["session_id"])
+	}
+	if payload["reconnect_count"] != float64(2) {
+		t.Fatalf("unexpected reconnect_count: %v", payload["reconnect_count"])
 	}
 }
 

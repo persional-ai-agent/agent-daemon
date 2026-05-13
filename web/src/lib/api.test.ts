@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTransportFallbackEvent, normalizeAPIError, streamEventDedupeKey } from "./api";
+import { buildDiagnosticsBundle } from "./diagnostics";
 
 describe("normalizeAPIError", () => {
   it("prefers structured error fields", () => {
@@ -48,5 +49,30 @@ describe("createTransportFallbackEvent", () => {
       reason: "WS_CLOSED",
       at: "2026-05-13T10:00:00.000Z"
     });
+  });
+});
+
+describe("buildDiagnosticsBundle", () => {
+  it("returns stable v1 bundle shape", () => {
+    const out = buildDiagnosticsBundle({
+      session_id: "s1",
+      turn_id: "t1",
+      stream_mode: true,
+      configured_transport: "ws",
+      active_transport: "sse",
+      reconnect_status: "degraded",
+      reconnect_count: 1,
+      timeout_action: "reconnect",
+      read_timeout_sec: 15,
+      turn_timeout_sec: 120,
+      fallback_hint: "ws->sse",
+      last_error_code: "timeout",
+      error_text: "read timeout",
+      events: []
+    });
+    expect(out.schema_version).toBe("diag.v1");
+    expect(out.source).toBe("web");
+    expect(out.session_id).toBe("s1");
+    expect(out.active_transport).toBe("sse");
   });
 });

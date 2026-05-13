@@ -18,6 +18,7 @@ import {
   type StreamTimeoutAction,
   type StreamEvent
 } from "./lib/api";
+import { buildDiagnosticsBundle } from "./lib/diagnostics";
 
 type Tab = "chat" | "sessions" | "tools" | "gateway" | "config";
 
@@ -134,8 +135,7 @@ export function App() {
   }
 
   function exportDiagnostics() {
-    const payload = {
-      exported_at: new Date().toISOString(),
+    const payload = buildDiagnosticsBundle({
       session_id: sessionID,
       turn_id: lastTurnID,
       stream_mode: streamMode,
@@ -149,8 +149,8 @@ export function App() {
       fallback_hint: fallbackHint,
       last_error_code: lastErrorCode,
       error_text: error,
-      timeline
-    };
+      events: timeline.map((t) => ({ ts: t.ts, event: t.event, data: t.data }))
+    });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
