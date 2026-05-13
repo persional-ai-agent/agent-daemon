@@ -27,6 +27,8 @@
 - Header：`X-Agent-UI-API-Version`、`X-Agent-UI-API-Compat`
 - Success：`{ ok: true, api_version, compat, ...payload }`
 - Error：`{ ok: false, error: { code, message }, api_version, compat }`
+- 机器可读契约：`docs/api/ui-chat-contract.openapi.yaml`
+- 版本兼容策略：`docs/api/contract-versioning.md`
 
 ## 2. 后端注入点
 

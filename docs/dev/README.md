@@ -361,3 +361,4 @@
 - `234-summary-cli-align-ui-contract-semantics.md`：CLI 输出语义对齐 UI 契约（ok/error.code/error.message）
 - `235-summary-chat-api-contract-alignment.md`：/v1/chat* 接口错误契约统一与兼容对齐
 - `236-summary-contract-consumer-regression.md`：契约消费者回归补齐（UI/Chat/CLI）
+- `237-summary-contract-governance-automation.md`：契约治理自动化（快照测试/CI/OpenAPI/版本策略）

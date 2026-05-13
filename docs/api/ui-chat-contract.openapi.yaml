@@ -1,0 +1,377 @@
+openapi: 3.0.3
+info:
+  title: Agent Daemon UI/Chat Contract
+  version: "v1"
+  description: Machine-readable contract for /v1/ui/* and /v1/chat*.
+servers:
+  - url: http://127.0.0.1:8080
+components:
+  headers:
+    XAgentUIApiVersion:
+      description: Contract major version.
+      schema:
+        type: string
+        example: v1
+    XAgentUIApiCompat:
+      description: Backward compatibility freeze date.
+      schema:
+        type: string
+        example: "2026-05-13"
+  schemas:
+    ErrorBody:
+      type: object
+      required: [ok, api_version, compat, error]
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        api_version:
+          type: string
+          enum: [v1]
+        compat:
+          type: string
+          enum: ["2026-05-13"]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    UISuccessEnvelope:
+      type: object
+      required: [ok, api_version, compat]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        api_version:
+          type: string
+          enum: [v1]
+        compat:
+          type: string
+          enum: ["2026-05-13"]
+paths:
+  /v1/ui/tools:
+    get:
+      responses:
+        "200":
+          description: Tool list
+          headers:
+            X-Agent-UI-API-Version:
+              $ref: "#/components/headers/XAgentUIApiVersion"
+            X-Agent-UI-API-Compat:
+              $ref: "#/components/headers/XAgentUIApiCompat"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [count, tools]
+                    properties:
+                      count:
+                        type: integer
+                      tools:
+                        type: array
+                        items:
+                          type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/sessions:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [count, sessions]
+                    properties:
+                      count:
+                        type: integer
+                      sessions:
+                        type: array
+                        items:
+                          type: object
+  /v1/ui/sessions/{session_id}:
+    get:
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [session_id, messages, stats]
+                    properties:
+                      session_id:
+                        type: string
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                      stats:
+                        type: object
+  /v1/ui/config:
+    get:
+      responses:
+        "200":
+          description: Config snapshot
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [snapshot]
+                    properties:
+                      snapshot:
+                        type: object
+  /v1/ui/config/set:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+      responses:
+        "200":
+          description: Config update result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+  /v1/ui/gateway/status:
+    get:
+      responses:
+        "200":
+          description: Gateway status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [status]
+                    properties:
+                      status:
+                        type: object
+  /v1/ui/gateway/action:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [enable, disable]
+      responses:
+        "200":
+          description: Gateway action result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+  /v1/ui/approval/confirm:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, approval_id, approve]
+              properties:
+                session_id:
+                  type: string
+                approval_id:
+                  type: string
+                approve:
+                  type: boolean
+      responses:
+        "200":
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+  /v1/chat:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                session_id:
+                  type: string
+                message:
+                  type: string
+      responses:
+        "200":
+          description: Chat result with compatibility fields
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, api_version, compat, result]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+                  api_version:
+                    type: string
+                    enum: [v1]
+                  compat:
+                    type: string
+                    enum: ["2026-05-13"]
+                  result:
+                    type: object
+                    required: [session_id, final_response, messages, turns_used, finished_naturally, summary]
+                    properties:
+                      session_id:
+                        type: string
+                      final_response:
+                        type: string
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                      turns_used:
+                        type: integer
+                      finished_naturally:
+                        type: boolean
+                      summary:
+                        type: object
+                  session_id:
+                    type: string
+                  final_response:
+                    type: string
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                  turns_used:
+                    type: integer
+                  finished_naturally:
+                    type: boolean
+                  summary:
+                    type: object
+        "4XX":
+          description: Chat error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /v1/chat/cancel:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+      responses:
+        "200":
+          description: Cancel result with compatibility fields
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, api_version, compat, result]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+                  api_version:
+                    type: string
+                    enum: [v1]
+                  compat:
+                    type: string
+                    enum: ["2026-05-13"]
+                  result:
+                    type: object
+                    required: [session_id, cancelled]
+                    properties:
+                      session_id:
+                        type: string
+                      cancelled:
+                        type: boolean
+                  session_id:
+                    type: string
+                  cancelled:
+                    type: boolean
+        "4XX":
+          description: Cancel error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"

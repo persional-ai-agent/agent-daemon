@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": true,
+    "api_version": "v1",
+    "compat": "2026-05-13",
+    "result": {
+      "session_id": "s-cancel",
+      "cancelled": true
+    },
+    "session_id": "s-cancel",
+    "cancelled": true
+  }
+}

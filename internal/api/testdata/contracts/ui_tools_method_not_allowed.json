@@ -1,0 +1,16 @@
+{
+  "status": 500,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": false,
+    "error": {
+      "code": "engine_unavailable",
+      "message": "engine unavailable"
+    },
+    "api_version": "v1",
+    "compat": "2026-05-13"
+  }
+}
