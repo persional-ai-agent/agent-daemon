@@ -315,6 +315,21 @@ func TestBrowserSchemasDocumentLimitBehavior(t *testing.T) {
 	check("browser_console", browserConsoleParams(), "default 200")
 }
 
+func TestBrowserScrollSchemaDocumentsDefaults(t *testing.T) {
+	params := browserScrollParams()
+	props, _ := params["properties"].(map[string]any)
+	dir, _ := props["direction"].(map[string]any)
+	amount, _ := props["amount"].(map[string]any)
+	dirDesc, _ := dir["description"].(string)
+	amountDesc, _ := amount["description"].(string)
+	if !strings.Contains(dirDesc, "default down") {
+		t.Fatalf("direction description=%q, want default down", dirDesc)
+	}
+	if !strings.Contains(amountDesc, "default 1") || !strings.Contains(amountDesc, "max 100") {
+		t.Fatalf("amount description=%q, want default/max hint", amountDesc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
