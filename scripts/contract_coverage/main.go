@@ -54,7 +54,7 @@ func loadOpenAPIOps(path string) (map[string]struct{}, error) {
 				continue
 			}
 			op := m + " " + p
-			if strings.HasPrefix(p, "/v1/ui/") || op == "POST /v1/chat" || op == "POST /v1/chat/cancel" {
+			if strings.HasPrefix(p, "/v1/ui/") || op == "POST /v1/chat" || op == "POST /v1/chat/stream" || op == "POST /v1/chat/cancel" {
 				out[op] = struct{}{}
 			}
 		}

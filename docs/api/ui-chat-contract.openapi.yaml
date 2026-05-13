@@ -348,6 +348,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/chat/stream:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                session_id:
+                  type: string
+                message:
+                  type: string
+      responses:
+        "200":
+          description: SSE stream response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "4XX":
+          description: Stream setup error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/chat/cancel:
     post:
       requestBody:

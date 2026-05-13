@@ -90,6 +90,22 @@
     "snapshot": "chat_success"
   },
   {
+    "name": "chat_stream_success",
+    "method": "POST",
+    "path": "/v1/chat/stream",
+    "contract_path": "/v1/chat/stream",
+    "content_type": "application/json",
+    "body": {
+      "session_id": "s-stream",
+      "message": "ping"
+    },
+    "expect_sse": true,
+    "expect_events": [
+      "event: session",
+      "event: result"
+    ]
+  },
+  {
     "name": "chat_cancel_success",
     "method": "POST",
     "path": "/v1/chat/cancel",

@@ -71,7 +71,7 @@
 - 参数（path/query）`required` 与 `type` 变化
 - enum 收缩（删除已有值，breaking）
 - HTTP 回放测试：固定请求样例执行 + OpenAPI + 快照双校验
-- 覆盖率门禁：核心端点（`/v1/ui/*` + `POST /v1/chat` + `POST /v1/chat/cancel`）必须 100%
+- 覆盖率门禁：核心端点（`/v1/ui/*` + `POST /v1/chat` + `POST /v1/chat/stream` + `POST /v1/chat/cancel`）必须 100%
 
 ## 新增接口规则
 

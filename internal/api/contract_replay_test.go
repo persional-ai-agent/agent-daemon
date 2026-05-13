@@ -24,6 +24,8 @@ type replayCase struct {
 	ContentType string         `json:"content_type,omitempty"`
 	Body        map[string]any `json:"body,omitempty"`
 	Snapshot    string         `json:"snapshot"`
+	ExpectSSE   bool           `json:"expect_sse,omitempty"`
+	ExpectEvents []string      `json:"expect_events,omitempty"`
 }
 
 type replayResult struct {
@@ -163,6 +165,19 @@ func assertReplayOpenAPI(t *testing.T, spec openAPISpec, rc replayCase, rec *htt
 	}
 }
 
+func assertReplaySSE(t *testing.T, rc replayCase, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("expected text/event-stream, got %q", rec.Header().Get("Content-Type"))
+	}
+	out := rec.Body.String()
+	for _, ev := range rc.ExpectEvents {
+		if !strings.Contains(out, ev) {
+			t.Fatalf("missing sse event marker %q in body=%s", ev, out)
+		}
+	}
+}
+
 func writeReplayReport(t *testing.T, results []replayResult) {
 	t.Helper()
 	reportPath := strings.TrimSpace(os.Getenv("CONTRACT_REPLAY_REPORT"))
@@ -256,6 +271,12 @@ func TestContractReplay(t *testing.T) {
 				srv.mu.Unlock()
 			}
 			srv.Handler().ServeHTTP(rec, req)
+			if tc.ExpectSSE {
+				assertReplaySSE(t, tc, rec)
+				assertReplayOpenAPI(t, spec, tc, rec, map[string]any{})
+				results = append(results, replayResult{Name: tc.Name, Status: rec.Code, Pass: true})
+				return
+			}
 			body := decodeJSONMap(t, rec)
 			assertReplayOpenAPI(t, spec, tc, rec, body)
 			headers := map[string]any{
