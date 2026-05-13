@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
@@ -60,5 +61,15 @@ func TestSendMessageSchemaActionIsOptional(t *testing.T) {
 	required, _ := schema.Function.Parameters["required"].([]string)
 	if len(required) != 0 && !reflect.DeepEqual(required, []string{}) {
 		t.Fatalf("required=%v, want empty", required)
+	}
+}
+
+func TestSendMessageSchemaDocumentsDefaultAction(t *testing.T) {
+	schema := NewSendMessageTool().Schema()
+	props, _ := schema.Function.Parameters["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	desc, _ := action["description"].(string)
+	if !strings.Contains(desc, "default: send") {
+		t.Fatalf("send_message action description=%q, want default hint", desc)
 	}
 }

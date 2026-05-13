@@ -29,7 +29,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 				"properties": map[string]any{
 					"action": map[string]any{
 						"type":        "string",
-						"description": "Action to perform",
+						"description": "Action to perform (default: send)",
 						"enum":        []string{"send", "list"},
 					},
 					"target": map[string]any{
