@@ -29,8 +29,13 @@ export function App() {
   const [timeline, setTimeline] = useState<Array<{ ts: string; event: string; data: unknown }>>([]);
   const [sessions, setSessions] = useState<Array<{ session_id: string; last_seen?: string }>>([]);
   const [sessionDetail, setSessionDetail] = useState<Record<string, unknown> | null>(null);
+  const [sessionOffset, setSessionOffset] = useState(0);
+  const [sessionPageSize, setSessionPageSize] = useState(50);
+  const [selectedSession, setSelectedSession] = useState("");
   const [tools, setTools] = useState<string[]>([]);
   const [toolSchema, setToolSchema] = useState<Record<string, unknown> | null>(null);
+  const [toolFilter, setToolFilter] = useState("");
+  const [selectedTool, setSelectedTool] = useState("");
   const [gatewayStatus, setGatewayStatus] = useState<Record<string, unknown> | null>(null);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [configKey, setConfigKey] = useState("api.type");
@@ -79,7 +84,9 @@ export function App() {
         .then((r) => {
           setSessions(r.sessions);
           if (r.sessions.length > 0) {
-            return getUISessionDetail(r.sessions[0].session_id, 0, 50);
+            setSelectedSession(r.sessions[0].session_id);
+            setSessionOffset(0);
+            return getUISessionDetail(r.sessions[0].session_id, 0, sessionPageSize);
           }
           return null;
         })
@@ -91,6 +98,7 @@ export function App() {
         .then((r) => {
           setTools(r.tools);
           if (r.tools.length > 0) {
+            setSelectedTool(r.tools[0]);
             return getUIToolSchema(r.tools[0]);
           }
           return null;
@@ -107,10 +115,20 @@ export function App() {
   }, [tab]);
 
   function pickSession(id: string) {
-    getUISessionDetail(id, 0, 50).then(setSessionDetail).catch((e) => setError(String(e)));
+    setSelectedSession(id);
+    setSessionOffset(0);
+    getUISessionDetail(id, 0, sessionPageSize).then(setSessionDetail).catch((e) => setError(String(e)));
+  }
+
+  function changeSessionPage(nextOffset: number) {
+    if (!selectedSession) return;
+    const offset = Math.max(0, nextOffset);
+    setSessionOffset(offset);
+    getUISessionDetail(selectedSession, offset, sessionPageSize).then(setSessionDetail).catch((e) => setError(String(e)));
   }
 
   function pickTool(name: string) {
+    setSelectedTool(name);
     getUIToolSchema(name).then(setToolSchema).catch((e) => setError(String(e)));
   }
 
@@ -134,6 +152,8 @@ export function App() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  const filteredTools = tools.filter((t) => t.toLowerCase().includes(toolFilter.toLowerCase()));
 
   return (
     <div className="page">
@@ -184,7 +204,14 @@ export function App() {
                   </button>
                 ))}
               </div>
-              <pre>{JSON.stringify(sessionDetail, null, 2)}</pre>
+              <div>
+                <div className="row">
+                  <button onClick={() => changeSessionPage(sessionOffset - sessionPageSize)}>上一页</button>
+                  <button onClick={() => changeSessionPage(sessionOffset + sessionPageSize)}>下一页</button>
+                  <button onClick={() => selectedSession && changeSessionPage(sessionOffset)}>刷新</button>
+                </div>
+                <pre>{JSON.stringify(sessionDetail, null, 2)}</pre>
+              </div>
             </div>
           </section>
         )}
@@ -193,9 +220,10 @@ export function App() {
             <h2>tools ({tools.length})</h2>
             <div className="split">
               <div>
-                {tools.map((t) => (
+                <input placeholder="筛选工具" value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} />
+                {filteredTools.map((t) => (
                   <button key={t} onClick={() => pickTool(t)}>
-                    {t}
+                    {selectedTool === t ? `* ${t}` : t}
                   </button>
                 ))}
               </div>
@@ -209,6 +237,7 @@ export function App() {
             <div className="row">
               <button onClick={() => gatewayAction("enable")}>启用网关</button>
               <button onClick={() => gatewayAction("disable")}>禁用网关</button>
+              <button onClick={() => getUIGatewayStatus().then(setGatewayStatus).catch((e) => setError(String(e)))}>刷新状态</button>
             </div>
             <pre>{JSON.stringify(gatewayStatus, null, 2)}</pre>
           </section>
@@ -222,6 +251,7 @@ export function App() {
             <input value={configValue} onChange={(e) => setConfigValue(e.target.value)} />
             <div className="row">
               <button onClick={applyConfig}>写入配置</button>
+              <button onClick={() => getUIConfig().then(setConfig).catch((e) => setError(String(e)))}>刷新快照</button>
             </div>
             <pre>{JSON.stringify(config, null, 2)}</pre>
           </section>

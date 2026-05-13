@@ -88,3 +88,5 @@
 - Web（Phase 1）：已新增独立 `web/` 工程骨架（Vite + React），包含 `Chat / Sessions / Tools / Gateway / Config` 五页入口，其中 Chat 已打通 `/v1/chat` 与 `/v1/chat/cancel`。
 - CLI/TUI（Phase 1）：已为交互式 chat 增加 slash 命令面（`/help`、`/session`、`/tools`、`/history`、`/reload`、`/clear`、`/tui`），作为完整 TUI 落地前的过渡产品面。
 - 后续：继续分批补齐 web 数据页与完整 TUI 交互，目标是逐步对齐 Hermes 的前端与 TUI 体验。
+- 使用文档：`docs/frontend-tui-user.md`
+- 开发文档：`docs/frontend-tui-dev.md`

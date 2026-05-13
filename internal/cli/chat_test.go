@@ -23,6 +23,36 @@ func (s *testSessionStore) LoadMessages(_ string, _ int) ([]core.Message, error)
 	return out, nil
 }
 
+func (s *testSessionStore) ListRecentSessions(limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return []map[string]any{
+		{"session_id": "s1", "last_seen": "2026-05-13T00:00:00Z"},
+	}, nil
+}
+
+func (s *testSessionStore) LoadMessagesPage(_ string, offset, limit int) ([]core.Message, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	start := offset
+	if start > len(s.msgs) {
+		start = len(s.msgs)
+	}
+	end := start + limit
+	if end > len(s.msgs) {
+		end = len(s.msgs)
+	}
+	out := make([]core.Message, end-start)
+	copy(out, s.msgs[start:end])
+	return out, nil
+}
+
+func (s *testSessionStore) SessionStats(sessionID string) (map[string]any, error) {
+	return map[string]any{"session_id": sessionID, "message_count": len(s.msgs)}, nil
+}
+
 func makeEngineForSlashTests(msgs []core.Message) *agent.Engine {
 	reg := tools.NewRegistry()
 	reg.Register(tools.NewSendMessageTool())
@@ -62,5 +92,16 @@ func TestHandleSlashCommandReload(t *testing.T) {
 	}
 	if len(next) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(next))
+	}
+}
+
+func TestHandleSlashCommandStats(t *testing.T) {
+	eng := makeEngineForSlashTests([]core.Message{{Role: "user", Content: "a"}})
+	_, _, handled, err := handleSlashCommand("/stats", "s1", "sp", nil, eng)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !handled {
+		t.Fatal("expected handled=true")
 	}
 }

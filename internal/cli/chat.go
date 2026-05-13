@@ -14,6 +14,15 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 )
 
+type sessionLister interface {
+	ListRecentSessions(limit int) ([]map[string]any, error)
+}
+
+type sessionDetailer interface {
+	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
+	SessionStats(sessionID string) (map[string]any, error)
+}
+
 func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, preloadSkills string) error {
 	reader := bufio.NewReader(os.Stdin)
 	history, _ := eng.SessionStore.LoadMessages(sessionID, 500)
@@ -101,6 +110,93 @@ func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Mes
 		}
 		printHistoryPreview(history, limit)
 		return history, systemPrompt, true, nil
+	case "/sessions":
+		limit := 10
+		if len(fields) > 1 {
+			v, err := strconv.Atoi(fields[1])
+			if err != nil || v <= 0 {
+				fmt.Println("用法: /sessions [n]  (n 必须是正整数)")
+				return history, systemPrompt, true, nil
+			}
+			limit = v
+		}
+		if eng.SessionStore == nil {
+			fmt.Println("session store unavailable")
+			return history, systemPrompt, true, nil
+		}
+		lister, ok := eng.SessionStore.(sessionLister)
+		if !ok {
+			fmt.Println("当前会话存储不支持会话列表。")
+			return history, systemPrompt, true, nil
+		}
+		rows, err := lister.ListRecentSessions(limit)
+		if err != nil {
+			return history, systemPrompt, true, err
+		}
+		fmt.Printf("最近会话（%d）\n", len(rows))
+		for i, row := range rows {
+			fmt.Printf("%d. %v  %v\n", i+1, row["session_id"], row["last_seen"])
+		}
+		return history, systemPrompt, true, nil
+	case "/stats":
+		target := sessionID
+		if len(fields) > 1 {
+			target = strings.TrimSpace(fields[1])
+		}
+		if eng.SessionStore == nil {
+			fmt.Println("session store unavailable")
+			return history, systemPrompt, true, nil
+		}
+		detailer, ok := eng.SessionStore.(sessionDetailer)
+		if !ok {
+			fmt.Println("当前会话存储不支持统计信息。")
+			return history, systemPrompt, true, nil
+		}
+		stats, err := detailer.SessionStats(target)
+		if err != nil {
+			return history, systemPrompt, true, err
+		}
+		fmt.Printf("session stats: %+v\n", stats)
+		return history, systemPrompt, true, nil
+	case "/show":
+		target := sessionID
+		offset := 0
+		limit := 20
+		if len(fields) > 1 {
+			target = strings.TrimSpace(fields[1])
+		}
+		if len(fields) > 2 {
+			if v, err := strconv.Atoi(fields[2]); err == nil && v >= 0 {
+				offset = v
+			}
+		}
+		if len(fields) > 3 {
+			if v, err := strconv.Atoi(fields[3]); err == nil && v > 0 {
+				limit = v
+			}
+		}
+		if eng.SessionStore == nil {
+			fmt.Println("session store unavailable")
+			return history, systemPrompt, true, nil
+		}
+		detailer, ok := eng.SessionStore.(sessionDetailer)
+		if !ok {
+			fmt.Println("当前会话存储不支持消息分页查看。")
+			return history, systemPrompt, true, nil
+		}
+		msgs, err := detailer.LoadMessagesPage(target, offset, limit)
+		if err != nil {
+			return history, systemPrompt, true, err
+		}
+		fmt.Printf("session=%s offset=%d limit=%d count=%d\n", target, offset, limit, len(msgs))
+		for i, msg := range msgs {
+			content := strings.TrimSpace(msg.Content)
+			if len(content) > 120 {
+				content = content[:120] + "..."
+			}
+			fmt.Printf("%d. [%s] %s\n", offset+i+1, msg.Role, content)
+		}
+		return history, systemPrompt, true, nil
 	case "/reload":
 		loaded, err := eng.SessionStore.LoadMessages(sessionID, 500)
 		if err != nil {
@@ -127,6 +223,9 @@ func printSlashHelp() {
 		"/session              显示当前会话 ID",
 		"/tools                列出当前启用工具",
 		"/history [n]          预览最近 n 条历史消息（默认 10）",
+		"/sessions [n]         列出最近 n 个会话（默认 10）",
+		"/stats [session_id]   查看会话统计（默认当前会话）",
+		"/show [sid] [o] [l]   分页查看会话消息（默认当前会话, 0, 20）",
 		"/reload               从存储重载历史消息",
 		"/clear                清空当前进程内上下文",
 		"/tui                  显示 CLI/TUI 能力状态",
