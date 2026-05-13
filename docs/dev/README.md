@@ -362,3 +362,4 @@
 - `235-summary-chat-api-contract-alignment.md`：/v1/chat* 接口错误契约统一与兼容对齐
 - `236-summary-contract-consumer-regression.md`：契约消费者回归补齐（UI/Chat/CLI）
 - `237-summary-contract-governance-automation.md`：契约治理自动化（快照测试/CI/OpenAPI/版本策略）
+- `238-summary-contract-toolchain-and-breaking-gate.md`：契约工具链与 Breaking 门禁（Make/diff/baseline/CI）

@@ -19,3 +19,22 @@ jobs:
 
       - name: Contract Regression Tests
         run: go test ./internal/api ./internal/cli ./ui-tui
+
+      - name: Contract Diff (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          git show "origin/${{ github.base_ref }}:docs/api/ui-chat-contract.openapi.yaml" > /tmp/base.openapi.yaml
+          ACK_FILE=""
+          if [ -f .contract/breaking-change-ack.md ]; then
+            ACK_FILE=".contract/breaking-change-ack.md"
+          fi
+          if [ -n "$ACK_FILE" ]; then
+            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml -ack "$ACK_FILE"
+          else
+            go run ./scripts/contract_diff.go -base /tmp/base.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml
+          fi
+
+      - name: Contract Diff (push baseline)
+        if: github.event_name != 'pull_request'
+        run: go run ./scripts/contract_diff.go -base docs/api/versions/v1/ui-chat-contract.openapi.yaml -target docs/api/ui-chat-contract.openapi.yaml
