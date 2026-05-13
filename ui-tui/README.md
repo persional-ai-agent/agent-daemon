@@ -88,7 +88,8 @@ go run . --fullscreen
 - `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/doctor` 后端能力预检（health/sessions/approval/ws/config）
 - `/actions` 打开快捷操作面板（编号选择常用管理动作）
-- `/panel [name]` 切换全屏面板（overview/sessions/tools/gateway/diag）
+- `/panel [name]` 切换全屏面板（overview/dashboard/sessions/tools/gateway/diag）
+- `/panel list` 列出全屏面板
 - `/panel next|prev` 循环切换全屏面板
 - `/refresh` 刷新当前全屏面板数据
 - `/diag` 查看实时诊断（transport/reconnect/fallback/error）

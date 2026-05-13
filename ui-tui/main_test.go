@@ -70,15 +70,15 @@ func TestParseStartupFlags(t *testing.T) {
 	defer func() { _ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", old) }()
 
 	_ = os.Unsetenv("AGENT_UI_TUI_FULLSCREEN")
-	noDoctor, fullscreen := parseStartupFlags([]string{"--no-doctor", "--fullscreen"})
-	if !noDoctor || !fullscreen {
-		t.Fatalf("unexpected flags: noDoctor=%v fullscreen=%v", noDoctor, fullscreen)
+	noDoctor, fullscreen, fullscreenSet := parseStartupFlags([]string{"--no-doctor", "--fullscreen"})
+	if !noDoctor || !fullscreen || !fullscreenSet {
+		t.Fatalf("unexpected flags: noDoctor=%v fullscreen=%v fullscreenSet=%v", noDoctor, fullscreen, fullscreenSet)
 	}
 
 	_ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", "1")
-	noDoctor, fullscreen = parseStartupFlags(nil)
-	if noDoctor || !fullscreen {
-		t.Fatalf("unexpected env parse: noDoctor=%v fullscreen=%v", noDoctor, fullscreen)
+	noDoctor, fullscreen, fullscreenSet = parseStartupFlags(nil)
+	if noDoctor || !fullscreen || !fullscreenSet {
+		t.Fatalf("unexpected env parse: noDoctor=%v fullscreen=%v fullscreenSet=%v", noDoctor, fullscreen, fullscreenSet)
 	}
 }
 
@@ -139,11 +139,33 @@ func TestTimelineSlice(t *testing.T) {
 }
 
 func TestPanelCycle(t *testing.T) {
-	if nextPanel("overview") != "sessions" {
+	if nextPanel("overview") != "dashboard" {
 		t.Fatalf("next panel mismatch")
 	}
 	if prevPanel("overview") != "diag" {
 		t.Fatalf("prev panel mismatch")
+	}
+}
+
+func TestRuntimeStatePersistsFullscreenPanel(t *testing.T) {
+	dir := t.TempDir()
+	s := newState()
+	s.statePath = filepath.Join(dir, "ui-tui-state.json")
+	s.session = "sid-x"
+	s.wsBase = "ws://127.0.0.1:8080/v1/chat/ws"
+	s.httpBase = "http://127.0.0.1:8080"
+	s.fullscreen = true
+	s.fullscreenPanel = "dashboard"
+	if err := s.saveRuntimeState(); err != nil {
+		t.Fatal(err)
+	}
+	s2 := newState()
+	s2.statePath = s.statePath
+	s2.fullscreen = false
+	s2.fullscreenPanel = "overview"
+	s2.loadRuntimeState()
+	if !s2.fullscreen || s2.fullscreenPanel != "dashboard" {
+		t.Fatalf("runtime restore failed: fullscreen=%v panel=%s", s2.fullscreen, s2.fullscreenPanel)
 	}
 }
 

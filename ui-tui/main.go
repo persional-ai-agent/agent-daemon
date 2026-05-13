@@ -35,10 +35,12 @@ type bookmark struct {
 }
 
 type runtimeState struct {
-	SessionID string `json:"session_id"`
-	WSBase    string `json:"ws_base"`
-	HTTPBase  string `json:"http_base"`
-	UpdatedAt string `json:"updated_at"`
+	SessionID       string `json:"session_id"`
+	WSBase          string `json:"ws_base"`
+	HTTPBase        string `json:"http_base"`
+	Fullscreen      bool   `json:"fullscreen,omitempty"`
+	FullscreenPanel string `json:"fullscreen_panel,omitempty"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 type doctorItem struct {
@@ -250,10 +252,12 @@ func (s *appState) printData(v any) {
 func (s *appState) saveRuntimeState() error {
 	_ = os.MkdirAll(filepath.Dir(s.statePath), 0o755)
 	st := runtimeState{
-		SessionID: s.session,
-		WSBase:    s.wsBase,
-		HTTPBase:  s.httpBase,
-		UpdatedAt: time.Now().Format(time.RFC3339),
+		SessionID:       s.session,
+		WSBase:          s.wsBase,
+		HTTPBase:        s.httpBase,
+		Fullscreen:      s.fullscreen,
+		FullscreenPanel: s.fullscreenPanel,
+		UpdatedAt:       time.Now().Format(time.RFC3339),
 	}
 	bs, _ := json.MarshalIndent(st, "", "  ")
 	return os.WriteFile(s.statePath, bs, 0o644)
@@ -281,6 +285,10 @@ func (s *appState) loadRuntimeState() {
 	}
 	if strings.TrimSpace(st.HTTPBase) != "" {
 		s.httpBase = strings.TrimRight(strings.TrimSpace(st.HTTPBase), "/")
+	}
+	s.fullscreen = st.Fullscreen
+	if strings.TrimSpace(st.FullscreenPanel) != "" {
+		s.fullscreenPanel = strings.TrimSpace(st.FullscreenPanel)
 	}
 }
 
@@ -391,7 +399,8 @@ func printHelp() {
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
 	fmt.Println("/actions              open quick action palette")
-	fmt.Println("/panel [name]         switch fullscreen panel (overview/sessions/tools/gateway/diag)")
+	fmt.Println("/panel [name]         switch fullscreen panel (overview/dashboard/sessions/tools/gateway/diag)")
+	fmt.Println("/panel list           list available fullscreen panels")
 	fmt.Println("/panel next|prev      cycle fullscreen panels")
 	fmt.Println("/refresh              refresh current fullscreen panel data")
 	fmt.Println("/version              show ui-tui build metadata")
@@ -437,7 +446,7 @@ func actionCommandByIndex(s *appState, idx int) (string, bool) {
 }
 
 func panelNames() []string {
-	return []string{"overview", "sessions", "tools", "gateway", "diag"}
+	return []string{"overview", "dashboard", "sessions", "tools", "gateway", "diag"}
 }
 
 func nextPanel(current string) string {
@@ -521,21 +530,23 @@ func printJSONMode(v any, pretty bool) {
 	fmt.Println(string(bs))
 }
 
-func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool) {
+func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool, fullscreenSet bool) {
 	for _, a := range args {
 		switch strings.TrimSpace(a) {
 		case "--no-doctor":
 			noDoctor = true
 		case "--fullscreen":
 			fullscreen = true
+			fullscreenSet = true
 		}
 	}
-	if !fullscreen {
+	if !fullscreenSet {
 		if v := strings.TrimSpace(os.Getenv("AGENT_UI_TUI_FULLSCREEN")); v == "1" || strings.EqualFold(v, "true") {
 			fullscreen = true
+			fullscreenSet = true
 		}
 	}
-	return noDoctor, fullscreen
+	return noDoctor, fullscreen, fullscreenSet
 }
 
 func (s *appState) renderFullscreenFrame() {
@@ -611,6 +622,25 @@ func (s *appState) refreshCurrentPanel() error {
 		s.panelData["gateway"] = uiPayload(out, "status", "result")
 	case "diag":
 		s.panelData["diag"] = s.diagnosticsSnapshot()
+	case "dashboard":
+		outSessions, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, 10), nil)
+		if err != nil {
+			return err
+		}
+		outTools, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
+		if err != nil {
+			return err
+		}
+		outGateway, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
+		if err != nil {
+			return err
+		}
+		s.panelData["dashboard"] = map[string]any{
+			"diag":     s.diagnosticsSnapshot(),
+			"sessions": uiPayload(outSessions, "sessions", "result"),
+			"tools":    uiPayload(outTools, "tools", "result"),
+			"gateway":  uiPayload(outGateway, "status", "result"),
+		}
 	default:
 		return fmt.Errorf("unsupported panel: %s", s.fullscreenPanel)
 	}
@@ -1359,8 +1389,10 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 
 func main() {
 	s := newState()
-	noDoctor, fullscreen := parseStartupFlags(os.Args[1:])
-	s.fullscreen = fullscreen
+	noDoctor, fullscreen, fullscreenSet := parseStartupFlags(os.Args[1:])
+	if fullscreenSet {
+		s.fullscreen = fullscreen
+	}
 	fmt.Printf("session: %s\n", s.session)
 	fmt.Printf("ws: %s\n", s.wsBase)
 	fmt.Printf("http: %s\n", s.httpBase)
@@ -1450,6 +1482,11 @@ func main() {
 				continue
 			}
 			target := strings.ToLower(strings.TrimSpace(parts[1]))
+			if target == "list" {
+				fmt.Printf("panels: %s\n", strings.Join(panelNames(), ", "))
+				s.setStatus(true, "ok", "panel list shown")
+				continue
+			}
 			switch target {
 			case "next":
 				s.fullscreenPanel = nextPanel(s.fullscreenPanel)
@@ -1464,13 +1501,14 @@ func main() {
 					}
 				}
 				if !valid {
-					fmt.Println("usage: /panel [overview|sessions|tools|gateway|diag|next|prev]")
+					fmt.Println("usage: /panel [overview|dashboard|sessions|tools|gateway|diag|next|prev]")
 					s.setStatus(false, "invalid_input", "invalid panel")
 					continue
 				}
 				s.fullscreenPanel = target
 			}
 			_ = s.refreshCurrentPanel()
+			_ = s.saveRuntimeState()
 			fmt.Printf("panel switched: %s\n", s.fullscreenPanel)
 			s.setStatus(true, "ok", "panel switched")
 		case text == "/version":
@@ -1521,10 +1559,12 @@ func main() {
 			s.setStatus(true, "ok", "fullscreen status shown")
 		case text == "/fullscreen on":
 			s.fullscreen = true
+			_ = s.saveRuntimeState()
 			fmt.Println("fullscreen: on")
 			s.setStatus(true, "ok", "fullscreen enabled")
 		case text == "/fullscreen off":
 			s.fullscreen = false
+			_ = s.saveRuntimeState()
 			fmt.Println("fullscreen: off")
 			s.setStatus(true, "ok", "fullscreen disabled")
 		case text == "/reconnect status":
