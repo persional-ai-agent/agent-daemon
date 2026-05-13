@@ -371,6 +371,16 @@ func TestBrowserCDPSchemaDocumentsIncludeHTMLDefault(t *testing.T) {
 	}
 }
 
+func TestBrowserDialogSchemaDocumentsDefaultBehavior(t *testing.T) {
+	params := browserDialogParams()
+	props, _ := params["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	desc, _ := action["description"].(string)
+	if !strings.Contains(desc, "default") || !strings.Contains(desc, "pending dialog") {
+		t.Fatalf("browser_dialog action description=%q, want default behavior hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)

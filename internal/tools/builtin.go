@@ -2021,7 +2021,7 @@ func browserDialogParams() map[string]any {
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type":        "string",
-				"description": "Dialog action (accept|dismiss). If omitted, returns current pending dialog (if any).",
+				"description": "Dialog action (accept|dismiss, default: inspect pending dialog).",
 				"enum":        []string{"accept", "dismiss"},
 			},
 			"prompt_text": map[string]any{
