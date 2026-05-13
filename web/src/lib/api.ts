@@ -34,6 +34,54 @@ export function sendChat(message: string, sessionID: string) {
   });
 }
 
+export type StreamEvent = {
+  event: string;
+  data: unknown;
+};
+
+export async function streamChat(
+  message: string,
+  sessionID: string,
+  onEvent: (evt: StreamEvent) => void
+) {
+  const res = await fetch(`${BASE}/v1/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionID })
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let split = buffer.indexOf("\n\n");
+    while (split >= 0) {
+      const chunk = buffer.slice(0, split);
+      buffer = buffer.slice(split + 2);
+      const eventLine = chunk.split("\n").find((l) => l.startsWith("event: "));
+      const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (eventLine && dataLine) {
+        const event = eventLine.slice(7).trim();
+        const raw = dataLine.slice(6);
+        let data: unknown = raw;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // keep raw string
+        }
+        onEvent({ event, data });
+      }
+      split = buffer.indexOf("\n\n");
+    }
+  }
+}
+
 export function cancelChat(sessionID: string) {
   return request<{ ok: boolean; session_id: string }>("/v1/chat/cancel", {
     method: "POST",

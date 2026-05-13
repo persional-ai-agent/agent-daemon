@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cancelChat, getUIConfig, getUIGatewayStatus, getUISessions, getUITools, sendChat } from "./lib/api";
+import { cancelChat, getUIConfig, getUIGatewayStatus, getUISessions, getUITools, sendChat, streamChat, type StreamEvent } from "./lib/api";
 
 type Tab = "chat" | "sessions" | "tools" | "gateway" | "config";
 
@@ -12,6 +12,8 @@ export function App() {
   const [output, setOutput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [streamMode, setStreamMode] = useState(true);
+  const [timeline, setTimeline] = useState<Array<{ ts: string; event: string; data: unknown }>>([]);
   const [sessions, setSessions] = useState<Array<{ session_id: string; last_seen?: string }>>([]);
   const [tools, setTools] = useState<string[]>([]);
   const [gatewayStatus, setGatewayStatus] = useState<Record<string, unknown> | null>(null);
@@ -21,9 +23,22 @@ export function App() {
     if (!input.trim()) return;
     setBusy(true);
     setError("");
+    setTimeline([]);
     try {
-      const res = await sendChat(input, sessionID);
-      setOutput(res.final_response || "(empty)");
+      if (streamMode) {
+        await streamChat(input, sessionID, (evt: StreamEvent) => {
+          setTimeline((prev) => prev.concat([{ ts: new Date().toISOString(), event: evt.event, data: evt.data }]));
+          if (evt.event === "result" && typeof evt.data === "object" && evt.data !== null) {
+            const finalResponse = (evt.data as any).final_response;
+            if (typeof finalResponse === "string") {
+              setOutput(finalResponse || "(empty)");
+            }
+          }
+        });
+      } else {
+        const res = await sendChat(input, sessionID);
+        setOutput(res.final_response || "(empty)");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -76,12 +91,22 @@ export function App() {
             <input value={sessionID} onChange={(e) => setSessionID(e.target.value)} />
             <label>Message</label>
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={5} />
+            <label className="checkbox">
+              <input type="checkbox" checked={streamMode} onChange={(e) => setStreamMode(e.target.checked)} />
+              流式模式（/v1/chat/stream）
+            </label>
             <div className="row">
               <button onClick={onSend} disabled={busy}>发送</button>
               <button onClick={onCancel} disabled={busy}>取消会话</button>
             </div>
             {error && <pre className="error">{error}</pre>}
             <pre>{output || "等待响应..."}</pre>
+            {streamMode && (
+              <>
+                <h3>Timeline</h3>
+                <pre>{JSON.stringify(timeline, null, 2)}</pre>
+              </>
+            )}
           </section>
         )}
         {tab === "sessions" && (
