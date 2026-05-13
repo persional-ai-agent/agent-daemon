@@ -11,6 +11,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/config"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway/platforms"
 	"github.com/dingjingmaster/agent-daemon/internal/model"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -329,7 +330,7 @@ func TestGatewayStatusLockFields(t *testing.T) {
 	workdir := t.TempDir()
 	cfg := config.Config{
 		Workdir:       workdir,
-		TelegramToken: "telegram-token",
+		TelegramToken: "telegram-token-" + strings.ReplaceAll(workdir, string(os.PathSeparator), "_"),
 	}
 	lockPath := gatewayLockPath(cfg)
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
@@ -362,7 +363,7 @@ func TestGatewayStatusTokenLockAlive(t *testing.T) {
 	workdir := t.TempDir()
 	cfg := config.Config{
 		Workdir:       workdir,
-		TelegramToken: "telegram-token",
+		TelegramToken: "telegram-token-" + strings.ReplaceAll(workdir, string(os.PathSeparator), "_"),
 	}
 	tokenLockPath := gatewayTokenLockPath(cfg)
 	if strings.TrimSpace(tokenLockPath) == "" {
@@ -393,6 +394,54 @@ func TestBuildYuanbaoManifestExportContainsApprovalQuickReplies(t *testing.T) {
 	}
 	if routeByText["批准"] != "/approve" || routeByText["拒绝"] != "/deny" {
 		t.Fatalf("approval quick replies mismatch: %#v", routeByText)
+	}
+}
+
+func TestGatewayManifestCoreCommandsParity(t *testing.T) {
+	core := []string{"/pair", "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/grant", "/revoke", "/approve", "/deny", "/help"}
+	telegram := map[string]bool{}
+	for _, c := range platforms.TelegramCommands() {
+		telegram["/"+c.Command] = true
+	}
+	discord := map[string]bool{}
+	for _, c := range platforms.DiscordApplicationCommands() {
+		discord["/"+c.Name] = true
+	}
+	slackManifest := buildSlackManifestExport("/agent")
+	slack := map[string]bool{}
+	for _, c := range slackManifest.Commands {
+		slack[strings.TrimSpace(c["command"])] = true
+	}
+	yb := map[string]bool{}
+	raw, _ := buildYuanbaoManifestExport()["commands"].([]map[string]string)
+	for _, c := range raw {
+		cmd := strings.TrimSpace(c["command"])
+		if cmd == "" {
+			continue
+		}
+		yb[strings.Fields(cmd)[0]] = true
+	}
+	for _, name := range core {
+		if !telegram[name] || !discord[name] || !slack[name] || !yb[name] {
+			t.Fatalf("core command missing %s: telegram=%v discord=%v slack=%v yuanbao=%v", name, telegram[name], discord[name], slack[name], yb[name])
+		}
+	}
+}
+
+func TestReadGatewayLockStateAndCleanup(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "gateway.lock")
+	if err := os.WriteFile(lockPath, []byte("999999"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st := readGatewayLockState(lockPath)
+	if st.PID != 999999 || !st.Stale || st.Alive {
+		t.Fatalf("unexpected state: %#v", st)
+	}
+	if !cleanupStaleGatewayLock(lockPath) {
+		t.Fatal("expected stale lock cleanup")
+	}
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Fatalf("stale lock file should be removed, err=%v", err)
 	}
 }
 

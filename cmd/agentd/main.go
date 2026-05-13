@@ -4271,6 +4271,7 @@ func runGateway(cfg config.Config, args []string) {
 			fmt.Println("pid=")
 		}
 		fmt.Printf("locked=%t\n", status.Locked)
+		fmt.Printf("stale_lock=%t\n", status.StaleLock)
 		if status.LockPID > 0 {
 			fmt.Printf("lock_pid=%d\n", status.LockPID)
 		} else {
@@ -4278,6 +4279,7 @@ func runGateway(cfg config.Config, args []string) {
 		}
 		fmt.Println("lock_path=" + status.LockPath)
 		fmt.Printf("token_locked=%t\n", status.TokenLocked)
+		fmt.Printf("stale_token_lock=%t\n", status.StaleTokenLock)
 		if status.TokenLockPID > 0 {
 			fmt.Printf("token_lock_pid=%d\n", status.TokenLockPID)
 		} else {
@@ -4465,24 +4467,31 @@ func runGatewayStart(cfg config.Config, args []string) {
 		fmt.Println("log_path=" + logPath)
 		return
 	}
-	if lockPID := readGatewayLockPID(gatewayLockPath(startCfg)); lockPID > 0 && processAlive(lockPID) {
-		result := map[string]any{"success": true, "started": false, "running": true, "locked": true, "lock_pid": lockPID, "lock_path": gatewayLockPath(startCfg), "pid_path": pidPath, "log_path": logPath}
+	lockPath := gatewayLockPath(startCfg)
+	if cleanupStaleGatewayLock(lockPath) {
+		log.Printf("gateway start: removed stale runtime lock %s", lockPath)
+	}
+	if lockState := readGatewayLockState(lockPath); lockState.Alive {
+		result := map[string]any{"success": true, "started": false, "running": true, "locked": true, "lock_pid": lockState.PID, "lock_path": gatewayLockPath(startCfg), "pid_path": pidPath, "log_path": logPath}
 		if *jsonOutput {
 			printJSON(result)
 			return
 		}
-		fmt.Printf("gateway already locked pid=%d\n", lockPID)
+		fmt.Printf("gateway already locked pid=%d\n", lockState.PID)
 		fmt.Println("log_path=" + logPath)
 		return
 	}
 	if tokenLockPath := gatewayTokenLockPath(startCfg); tokenLockPath != "" {
-		if lockPID := readGatewayLockPID(tokenLockPath); lockPID > 0 && processAlive(lockPID) {
-			result := map[string]any{"success": true, "started": false, "running": true, "token_locked": true, "token_lock_pid": lockPID, "token_lock_path": tokenLockPath, "pid_path": pidPath, "log_path": logPath}
+		if cleanupStaleGatewayLock(tokenLockPath) {
+			log.Printf("gateway start: removed stale token lock %s", tokenLockPath)
+		}
+		if lockState := readGatewayLockState(tokenLockPath); lockState.Alive {
+			result := map[string]any{"success": true, "started": false, "running": true, "token_locked": true, "token_lock_pid": lockState.PID, "token_lock_path": tokenLockPath, "pid_path": pidPath, "log_path": logPath}
 			if *jsonOutput {
 				printJSON(result)
 				return
 			}
-			fmt.Printf("gateway token already locked pid=%d\n", lockPID)
+			fmt.Printf("gateway token already locked pid=%d\n", lockState.PID)
 			fmt.Println("log_path=" + logPath)
 			return
 		}
@@ -5737,6 +5746,10 @@ func buildSlackManifestExport(command string) slackManifestExport {
 	}
 	commands := []map[string]string{
 		{"command": command, "description": "Gateway command entrypoint"},
+		{"command": "/pair", "description": "Pair with gateway using code"},
+		{"command": "/unpair", "description": "Remove current gateway pairing"},
+		{"command": "/cancel", "description": "Cancel the running task"},
+		{"command": "/queue", "description": "Show queued task count"},
 		{"command": "/status", "description": "Show current session status"},
 		{"command": "/pending", "description": "Show latest pending approval"},
 		{"command": "/approvals", "description": "Show active approvals"},
@@ -5744,6 +5757,7 @@ func buildSlackManifestExport(command string) slackManifestExport {
 		{"command": "/revoke", "description": "Revoke session or pattern approval"},
 		{"command": "/approve", "description": "Approve a pending approval id"},
 		{"command": "/deny", "description": "Deny a pending approval id"},
+		{"command": "/help", "description": "Show supported commands"},
 	}
 	manifest := map[string]any{
 		"display_information": map[string]any{
@@ -5863,6 +5877,10 @@ func buildTelegramManifestExport() map[string]any {
 
 func buildYuanbaoManifestExport() map[string]any {
 	commands := []map[string]string{
+		{"command": "/pair", "description": "pair with gateway using code"},
+		{"command": "/unpair", "description": "remove current pairing"},
+		{"command": "/cancel", "description": "cancel the running task"},
+		{"command": "/queue", "description": "show queued task count"},
 		{"command": "/status", "description": "show current session status"},
 		{"command": "/pending", "description": "show latest pending approval"},
 		{"command": "/approvals", "description": "show active approvals"},
@@ -5942,6 +5960,8 @@ type gatewayStatusInfo struct {
 	TokenLocked         bool     `json:"token_locked"`
 	TokenLockPID        int      `json:"token_lock_pid,omitempty"`
 	TokenLockPath       string   `json:"token_lock_path,omitempty"`
+	StaleLock           bool     `json:"stale_lock,omitempty"`
+	StaleTokenLock      bool     `json:"stale_token_lock,omitempty"`
 	Installed           bool     `json:"installed"`
 	InstallDir          string   `json:"install_dir,omitempty"`
 	ManifestPath        string   `json:"manifest_path,omitempty"`
@@ -5949,9 +5969,9 @@ type gatewayStatusInfo struct {
 
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 	running, pid := gatewayProcessStatus(cfg)
-	lockPID := readGatewayLockPID(gatewayLockPath(cfg))
+	lockState := readGatewayLockState(gatewayLockPath(cfg))
 	tokenLockPath := gatewayTokenLockPath(cfg)
-	tokenLockPID := readGatewayLockPID(tokenLockPath)
+	tokenLockState := readGatewayLockState(tokenLockPath)
 	return gatewayStatusInfo{
 		Enabled:             cfg.GatewayEnabled,
 		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
@@ -5960,16 +5980,44 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 		PID:                 pid,
 		PIDPath:             gatewayPIDPath(cfg),
 		LogPath:             gatewayLogPath(cfg),
-		Locked:              lockPID > 0 && processAlive(lockPID),
-		LockPID:             lockPID,
+		Locked:              lockState.Alive,
+		LockPID:             lockState.PID,
 		LockPath:            gatewayLockPath(cfg),
-		TokenLocked:         tokenLockPID > 0 && processAlive(tokenLockPID),
-		TokenLockPID:        tokenLockPID,
+		TokenLocked:         tokenLockState.Alive,
+		TokenLockPID:        tokenLockState.PID,
 		TokenLockPath:       tokenLockPath,
+		StaleLock:           lockState.Stale,
+		StaleTokenLock:      tokenLockState.Stale,
 		Installed:           fileExists(gatewayManifestPath(cfg)),
 		InstallDir:          gatewayInstallDir(cfg),
 		ManifestPath:        gatewayManifestPath(cfg),
 	}
+}
+
+type gatewayLockState struct {
+	PID   int
+	Alive bool
+	Stale bool
+}
+
+func readGatewayLockState(path string) gatewayLockState {
+	pid := readGatewayLockPID(path)
+	if pid <= 0 {
+		return gatewayLockState{}
+	}
+	if processAlive(pid) {
+		return gatewayLockState{PID: pid, Alive: true}
+	}
+	return gatewayLockState{PID: pid, Alive: false, Stale: true}
+}
+
+func cleanupStaleGatewayLock(path string) bool {
+	st := readGatewayLockState(path)
+	if !st.Stale {
+		return false
+	}
+	_ = os.Remove(path)
+	return true
 }
 
 func gatewayPIDPath(cfg config.Config) string {
