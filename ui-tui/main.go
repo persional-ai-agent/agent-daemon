@@ -94,6 +94,8 @@ type appState struct {
 	fullscreen       bool
 	chatLog          []string
 	chatMaxLines     int
+	fullscreenPanel  string
+	panelData        map[string]any
 }
 
 const (
@@ -174,6 +176,8 @@ func newState() *appState {
 		diagUpdatedAt:    time.Now().Format(time.RFC3339),
 		chatLog:          make([]string, 0),
 		chatMaxLines:     defaultChatMaxLines,
+		fullscreenPanel:  "overview",
+		panelData:        make(map[string]any),
 	}
 	st.loadRuntimeState()
 	return st
@@ -387,6 +391,9 @@ func printHelp() {
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
 	fmt.Println("/actions              open quick action palette")
+	fmt.Println("/panel [name]         switch fullscreen panel (overview/sessions/tools/gateway/diag)")
+	fmt.Println("/panel next|prev      cycle fullscreen panels")
+	fmt.Println("/refresh              refresh current fullscreen panel data")
 	fmt.Println("/version              show ui-tui build metadata")
 	fmt.Println("/reconnect status     show reconnect status")
 	fmt.Println("/reconnect on|off     enable/disable auto reconnect")
@@ -415,6 +422,7 @@ func actionMenuItems(s *appState) []string {
 		"/diag",
 		"/reconnect status",
 		"/pending 5",
+		"/panel next",
 		"/" + fullscreenAction,
 		"/help",
 	}
@@ -426,6 +434,37 @@ func actionCommandByIndex(s *appState, idx int) (string, bool) {
 		return "", false
 	}
 	return items[idx-1], true
+}
+
+func panelNames() []string {
+	return []string{"overview", "sessions", "tools", "gateway", "diag"}
+}
+
+func nextPanel(current string) string {
+	names := panelNames()
+	idx := 0
+	for i, name := range names {
+		if name == current {
+			idx = i
+			break
+		}
+	}
+	return names[(idx+1)%len(names)]
+}
+
+func prevPanel(current string) string {
+	names := panelNames()
+	idx := 0
+	for i, name := range names {
+		if name == current {
+			idx = i
+			break
+		}
+	}
+	if idx == 0 {
+		return names[len(names)-1]
+	}
+	return names[idx-1]
 }
 
 func printEvent(evt map[string]any, emit bool) string {
@@ -511,7 +550,17 @@ func (s *appState) renderFullscreenFrame() {
 	fmt.Printf("http: %s\n", s.httpBase)
 	fmt.Printf("status: %s/%s  detail: %s\n", s.lastStatus, s.lastCode, s.lastDetail)
 	fmt.Printf("transport: %s  reconnect: %s(%d)  view: %s\n", s.activeTransport, s.reconnectState, s.reconnectCount, s.viewMode)
-	fmt.Printf("hint: /help /diag /sessions /show /tools /gateway status /quit\n")
+	fmt.Printf("panel: %s  hint: /panel next|prev|<name> /refresh /actions /quit\n", s.fullscreenPanel)
+	if s.fullscreenPanel != "overview" {
+		fmt.Println("---- panel data ----")
+		if payload, ok := s.panelData[s.fullscreenPanel]; ok {
+			s.printData(payload)
+		} else {
+			fmt.Println("(empty, run /refresh)")
+		}
+		fmt.Println("---- input ----")
+		return
+	}
 	fmt.Println("---- recent events ----")
 	start := len(s.eventLog) - 6
 	if start < 0 {
@@ -535,6 +584,37 @@ func (s *appState) renderFullscreenFrame() {
 		fmt.Printf("%s\n", ln)
 	}
 	fmt.Println("---- input ----")
+}
+
+func (s *appState) refreshCurrentPanel() error {
+	switch s.fullscreenPanel {
+	case "overview":
+		out := s.diagnosticsSnapshot()
+		s.panelData["overview"] = out
+	case "sessions":
+		out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, 20), nil)
+		if err != nil {
+			return err
+		}
+		s.panelData["sessions"] = uiPayload(out, "sessions", "result")
+	case "tools":
+		out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
+		if err != nil {
+			return err
+		}
+		s.panelData["tools"] = uiPayload(out, "tools", "result")
+	case "gateway":
+		out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
+		if err != nil {
+			return err
+		}
+		s.panelData["gateway"] = uiPayload(out, "status", "result")
+	case "diag":
+		s.panelData["diag"] = s.diagnosticsSnapshot()
+	default:
+		return fmt.Errorf("unsupported panel: %s", s.fullscreenPanel)
+	}
+	return nil
 }
 
 func (s *appState) addChatLine(line string) {
@@ -1354,6 +1434,45 @@ func main() {
 			text = next
 			fromRerun = true
 			goto REPROCESS
+		case text == "/refresh":
+			if err := s.refreshCurrentPanel(); err != nil {
+				fmt.Printf("[refresh-error] %v\n", err)
+				s.setErrStatus(err)
+				continue
+			}
+			fmt.Printf("panel refreshed: %s\n", s.fullscreenPanel)
+			s.setStatus(true, "ok", "panel refreshed")
+		case strings.HasPrefix(text, "/panel"):
+			parts := strings.Fields(text)
+			if len(parts) == 1 {
+				fmt.Printf("panel: %s\n", s.fullscreenPanel)
+				s.setStatus(true, "ok", "panel shown")
+				continue
+			}
+			target := strings.ToLower(strings.TrimSpace(parts[1]))
+			switch target {
+			case "next":
+				s.fullscreenPanel = nextPanel(s.fullscreenPanel)
+			case "prev":
+				s.fullscreenPanel = prevPanel(s.fullscreenPanel)
+			default:
+				valid := false
+				for _, n := range panelNames() {
+					if n == target {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					fmt.Println("usage: /panel [overview|sessions|tools|gateway|diag|next|prev]")
+					s.setStatus(false, "invalid_input", "invalid panel")
+					continue
+				}
+				s.fullscreenPanel = target
+			}
+			_ = s.refreshCurrentPanel()
+			fmt.Printf("panel switched: %s\n", s.fullscreenPanel)
+			s.setStatus(true, "ok", "panel switched")
 		case text == "/version":
 			out := map[string]any{"version": BuildVersion, "commit": BuildCommit, "build_time": BuildTime}
 			s.lastJSON = out

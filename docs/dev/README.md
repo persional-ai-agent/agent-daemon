@@ -391,3 +391,4 @@
 - `264-summary-ui-tui-fullscreen-timeline-and-runtime-toggle.md`：`ui-tui` 全屏新增时间线面板与 `/fullscreen on|off` 运行时切换
 - `265-summary-ui-tui-actions-palette.md`：`ui-tui` 新增 `/actions` 快捷操作面板（编号选择高频管理动作）
 - `266-summary-ui-tui-fullscreen-quiet-and-timeline-command.md`：全屏模式静默刷屏并新增 `/timeline [n]` 时间线查看命令
+- `267-summary-ui-tui-fullscreen-multi-panel.md`：全屏模式新增多面板（overview/sessions/tools/gateway/diag）与 `/panel`、`/refresh` 管理

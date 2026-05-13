@@ -72,6 +72,7 @@
   - 关键操作审计日志（approve/deny/cancel/config set）
   - 全屏看板模式（`--fullscreen` / `AGENT_UI_TUI_FULLSCREEN=1`）支持实时状态 + 最近事件 + 时间线
   - 快捷操作面板（`/actions`）支持编号选择高频管理动作，降低命令输入成本
+  - 全屏多面板：`overview/sessions/tools/gateway/diag`，支持 `/panel` 切换与 `/refresh` 拉取数据
 
 ## 4. 测试策略
 

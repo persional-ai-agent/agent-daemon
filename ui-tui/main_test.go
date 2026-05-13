@@ -106,13 +106,17 @@ func TestActionCommandByIndex(t *testing.T) {
 		t.Fatalf("idx1 cmd=%q ok=%v", cmd, ok)
 	}
 	cmd, ok = actionCommandByIndex(s, 10)
-	if !ok || cmd != "/fullscreen on" {
+	if !ok || cmd != "/panel next" {
 		t.Fatalf("idx10 cmd=%q ok=%v", cmd, ok)
 	}
+	cmd, ok = actionCommandByIndex(s, 11)
+	if !ok || cmd != "/fullscreen on" {
+		t.Fatalf("idx11 cmd=%q ok=%v", cmd, ok)
+	}
 	s.fullscreen = true
-	cmd, ok = actionCommandByIndex(s, 10)
+	cmd, ok = actionCommandByIndex(s, 11)
 	if !ok || cmd != "/fullscreen off" {
-		t.Fatalf("idx10 fullscreen cmd=%q ok=%v", cmd, ok)
+		t.Fatalf("idx11 fullscreen cmd=%q ok=%v", cmd, ok)
 	}
 	_, ok = actionCommandByIndex(s, 99)
 	if ok {
@@ -131,6 +135,15 @@ func TestTimelineSlice(t *testing.T) {
 	}
 	if got[0] != "a1" || got[1] != "u2" {
 		t.Fatalf("timelineSlice=%v", got)
+	}
+}
+
+func TestPanelCycle(t *testing.T) {
+	if nextPanel("overview") != "sessions" {
+		t.Fatalf("next panel mismatch")
+	}
+	if prevPanel("overview") != "diag" {
+		t.Fatalf("prev panel mismatch")
 	}
 }
 
