@@ -1,6 +1,9 @@
 package tools
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSpotifyLimitOffsetBounds(t *testing.T) {
 	limit, offset := spotifyLimitOffset(map[string]any{"limit": -1, "offset": -2}, 20)
@@ -39,4 +42,18 @@ func TestSpotifySchemasExposePagination(t *testing.T) {
 	check("spotify_playlists")
 	check("spotify_albums")
 	check("spotify_library")
+}
+
+func TestSpotifyActionSchemasDocumentDefaultGet(t *testing.T) {
+	check := func(name string, params map[string]any) {
+		t.Helper()
+		props, _ := params["properties"].(map[string]any)
+		action, _ := props["action"].(map[string]any)
+		desc, _ := action["description"].(string)
+		if !strings.Contains(desc, "default: get") {
+			t.Fatalf("%s action description=%q, want default hint", name, desc)
+		}
+	}
+	check("spotify_playback", spotifyPlaybackParams())
+	check("spotify_queue", spotifyQueueParams())
 }
