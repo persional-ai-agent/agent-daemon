@@ -1817,7 +1817,7 @@ func processParams() map[string]any {
 		"session_id":      map[string]any{"type": "string", "description": "Required for action=status/poll/log/wait/stop/kill/write."},
 		"include_done":    map[string]any{"type": "boolean", "description": "For action=list, include finished processes (default false)."},
 		"limit":           map[string]any{"type": "integer", "minimum": 1, "description": "For action=list, maximum processes to return (default 50)."},
-		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log (default 0)."},
+		"offset":          map[string]any{"type": "integer", "minimum": 0, "description": "Byte offset for action=log (default 0)."},
 		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
 		"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "description": "For action=wait, timeout seconds (default 60)."},
 		"input":           map[string]any{"type": "string", "description": "For action=write (required)."},
@@ -1908,7 +1908,7 @@ func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}
 }
 func memoryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}, "description": "Memory operation action."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}}
 }
 func sessionSearchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum sessions to return (default 5)."}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean", "description": "Include current session in results (default false)."}}, "required": []string{"query"}}
@@ -2015,7 +2015,7 @@ func browserScrollParams() map[string]any {
 }
 func browserGetImagesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"limit": map[string]any{"type": "integer", "description": "Maximum number of images to return (default 200, max 1000)."},
+		"limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum number of images to return (default 200, max 1000)."},
 	}}
 }
 func browserConsoleParams() map[string]any {
@@ -2024,7 +2024,7 @@ func browserConsoleParams() map[string]any {
 	}}
 }
 func browserVisionParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "description": "Maximum number of images to inspect (default 5, max 20)."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum number of images to inspect (default 5, max 20)."}}}
 }
 func browserCDPParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"include_html": map[string]any{"type": "boolean", "description": "Include page HTML in response (default false)."}}}

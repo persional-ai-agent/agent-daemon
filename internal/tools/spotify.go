@@ -70,7 +70,7 @@ func (b *BuiltinTools) spotifySearch(ctx context.Context, args map[string]any, _
 	}
 	q := strings.TrimSpace(strArg(args, "q"))
 	if q == "" {
-		return nil, errors.New("q required")
+		return map[string]any{"success": false, "error": "q required"}, nil
 	}
 	typ := strings.ToLower(strings.TrimSpace(strArg(args, "type")))
 	if typ == "" {
@@ -168,7 +168,7 @@ func (b *BuiltinTools) spotifyPlayback(ctx context.Context, args map[string]any,
 		}
 		return map[string]any{"success": code >= 200 && code < 300, "status_code": code}, nil
 	default:
-		return nil, fmt.Errorf("unsupported spotify_playback action: %s", action)
+		return map[string]any{"success": false, "error": fmt.Sprintf("unsupported spotify_playback action: %s", action)}, nil
 	}
 }
 
@@ -196,7 +196,7 @@ func (b *BuiltinTools) spotifyQueue(ctx context.Context, args map[string]any, _ 
 	case "add":
 		uri := strings.TrimSpace(strArg(args, "uri"))
 		if uri == "" {
-			return nil, errors.New("uri required for action=add")
+			return map[string]any{"success": false, "error": "uri required for action=add"}, nil
 		}
 		params := url.Values{}
 		params.Set("uri", uri)
@@ -206,7 +206,7 @@ func (b *BuiltinTools) spotifyQueue(ctx context.Context, args map[string]any, _ 
 		}
 		return map[string]any{"success": code >= 200 && code < 300, "status_code": code}, nil
 	default:
-		return nil, fmt.Errorf("unsupported spotify_queue action: %s", action)
+		return map[string]any{"success": false, "error": fmt.Sprintf("unsupported spotify_queue action: %s", action)}, nil
 	}
 }
 

@@ -293,12 +293,44 @@ func TestRegistrySchemasLint(t *testing.T) {
 				default:
 					t.Fatalf("%s.%s enum has unsupported type %T", schema.Function.Name, key, enum)
 				}
+				if key == "action" {
+					desc, _ := field["description"].(string)
+					if strings.TrimSpace(desc) == "" {
+						t.Fatalf("%s.action enum exists but description missing", schema.Function.Name)
+					}
+				}
 			}
 			minV, minOK := field["minimum"].(int)
 			maxV, maxOK := field["maximum"].(int)
 			if minOK && maxOK && minV > maxV {
 				t.Fatalf("%s.%s minimum=%d > maximum=%d", schema.Function.Name, key, minV, maxV)
 			}
+			if key == "limit" || key == "offset" || key == "page_size" {
+				if fieldType, _ := field["type"].(string); fieldType == "integer" {
+					if _, ok := field["minimum"]; !ok {
+						t.Fatalf("%s.%s missing minimum for integer pagination field", schema.Function.Name, key)
+					}
+				}
+			}
 		}
+	}
+}
+
+func TestExternalToolValidationReturnsSuccessFalse(t *testing.T) {
+	b := &BuiltinTools{}
+
+	res, err := b.spotifySearch(t.Context(), map[string]any{}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("spotifySearch expected success=false,nil err, got res=%v err=%v", res, err)
+	}
+
+	res, err = b.spotifyQueue(t.Context(), map[string]any{"action": "add"}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("spotifyQueue expected success=false,nil err, got res=%v err=%v", res, err)
+	}
+
+	res, err = b.discordTool(t.Context(), map[string]any{"action": "fetch_channel"}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("discordTool expected success=false,nil err, got res=%v err=%v", res, err)
 	}
 }

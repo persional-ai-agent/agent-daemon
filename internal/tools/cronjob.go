@@ -71,11 +71,11 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "create":
 		prompt := strings.TrimSpace(strArg(args, "prompt"))
 		if prompt == "" {
-			return nil, errors.New("prompt required")
+			return map[string]any{"success": false, "error": "prompt required"}, nil
 		}
 		schedRaw := strings.TrimSpace(strArg(args, "schedule"))
 		if schedRaw == "" {
-			return nil, errors.New("schedule required")
+			return map[string]any{"success": false, "error": "schedule required"}, nil
 		}
 		now := time.Now().UTC()
 		sched, err := cron.ParseSchedule(now, schedRaw)
@@ -132,7 +132,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "get":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		job, ok, err := t.Store.GetJob(ctx, id)
 		if err != nil {
@@ -145,7 +145,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "update":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		cur, ok, err := t.Store.GetJob(ctx, id)
 		if err != nil {
@@ -234,7 +234,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "pause":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		if err := t.Store.SetPaused(ctx, id, true); err != nil {
 			return nil, err
@@ -243,7 +243,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "resume":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		if err := t.Store.SetPaused(ctx, id, false); err != nil {
 			return nil, err
@@ -252,7 +252,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "remove":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		if err := t.Store.RemoveJob(ctx, id); err != nil {
 			return nil, err
@@ -261,7 +261,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "trigger":
 		id := strings.TrimSpace(strArg(args, "job_id"))
 		if id == "" {
-			return nil, errors.New("job_id required")
+			return map[string]any{"success": false, "error": "job_id required"}, nil
 		}
 		if err := t.Store.TriggerJob(ctx, id); err != nil {
 			return nil, err
@@ -278,7 +278,7 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	case "run_get":
 		runID := strings.TrimSpace(strArg(args, "run_id"))
 		if runID == "" {
-			return nil, errors.New("run_id required")
+			return map[string]any{"success": false, "error": "run_id required"}, nil
 		}
 		run, ok, err := t.Store.GetRun(ctx, runID)
 		if err != nil {
@@ -289,6 +289,6 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		}
 		return map[string]any{"success": true, "run": run}, nil
 	default:
-		return nil, fmt.Errorf("unknown action: %s", action)
+		return map[string]any{"success": false, "error": fmt.Sprintf("unknown action: %s", action)}, nil
 	}
 }

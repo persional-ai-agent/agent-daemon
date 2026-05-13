@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -39,7 +38,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	case "server_info":
 		guildID := strings.TrimSpace(strArg(args, "guild_id"))
 		if guildID == "" {
-			return nil, errors.New("guild_id required")
+			return map[string]any{"success": false, "error": "guild_id required"}, nil
 		}
 		bs, code, err := discordDo(ctx, http.MethodGet, "/guilds/"+guildID+"?with_counts=true", token, nil)
 		if err != nil {
@@ -55,7 +54,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	case "list_channels":
 		guildID := strings.TrimSpace(strArg(args, "guild_id"))
 		if guildID == "" {
-			return nil, errors.New("guild_id required")
+			return map[string]any{"success": false, "error": "guild_id required"}, nil
 		}
 		bs, code, err := discordDo(ctx, http.MethodGet, "/guilds/"+guildID+"/channels", token, nil)
 		if err != nil {
@@ -71,7 +70,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	case "fetch_channel":
 		channelID := strings.TrimSpace(strArg(args, "channel_id"))
 		if channelID == "" {
-			return nil, errors.New("channel_id required")
+			return map[string]any{"success": false, "error": "channel_id required"}, nil
 		}
 		bs, code, err := discordDo(ctx, http.MethodGet, "/channels/"+channelID, token, nil)
 		if err != nil {
@@ -87,7 +86,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	case "fetch_messages":
 		channelID := strings.TrimSpace(strArg(args, "channel_id"))
 		if channelID == "" {
-			return nil, errors.New("channel_id required")
+			return map[string]any{"success": false, "error": "channel_id required"}, nil
 		}
 		limit := intArg(args, "limit", 50)
 		if limit <= 0 {
@@ -125,14 +124,14 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 	case "send_message":
 		channelID := strings.TrimSpace(strArg(args, "channel_id"))
 		if channelID == "" {
-			return nil, errors.New("channel_id required")
+			return map[string]any{"success": false, "error": "channel_id required"}, nil
 		}
 		content := strArg(args, "content")
 		if strings.TrimSpace(content) == "" {
 			content = strArg(args, "message")
 		}
 		if strings.TrimSpace(content) == "" {
-			return nil, errors.New("content/message required")
+			return map[string]any{"success": false, "error": "content/message required"}, nil
 		}
 		payload := map[string]any{"content": content}
 		bs, code, err := discordDo(ctx, http.MethodPost, "/channels/"+channelID+"/messages", token, payload)
@@ -151,7 +150,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 		messageID := strings.TrimSpace(strArg(args, "message_id"))
 		emoji := strings.TrimSpace(strArg(args, "emoji"))
 		if channelID == "" || messageID == "" || emoji == "" {
-			return nil, errors.New("channel_id, message_id, emoji required")
+			return map[string]any{"success": false, "error": "channel_id, message_id, emoji required"}, nil
 		}
 		// Emoji must be URL-encoded per Discord API.
 		emojiEnc := url.PathEscape(emoji)
@@ -165,7 +164,7 @@ func (b *BuiltinTools) discordTool(ctx context.Context, args map[string]any, _ T
 		return map[string]any{"success": true, "channel_id": channelID, "message_id": messageID, "emoji": emoji}, nil
 
 	default:
-		return nil, errors.New("unsupported action")
+		return map[string]any{"success": false, "error": "unsupported action"}, nil
 	}
 }
 
