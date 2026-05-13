@@ -341,3 +341,4 @@
 - `214-summary-frontend-tui-parity-phase8-standalone-ui-tui.md`：Frontend 与 TUI 对齐 Phase 8（独立 ui-tui 子工程）
 - `215-summary-frontend-tui-parity-phase9-ui-tui-commands.md`：Frontend 与 TUI 对齐 Phase 9（ui-tui 命令体系增强）
 - `216-summary-ui-tui-migrate-to-go.md`：ui-tui 从 Node.js 迁移到 Go 实现
+- `217-summary-ui-tui-parity-management-commands.md`：ui-tui 管理命令补齐（工具/会话/网关/配置）

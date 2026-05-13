@@ -58,3 +58,11 @@ go run .
 - `/reload`：从存储重载上下文
 - `/clear`：清空当前进程内上下文
 - `/quit`：退出
+
+`ui-tui` 额外命令（管理面）：
+
+- `/api`、`/api <ws-url>`：查看/切换 WS 地址
+- `/http`、`/http <http-url>`：查看/切换 HTTP 管理地址
+- `/tool <name>`：查看工具 schema
+- `/gateway status|enable|disable`：网关状态与启停
+- `/config get`、`/config set <section.key> <value>`：配置查看与设置

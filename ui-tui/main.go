@@ -2,10 +2,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -27,6 +31,18 @@ func printHelp() {
 	fmt.Println("/session <id>         switch session id")
 	fmt.Println("/api                  show websocket endpoint")
 	fmt.Println("/api <ws-url>         switch websocket endpoint")
+	fmt.Println("/http                 show http api base")
+	fmt.Println("/http <http-url>      switch http api base")
+	fmt.Println("/tools                list tools")
+	fmt.Println("/tool <name>          show tool schema")
+	fmt.Println("/sessions [n]         list recent sessions")
+	fmt.Println("/show [sid] [o] [l]   show session messages")
+	fmt.Println("/stats [sid]          show session stats")
+	fmt.Println("/gateway status       show gateway status")
+	fmt.Println("/gateway enable       enable gateway")
+	fmt.Println("/gateway disable      disable gateway")
+	fmt.Println("/config get           show config snapshot")
+	fmt.Println("/config set k v       set config key/value")
 	fmt.Println("/quit                 exit")
 }
 
@@ -94,11 +110,67 @@ func sendTurn(apiBase, sessionID, message string) error {
 	}
 }
 
+func deriveHTTPBase(wsBase string) string {
+	u, err := url.Parse(strings.TrimSpace(wsBase))
+	if err != nil {
+		return "http://127.0.0.1:8080"
+	}
+	switch u.Scheme {
+	case "wss":
+		u.Scheme = "https"
+	default:
+		u.Scheme = "http"
+	}
+	u.Path = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	return strings.TrimRight(u.String(), "/")
+}
+
+func httpJSON(method, endpoint string, body map[string]any) (map[string]any, error) {
+	var reader io.Reader
+	if body != nil {
+		bs, _ := json.Marshal(body)
+		reader = bytes.NewReader(bs)
+	}
+	req, err := http.NewRequest(method, endpoint, reader)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	bs, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(bs)))
+	}
+	out := map[string]any{}
+	if len(bs) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal(bs, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func printJSON(v any) {
+	bs, _ := json.MarshalIndent(v, "", "  ")
+	fmt.Println(string(bs))
+}
+
 func main() {
 	apiBase := getenvOr("AGENT_API_BASE", "ws://127.0.0.1:8080/v1/chat/ws")
+	httpBase := getenvOr("AGENT_HTTP_BASE", deriveHTTPBase(apiBase))
 	sessionID := getenvOr("AGENT_SESSION_ID", uuid.NewString())
 	fmt.Printf("session: %s\n", sessionID)
 	fmt.Printf("ws: %s\n", apiBase)
+	fmt.Printf("http: %s\n", httpBase)
 	fmt.Println("输入 /help 查看命令")
 	reader := bufio.NewScanner(os.Stdin)
 	for {
@@ -141,6 +213,144 @@ func main() {
 			}
 			apiBase = next
 			fmt.Printf("ws switched: %s\n", apiBase)
+			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) == "" {
+				httpBase = deriveHTTPBase(apiBase)
+				fmt.Printf("http auto-updated: %s\n", httpBase)
+			}
+			continue
+		case text == "/http":
+			fmt.Printf("http: %s\n", httpBase)
+			continue
+		case strings.HasPrefix(text, "/http "):
+			next := strings.TrimSpace(strings.TrimPrefix(text, "/http "))
+			if !strings.HasPrefix(next, "http://") && !strings.HasPrefix(next, "https://") {
+				fmt.Println("http api must start with http:// or https://")
+				continue
+			}
+			httpBase = strings.TrimRight(next, "/")
+			fmt.Printf("http switched: %s\n", httpBase)
+			continue
+		case text == "/tools":
+			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/tools", nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
+			continue
+		case strings.HasPrefix(text, "/tool "):
+			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
+			if name == "" {
+				fmt.Println("usage: /tool <name>")
+				continue
+			}
+			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
+			continue
+		case strings.HasPrefix(text, "/sessions"):
+			parts := strings.Fields(text)
+			limit := 20
+			if len(parts) > 1 {
+				if v, err := strconv.Atoi(parts[1]); err == nil && v > 0 {
+					limit = v
+				}
+			}
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", httpBase, limit), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
+			continue
+		case strings.HasPrefix(text, "/show"):
+			parts := strings.Fields(text)
+			sid := sessionID
+			offset := 0
+			limit := 20
+			if len(parts) > 1 {
+				sid = parts[1]
+			}
+			if len(parts) > 2 {
+				if v, err := strconv.Atoi(parts[2]); err == nil && v >= 0 {
+					offset = v
+				}
+			}
+			if len(parts) > 3 {
+				if v, err := strconv.Atoi(parts[3]); err == nil && v > 0 {
+					limit = v
+				}
+			}
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", httpBase, url.PathEscape(sid), offset, limit), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
+			continue
+		case strings.HasPrefix(text, "/stats"):
+			parts := strings.Fields(text)
+			sid := sessionID
+			if len(parts) > 1 {
+				sid = parts[1]
+			}
+			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", httpBase, url.PathEscape(sid)), nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out["stats"])
+			continue
+		case strings.HasPrefix(text, "/gateway "):
+			parts := strings.Fields(text)
+			if len(parts) != 2 {
+				fmt.Println("usage: /gateway status|enable|disable")
+				continue
+			}
+			switch parts[1] {
+			case "status":
+				out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/gateway/status", nil)
+				if err != nil {
+					fmt.Printf("[http-error] %v\n", err)
+					continue
+				}
+				printJSON(out)
+			case "enable", "disable":
+				out, err := httpJSON(http.MethodPost, httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
+				if err != nil {
+					fmt.Printf("[http-error] %v\n", err)
+					continue
+				}
+				printJSON(out)
+			default:
+				fmt.Println("usage: /gateway status|enable|disable")
+			}
+			continue
+		case text == "/config get":
+			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/config", nil)
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
+			continue
+		case strings.HasPrefix(text, "/config set "):
+			parts := strings.SplitN(strings.TrimPrefix(text, "/config set "), " ", 2)
+			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+				fmt.Println("usage: /config set <section.key> <value>")
+				continue
+			}
+			key := strings.TrimSpace(parts[0])
+			value := parts[1]
+			out, err := httpJSON(http.MethodPost, httpBase+"/v1/ui/config/set", map[string]any{"key": key, "value": value})
+			if err != nil {
+				fmt.Printf("[http-error] %v\n", err)
+				continue
+			}
+			printJSON(out)
 			continue
 		default:
 			if err := sendTurn(apiBase, sessionID, text); err != nil {
@@ -149,4 +359,3 @@ func main() {
 		}
 	}
 }
-
