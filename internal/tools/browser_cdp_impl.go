@@ -191,7 +191,7 @@ func (b *BuiltinTools) browserNavigateCDP(ctx context.Context, args map[string]a
 	}
 	targetURL := strings.TrimSpace(strArg(args, "url"))
 	if targetURL == "" {
-		return nil, errors.New("url required")
+		return map[string]any{"success": false, "error": "url required"}, nil
 	}
 	var res struct {
 		FrameID string `json:"frameId"`
@@ -305,7 +305,7 @@ func (b *BuiltinTools) browserClickCDP(ctx context.Context, args map[string]any,
 	text := strings.TrimSpace(strArg(args, "text"))
 	hrefContains := strings.TrimSpace(strArg(args, "href_contains"))
 	if ref == "" && text == "" && hrefContains == "" {
-		return nil, errors.New("ref, text or href_contains required")
+		return map[string]any{"success": false, "error": "ref, text or href_contains required"}, nil
 	}
 	if ref != "" {
 		el, ok := st.elements[ref]
@@ -547,7 +547,7 @@ func (b *BuiltinTools) browserDialogCDP(ctx context.Context, args map[string]any
 	case "dismiss":
 		accept = false
 	default:
-		return nil, errors.New("invalid action (expected accept or dismiss)")
+		return map[string]any{"success": false, "error": "invalid action (expected accept or dismiss)"}, nil
 	}
 	promptText := strArg(args, "prompt_text")
 	if err := st.client.call(ctx, "Page.handleJavaScriptDialog", map[string]any{

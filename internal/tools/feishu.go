@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,7 +31,7 @@ func feishuConfig() (baseURL, appID, appSecret string, err error) {
 	appID = strings.TrimSpace(os.Getenv("FEISHU_APP_ID"))
 	appSecret = strings.TrimSpace(os.Getenv("FEISHU_APP_SECRET"))
 	if appID == "" || appSecret == "" {
-		return "", "", "", errors.New("Feishu not configured (set FEISHU_APP_ID and FEISHU_APP_SECRET)")
+		return "", "", "", fmt.Errorf("Feishu not configured (set FEISHU_APP_ID and FEISHU_APP_SECRET)")
 	}
 	return baseURL, appID, appSecret, nil
 }
@@ -124,7 +123,7 @@ func feishuOK(bs []byte) (map[string]any, error) {
 func (b *BuiltinTools) feishuDocRead(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	docToken := strings.TrimSpace(strArg(args, "doc_token"))
 	if docToken == "" {
-		return nil, errors.New("doc_token required")
+		return map[string]any{"success": false, "error": "doc_token required"}, nil
 	}
 	baseURL, _, _, err := feishuConfig()
 	if err != nil {
@@ -167,7 +166,7 @@ func feishuDocReadParams() map[string]any {
 func (b *BuiltinTools) feishuDriveListComments(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	fileToken := strings.TrimSpace(strArg(args, "file_token"))
 	if fileToken == "" {
-		return nil, errors.New("file_token required")
+		return map[string]any{"success": false, "error": "file_token required"}, nil
 	}
 	baseURL, _, _, err := feishuConfig()
 	if err != nil {
@@ -220,7 +219,7 @@ func (b *BuiltinTools) feishuDriveListCommentReplies(ctx context.Context, args m
 	fileToken := strings.TrimSpace(strArg(args, "file_token"))
 	commentID := strings.TrimSpace(strArg(args, "comment_id"))
 	if fileToken == "" || commentID == "" {
-		return nil, errors.New("file_token and comment_id required")
+		return map[string]any{"success": false, "error": "file_token and comment_id required"}, nil
 	}
 	baseURL, _, _, err := feishuConfig()
 	if err != nil {
@@ -270,7 +269,7 @@ func (b *BuiltinTools) feishuDriveReplyComment(ctx context.Context, args map[str
 	commentID := strings.TrimSpace(strArg(args, "comment_id"))
 	content := strings.TrimSpace(strArg(args, "content"))
 	if fileToken == "" || commentID == "" || content == "" {
-		return nil, errors.New("file_token, comment_id, and content required")
+		return map[string]any{"success": false, "error": "file_token, comment_id, and content required"}, nil
 	}
 	baseURL, _, _, err := feishuConfig()
 	if err != nil {
@@ -313,7 +312,7 @@ func (b *BuiltinTools) feishuDriveAddComment(ctx context.Context, args map[strin
 	fileToken := strings.TrimSpace(strArg(args, "file_token"))
 	content := strings.TrimSpace(strArg(args, "content"))
 	if fileToken == "" || content == "" {
-		return nil, errors.New("file_token and content required")
+		return map[string]any{"success": false, "error": "file_token and content required"}, nil
 	}
 	baseURL, _, _, err := feishuConfig()
 	if err != nil {

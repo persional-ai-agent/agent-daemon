@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"regexp"
 	"reflect"
 	"strings"
 	"testing"
@@ -260,6 +261,7 @@ func TestProcessSchemaOneOfConditionalRequirements(t *testing.T) {
 }
 
 func TestRegistrySchemasLint(t *testing.T) {
+	maxWithNumber := regexp.MustCompile(`(?i)\bmax\s+\d`)
 	registry := NewRegistry()
 	RegisterBuiltins(registry, NewProcessRegistry(t.TempDir()))
 	for _, schema := range registry.Schemas() {
@@ -305,6 +307,11 @@ func TestRegistrySchemasLint(t *testing.T) {
 			if minOK && maxOK && minV > maxV {
 				t.Fatalf("%s.%s minimum=%d > maximum=%d", schema.Function.Name, key, minV, maxV)
 			}
+			if desc, _ := field["description"].(string); maxWithNumber.MatchString(desc) {
+				if _, ok := field["maximum"]; !ok {
+					t.Fatalf("%s.%s description mentions max but maximum missing", schema.Function.Name, key)
+				}
+			}
 			if key == "limit" || key == "offset" || key == "page_size" {
 				if fieldType, _ := field["type"].(string); fieldType == "integer" {
 					if _, ok := field["minimum"]; !ok {
@@ -332,5 +339,20 @@ func TestExternalToolValidationReturnsSuccessFalse(t *testing.T) {
 	res, err = b.discordTool(t.Context(), map[string]any{"action": "fetch_channel"}, ToolContext{})
 	if err != nil || res["success"] != false {
 		t.Fatalf("discordTool expected success=false,nil err, got res=%v err=%v", res, err)
+	}
+
+	res, err = b.haGetState(t.Context(), map[string]any{}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("haGetState expected success=false,nil err, got res=%v err=%v", res, err)
+	}
+
+	res, err = b.browserNavigate(t.Context(), map[string]any{}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("browserNavigate expected success=false,nil err, got res=%v err=%v", res, err)
+	}
+
+	res, err = b.feishuDocRead(t.Context(), map[string]any{}, ToolContext{})
+	if err != nil || res["success"] != false {
+		t.Fatalf("feishuDocRead expected success=false,nil err, got res=%v err=%v", res, err)
 	}
 }

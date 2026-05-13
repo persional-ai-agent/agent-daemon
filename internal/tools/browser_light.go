@@ -64,7 +64,7 @@ func (b *BuiltinTools) browserNavigate(ctx context.Context, args map[string]any,
 	}
 	url := strings.TrimSpace(strArg(args, "url"))
 	if url == "" {
-		return nil, errors.New("url required")
+		return map[string]any{"success": false, "error": "url required"}, nil
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -189,7 +189,7 @@ func (b *BuiltinTools) browserClick(ctx context.Context, args map[string]any, tc
 	targetText := strings.TrimSpace(strArg(args, "text"))
 	hrefContains := strings.TrimSpace(strArg(args, "href_contains"))
 	if targetText == "" && hrefContains == "" {
-		return nil, errors.New("ref, text or href_contains required")
+		return map[string]any{"success": false, "error": "ref, text or href_contains required"}, nil
 	}
 	href, ok := findAnchorHref(p.HTML, targetText, hrefContains)
 	if !ok {
@@ -352,9 +352,6 @@ func (b *BuiltinTools) browserGetImages(_ context.Context, args map[string]any, 
 	limit := intArg(args, "limit", 200)
 	if limit <= 0 {
 		limit = 200
-	}
-	if limit > 1000 {
-		limit = 1000
 	}
 	if limit > 1000 {
 		limit = 1000

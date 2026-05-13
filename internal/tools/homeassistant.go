@@ -74,7 +74,7 @@ func (b *BuiltinTools) haListEntities(ctx context.Context, _ map[string]any, _ T
 func (b *BuiltinTools) haGetState(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	entityID := strings.TrimSpace(strArg(args, "entity_id"))
 	if entityID == "" {
-		return nil, errors.New("entity_id required")
+		return map[string]any{"success": false, "error": "entity_id required"}, nil
 	}
 	baseURL, token, err := hassConfig()
 	if err != nil {
@@ -113,7 +113,7 @@ func (b *BuiltinTools) haCallService(ctx context.Context, args map[string]any, _
 	domain := strings.TrimSpace(strArg(args, "domain"))
 	service := strings.TrimSpace(strArg(args, "service"))
 	if domain == "" || service == "" {
-		return nil, errors.New("domain and service required")
+		return map[string]any{"success": false, "error": "domain and service required"}, nil
 	}
 	entityID := strings.TrimSpace(strArg(args, "entity_id"))
 	serviceDataAny := args["service_data"]
@@ -157,4 +157,3 @@ func sliceLen(v any) int {
 		return 0
 	}
 }
-

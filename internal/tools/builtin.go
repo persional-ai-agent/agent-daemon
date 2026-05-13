@@ -1818,7 +1818,7 @@ func processParams() map[string]any {
 		"include_done":    map[string]any{"type": "boolean", "description": "For action=list, include finished processes (default false)."},
 		"limit":           map[string]any{"type": "integer", "minimum": 1, "description": "For action=list, maximum processes to return (default 50)."},
 		"offset":          map[string]any{"type": "integer", "minimum": 0, "description": "Byte offset for action=log (default 0)."},
-		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
+		"max_chars":       map[string]any{"type": "integer", "minimum": 1, "maximum": 200000, "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
 		"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "description": "For action=wait, timeout seconds (default 60)."},
 		"input":           map[string]any{"type": "string", "description": "For action=write (required)."},
 	}, "required": []string{}, "oneOf": []any{
@@ -1920,7 +1920,7 @@ func webSearchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20, "description": "Maximum results to return (default 5, max 20)."}, "base_url": map[string]any{"type": "string", "description": "Search endpoint URL (default https://duckduckgo.com/html/)."}}, "required": []string{"query"}}
 }
 func webExtractParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer", "description": "Maximum extracted text length (default 8000, max 200000)."}}, "required": []string{"url"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 200000, "description": "Maximum extracted text length (default 8000, max 200000)."}}, "required": []string{"url"}}
 }
 func stubParams() map[string]any {
 	// Keep schema footprint minimal while still being callable by name.
@@ -1987,7 +1987,7 @@ func browserBackParams() map[string]any {
 func browserSnapshotParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"full":      map[string]any{"type": "boolean", "description": "Compatibility hint; ignored by lightweight browser."},
-		"max_chars": map[string]any{"type": "integer", "description": "Maximum snapshot text length (default 120000, max 300000)."},
+		"max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 300000, "description": "Maximum snapshot text length (default 120000, max 300000)."},
 	}}
 }
 func browserClickParams() map[string]any {
@@ -2010,12 +2010,12 @@ func browserPressParams() map[string]any {
 func browserScrollParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		"direction": map[string]any{"type": "string", "enum": []string{"up", "down", "left", "right"}, "description": "Scroll direction (up/down/left/right, default down)."},
-		"amount":    map[string]any{"type": "integer", "description": "Scroll amount units (default 1, max 100)."},
+		"amount":    map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Scroll amount units (default 1, max 100)."},
 	}}
 }
 func browserGetImagesParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum number of images to return (default 200, max 1000)."},
+		"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 1000, "description": "Maximum number of images to return (default 200, max 1000)."},
 	}}
 }
 func browserConsoleParams() map[string]any {
@@ -2024,7 +2024,7 @@ func browserConsoleParams() map[string]any {
 	}}
 }
 func browserVisionParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum number of images to inspect (default 5, max 20)."}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20, "description": "Maximum number of images to inspect (default 5, max 20)."}}}
 }
 func browserCDPParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"include_html": map[string]any{"type": "boolean", "description": "Include page HTML in response (default false)."}}}
@@ -2050,7 +2050,7 @@ func mixtureOfAgentsParams() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"user_prompt":       map[string]any{"type": "string"},
-			"reference_agents":  map[string]any{"type": "integer", "description": "Number of reference subagents (default 3, max 6)"},
+			"reference_agents":  map[string]any{"type": "integer", "minimum": 1, "maximum": 6, "description": "Number of reference subagents (default 3, max 6)"},
 			"max_iterations":    map[string]any{"type": "integer", "description": "Max delegate iterations per subtask (default 12)."},
 			"timeout_seconds":   map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 180)."},
 		},
