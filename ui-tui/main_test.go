@@ -82,6 +82,23 @@ func TestParseStartupFlags(t *testing.T) {
 	}
 }
 
+func TestAddChatLineTruncateAndCap(t *testing.T) {
+	s := newState()
+	s.chatMaxLines = 2
+	s.addChatLine("a")
+	s.addChatLine(strings.Repeat("x", 500))
+	s.addChatLine("b")
+	if len(s.chatLog) != 2 {
+		t.Fatalf("chatLog len=%d", len(s.chatLog))
+	}
+	if s.chatLog[0] == "a" {
+		t.Fatalf("expected oldest line dropped: %+v", s.chatLog)
+	}
+	if len(s.chatLog[0]) > 303 {
+		t.Fatalf("expected line truncated, got len=%d", len(s.chatLog[0]))
+	}
+}
+
 func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
 	dir := t.TempDir()
 	s := newState()

@@ -70,6 +70,7 @@
   - 本地历史与事件日志滚动上限，避免无界增长
   - 启动自动 doctor 预检（可通过 `--no-doctor` 或 `[ui-tui] auto_doctor=false` 关闭）
   - 关键操作审计日志（approve/deny/cancel/config set）
+  - 全屏看板模式（`--fullscreen` / `AGENT_UI_TUI_FULLSCREEN=1`）支持实时状态 + 最近事件 + 时间线
 
 ## 4. 测试策略
 

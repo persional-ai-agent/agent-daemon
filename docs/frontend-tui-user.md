@@ -86,6 +86,7 @@ go run .
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
 - `/doctor`：后端能力预检（接口版本与连通性）
 - `/view human|json`：切换人类视图/JSON 视图
+- `/fullscreen on|off`：运行时切换全屏看板
 - `/version`：查看构建版本信息
 
 稳定性与排障：

@@ -388,3 +388,4 @@
 - `261-summary-cli-tui-standalone-auto-mode.md`：`agentd tui` 增加 standalone/lite/auto 模式，默认优先独立 ui-tui 并可自动回退
 - `262-summary-cli-tui-source-fallback-and-boot-message.md`：`agentd tui` 增加源码回退启动（go run ./ui-tui）与首条消息透传
 - `263-summary-ui-tui-fullscreen-dashboard-mode.md`：`ui-tui` 新增全屏看板模式并支持 `agentd tui -fullscreen` 透传
+- `264-summary-ui-tui-fullscreen-timeline-and-runtime-toggle.md`：`ui-tui` 全屏新增时间线面板与 `/fullscreen on|off` 运行时切换

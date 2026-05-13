@@ -92,11 +92,14 @@ type appState struct {
 	fallbackHint     string
 	diagUpdatedAt    string
 	fullscreen       bool
+	chatLog          []string
+	chatMaxLines     int
 }
 
 const (
 	defaultHistoryMaxLines = 2000
 	defaultEventMaxItems   = 2000
+	defaultChatMaxLines    = 2000
 )
 
 func getenvOr(key, def string) string {
@@ -169,6 +172,8 @@ func newState() *appState {
 		activeTransport:  "ws",
 		lastErrorCode:    "ok",
 		diagUpdatedAt:    time.Now().Format(time.RFC3339),
+		chatLog:          make([]string, 0),
+		chatMaxLines:     defaultChatMaxLines,
 	}
 	st.loadRuntimeState()
 	return st
@@ -387,11 +392,13 @@ func printHelp() {
 	fmt.Println("/reconnect timeout wait|reconnect|cancel")
 	fmt.Println("/diag                 show realtime diagnostics")
 	fmt.Println("/diag export <file>   export diagnostics bundle")
+	fmt.Println("/fullscreen           show fullscreen mode status")
+	fmt.Println("/fullscreen on|off    toggle fullscreen dashboard mode")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
 
-func printEvent(evt map[string]any) {
+func printEvent(evt map[string]any) string {
 	evtType := ""
 	if v, ok := evt["type"].(string); ok {
 		evtType = v
@@ -404,19 +411,24 @@ func printEvent(evt map[string]any) {
 	switch evtType {
 	case "assistant_message":
 		fmt.Printf("[assistant] %v\n", evt["content"])
+		return fmt.Sprintf("assistant: %v", evt["content"])
 	case "tool_started", "tool_finished":
 		toolName := evt["tool_name"]
 		if toolName == nil {
 			toolName = evt["ToolName"]
 		}
 		fmt.Printf("[%s] %v\n", evtType, toolName)
+		return fmt.Sprintf("%s: %v", evtType, toolName)
 	case "result":
 		fmt.Printf("[result] %v\n", evt["final_response"])
+		return fmt.Sprintf("result: %v", evt["final_response"])
 	case "error":
 		fmt.Printf("[error] %v\n", evt["error"])
+		return fmt.Sprintf("error: %v", evt["error"])
 	default:
 		bs, _ := json.Marshal(evt)
 		fmt.Printf("[%s] %s\n", evtType, string(bs))
+		return fmt.Sprintf("%s: %s", evtType, string(bs))
 	}
 }
 
@@ -474,7 +486,29 @@ func (s *appState) renderFullscreenFrame() {
 			fmt.Printf("- %s\n", typ)
 		}
 	}
+	fmt.Println("---- timeline ----")
+	lineStart := len(s.chatLog) - 10
+	if lineStart < 0 {
+		lineStart = 0
+	}
+	for _, ln := range s.chatLog[lineStart:] {
+		fmt.Printf("%s\n", ln)
+	}
 	fmt.Println("---- input ----")
+}
+
+func (s *appState) addChatLine(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	if len(line) > 300 {
+		line = line[:300] + "..."
+	}
+	s.chatLog = append(s.chatLog, line)
+	if len(s.chatLog) > s.chatMaxLines {
+		s.chatLog = append([]string(nil), s.chatLog[len(s.chatLog)-s.chatMaxLines:]...)
+	}
 }
 
 func asMap(v any) map[string]any {
@@ -1155,7 +1189,9 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				}
 			}
 			seenPayload[key] = struct{}{}
-			printEvent(evt)
+			if line := printEvent(evt); strings.TrimSpace(line) != "" {
+				s.addChatLine(line)
+			}
 			if onEvent != nil {
 				onEvent(evt)
 			}
@@ -1210,9 +1246,11 @@ func main() {
 	}
 	if boot := strings.TrimSpace(os.Getenv("AGENT_UI_TUI_BOOT_MESSAGE")); boot != "" {
 		fmt.Printf("[startup] send first message: %s\n", boot)
+		s.addChatLine("user: " + boot)
 		if err := s.sendTurn(boot, s.addEvent); err != nil {
 			fmt.Printf("[ws-error] %v\n", err)
 			s.setErrStatus(err)
+			s.addChatLine("system: startup send failed")
 		} else {
 			s.setStatus(true, "ok", "startup message sent")
 		}
@@ -1286,6 +1324,17 @@ func main() {
 		case text == "/status":
 			fmt.Printf("status=%s code=%s detail=%s\n", s.lastStatus, s.lastCode, s.lastDetail)
 			fmt.Printf("reconnect enabled=%v state=%s max=%d timeout_action=%s\n", s.reconnectEnabled, s.reconnectState, s.wsMaxReconnect, s.timeoutAction)
+		case text == "/fullscreen":
+			fmt.Printf("fullscreen: %v\n", s.fullscreen)
+			s.setStatus(true, "ok", "fullscreen status shown")
+		case text == "/fullscreen on":
+			s.fullscreen = true
+			fmt.Println("fullscreen: on")
+			s.setStatus(true, "ok", "fullscreen enabled")
+		case text == "/fullscreen off":
+			s.fullscreen = false
+			fmt.Println("fullscreen: off")
+			s.setStatus(true, "ok", "fullscreen disabled")
 		case text == "/reconnect status":
 			out := map[string]any{
 				"enabled":         s.reconnectEnabled,
@@ -1971,9 +2020,11 @@ func main() {
 			s.audit("config_set", "key="+key)
 			s.setStatus(true, "ok", "config updated")
 		default:
+			s.addChatLine("user: " + text)
 			if err := s.sendTurn(text, s.addEvent); err != nil {
 				fmt.Printf("[ws-error] %v\n", err)
 				s.setErrStatus(err)
+				s.addChatLine("system: send failed")
 			} else {
 				s.setStatus(true, "ok", "chat turn finished")
 			}

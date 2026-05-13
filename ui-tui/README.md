@@ -70,6 +70,8 @@ go run . --fullscreen
 - `/last` 查看最近一次 JSON 响应
 - `/save <file>` 保存最近一次 JSON 响应到文件
 - `/status` 查看最近一次命令状态
+- `/fullscreen` 查看全屏模式状态
+- `/fullscreen on|off` 运行时切换全屏看板
 - `/health` 查看后端健康状态
 - `/cancel` 取消当前会话中的运行任务
 - `/history [n]` 查看本地命令历史
