@@ -340,6 +340,17 @@ func TestBrowserSnapshotSchemaDocumentsMaxCharsBounds(t *testing.T) {
 	}
 }
 
+func TestBrowserScrollSchemaDirectionEnum(t *testing.T) {
+	params := browserScrollParams()
+	props, _ := params["properties"].(map[string]any)
+	dir, _ := props["direction"].(map[string]any)
+	enum, _ := dir["enum"].([]string)
+	want := []string{"up", "down", "left", "right"}
+	if !reflect.DeepEqual(enum, want) {
+		t.Fatalf("browser_scroll direction enum=%v, want=%v", enum, want)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)

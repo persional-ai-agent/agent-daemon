@@ -1995,7 +1995,7 @@ func browserPressParams() map[string]any {
 }
 func browserScrollParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"direction": map[string]any{"type": "string", "description": "Scroll direction (up/down/left/right, default down)."},
+		"direction": map[string]any{"type": "string", "enum": []string{"up", "down", "left", "right"}, "description": "Scroll direction (up/down/left/right, default down)."},
 		"amount":    map[string]any{"type": "integer", "description": "Scroll amount units (default 1, max 100)."},
 	}}
 }
