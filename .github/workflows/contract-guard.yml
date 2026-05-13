@@ -25,6 +25,15 @@ jobs:
           mkdir -p artifacts
           CONTRACT_REPLAY_REPORT="$PWD/artifacts/contract-replay.json" go test ./internal/api -run TestContractReplay -count=1
 
+      - name: Contract Coverage Gate
+        run: |
+          mkdir -p artifacts
+          go run ./scripts/contract_coverage \
+            -openapi docs/api/ui-chat-contract.openapi.yaml \
+            -replay internal/api/testdata/replay/cases.json \
+            -report artifacts/contract-coverage.json \
+            -enforce-core=true
+
       - name: Contract Diff (PR)
         if: github.event_name == 'pull_request'
         run: |
@@ -61,4 +70,12 @@ jobs:
         with:
           name: contract-replay-report
           path: artifacts/contract-replay.json
+          if-no-files-found: warn
+
+      - name: Upload Contract Coverage Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-coverage-report
+          path: artifacts/contract-coverage.json
           if-no-files-found: warn

@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": true,
+    "result": {
+      "success": true,
+      "key": "api.type",
+      "value": "openai"
+    },
+    "api_version": "v1",
+    "compat": "2026-05-13"
+  }
+}

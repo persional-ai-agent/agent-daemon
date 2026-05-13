@@ -3,12 +3,85 @@
     "name": "ui_tools_success",
     "method": "GET",
     "path": "/v1/ui/tools",
-    "snapshot": "ui_tools_success"
+    "contract_path": "/v1/ui/tools",
+    "snapshot": "ui_tools_success_replay"
+  },
+  {
+    "name": "ui_tool_schema_success",
+    "method": "GET",
+    "path": "/v1/ui/tools/x/schema",
+    "contract_path": "/v1/ui/tools/{name}/schema",
+    "snapshot": "ui_tool_schema_success"
+  },
+  {
+    "name": "ui_sessions_success",
+    "method": "GET",
+    "path": "/v1/ui/sessions?limit=2",
+    "contract_path": "/v1/ui/sessions",
+    "snapshot": "ui_sessions_success"
+  },
+  {
+    "name": "ui_session_detail_success",
+    "method": "GET",
+    "path": "/v1/ui/sessions/s1?offset=0&limit=2",
+    "contract_path": "/v1/ui/sessions/{session_id}",
+    "snapshot": "ui_session_detail_success"
+  },
+  {
+    "name": "ui_config_success",
+    "method": "GET",
+    "path": "/v1/ui/config",
+    "contract_path": "/v1/ui/config",
+    "snapshot": "ui_config_success"
+  },
+  {
+    "name": "ui_config_set_success",
+    "method": "POST",
+    "path": "/v1/ui/config/set",
+    "contract_path": "/v1/ui/config/set",
+    "content_type": "application/json",
+    "body": {
+      "key": "api.type",
+      "value": "openai"
+    },
+    "snapshot": "ui_config_set_success"
+  },
+  {
+    "name": "ui_gateway_status_success",
+    "method": "GET",
+    "path": "/v1/ui/gateway/status",
+    "contract_path": "/v1/ui/gateway/status",
+    "snapshot": "ui_gateway_status_success"
+  },
+  {
+    "name": "ui_gateway_action_success",
+    "method": "POST",
+    "path": "/v1/ui/gateway/action",
+    "contract_path": "/v1/ui/gateway/action",
+    "content_type": "application/json",
+    "body": {
+      "action": "enable"
+    },
+    "snapshot": "ui_gateway_action_success"
+  },
+  {
+    "name": "ui_approval_confirm_success",
+    "method": "POST",
+    "path": "/v1/ui/approval/confirm",
+    "contract_path": "/v1/ui/approval/confirm",
+    "content_type": "application/json",
+    "body": {
+      "session_id": "s-1",
+      "approval_id": "ap-1",
+      "approve": true
+    },
+    "snapshot": "ui_approval_confirm_success"
   },
   {
     "name": "chat_success",
     "method": "POST",
     "path": "/v1/chat",
+    "contract_path": "/v1/chat",
     "content_type": "application/json",
     "body": {
       "session_id": "s1",
@@ -20,6 +93,7 @@
     "name": "chat_cancel_success",
     "method": "POST",
     "path": "/v1/chat/cancel",
+    "contract_path": "/v1/chat/cancel",
     "content_type": "application/json",
     "body": {
       "session_id": "s-cancel"

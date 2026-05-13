@@ -83,6 +83,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/tools/{name}/schema:
+    get:
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tool schema
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [schema]
+                    properties:
+                      schema:
+                        type: object
   /v1/ui/sessions:
     get:
       parameters:

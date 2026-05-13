@@ -20,6 +20,7 @@ type replayCase struct {
 	Name        string         `json:"name"`
 	Method      string         `json:"method"`
 	Path        string         `json:"path"`
+	ContractPath string        `json:"contract_path,omitempty"`
 	ContentType string         `json:"content_type,omitempty"`
 	Body        map[string]any `json:"body,omitempty"`
 	Snapshot    string         `json:"snapshot"`
@@ -80,12 +81,31 @@ func replayServer() *Server {
 			return map[string]any{"success": true}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "approval",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success":     true,
+				"action":      args["action"],
+				"approval_id": args["approval_id"],
+				"approved":    args["approve"],
+			}, nil
+		},
+	})
 	return &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
 			Registry:     reg,
 			SessionStore: &stubSessionStore{},
 			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+		ConfigSnapshotFn: func() map[string]any { return map[string]any{"model_provider": "openai"} },
+		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
+			return map[string]any{"success": true, "key": key, "value": value}, nil
+		},
+		GatewayStatusFn: func() map[string]any { return map[string]any{"enabled": true, "running": false} },
+		GatewayActionFn: func(action string) (map[string]any, error) {
+			return map[string]any{"success": true, "action": action}, nil
 		},
 	}
 }
@@ -116,13 +136,17 @@ func findOpenAPIRequiredTop(spec openAPISpec, path, method, statusCode string) [
 
 func assertReplayOpenAPI(t *testing.T, spec openAPISpec, rc replayCase, rec *httptest.ResponseRecorder, body map[string]any) {
 	t.Helper()
-	pathItem := spec.Paths[rc.Path]
+	contractPath := strings.TrimSpace(rc.ContractPath)
+	if contractPath == "" {
+		contractPath = rc.Path
+	}
+	pathItem := spec.Paths[contractPath]
 	if pathItem == nil {
-		t.Fatalf("openapi missing path: %s", rc.Path)
+		t.Fatalf("openapi missing path: %s", contractPath)
 	}
 	op := pathItem[strings.ToLower(rc.Method)]
 	if op == nil {
-		t.Fatalf("openapi missing method: %s %s", rc.Method, rc.Path)
+		t.Fatalf("openapi missing method: %s %s", rc.Method, contractPath)
 	}
 	respCode := "200"
 	if rec.Code >= 400 {
@@ -130,11 +154,11 @@ func assertReplayOpenAPI(t *testing.T, spec openAPISpec, rc replayCase, rec *htt
 	}
 	responses := replayAsMap(replayAsMap(op)["responses"])
 	if _, ok := responses[respCode]; !ok {
-		t.Fatalf("openapi missing response code bucket %s for %s %s", respCode, rc.Method, rc.Path)
+		t.Fatalf("openapi missing response code bucket %s for %s %s", respCode, rc.Method, contractPath)
 	}
-	for _, key := range findOpenAPIRequiredTop(spec, rc.Path, rc.Method, respCode) {
+	for _, key := range findOpenAPIRequiredTop(spec, contractPath, rc.Method, respCode) {
 		if _, ok := body[key]; !ok {
-			t.Fatalf("openapi required field missing: %s (%s %s)", key, rc.Method, rc.Path)
+			t.Fatalf("openapi required field missing: %s (%s %s)", key, rc.Method, contractPath)
 		}
 	}
 }

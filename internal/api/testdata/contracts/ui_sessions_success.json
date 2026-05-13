@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": true,
+    "count": 2,
+    "sessions": [
+      {
+        "session_id": "s1",
+        "last_seen": "2026-05-13T00:00:00Z"
+      },
+      {
+        "session_id": "s2",
+        "last_seen": "2026-05-12T00:00:00Z"
+      }
+    ],
+    "api_version": "v1",
+    "compat": "2026-05-13"
+  }
+}
