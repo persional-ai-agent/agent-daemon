@@ -1809,7 +1809,7 @@ func terminalParams() map[string]any {
 }
 func processParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"action":          map[string]any{"type": "string", "enum": []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}},
+		"action":          map[string]any{"type": "string", "enum": []string{"list", "status", "poll", "log", "wait", "stop", "kill", "write"}, "description": "Action to perform (default: status)"},
 		"session_id":      map[string]any{"type": "string"},
 		"include_done":    map[string]any{"type": "boolean"},
 		"limit":           map[string]any{"type": "integer"},

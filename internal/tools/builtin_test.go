@@ -291,6 +291,16 @@ func TestApprovalSchemaDocumentsDefaultAction(t *testing.T) {
 	}
 }
 
+func TestProcessSchemaDocumentsDefaultAction(t *testing.T) {
+	params := processParams()
+	props, _ := params["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	desc, _ := action["description"].(string)
+	if !strings.Contains(desc, "default: status") {
+		t.Fatalf("process action description=%q, want default hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)
