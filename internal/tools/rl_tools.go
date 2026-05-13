@@ -282,7 +282,7 @@ func rlTestInferenceParams() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"environment": map[string]any{"type": "string"},
-			"timeout":     map[string]any{"type": "integer"},
+			"timeout":     map[string]any{"type": "integer", "description": "Foreground timeout seconds (default 180)."},
 		},
 	}
 }

@@ -27,7 +27,7 @@ func (b *BuiltinTools) ybSearchSticker(_ context.Context, args map[string]any, _
 }
 
 func ybSearchStickerParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "description": "Maximum stickers to return (default 10)."}}}
 }
 
 func ybSendParams() map[string]any {
@@ -194,7 +194,7 @@ func ybQueryGroupInfoParams() map[string]any {
 }
 
 func ybQueryGroupMembersParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"group_code": map[string]any{"type": "string"}, "chat_id": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}}, "required": []string{}}
+	return map[string]any{"type": "object", "properties": map[string]any{"group_code": map[string]any{"type": "string"}, "chat_id": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "description": "Pagination offset (default 0)."}, "limit": map[string]any{"type": "integer", "description": "Page size (default 200)."}}, "required": []string{}}
 }
 
 func findStickerByNameOrID(nameOrID string) *yuanbaoSticker {

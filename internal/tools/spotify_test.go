@@ -72,3 +72,37 @@ func TestSpotifyActionSchemasExposeEnum(t *testing.T) {
 	check("spotify_playback", spotifyPlaybackParams(), []string{"get", "pause", "play"})
 	check("spotify_queue", spotifyQueueParams(), []string{"get", "add"})
 }
+
+func TestSpotifySchemasDocumentDefaultsAndBounds(t *testing.T) {
+	props := func(params map[string]any) map[string]any {
+		p, _ := params["properties"].(map[string]any)
+		return p
+	}
+	search := props(spotifySearchParams())
+	searchType, _ := search["type"].(map[string]any)
+	searchLimit, _ := search["limit"].(map[string]any)
+	if desc, _ := searchType["description"].(string); !strings.Contains(desc, "default: track") {
+		t.Fatalf("spotify_search.type description=%q", desc)
+	}
+	if desc, _ := searchLimit["description"].(string); !strings.Contains(desc, "default 10") || !strings.Contains(desc, "max 50") {
+		t.Fatalf("spotify_search.limit description=%q", desc)
+	}
+	for _, tc := range []struct {
+		name   string
+		params map[string]any
+	}{
+		{"spotify_playlists", spotifyPlaylistsParams()},
+		{"spotify_albums", spotifyAlbumsParams()},
+		{"spotify_library", spotifyLibraryParams()},
+	} {
+		p := props(tc.params)
+		limit, _ := p["limit"].(map[string]any)
+		offset, _ := p["offset"].(map[string]any)
+		if desc, _ := limit["description"].(string); !strings.Contains(desc, "default 20") || !strings.Contains(desc, "max 50") {
+			t.Fatalf("%s.limit description=%q", tc.name, desc)
+		}
+		if desc, _ := offset["description"].(string); !strings.Contains(desc, "default 0") {
+			t.Fatalf("%s.offset description=%q", tc.name, desc)
+		}
+	}
+}
