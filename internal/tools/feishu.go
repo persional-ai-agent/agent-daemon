@@ -349,11 +349,11 @@ func (b *BuiltinTools) feishuDriveAddComment(ctx context.Context, args map[strin
 }
 
 func feishuDriveListCommentsParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string"}, "is_whole": map[string]any{"type": "boolean"}, "page_size": map[string]any{"type": "integer"}, "page_token": map[string]any{"type": "string"}}, "required": []string{"file_token"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string", "description": "Drive file type (default docx)."}, "is_whole": map[string]any{"type": "boolean", "description": "Whether to fetch comments for whole document (default false)."}, "page_size": map[string]any{"type": "integer", "description": "Page size (default 100, max 100)."}, "page_token": map[string]any{"type": "string"}}, "required": []string{"file_token"}}
 }
 
 func feishuDriveListCommentRepliesParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "comment_id": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string"}, "page_size": map[string]any{"type": "integer"}, "page_token": map[string]any{"type": "string"}}, "required": []string{"file_token", "comment_id"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "comment_id": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string", "description": "Drive file type (default docx)."}, "page_size": map[string]any{"type": "integer", "description": "Page size (default 100, max 100)."}, "page_token": map[string]any{"type": "string"}}, "required": []string{"file_token", "comment_id"}}
 }
 
 func feishuDriveReplyCommentParams() map[string]any {
@@ -363,4 +363,3 @@ func feishuDriveReplyCommentParams() map[string]any {
 func feishuDriveAddCommentParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"file_token": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}, "file_type": map[string]any{"type": "string"}}, "required": []string{"file_token", "content"}}
 }
-

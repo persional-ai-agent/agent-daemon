@@ -2041,8 +2041,8 @@ func mixtureOfAgentsParams() map[string]any {
 		"properties": map[string]any{
 			"user_prompt":       map[string]any{"type": "string"},
 			"reference_agents":  map[string]any{"type": "integer", "description": "Number of reference subagents (default 3, max 6)"},
-			"max_iterations":    map[string]any{"type": "integer"},
-			"timeout_seconds":   map[string]any{"type": "integer"},
+			"max_iterations":    map[string]any{"type": "integer", "description": "Max delegate iterations per subtask (default 12)."},
+			"timeout_seconds":   map[string]any{"type": "integer", "description": "Per-subtask timeout in seconds (default 180)."},
 		},
 		"required": []string{"user_prompt"},
 	}

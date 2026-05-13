@@ -60,11 +60,10 @@ func videoAnalyzeParams() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"path":    map[string]any{"type": "string"},
-			"timeout": map[string]any{"type": "integer"},
+			"timeout": map[string]any{"type": "integer", "description": "ffprobe timeout seconds (default 30)."},
 		},
 		"required": []string{"path"},
 	}
 }
 
 var _ = errors.New
-
