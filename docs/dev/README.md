@@ -394,3 +394,4 @@
 - `267-summary-ui-tui-fullscreen-multi-panel.md`：全屏模式新增多面板（overview/sessions/tools/gateway/diag）与 `/panel`、`/refresh` 管理
 - `268-summary-ui-tui-workbench-completion-bundle.md`：ui-tui 全屏工作台补齐（dashboard 聚合面板、panel list、状态持久化、测试与文档）
 - `269-summary-ui-tui-workbench-auto-refresh-and-persistence.md`：ui-tui 工作台补齐自动刷新策略与偏好持久化（panel auto/interval/status）
+- `270-summary-ui-tui-workbench-drilldown-and-approvals-panel.md`：ui-tui 工作台新增 approvals 面板与 `/open <index>` 条目钻取动作

@@ -149,6 +149,35 @@ func TestPanelCycle(t *testing.T) {
 	if prevPanel("overview") != "diag" {
 		t.Fatalf("prev panel mismatch")
 	}
+	names := panelNames()
+	foundApprovals := false
+	for _, n := range names {
+		if n == "approvals" {
+			foundApprovals = true
+			break
+		}
+	}
+	if !foundApprovals {
+		t.Fatalf("panelNames missing approvals: %v", names)
+	}
+}
+
+func TestPanelSelectionHelpers(t *testing.T) {
+	sessions := []any{map[string]any{"session_id": "s1"}}
+	sid, ok := selectSessionIDFromPanelData(sessions, 1)
+	if !ok || sid != "s1" {
+		t.Fatalf("selectSessionID failed sid=%q ok=%v", sid, ok)
+	}
+	tools := []any{"terminal"}
+	tool, ok := selectToolNameFromPanelData(tools, 1)
+	if !ok || tool != "terminal" {
+		t.Fatalf("selectToolName failed tool=%q ok=%v", tool, ok)
+	}
+	approvals := []any{map[string]any{"approval_id": "ap-1"}}
+	aid, ok := selectApprovalIDFromPanelData(approvals, 1)
+	if !ok || aid != "ap-1" {
+		t.Fatalf("selectApprovalID failed id=%q ok=%v", aid, ok)
+	}
 }
 
 func TestRuntimeStatePersistsFullscreenPanel(t *testing.T) {

@@ -87,10 +87,11 @@ go run .
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
 - `/doctor`：后端能力预检（接口版本与连通性）
 - `/actions`：打开快捷操作面板（编号选择常用动作）
-- `/panel [name]`、`/panel next|prev`：切换全屏面板（overview/dashboard/sessions/tools/gateway/diag）
+- `/panel [name]`、`/panel next|prev`：切换全屏面板（overview/dashboard/sessions/tools/approvals/gateway/diag）
 - `/panel list`：查看全屏面板清单
 - `/panel status`、`/panel auto on|off`、`/panel interval <sec>`：管理全屏面板自动刷新策略
 - `/refresh`：刷新当前全屏面板数据
+- `/open <index>`：打开当前面板条目（会话切换/工具详情/审批执行）
 - `/view human|json`：切换人类视图/JSON 视图
 - `/fullscreen on|off`：运行时切换全屏看板
 - `/version`：查看构建版本信息

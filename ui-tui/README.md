@@ -88,12 +88,13 @@ go run . --fullscreen
 - `/reload-config` 运行时重载 `[ui-tui]` 配置
 - `/doctor` 后端能力预检（health/sessions/approval/ws/config）
 - `/actions` 打开快捷操作面板（编号选择常用管理动作）
-- `/panel [name]` 切换全屏面板（overview/dashboard/sessions/tools/gateway/diag）
+- `/panel [name]` 切换全屏面板（overview/dashboard/sessions/tools/approvals/gateway/diag）
 - `/panel list` 列出全屏面板
 - `/panel next|prev` 循环切换全屏面板
 - `/panel status` 查看面板运行状态（自动刷新、间隔、最近刷新时间）
 - `/panel auto on|off` 开关面板自动刷新
 - `/panel interval <sec>` 设置面板刷新间隔（1..300 秒）
+- `/open <index>` 打开当前面板项（sessions/tools/approvals）
 - `/refresh` 刷新当前全屏面板数据
 - `/diag` 查看实时诊断（transport/reconnect/fallback/error）
 - `/diag export <file>` 导出诊断包（含 recent_events）

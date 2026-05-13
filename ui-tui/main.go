@@ -413,12 +413,13 @@ func printHelp() {
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
 	fmt.Println("/doctor               run backend capability checks")
 	fmt.Println("/actions              open quick action palette")
-	fmt.Println("/panel [name]         switch fullscreen panel (overview/dashboard/sessions/tools/gateway/diag)")
+	fmt.Println("/panel [name]         switch fullscreen panel (overview/dashboard/sessions/tools/approvals/gateway/diag)")
 	fmt.Println("/panel list           list available fullscreen panels")
 	fmt.Println("/panel next|prev      cycle fullscreen panels")
 	fmt.Println("/panel status         show panel runtime status")
 	fmt.Println("/panel auto on|off    toggle panel auto refresh")
 	fmt.Println("/panel interval <sec> set panel auto refresh interval")
+	fmt.Println("/open <index>         open item from current panel (sessions/tools/approvals)")
 	fmt.Println("/refresh              refresh current fullscreen panel data")
 	fmt.Println("/version              show ui-tui build metadata")
 	fmt.Println("/reconnect status     show reconnect status")
@@ -464,7 +465,7 @@ func actionCommandByIndex(s *appState, idx int) (string, bool) {
 }
 
 func panelNames() []string {
-	return []string{"overview", "dashboard", "sessions", "tools", "gateway", "diag"}
+	return []string{"overview", "dashboard", "sessions", "tools", "approvals", "gateway", "diag"}
 }
 
 func nextPanel(current string) string {
@@ -579,7 +580,7 @@ func (s *appState) renderFullscreenFrame() {
 	fmt.Printf("http: %s\n", s.httpBase)
 	fmt.Printf("status: %s/%s  detail: %s\n", s.lastStatus, s.lastCode, s.lastDetail)
 	fmt.Printf("transport: %s  reconnect: %s(%d)  view: %s\n", s.activeTransport, s.reconnectState, s.reconnectCount, s.viewMode)
-	fmt.Printf("panel: %s  auto=%v/%ds  hint: /panel next|prev|<name> /panel status /refresh /actions /quit\n", s.fullscreenPanel, s.panelAutoRefresh, s.panelRefreshSec)
+	fmt.Printf("panel: %s  auto=%v/%ds  hint: /panel next|prev|<name> /refresh /open <index> /actions /quit\n", s.fullscreenPanel, s.panelAutoRefresh, s.panelRefreshSec)
 	if s.fullscreenPanel != "overview" {
 		fmt.Println("---- panel data ----")
 		if payload, ok := s.panelData[s.fullscreenPanel]; ok {
@@ -644,6 +645,13 @@ func (s *appState) refreshCurrentPanel() error {
 			return err
 		}
 		s.panelData["tools"] = uiPayload(out, "tools", "result")
+	case "approvals":
+		out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+		if err != nil {
+			return err
+		}
+		msgs, _ := out["messages"].([]any)
+		s.panelData["approvals"] = findPendingApprovals(msgs, 50)
 	case "gateway":
 		out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
 		if err != nil {
@@ -665,11 +673,17 @@ func (s *appState) refreshCurrentPanel() error {
 		if err != nil {
 			return err
 		}
+		outSession, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+		if err != nil {
+			return err
+		}
+		msgs, _ := outSession["messages"].([]any)
 		s.panelData["dashboard"] = map[string]any{
-			"diag":     s.diagnosticsSnapshot(),
-			"sessions": uiPayload(outSessions, "sessions", "result"),
-			"tools":    uiPayload(outTools, "tools", "result"),
-			"gateway":  uiPayload(outGateway, "status", "result"),
+			"diag":      s.diagnosticsSnapshot(),
+			"sessions":  uiPayload(outSessions, "sessions", "result"),
+			"tools":     uiPayload(outTools, "tools", "result"),
+			"gateway":   uiPayload(outGateway, "status", "result"),
+			"approvals": findPendingApprovals(msgs, 20),
 		}
 	default:
 		return fmt.Errorf("unsupported panel: %s", s.fullscreenPanel)
@@ -709,6 +723,46 @@ func (s *appState) timelineSlice(limit int) []string {
 func asMap(v any) map[string]any {
 	m, _ := v.(map[string]any)
 	return m
+}
+
+func asSlice(v any) []any {
+	out, _ := v.([]any)
+	return out
+}
+
+func selectSessionIDFromPanelData(v any, idx int) (string, bool) {
+	rows := asSlice(v)
+	if idx <= 0 || idx > len(rows) {
+		return "", false
+	}
+	row := asMap(rows[idx-1])
+	if row == nil {
+		return "", false
+	}
+	sid, _ := row["session_id"].(string)
+	return strings.TrimSpace(sid), strings.TrimSpace(sid) != ""
+}
+
+func selectToolNameFromPanelData(v any, idx int) (string, bool) {
+	rows := asSlice(v)
+	if idx <= 0 || idx > len(rows) {
+		return "", false
+	}
+	name, _ := rows[idx-1].(string)
+	return strings.TrimSpace(name), strings.TrimSpace(name) != ""
+}
+
+func selectApprovalIDFromPanelData(v any, idx int) (string, bool) {
+	rows := asSlice(v)
+	if idx <= 0 || idx > len(rows) {
+		return "", false
+	}
+	row := asMap(rows[idx-1])
+	if row == nil {
+		return "", false
+	}
+	id, _ := row["approval_id"].(string)
+	return strings.TrimSpace(id), strings.TrimSpace(id) != ""
 }
 
 func findLatestPendingApproval(msgs []any) (string, map[string]any) {
@@ -1585,7 +1639,7 @@ func main() {
 					}
 				}
 				if !valid {
-					fmt.Println("usage: /panel [overview|dashboard|sessions|tools|gateway|diag|next|prev]")
+					fmt.Println("usage: /panel [overview|dashboard|sessions|tools|approvals|gateway|diag|next|prev]")
 					s.setStatus(false, "invalid_input", "invalid panel")
 					continue
 				}
@@ -2176,6 +2230,89 @@ func main() {
 			_ = s.saveRuntimeState()
 			fmt.Printf("session switched: %s\n", s.session)
 			s.setStatus(true, "ok", "session switched")
+		case strings.HasPrefix(text, "/open "):
+			idx, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(text, "/open ")))
+			if err != nil || idx <= 0 {
+				fmt.Println("usage: /open <index>")
+				s.setStatus(false, "invalid_input", "invalid open index")
+				continue
+			}
+			payload := s.panelData[s.fullscreenPanel]
+			switch s.fullscreenPanel {
+			case "sessions":
+				sid, ok := selectSessionIDFromPanelData(payload, idx)
+				if !ok {
+					fmt.Println("open failed: invalid session index")
+					s.setStatus(false, "invalid_input", "invalid session index")
+					continue
+				}
+				s.session = sid
+				s.lastShowSession = sid
+				s.lastShowOffset = 0
+				_ = s.saveRuntimeState()
+				fmt.Printf("session switched: %s\n", sid)
+				s.setStatus(true, "ok", "session opened")
+			case "tools":
+				name, ok := selectToolNameFromPanelData(payload, idx)
+				if !ok {
+					fmt.Println("open failed: invalid tool index")
+					s.setStatus(false, "invalid_input", "invalid tool index")
+					continue
+				}
+				out, err := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
+				if err != nil {
+					fmt.Printf("[http-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				p := uiPayload(out, "schema", "result")
+				s.lastJSON = p
+				s.printData(p)
+				s.setStatus(true, "ok", "tool opened")
+			case "approvals":
+				id, ok := selectApprovalIDFromPanelData(payload, idx)
+				if !ok {
+					fmt.Println("open failed: invalid approval index")
+					s.setStatus(false, "invalid_input", "invalid approval index")
+					continue
+				}
+				fmt.Printf("selected pending approval: %s\n", id)
+				fmt.Print("action [a=approve,d=deny,Enter skip]: ")
+				if !reader.Scan() {
+					s.setStatus(false, "cancelled", "approval action cancelled")
+					continue
+				}
+				act := strings.TrimSpace(strings.ToLower(reader.Text()))
+				if act == "" {
+					s.setStatus(true, "ok", "approval action skipped")
+					continue
+				}
+				approve := act == "a"
+				if act != "a" && act != "d" {
+					fmt.Println("invalid action, use a/d")
+					s.setStatus(false, "invalid_input", "invalid approval action")
+					continue
+				}
+				out, err := s.confirmApproval(id, approve)
+				if err != nil {
+					fmt.Printf("[approval-error] %v\n", err)
+					s.setErrStatus(err)
+					continue
+				}
+				if approve {
+					s.audit("approve", "approval_id="+id)
+				} else {
+					s.audit("deny", "approval_id="+id)
+				}
+				p := uiPayload(out, "result")
+				s.lastJSON = p
+				s.printData(p)
+				_ = s.refreshCurrentPanel()
+				s.setStatus(true, "ok", "approval action applied")
+			default:
+				fmt.Println("open is available for panels: sessions/tools/approvals")
+				s.setStatus(false, "not_supported", "open unsupported for current panel")
+			}
 		case strings.HasPrefix(text, "/show"):
 			parts := strings.Fields(text)
 			sid := s.session
