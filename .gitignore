@@ -2,6 +2,9 @@
 .idea/
 .dj-agent/
 AGENTS.md
+web/dist/
+web/node_modules/
+ui-tui/node_modules/
 
 
 # If you prefer the allow list template instead of the deny list, see community template:
