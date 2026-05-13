@@ -301,6 +301,16 @@ func TestProcessSchemaDocumentsDefaultAction(t *testing.T) {
 	}
 }
 
+func TestProcessSchemaDocumentsMaxCharsBounds(t *testing.T) {
+	params := processParams()
+	props, _ := params["properties"].(map[string]any)
+	maxChars, _ := props["max_chars"].(map[string]any)
+	desc, _ := maxChars["description"].(string)
+	if !strings.Contains(desc, "50000") || !strings.Contains(desc, "20000") || !strings.Contains(desc, "200000") {
+		t.Fatalf("process max_chars description=%q, want default/cap hints", desc)
+	}
+}
+
 func TestBrowserSchemasDocumentLimitBehavior(t *testing.T) {
 	check := func(name string, params map[string]any, want string) {
 		t.Helper()

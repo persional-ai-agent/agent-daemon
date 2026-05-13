@@ -1814,7 +1814,7 @@ func processParams() map[string]any {
 		"include_done":    map[string]any{"type": "boolean"},
 		"limit":           map[string]any{"type": "integer"},
 		"offset":          map[string]any{"type": "integer", "description": "Byte offset for action=log"},
-		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return"},
+		"max_chars":       map[string]any{"type": "integer", "description": "Max output chars to return (action=log default 50000, action=poll/wait default 20000, hard cap 200000)."},
 		"timeout_seconds": map[string]any{"type": "integer", "description": "For action=wait"},
 		"input":           map[string]any{"type": "string", "description": "For action=write"},
 	}, "required": []string{}}
@@ -1991,7 +1991,7 @@ func browserTypeParams() map[string]any {
 	}}
 }
 func browserPressParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"key": map[string]any{"type": "string"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"key": map[string]any{"type": "string", "description": "Key to press (default: unknown). Enter triggers best-effort GET form submit in lightweight mode."}}}
 }
 func browserScrollParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
