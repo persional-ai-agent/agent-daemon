@@ -1169,7 +1169,7 @@ func (b *BuiltinTools) sessionSearch(_ context.Context, args map[string]any, tc 
 func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	url := strArg(args, "url")
 	if url == "" {
-		return nil, errors.New("url required")
+		return map[string]any{"success": false, "error": "url required"}, nil
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -1188,7 +1188,7 @@ func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ Tool
 func (b *BuiltinTools) webSearch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	query := strings.TrimSpace(strArg(args, "query"))
 	if query == "" {
-		return nil, errors.New("query required")
+		return map[string]any{"success": false, "error": "query required"}, nil
 	}
 	limit := intArg(args, "limit", 5)
 	if limit <= 0 {
@@ -1219,7 +1219,7 @@ func (b *BuiltinTools) webSearch(ctx context.Context, args map[string]any, _ Too
 func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	rawURL := strings.TrimSpace(strArg(args, "url"))
 	if rawURL == "" {
-		return nil, errors.New("url required")
+		return map[string]any{"success": false, "error": "url required"}, nil
 	}
 	maxChars := intArg(args, "max_chars", 8000)
 	if maxChars <= 0 {
@@ -1243,7 +1243,7 @@ func (b *BuiltinTools) webExtract(ctx context.Context, args map[string]any, _ To
 func (b *BuiltinTools) clarify(_ context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
 	question := strings.TrimSpace(strArg(args, "question"))
 	if question == "" {
-		return nil, errors.New("question required")
+		return map[string]any{"success": false, "error": "question required"}, nil
 	}
 	allowFreeform := boolArg(args, "allow_freeform", true)
 
@@ -1333,7 +1333,7 @@ func (b *BuiltinTools) delegateTask(ctx context.Context, args map[string]any, tc
 	}
 	goal := strArg(args, "goal")
 	if strings.TrimSpace(goal) == "" {
-		return nil, errors.New("goal or tasks is required")
+		return map[string]any{"success": false, "error": "goal or tasks is required"}, nil
 	}
 	res, err := runDelegateSubtask(ctx, tc.DelegateRunner, tc.SessionID, goal, strArg(args, "context"), maxIterations, timeoutSeconds)
 	if err != nil {
@@ -1508,7 +1508,7 @@ func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc Tool
 func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
 	name := strings.TrimSpace(strArg(args, "name"))
 	if name == "" {
-		return nil, errors.New("name required")
+		return map[string]any{"success": false, "error": "name required"}, nil
 	}
 	root, err := resolveSkillsRoot(tc.Workdir, strArg(args, "path"))
 	if err != nil {
@@ -1601,7 +1601,7 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 	action := strings.ToLower(strings.TrimSpace(strArg(args, "action")))
 	name := strings.TrimSpace(strArg(args, "name"))
 	if name == "" {
-		return nil, errors.New("name required")
+		return map[string]any{"success": false, "error": "name required"}, nil
 	}
 	if !skillNameRE.MatchString(name) {
 		return nil, fmt.Errorf("invalid skill name: %s", name)
@@ -2121,6 +2121,15 @@ func skillManageParams() map[string]any {
 			"repo":         map[string]any{"type": "string", "description": "GitHub repo (owner/name) for source=github sync"},
 		},
 		"required": []string{"action", "name"},
+		"oneOf": []any{
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "create"}}, "required": []string{"content"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "edit"}}, "required": []string{"content"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "patch"}}, "required": []string{"old_string", "new_string"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "delete"}}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "write_file"}}, "required": []string{"file_path", "file_content"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "remove_file"}}, "required": []string{"file_path"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "sync"}, "source": map[string]any{"enum": []string{"github", "url"}}}},
+		},
 	}
 }
 
