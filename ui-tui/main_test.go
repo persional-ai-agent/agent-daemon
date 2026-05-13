@@ -120,6 +120,20 @@ func TestActionCommandByIndex(t *testing.T) {
 	}
 }
 
+func TestTimelineSlice(t *testing.T) {
+	s := newState()
+	s.addChatLine("u1")
+	s.addChatLine("a1")
+	s.addChatLine("u2")
+	got := s.timelineSlice(2)
+	if len(got) != 2 {
+		t.Fatalf("timelineSlice len=%d", len(got))
+	}
+	if got[0] != "a1" || got[1] != "u2" {
+		t.Fatalf("timelineSlice=%v", got)
+	}
+}
+
 func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
 	dir := t.TempDir()
 	s := newState()

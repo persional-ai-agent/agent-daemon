@@ -75,6 +75,7 @@ go run . --fullscreen
 - `/health` 查看后端健康状态
 - `/cancel` 取消当前会话中的运行任务
 - `/history [n]` 查看本地命令历史
+- `/timeline [n]` 查看最近对话时间线（user/assistant/tool/result 摘要）
 - `/rerun <index>` 重新执行历史命令
 - `/events [n]` 查看最近运行事件
 - `/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]` 保存事件日志到文件

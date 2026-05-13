@@ -374,6 +374,7 @@ func printHelp() {
 	fmt.Println("/health               check backend health endpoint")
 	fmt.Println("/cancel               cancel current session run")
 	fmt.Println("/history [n]          show local command history")
+	fmt.Println("/timeline [n]         show recent conversation timeline")
 	fmt.Println("/rerun <index>        rerun command from history")
 	fmt.Println("/events [n]           show recent runtime events")
 	fmt.Println("/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]")
@@ -427,7 +428,7 @@ func actionCommandByIndex(s *appState, idx int) (string, bool) {
 	return items[idx-1], true
 }
 
-func printEvent(evt map[string]any) string {
+func printEvent(evt map[string]any, emit bool) string {
 	evtType := ""
 	if v, ok := evt["type"].(string); ok {
 		evtType = v
@@ -439,24 +440,34 @@ func printEvent(evt map[string]any) string {
 	}
 	switch evtType {
 	case "assistant_message":
-		fmt.Printf("[assistant] %v\n", evt["content"])
+		if emit {
+			fmt.Printf("[assistant] %v\n", evt["content"])
+		}
 		return fmt.Sprintf("assistant: %v", evt["content"])
 	case "tool_started", "tool_finished":
 		toolName := evt["tool_name"]
 		if toolName == nil {
 			toolName = evt["ToolName"]
 		}
-		fmt.Printf("[%s] %v\n", evtType, toolName)
+		if emit {
+			fmt.Printf("[%s] %v\n", evtType, toolName)
+		}
 		return fmt.Sprintf("%s: %v", evtType, toolName)
 	case "result":
-		fmt.Printf("[result] %v\n", evt["final_response"])
+		if emit {
+			fmt.Printf("[result] %v\n", evt["final_response"])
+		}
 		return fmt.Sprintf("result: %v", evt["final_response"])
 	case "error":
-		fmt.Printf("[error] %v\n", evt["error"])
+		if emit {
+			fmt.Printf("[error] %v\n", evt["error"])
+		}
 		return fmt.Sprintf("error: %v", evt["error"])
 	default:
 		bs, _ := json.Marshal(evt)
-		fmt.Printf("[%s] %s\n", evtType, string(bs))
+		if emit {
+			fmt.Printf("[%s] %s\n", evtType, string(bs))
+		}
 		return fmt.Sprintf("%s: %s", evtType, string(bs))
 	}
 }
@@ -538,6 +549,20 @@ func (s *appState) addChatLine(line string) {
 	if len(s.chatLog) > s.chatMaxLines {
 		s.chatLog = append([]string(nil), s.chatLog[len(s.chatLog)-s.chatMaxLines:]...)
 	}
+}
+
+func (s *appState) timelineSlice(limit int) []string {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > len(s.chatLog) {
+		limit = len(s.chatLog)
+	}
+	if limit <= 0 {
+		return nil
+	}
+	start := len(s.chatLog) - limit
+	return append([]string(nil), s.chatLog[start:]...)
 }
 
 func asMap(v any) map[string]any {
@@ -1218,7 +1243,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				}
 			}
 			seenPayload[key] = struct{}{}
-			if line := printEvent(evt); strings.TrimSpace(line) != "" {
+			if line := printEvent(evt, !s.fullscreen); strings.TrimSpace(line) != "" {
 				s.addChatLine(line)
 			}
 			if onEvent != nil {
@@ -1492,6 +1517,24 @@ func main() {
 				fmt.Printf("%d. %s\n", i+1, item)
 			}
 			s.setStatus(true, "ok", "history loaded")
+		case strings.HasPrefix(text, "/timeline"):
+			parts := strings.Fields(text)
+			limit := 20
+			if len(parts) > 1 {
+				if v, err := strconv.Atoi(parts[1]); err == nil && v > 0 {
+					limit = v
+				}
+			}
+			items := s.timelineSlice(limit)
+			if len(items) == 0 {
+				fmt.Println("timeline empty")
+				s.setStatus(true, "ok", "timeline empty")
+				continue
+			}
+			for i, item := range items {
+				fmt.Printf("%d. %s\n", i+1, item)
+			}
+			s.setStatus(true, "ok", "timeline listed")
 		case strings.HasPrefix(text, "/rerun "):
 			idx, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(text, "/rerun ")))
 			if err != nil || idx <= 0 {

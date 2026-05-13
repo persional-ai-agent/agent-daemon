@@ -79,6 +79,7 @@ go run .
 - `/config tui`：查看 ui-tui 配置生效值与来源
 - `/health`、`/cancel`：健康检查与当前会话中断
 - `/history [n]`、`/rerun <index>`：本地历史查看与命令重放
+- `/timeline [n]`：查看最近对话时间线（user/assistant/tool/result 摘要）
 - `/events [n]`、`/events save <file>`：运行事件查看与导出
 - `/events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]`：按格式和时间范围导出
 - `/bookmark add|list|use`：会话配置书签
