@@ -79,6 +79,8 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "session_detail", method: http.MethodGet, path: "/v1/ui/sessions/s1?offset=0&limit=1"},
 		{name: "config", method: http.MethodGet, path: "/v1/ui/config"},
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
+		{name: "complete_slash", method: http.MethodPost, path: "/v1/ui/complete/slash", body: `{"text":"/to"}`},
+		{name: "complete_path", method: http.MethodPost, path: "/v1/ui/complete/path", body: `{"path":"./"}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

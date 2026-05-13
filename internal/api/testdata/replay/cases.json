@@ -78,6 +78,28 @@
     "snapshot": "ui_approval_confirm_success"
   },
   {
+    "name": "ui_complete_slash_success",
+    "method": "POST",
+    "path": "/v1/ui/complete/slash",
+    "contract_path": "/v1/ui/complete/slash",
+    "content_type": "application/json",
+    "body": {
+      "text": "/to"
+    },
+    "snapshot": "ui_complete_slash_success"
+  },
+  {
+    "name": "ui_complete_path_invalid",
+    "method": "POST",
+    "path": "/v1/ui/complete/path",
+    "contract_path": "/v1/ui/complete/path",
+    "content_type": "application/json",
+    "body": {
+      "path": "/__agent_daemon_missing_path__/a"
+    },
+    "snapshot": "ui_complete_path_invalid"
+  },
+  {
     "name": "chat_success",
     "method": "POST",
     "path": "/v1/chat",

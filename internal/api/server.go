@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,6 +94,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
+	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
+	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
 	return mux
 }
 
@@ -486,10 +490,116 @@ type uiGatewayActionRequest struct {
 	Action string `json:"action"`
 }
 
+type uiCompleteSlashRequest struct {
+	Text string `json:"text"`
+}
+
+type uiCompletePathRequest struct {
+	Path string `json:"path"`
+}
+
 type uiApprovalConfirmRequest struct {
 	SessionID  string `json:"session_id"`
 	ApprovalID string `json:"approval_id"`
 	Approve    bool   `json:"approve"`
+}
+
+var uiSlashCommands = []string{
+	"/help", "/tools", "/tool", "/sessions", "/session", "/show", "/pick", "/open", "/stats",
+	"/gateway", "/config", "/panel", "/refresh", "/fullscreen", "/diag", "/doctor", "/pending",
+	"/approve", "/deny", "/bookmark", "/workbench", "/workflow", "/history", "/timeline",
+	"/events", "/rerun", "/save", "/pretty", "/api", "/http", "/version", "/reconnect", "/quit",
+}
+
+func (s *Server) handleUICompleteSlash(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiCompleteSlashRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	text := strings.TrimSpace(req.Text)
+	if text == "" {
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok":           true,
+			"replace_from": 1,
+			"items":        uiSlashCommands,
+		})
+		return
+	}
+	if !strings.HasPrefix(text, "/") {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "slash text must start with /")
+		return
+	}
+	first := text
+	if idx := strings.IndexAny(first, " \t"); idx >= 0 {
+		first = first[:idx]
+	}
+	first = strings.ToLower(first)
+	items := make([]string, 0, len(uiSlashCommands))
+	for _, cmd := range uiSlashCommands {
+		if strings.HasPrefix(cmd, first) {
+			items = append(items, cmd)
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"replace_from": 1,
+		"items":        items,
+	})
+}
+
+func (s *Server) handleUICompletePath(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiCompletePathRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	raw := strings.TrimSpace(req.Path)
+	if raw == "" {
+		raw = "."
+	}
+	dir, base := filepath.Split(raw)
+	if dir == "" {
+		dir = "."
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
+		return
+	}
+	items := make([]string, 0, 32)
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, base) {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		if e.IsDir() {
+			candidate += string(filepath.Separator)
+		}
+		items = append(items, candidate)
+	}
+	sort.Strings(items)
+	if len(items) > 100 {
+		items = items[:100]
+	}
+	replaceFrom := len(raw) - len(base) + 1
+	if replaceFrom < 1 {
+		replaceFrom = 1
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"replace_from": replaceFrom,
+		"items":        items,
+	})
 }
 
 func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {

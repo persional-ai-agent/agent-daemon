@@ -278,6 +278,78 @@ paths:
                     properties:
                       result:
                         type: object
+  /v1/ui/complete/slash:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        "200":
+          description: Slash completion
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [replace_from, items]
+                    properties:
+                      replace_from:
+                        type: integer
+                        minimum: 1
+                      items:
+                        type: array
+                        items:
+                          type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/complete/path:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+      responses:
+        "200":
+          description: Path completion
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [replace_from, items]
+                    properties:
+                      replace_from:
+                        type: integer
+                        minimum: 1
+                      items:
+                        type: array
+                        items:
+                          type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/chat:
     post:
       requestBody:
