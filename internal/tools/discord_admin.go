@@ -128,7 +128,7 @@ func discordAdminParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":     map[string]any{"type": "string", "enum": []string{"list_guilds", "list_channels", "create_text_channel", "delete_channel"}},
+			"action":     map[string]any{"type": "string", "enum": []string{"list_guilds", "list_channels", "create_text_channel", "delete_channel"}, "description": "Action to perform (default: list_guilds)"},
 			"guild_id":   map[string]any{"type": "string"},
 			"channel_id": map[string]any{"type": "string"},
 			"name":       map[string]any{"type": "string"},

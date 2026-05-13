@@ -181,7 +181,7 @@ func discordToolParams() map[string]any {
 				"fetch_messages",
 				"send_message",
 				"react",
-			}},
+			}, "description": "Action to perform (default: list_guilds)"},
 			"guild_id":   map[string]any{"type": "string"},
 			"channel_id": map[string]any{"type": "string"},
 			"message_id": map[string]any{"type": "string"},
