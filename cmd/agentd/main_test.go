@@ -1,7 +1,10 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/config"
@@ -313,5 +316,76 @@ func TestGatewayStatus(t *testing.T) {
 	}
 	if len(status.SupportedPlatforms) != 4 {
 		t.Fatalf("supported platforms = %#v", status.SupportedPlatforms)
+	}
+}
+
+func TestGatewayStatusLockFields(t *testing.T) {
+	workdir := t.TempDir()
+	cfg := config.Config{
+		Workdir:       workdir,
+		TelegramToken: "telegram-token",
+	}
+	lockPath := gatewayLockPath(cfg)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, []byte("999999"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tokenLockPath := gatewayTokenLockPath(cfg)
+	if strings.TrimSpace(tokenLockPath) == "" {
+		t.Fatal("token lock path should not be empty when token configured")
+	}
+	if err := os.MkdirAll(filepath.Dir(tokenLockPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(tokenLockPath) })
+	if err := os.WriteFile(tokenLockPath, []byte("999999"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status := gatewayStatus(cfg)
+	if status.LockPID != 999999 || status.TokenLockPID != 999999 {
+		t.Fatalf("unexpected lock pid values: lock=%d token=%d", status.LockPID, status.TokenLockPID)
+	}
+	if status.Locked || status.TokenLocked {
+		t.Fatalf("stale lock should not be marked as locked: %#v", status)
+	}
+}
+
+func TestGatewayStatusTokenLockAlive(t *testing.T) {
+	workdir := t.TempDir()
+	cfg := config.Config{
+		Workdir:       workdir,
+		TelegramToken: "telegram-token",
+	}
+	tokenLockPath := gatewayTokenLockPath(cfg)
+	if strings.TrimSpace(tokenLockPath) == "" {
+		t.Fatal("token lock path should not be empty when token configured")
+	}
+	if err := os.MkdirAll(filepath.Dir(tokenLockPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(tokenLockPath) })
+	if err := os.WriteFile(tokenLockPath, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status := gatewayStatus(cfg)
+	if !status.TokenLocked {
+		t.Fatalf("expected token lock alive, got %#v", status)
+	}
+}
+
+func TestBuildYuanbaoManifestExportContainsApprovalQuickReplies(t *testing.T) {
+	out := buildYuanbaoManifestExport()
+	raw, ok := out["quick_replies"].([]map[string]string)
+	if !ok {
+		t.Fatalf("quick_replies type invalid: %T", out["quick_replies"])
+	}
+	routeByText := map[string]string{}
+	for _, item := range raw {
+		routeByText[item["text"]] = item["route"]
+	}
+	if routeByText["批准"] != "/approve" || routeByText["拒绝"] != "/deny" {
+		t.Fatalf("approval quick replies mismatch: %#v", routeByText)
 	}
 }

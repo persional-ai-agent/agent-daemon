@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+	"github.com/slack-go/slack"
 )
 
 func TestSlackAdapterName(t *testing.T) {
@@ -38,4 +39,31 @@ func TestTruncateSlack(t *testing.T) {
 	if len(s) > 40000 {
 		t.Errorf("too long: %d", len(s))
 	}
+}
+
+func TestRenderSlackSlashCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		text    string
+		want    string
+	}{
+		{name: "empty command", command: "", text: "status", want: ""},
+		{name: "built in with arg", command: "/approve", text: "abc", want: "/approve abc"},
+		{name: "built in direct", command: "/status", text: "", want: "/status"},
+		{name: "text already slash", command: "/agent", text: "/pending", want: "/pending"},
+		{name: "generic entrypoint", command: "/agent", text: "status", want: "/status"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderSlackSlashCommand(fakeSlashCommand(tt.command, tt.text))
+			if got != tt.want {
+				t.Fatalf("renderSlash command=%q text=%q got=%q want=%q", tt.command, tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+func fakeSlashCommand(command, text string) slack.SlashCommand {
+	return slack.SlashCommand{Command: command, Text: text}
 }

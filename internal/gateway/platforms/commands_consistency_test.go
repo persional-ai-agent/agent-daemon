@@ -21,3 +21,26 @@ func TestTelegramDiscordApprovalCommandsConsistency(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayBuiltInCommandsCrossPlatformConsistency(t *testing.T) {
+	telegram := map[string]bool{}
+	for _, c := range TelegramCommands() {
+		telegram["/"+c.Command] = true
+	}
+	discord := map[string]bool{}
+	for _, c := range DiscordApplicationCommands() {
+		discord["/"+c.Name] = true
+	}
+	shared := []string{"/pair", "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/grant", "/revoke", "/approve", "/deny", "/help"}
+	for _, name := range shared {
+		if !telegram[name] {
+			t.Fatalf("telegram missing command: %s", name)
+		}
+		if !discord[name] {
+			t.Fatalf("discord missing command: %s", name)
+		}
+		if !isBuiltInGatewaySlashCommand(name[1:]) {
+			t.Fatalf("slack builtin list missing command: %s", name)
+		}
+	}
+}
