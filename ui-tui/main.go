@@ -35,6 +35,13 @@ type runtimeState struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type doctorItem struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Detail  string `json:"detail"`
+	Checked string `json:"checked_at"`
+}
+
 type appState struct {
 	wsBase   string
 	httpBase string
@@ -291,6 +298,7 @@ func printHelp() {
 	fmt.Println("/approve [id]         approve pending approval id (default latest)")
 	fmt.Println("/deny [id]            deny pending approval id (default latest)")
 	fmt.Println("/reload-config        reload [ui-tui] config from config.ini")
+	fmt.Println("/doctor               run backend capability checks")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg, h")
 }
@@ -568,6 +576,87 @@ func httpJSON(method, endpoint string, body map[string]any) (map[string]any, err
 	return out, nil
 }
 
+func httpStatus(method, endpoint string, body map[string]any) (int, string, error) {
+	var reader io.Reader
+	if body != nil {
+		bs, _ := json.Marshal(body)
+		reader = bytes.NewReader(bs)
+	}
+	req, err := http.NewRequest(method, endpoint, reader)
+	if err != nil {
+		return 0, "", err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+	bs, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, strings.TrimSpace(string(bs)), nil
+}
+
+func (s *appState) runDoctor() ([]doctorItem, bool) {
+	now := time.Now().Format(time.RFC3339)
+	items := make([]doctorItem, 0, 5)
+	allOK := true
+	add := func(name, status, detail string) {
+		if status != "ok" {
+			allOK = false
+		}
+		items = append(items, doctorItem{Name: name, Status: status, Detail: detail, Checked: now})
+	}
+
+	if out, err := httpJSON(http.MethodGet, s.httpBase+"/health", nil); err != nil {
+		add("health", "fail", err.Error())
+	} else {
+		add("health", "ok", fmt.Sprintf("status=%v", out["status"]))
+	}
+
+	if _, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(s.session)), nil); err != nil {
+		add("sessions_detail", "fail", err.Error())
+	} else {
+		add("sessions_detail", "ok", "session detail endpoint reachable")
+	}
+
+	code, body, err := httpStatus(http.MethodPost, s.httpBase+"/v1/ui/approval/confirm", map[string]any{
+		"session_id":  s.session,
+		"approval_id": "doctor-probe",
+		"approve":     true,
+	})
+	if err != nil {
+		add("approval_confirm", "fail", err.Error())
+	} else {
+		switch code {
+		case http.StatusNotFound:
+			add("approval_confirm", "fail", "endpoint missing: upgrade backend to support /v1/ui/approval/confirm")
+		case http.StatusBadRequest, http.StatusOK:
+			add("approval_confirm", "ok", fmt.Sprintf("endpoint reachable (http %d)", code))
+		default:
+			add("approval_confirm", "warn", fmt.Sprintf("unexpected status=%d body=%s", code, body))
+		}
+	}
+
+	add("config_effective", "ok", fmt.Sprintf("ws=%s http=%s reconnect=%d read_timeout=%s turn_timeout=%s history_max=%d event_max=%d", s.wsBase, s.httpBase, s.wsMaxReconnect, s.wsReadTimeout, s.wsTurnTimeout, s.historyMaxLines, s.eventMaxItems))
+
+	u, err := url.Parse(s.wsBase)
+	if err != nil {
+		add("ws_reachable", "fail", err.Error())
+	} else {
+		d := websocket.Dialer{HandshakeTimeout: 3 * time.Second}
+		conn, _, dialErr := d.Dial(u.String(), nil)
+		if dialErr != nil {
+			add("ws_reachable", "warn", dialErr.Error())
+		} else {
+			_ = conn.Close()
+			add("ws_reachable", "ok", "websocket handshake ok")
+		}
+	}
+	return items, allOK
+}
+
 func (s *appState) appendHistory(cmd string) {
 	if strings.TrimSpace(cmd) == "" {
 		return
@@ -823,6 +912,15 @@ func main() {
 		case text == "/help":
 			printHelp()
 			s.setStatus(true, "ok", "help shown")
+		case text == "/doctor":
+			items, allOK := s.runDoctor()
+			s.lastJSON = map[string]any{"checks": items, "ok": allOK}
+			printJSONMode(s.lastJSON, s.pretty)
+			if allOK {
+				s.setStatus(true, "ok", "doctor checks passed")
+			} else {
+				s.setStatus(false, "doctor_failed", "doctor checks found failures")
+			}
 		case text == "/reload-config":
 			cfg := appconfig.Load()
 			s.applyConfig(cfg)

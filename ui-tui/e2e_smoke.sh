@@ -16,6 +16,7 @@ OUT_LOCAL="$(mktemp)"
 HOME="$TMP_HOME" AGENT_HTTP_BASE="$BASE_HTTP" AGENT_API_BASE="$BASE_WS" \
 	timeout 20s go run ./ui-tui <<'EOF' >"$OUT_LOCAL"
 /help
+/doctor
 /status
 /reload-config
 /history 5

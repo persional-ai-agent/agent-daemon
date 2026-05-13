@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -121,5 +122,39 @@ func TestSendTurnReconnect(t *testing.T) {
 	}
 	if seen < 2 {
 		t.Fatalf("expected >=2 events, got %d", seen)
+	}
+}
+
+func TestRunDoctor(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+	})
+	mux.HandleFunc("/v1/ui/sessions/", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"messages": []any{}, "stats": map[string]any{}})
+	})
+	mux.HandleFunc("/v1/ui/approval/confirm", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "pending approval not found", http.StatusBadRequest)
+	})
+	mux.HandleFunc("/v1/chat/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Fatalf("upgrade: %v", err)
+		}
+		_ = conn.Close()
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	s := newState()
+	s.httpBase = ts.URL
+	s.wsBase = "ws" + strings.TrimPrefix(ts.URL, "http") + "/v1/chat/ws"
+	items, ok := s.runDoctor()
+	if !ok {
+		t.Fatalf("expected doctor ok, items=%+v", items)
+	}
+	if len(items) < 5 {
+		t.Fatalf("expected >=5 checks, got %d", len(items))
 	}
 }

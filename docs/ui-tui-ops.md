@@ -48,6 +48,7 @@
 
 - 全量测试：`go test ./...`
 - ui-tui 烟测：`./ui-tui/e2e_smoke.sh`
+- 运行时预检：`/doctor`（检查 health、session detail、approval confirm、ws 握手、配置生效）
 
 ## 6. 升级兼容检查
 

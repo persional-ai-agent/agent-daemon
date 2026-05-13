@@ -354,3 +354,4 @@
 - `227-summary-ui-tui-usability-finalization.md`：ui-tui 易用性收口（审批列表/默认审批/热更新/自修复）
 - `228-summary-ui-tui-final-audit-and-baseline.md`：ui-tui 最终审计、真实回归与基线标记
 - `229-summary-backend-compat-session-stats-and-approval-confirm.md`：后端兼容修复（SessionStats 空值 + approval confirm 检查）
+- `230-summary-ui-tui-doctor-command.md`：ui-tui 新增 /doctor 后端能力预检命令

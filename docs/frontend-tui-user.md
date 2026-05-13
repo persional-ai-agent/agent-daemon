@@ -73,6 +73,7 @@ go run .
 - `/bookmark add|list|use`：会话配置书签
 - `/pending [n]`、`/approve [id]`、`/deny [id]`：终端内审批闭环（可默认处理最近一条）
 - `/reload-config`：运行时重载 `[ui-tui]` 配置
+- `/doctor`：后端能力预检（接口版本与连通性）
 
 稳定性与排障：
 
