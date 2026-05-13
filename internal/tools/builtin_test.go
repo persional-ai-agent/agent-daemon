@@ -351,6 +351,16 @@ func TestBrowserScrollSchemaDirectionEnum(t *testing.T) {
 	}
 }
 
+func TestBrowserVisionSchemaDocumentsLimitBounds(t *testing.T) {
+	params := browserVisionParams()
+	props, _ := params["properties"].(map[string]any)
+	limit, _ := props["limit"].(map[string]any)
+	desc, _ := limit["description"].(string)
+	if !strings.Contains(desc, "default 5") || !strings.Contains(desc, "max 20") {
+		t.Fatalf("browser_vision limit description=%q, want default/max hint", desc)
+	}
+}
+
 func TestApprovalToolPatternGrantAndStatus(t *testing.T) {
 	b := &BuiltinTools{}
 	store := NewApprovalStore(time.Minute)

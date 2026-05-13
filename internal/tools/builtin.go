@@ -2010,7 +2010,7 @@ func browserConsoleParams() map[string]any {
 	}}
 }
 func browserVisionParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer"}}}
+	return map[string]any{"type": "object", "properties": map[string]any{"limit": map[string]any{"type": "integer", "description": "Maximum number of images to inspect (default 5, max 20)."}}}
 }
 func browserCDPParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"include_html": map[string]any{"type": "boolean"}}}
