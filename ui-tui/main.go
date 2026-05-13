@@ -49,6 +49,7 @@ func printHelp() {
 	fmt.Println("/pretty on|off        enable/disable pretty json")
 	fmt.Println("/last                 print last json payload")
 	fmt.Println("/save <file>          save last json payload")
+	fmt.Println("/status               show last command status")
 	fmt.Println("/quit                 exit")
 	fmt.Println("aliases: :q, quit, ls, show, gw, cfg")
 }
@@ -186,6 +187,8 @@ func main() {
 	sessionID := getenvOr("AGENT_SESSION_ID", uuid.NewString())
 	pretty := true
 	var lastJSON any
+	lastStatus := "ok"
+	lastDetail := "initialized"
 	lastShowSession := sessionID
 	lastShowOffset := 0
 	lastShowLimit := 20
@@ -196,7 +199,7 @@ func main() {
 	fmt.Println("输入 /help 查看命令")
 	reader := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Print("tui> ")
+		fmt.Printf("tui[%s]> ", lastStatus)
 		if !reader.Scan() {
 			fmt.Println("bye")
 			return
@@ -244,6 +247,9 @@ func main() {
 		case text == "/quit" || text == "/exit":
 			fmt.Println("bye")
 			return
+		case text == "/status":
+			fmt.Printf("status=%s detail=%s\n", lastStatus, lastDetail)
+			continue
 		case text == "/help":
 			printHelp()
 			continue
@@ -266,10 +272,12 @@ func main() {
 			next := strings.TrimSpace(strings.TrimPrefix(text, "/api "))
 			if !strings.HasPrefix(next, "ws://") && !strings.HasPrefix(next, "wss://") {
 				fmt.Println("api must start with ws:// or wss://")
+				lastStatus, lastDetail = "err", "invalid ws url"
 				continue
 			}
 			apiBase = next
 			fmt.Printf("ws switched: %s\n", apiBase)
+			lastStatus, lastDetail = "ok", "ws switched"
 			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) == "" {
 				httpBase = deriveHTTPBase(apiBase)
 				fmt.Printf("http auto-updated: %s\n", httpBase)
@@ -282,10 +290,12 @@ func main() {
 			next := strings.TrimSpace(strings.TrimPrefix(text, "/http "))
 			if !strings.HasPrefix(next, "http://") && !strings.HasPrefix(next, "https://") {
 				fmt.Println("http api must start with http:// or https://")
+				lastStatus, lastDetail = "err", "invalid http url"
 				continue
 			}
 			httpBase = strings.TrimRight(next, "/")
 			fmt.Printf("http switched: %s\n", httpBase)
+			lastStatus, lastDetail = "ok", "http switched"
 			continue
 		case text == "/last":
 			if lastJSON == nil {
@@ -333,10 +343,12 @@ func main() {
 			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/tools", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
+				lastStatus, lastDetail = "err", err.Error()
 				continue
 			}
 			lastJSON = out
 			printJSONMode(out, pretty)
+			lastStatus, lastDetail = "ok", "tools listed"
 			continue
 		case strings.HasPrefix(text, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
@@ -347,10 +359,12 @@ func main() {
 			out, err := httpJSON(http.MethodGet, httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
+				lastStatus, lastDetail = "err", err.Error()
 				continue
 			}
 			lastJSON = out
 			printJSONMode(out, pretty)
+			lastStatus, lastDetail = "ok", "tool schema loaded"
 			continue
 		case strings.HasPrefix(text, "/sessions"):
 			parts := strings.Fields(text)
@@ -363,6 +377,7 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", httpBase, limit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
+				lastStatus, lastDetail = "err", err.Error()
 				continue
 			}
 			lastSessions = lastSessions[:0]
@@ -379,6 +394,7 @@ func main() {
 			}
 			lastJSON = out
 			printJSONMode(out, pretty)
+			lastStatus, lastDetail = "ok", "sessions listed"
 			continue
 		case strings.HasPrefix(text, "/pick "):
 			arg := strings.TrimSpace(strings.TrimPrefix(text, "/pick "))
@@ -420,10 +436,12 @@ func main() {
 			out, err := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", httpBase, url.PathEscape(sid), offset, limit), nil)
 			if err != nil {
 				fmt.Printf("[http-error] %v\n", err)
+				lastStatus, lastDetail = "err", err.Error()
 				continue
 			}
 			lastJSON = out
 			printJSONMode(out, pretty)
+			lastStatus, lastDetail = "ok", "show loaded"
 			continue
 		case text == "/next":
 			lastShowOffset += lastShowLimit
@@ -518,6 +536,9 @@ func main() {
 		default:
 			if err := sendTurn(apiBase, sessionID, text); err != nil {
 				fmt.Printf("[ws-error] %v\n", err)
+				lastStatus, lastDetail = "err", err.Error()
+			} else {
+				lastStatus, lastDetail = "ok", "chat turn finished"
 			}
 		}
 	}

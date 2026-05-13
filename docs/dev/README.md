@@ -346,3 +346,4 @@
 - `219-summary-ui-tui-pagination-shortcuts.md`：ui-tui 分页快捷翻页（next/prev）
 - `220-summary-ui-tui-quick-session-pick.md`：ui-tui 快速会话选择（pick）
 - `221-summary-ui-tui-command-aliases.md`：ui-tui 命令别名与容错输入
+- `222-summary-ui-tui-command-status.md`：ui-tui 命令状态提示与状态查询
