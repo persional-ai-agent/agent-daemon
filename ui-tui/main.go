@@ -639,17 +639,51 @@ func httpJSON(method, endpoint string, body map[string]any) (map[string]any, err
 	}
 	defer resp.Body.Close()
 	bs, _ := io.ReadAll(resp.Body)
+	out := map[string]any{}
+	if len(bs) > 0 {
+		if err := json.Unmarshal(bs, &out); err != nil {
+			if resp.StatusCode >= 400 {
+				return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(bs)))
+			}
+			return nil, err
+		}
+	}
 	if resp.StatusCode >= 400 {
+		if errObj, ok := out["error"].(map[string]any); ok {
+			code, _ := errObj["code"].(string)
+			msg, _ := errObj["message"].(string)
+			if strings.TrimSpace(code) != "" || strings.TrimSpace(msg) != "" {
+				return nil, fmt.Errorf("http %d [%s]: %s", resp.StatusCode, code, msg)
+			}
+		}
 		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(bs)))
 	}
-	out := map[string]any{}
-	if len(bs) == 0 {
-		return out, nil
-	}
-	if err := json.Unmarshal(bs, &out); err != nil {
-		return nil, err
+	if okVal, exists := out["ok"]; exists {
+		if okBool, ok := okVal.(bool); ok && !okBool {
+			if errObj, ok := out["error"].(map[string]any); ok {
+				code, _ := errObj["code"].(string)
+				msg, _ := errObj["message"].(string)
+				return nil, fmt.Errorf("[%s]: %s", code, msg)
+			}
+			return nil, fmt.Errorf("ui api returned ok=false")
+		}
 	}
 	return out, nil
+}
+
+func uiPayload(out map[string]any, keys ...string) any {
+	if out == nil {
+		return nil
+	}
+	for _, k := range keys {
+		if v, ok := out[k]; ok {
+			return v
+		}
+	}
+	if v, ok := out["result"]; ok {
+		return v
+	}
+	return out
 }
 
 func httpStatus(method, endpoint string, body map[string]any) (int, string, error) {
@@ -1053,8 +1087,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "status", "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "health checked")
 		case text == "/cancel":
 			out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
@@ -1065,8 +1100,9 @@ func main() {
 				continue
 			}
 			s.audit("cancel", "requested")
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "cancel requested")
 		case strings.HasPrefix(text, "/history"):
 			parts := strings.Fields(text)
@@ -1190,8 +1226,9 @@ func main() {
 								s.setErrStatus(err)
 							} else {
 								s.audit("approve", "approval_id="+id)
-								s.lastJSON = out
-								s.printData(out)
+								p := uiPayload(out, "result")
+								s.lastJSON = p
+								s.printData(p)
 								s.setStatus(true, "ok", "approval confirmed")
 							}
 						} else if act == "d" {
@@ -1202,8 +1239,9 @@ func main() {
 								s.setErrStatus(err)
 							} else {
 								s.audit("deny", "approval_id="+id)
-								s.lastJSON = out
-								s.printData(out)
+								p := uiPayload(out, "result")
+								s.lastJSON = p
+								s.printData(p)
 								s.setStatus(true, "ok", "approval denied")
 							}
 						}
@@ -1237,8 +1275,9 @@ func main() {
 				continue
 			}
 			s.audit("approve", "approval_id="+id)
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "approval confirmed")
 		case text == "/deny" || strings.HasPrefix(text, "/deny "):
 			id := strings.TrimSpace(strings.TrimPrefix(text, "/deny "))
@@ -1266,8 +1305,9 @@ func main() {
 				continue
 			}
 			s.audit("deny", "approval_id="+id)
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "approval denied")
 		case strings.HasPrefix(text, "/bookmark "):
 			parts := strings.Fields(text)
@@ -1407,8 +1447,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "tools", "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "tools listed")
 		case strings.HasPrefix(text, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(text, "/tool "))
@@ -1423,8 +1464,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "schema", "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "tool schema loaded")
 		case strings.HasPrefix(text, "/sessions"):
 			parts := strings.Fields(text)
@@ -1440,8 +1482,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
+			payload := uiPayload(out, "sessions", "result")
 			s.lastSessions = s.lastSessions[:0]
-			if rows, ok := out["sessions"].([]any); ok {
+			if rows, ok := payload.([]any); ok {
 				for _, row := range rows {
 					m, ok := row.(map[string]any)
 					if !ok {
@@ -1452,8 +1495,8 @@ func main() {
 					}
 				}
 			}
-			s.lastJSON = out
-			s.printData(out)
+			s.lastJSON = payload
+			s.printData(payload)
 			if idx, ok := promptIndex(reader, "select session index to switch", len(s.lastSessions)); ok {
 				s.session = s.lastSessions[idx-1]
 				s.lastShowSession = s.session
@@ -1554,8 +1597,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
-			s.lastJSON = out["stats"]
-			s.printData(out["stats"])
+			p := uiPayload(out, "stats", "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "stats loaded")
 		case strings.HasPrefix(text, "/gateway "):
 			parts := strings.Fields(text)
@@ -1572,8 +1616,9 @@ func main() {
 					s.setErrStatus(err)
 					continue
 				}
-				s.lastJSON = out
-				s.printData(out)
+				p := uiPayload(out, "status", "result")
+				s.lastJSON = p
+				s.printData(p)
 				s.setStatus(true, "ok", "gateway status loaded")
 			case "enable", "disable":
 				out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
@@ -1582,8 +1627,9 @@ func main() {
 					s.setErrStatus(err)
 					continue
 				}
-				s.lastJSON = out
-				s.printData(out)
+				p := uiPayload(out, "result")
+				s.lastJSON = p
+				s.printData(p)
 				s.setStatus(true, "ok", "gateway action applied")
 			default:
 				fmt.Println("usage: /gateway status|enable|disable")
@@ -1596,8 +1642,9 @@ func main() {
 				s.setErrStatus(err)
 				continue
 			}
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "snapshot", "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "config loaded")
 		case text == "/config tui":
 			cfg := appconfig.Load()
@@ -1630,8 +1677,9 @@ func main() {
 				},
 				"source": src,
 			}
-			s.lastJSON = out
-			s.printData(out)
+			p := uiPayload(out, "result")
+			s.lastJSON = p
+			s.printData(p)
 			s.setStatus(true, "ok", "ui-tui config shown")
 		case strings.HasPrefix(text, "/config set "):
 			parts := strings.SplitN(strings.TrimPrefix(text, "/config set "), " ", 2)

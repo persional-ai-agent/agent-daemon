@@ -194,3 +194,23 @@ func TestRunDoctorMissingApprovalEndpoint(t *testing.T) {
 		t.Fatalf("expected approval_confirm fail, items=%+v", items)
 	}
 }
+
+func TestHTTPJSONParsesUIErrorEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": false,
+			"error": map[string]any{
+				"code":    "invalid_argument",
+				"message": "bad input",
+			},
+			"api_version": "v1",
+			"compat":      "2026-05-13",
+		})
+	}))
+	defer ts.Close()
+	_, err := httpJSON(http.MethodGet, ts.URL, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid_argument") {
+		t.Fatalf("expected parsed ui error, got %v", err)
+	}
+}
