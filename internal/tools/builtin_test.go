@@ -350,6 +350,16 @@ func TestBrowserSnapshotSchemaDocumentsMaxCharsBounds(t *testing.T) {
 	}
 }
 
+func TestReadFileSchemaDocumentsMaxCharsBehavior(t *testing.T) {
+	params := readFileParams()
+	props, _ := params["properties"].(map[string]any)
+	maxChars, _ := props["max_chars"].(map[string]any)
+	desc, _ := maxChars["description"].(string)
+	if !strings.Contains(desc, "default 100000") || !strings.Contains(desc, "reject_on_truncate=true") {
+		t.Fatalf("read_file max_chars description=%q, want default/reject hint", desc)
+	}
+}
+
 func TestBrowserScrollSchemaDirectionEnum(t *testing.T) {
 	params := browserScrollParams()
 	props, _ := params["properties"].(map[string]any)
