@@ -58,6 +58,9 @@ type Config struct {
 	WhatsAppVerifyToken     string
 	WhatsAppWebhookSecret   string
 	WhatsAppAllowed         string
+	WebhookOutboundURL      string
+	WebhookInboundSecret    string
+	WebhookAllowed          string
 	YuanbaoToken            string
 	YuanbaoAppID            string
 	YuanbaoAppSecret        string
@@ -312,6 +315,9 @@ func loadFromINIValues(iv iniValues) Config {
 		WhatsAppVerifyToken:     iniStr(iv, "gateway.whatsapp", "verify_token", "AGENT_WHATSAPP_VERIFY_TOKEN", ""),
 		WhatsAppWebhookSecret:   iniStr(iv, "gateway.whatsapp", "webhook_secret", "AGENT_WHATSAPP_WEBHOOK_SECRET", ""),
 		WhatsAppAllowed:         iniStr(iv, "gateway.whatsapp", "allowed_users", "AGENT_WHATSAPP_ALLOWED_USERS", ""),
+		WebhookOutboundURL:      iniStr(iv, "gateway.webhook", "outbound_url", "AGENT_WEBHOOK_OUTBOUND_URL", ""),
+		WebhookInboundSecret:    iniStr(iv, "gateway.webhook", "inbound_secret", "AGENT_WEBHOOK_INBOUND_SECRET", ""),
+		WebhookAllowed:          iniStr(iv, "gateway.webhook", "allowed_users", "AGENT_WEBHOOK_ALLOWED_USERS", ""),
 		YuanbaoToken:            iniStr(iv, "gateway.yuanbao", "token", "YUANBAO_TOKEN", ""),
 		YuanbaoAppID:            iniStr(iv, "gateway.yuanbao", "app_id", "YUANBAO_APP_ID", ""),
 		YuanbaoAppSecret:        iniStr(iv, "gateway.yuanbao", "app_secret", "YUANBAO_APP_SECRET", ""),

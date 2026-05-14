@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
@@ -38,7 +38,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 					},
 					"platform": map[string]any{
 						"type":        "string",
-						"description": "Platform name (telegram/discord/slack/yuanbao)",
+						"description": "Platform name (telegram/discord/slack/whatsapp/webhook/yuanbao)",
 					},
 					"chat_id": map[string]any{
 						"type":        "string",

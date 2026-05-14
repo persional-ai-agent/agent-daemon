@@ -925,7 +925,7 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (telegram/discord/slack/whatsapp/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	gatewayToken := fs.String("gateway-token", "", "shared gateway token (telegram/discord/yuanbao)")
 	gatewayBotToken := fs.String("gateway-bot-token", "", "slack bot token")
 	gatewayAppToken := fs.String("gateway-app-token", "", "slack app token")
@@ -933,6 +933,8 @@ func runSetup(cfg config.Config, args []string) {
 	gatewayPhoneNumberID := fs.String("gateway-phone-number-id", "", "whatsapp phone number id")
 	gatewayVerifyToken := fs.String("gateway-verify-token", "", "whatsapp verify token (for webhook challenge)")
 	gatewayWebhookSecret := fs.String("gateway-webhook-secret", "", "whatsapp webhook signature secret (X-Hub-Signature-256)")
+	gatewayWebhookOutboundURL := fs.String("gateway-webhook-outbound-url", "", "webhook outbound URL")
+	gatewayWebhookInboundSecret := fs.String("gateway-webhook-inbound-secret", "", "webhook inbound secret")
 	gatewayAppID := fs.String("gateway-app-id", "", "yuanbao app id")
 	gatewayAppSecret := fs.String("gateway-app-secret", "", "yuanbao app secret")
 	gatewayAllowedUsers := fs.String("gateway-allowed-users", "", "comma-separated allowed users")
@@ -974,6 +976,8 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*gatewayPhoneNumberID),
 		strings.TrimSpace(*gatewayVerifyToken),
 		strings.TrimSpace(*gatewayWebhookSecret),
+		strings.TrimSpace(*gatewayWebhookOutboundURL),
+		strings.TrimSpace(*gatewayWebhookInboundSecret),
 		strings.TrimSpace(*gatewayAppID),
 		strings.TrimSpace(*gatewayAppSecret),
 		strings.TrimSpace(*gatewayAllowedUsers),
@@ -3595,7 +3599,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/telegram/discord/slack/whatsapp/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
@@ -3606,6 +3610,8 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewayPhoneNumberID := ""
 	gatewayVerifyToken := ""
 	gatewayWebhookSecret := ""
+	gatewayWebhookOutboundURL := ""
+	gatewayWebhookInboundSecret := ""
 	gatewayAppID := ""
 	gatewayAppSecret := ""
 	gatewayAllowedUsers := ""
@@ -3623,6 +3629,10 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayPhoneNumberID = promptInput(reader, "whatsapp phone number id", "")
 		gatewayVerifyToken = promptInput(reader, "whatsapp verify token (optional, for webhook challenge)", "")
 		gatewayWebhookSecret = promptInput(reader, "whatsapp webhook secret (optional, for X-Hub-Signature-256)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "webhook":
+		gatewayWebhookOutboundURL = promptInput(reader, "webhook outbound url", "")
+		gatewayWebhookInboundSecret = promptInput(reader, "webhook inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "yuanbao":
 		gatewayToken = promptInput(reader, "yuanbao token (optional)", "")
@@ -3648,6 +3658,8 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayPhoneNumberID,
 		gatewayVerifyToken,
 		gatewayWebhookSecret,
+		gatewayWebhookOutboundURL,
+		gatewayWebhookInboundSecret,
 		gatewayAppID,
 		gatewayAppSecret,
 		gatewayAllowedUsers,
@@ -3679,7 +3691,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3703,7 +3715,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -4440,7 +4452,7 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	if !cfg.GatewayEnabled {
 		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
 	}
-	configured := make([]string, 0, 3)
+	configured := make([]string, 0, 6)
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
 		configured = append(configured, "telegram")
 	}
@@ -4449,6 +4461,15 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	}
 	if strings.TrimSpace(cfg.SlackBotToken) != "" && strings.TrimSpace(cfg.SlackAppToken) != "" {
 		configured = append(configured, "slack")
+	}
+	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" && strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
+		configured = append(configured, "whatsapp")
+	}
+	if strings.TrimSpace(cfg.WebhookOutboundURL) != "" {
+		configured = append(configured, "webhook")
+	}
+	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
+		configured = append(configured, "yuanbao")
 	}
 	if len(configured) == 0 {
 		return doctorCheck{Name: "gateway", Status: "warn", Detail: "enabled but no platform tokens are configured"}
@@ -5089,6 +5110,8 @@ func runGatewayForeground(cfg config.Config) {
 			return cfg.SlackAllowed
 		case "whatsapp":
 			return cfg.WhatsAppAllowed
+		case "webhook":
+			return cfg.WebhookAllowed
 		case "yuanbao":
 			return cfg.YuanbaoAllowed
 		}
@@ -5808,7 +5831,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (telegram/discord/slack/whatsapp/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -5871,7 +5894,7 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (telegram/discord/slack/whatsapp/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	token := fs.String("token", "", "shared token field (telegram/discord/yuanbao)")
 	botToken := fs.String("bot-token", "", "slack bot token")
 	appToken := fs.String("app-token", "", "slack app token")
@@ -5879,13 +5902,15 @@ func runGatewaySetup(args []string) {
 	phoneNumberID := fs.String("phone-number-id", "", "whatsapp phone number id")
 	verifyToken := fs.String("verify-token", "", "whatsapp verify token (for webhook challenge)")
 	webhookSecret := fs.String("webhook-secret", "", "whatsapp webhook signature secret (X-Hub-Signature-256)")
+	outboundURL := fs.String("outbound-url", "", "webhook outbound URL")
+	inboundSecret := fs.String("inbound-secret", "", "webhook inbound secret")
 	appID := fs.String("app-id", "", "yuanbao app id")
 	appSecret := fs.String("app-secret", "", "yuanbao app secret")
 	allowedUsers := fs.String("allowed-users", "", "comma-separated allowed users")
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <telegram|discord|slack|whatsapp|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -5902,6 +5927,8 @@ func runGatewaySetup(args []string) {
 		strings.TrimSpace(*phoneNumberID),
 		strings.TrimSpace(*verifyToken),
 		strings.TrimSpace(*webhookSecret),
+		strings.TrimSpace(*outboundURL),
+		strings.TrimSpace(*inboundSecret),
 		strings.TrimSpace(*appID),
 		strings.TrimSpace(*appSecret),
 		strings.TrimSpace(*allowedUsers),
@@ -5923,7 +5950,7 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
@@ -5999,6 +6026,20 @@ func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToke
 			values["gateway.yuanbao.allowed_users"] = allowedUsers
 			written = append(written, "gateway.yuanbao.allowed_users")
 		}
+	case "webhook":
+		if webhookOutboundURL == "" {
+			return nil, fmt.Errorf("webhook setup requires -outbound-url")
+		}
+		values["gateway.webhook.outbound_url"] = webhookOutboundURL
+		written = append(written, "gateway.webhook.outbound_url")
+		if webhookInboundSecret != "" {
+			values["gateway.webhook.inbound_secret"] = webhookInboundSecret
+			written = append(written, "gateway.webhook.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.webhook.allowed_users"] = allowedUsers
+			written = append(written, "gateway.webhook.allowed_users")
+		}
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", platformKey)
 	}
@@ -6048,7 +6089,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <telegram|discord|slack|whatsapp|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
@@ -6431,6 +6472,9 @@ func gatewayTokenFingerprint(cfg config.Config) string {
 	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" || strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
 		parts = append(parts, "whatsapp:"+strings.TrimSpace(cfg.WhatsAppAccessToken)+":"+strings.TrimSpace(cfg.WhatsAppPhoneNumberID))
 	}
+	if strings.TrimSpace(cfg.WebhookOutboundURL) != "" {
+		parts = append(parts, "webhook:"+strings.TrimSpace(cfg.WebhookOutboundURL)+":"+strings.TrimSpace(cfg.WebhookInboundSecret))
+	}
 	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
 		parts = append(parts, "yuanbao:"+strings.TrimSpace(cfg.YuanbaoToken)+":"+strings.TrimSpace(cfg.YuanbaoAppID))
 	}
@@ -6511,7 +6555,7 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"telegram", "discord", "slack", "whatsapp", "yuanbao"}
+	return []string{"telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
@@ -6527,6 +6571,9 @@ func configuredGatewayPlatforms(cfg config.Config) []string {
 	}
 	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" && strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
 		out = append(out, "whatsapp")
+	}
+	if strings.TrimSpace(cfg.WebhookOutboundURL) != "" {
+		out = append(out, "webhook")
 	}
 	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {
 		out = append(out, "yuanbao")
@@ -6958,6 +7005,8 @@ func runServe(cfg config.Config) {
 						return cfg.SlackAllowed
 					case "whatsapp":
 						return cfg.WhatsAppAllowed
+					case "webhook":
+						return cfg.WebhookAllowed
 					case "yuanbao":
 						return cfg.YuanbaoAllowed
 					}
@@ -7021,6 +7070,15 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, wa)
 			log.Printf("whatsapp adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.WebhookOutboundURL) != "" {
+		ha, err := platforms.NewWebhookAdapter(cfg.WebhookOutboundURL, cfg.WebhookInboundSecret)
+		if err != nil {
+			log.Printf("webhook adapter: %v", err)
+		} else {
+			adapters = append(adapters, ha)
+			log.Printf("webhook adapter configured")
 		}
 	}
 	if strings.TrimSpace(cfg.YuanbaoToken) != "" || strings.TrimSpace(cfg.YuanbaoAppID) != "" {

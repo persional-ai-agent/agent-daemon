@@ -61,6 +61,40 @@
 - CLI、TUI、Gateway、Web 中同名动作必须保持语义一致。
 - 不追求逐文件复刻 Hermes，只补功能行为。
 
+## 进度看板（2026-05-14）
+
+状态定义：
+- `done`：已满足原验收标准，且入口可稳定使用。
+- `partial`：已落地核心子功能，但未满足完整验收标准。
+- `todo`：尚未进入可用实现阶段。
+
+| TODO | 状态 | 当前结论 | 证据 |
+|---|---|---|---|
+| `TODO-001` | `partial` | TUI/CLI 已完成多轮重构与流式链路收口，但仍有交互与渲染边角待稳定。 | `docs/dev/0036-summary-summary-merged.md`（`# 274`） |
+| `TODO-002` | `partial` | 网关命令一致性与部分统一已做，未完成统一 dispatcher 全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
+| `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
+| `TODO-004` | `partial` | 已补 `webhook` 网关适配器（inbound/outbound 最小闭环）；`signal/email/home_assistant` 仍待实现。 | `internal/gateway/platforms/webhook.go`、`cmd/agentd/main.go` |
+| `TODO-005` | `todo` | 缺 Matrix/Feishu/DingTalk/WeCom/Mattermost/SMS/BlueBubbles 网关适配器级实现。 | `internal/gateway/platforms/` 现有平台清单 |
+| `TODO-006` | `partial` | 审批命令链路已推进，平台原生交互深度仍未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
+| `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
+| `TODO-008` | `partial` | toolsets 最小对齐已完成，动态可用性与 UI 管理仍未完全到位。 | `docs/dev/0036-summary-summary-merged.md`（`# 063`、`# 107`） |
+| `TODO-009` | `partial` | provider 运行时与插件闭环有进展，profile/能力矩阵未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 255`、`# 279`） |
+| `TODO-010` | `partial` | skills 多源与管理能力已补，自动学习与审计回滚未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 051`、`# 052`、`# 275`） |
+| `TODO-011` | `partial` | memory 学习闭环有阶段成果，insights/外部 provider 仍待补。 | `docs/dev/0036-summary-summary-merged.md`（`# 275`） |
+| `TODO-012` | `partial` | cron 表达式、投递、链式、脚本已补，重试/并发/审计还需补完。 | `docs/dev/0036-summary-summary-merged.md`（`# 280`~`# 283`） |
+| `TODO-013` | `partial` | ACP/IDE 最小适配已完成，完整协议层能力未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 258`） |
+| `TODO-014` | `partial` | research/trajectory 最小运行闭环已完成，策略评估与导出体系需增强。 | `docs/dev/0036-summary-summary-merged.md`（`# 259`） |
+| `TODO-015` | `partial` | setup/install/update 等有进展，迁移与可回滚备份恢复未闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 054`~`# 058` 及后续安装相关总结） |
+| `TODO-016` | `partial` | Web 管理面已补 dashboard/cron/model-provider，距“日常可完全替代 CLI”仍有缺口。 | `docs/dev/0036-summary-summary-merged.md`（`# 277`~`# 279`） |
+
+## 下一迭代优先级（先做功能）
+
+1. `TODO-004`：Gateway 第一批扩展（Signal/Email/Webhook/Home Assistant）。
+2. `TODO-005`：Gateway 第二批扩展（Matrix/Feishu/DingTalk/WeCom/Mattermost/SMS/BlueBubbles）。
+3. `TODO-001`：收口 TUI/CLI 流式渲染与输入稳定性残留问题。
+4. `TODO-002`：统一 command dispatcher，彻底消除 CLI/TUI/Gateway 语义漂移。
+5. `TODO-006`：补平台原生命令与审批交互深度。
+
 ## P0：先稳定用户入口与会话体验
 
 ### TODO-001：完整 TUI/CLI 交互体验
@@ -497,17 +531,18 @@
 2. `TODO-002` CLI 与消息平台命令语义统一。
 3. `TODO-003` Gateway 会话连续性与投递目标模型。
 4. `TODO-004` Gateway 平台第一批扩展。
-5. `TODO-006` Gateway 原生交互深度。
-6. `TODO-007` 工具能力级补齐。
-7. `TODO-008` Toolsets 动态行为。
-8. `TODO-009` Provider 生态与 Profile。
-9. `TODO-010` Skills 闭环学习。
-10. `TODO-011` Memory 与用户模型增强。
-11. `TODO-012` Cron 高级动作。
-12. `TODO-013` ACP/IDE 完整协议。
-13. `TODO-014` Research/RL/trajectory 链路。
-14. `TODO-015` 安装、迁移与备份恢复。
-15. `TODO-016` Web Dashboard 完整化。
+5. `TODO-005` Gateway 平台第二批扩展。
+6. `TODO-006` Gateway 原生交互深度。
+7. `TODO-007` 工具能力级补齐。
+8. `TODO-008` Toolsets 动态行为。
+9. `TODO-009` Provider 生态与 Profile。
+10. `TODO-010` Skills 闭环学习。
+11. `TODO-011` Memory 与用户模型增强。
+12. `TODO-012` Cron 高级动作。
+13. `TODO-013` ACP/IDE 完整协议。
+14. `TODO-014` Research/RL/trajectory 链路。
+15. `TODO-015` 安装、迁移与备份恢复。
+16. `TODO-016` Web Dashboard 完整化。
 
 ## 每个 TODO 的完成定义
 

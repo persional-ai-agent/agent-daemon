@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/gateway/whatsapp/webhook", s.handleGatewayWhatsAppWebhook)
+	mux.HandleFunc("/v1/gateway/webhook/inbound", s.handleGatewayWebhookInbound)
 	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
 	mux.HandleFunc("/v1/acp/message", s.handleACPMessage)
 	mux.HandleFunc("/v1/acp/message/stream", s.handleACPMessageStream)
@@ -155,6 +156,22 @@ func (s *Server) handleGatewayWhatsAppWebhook(w http.ResponseWriter, r *http.Req
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "whatsapp webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayWebhookInbound(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("webhook")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "webhook gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "webhook inbound is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)
