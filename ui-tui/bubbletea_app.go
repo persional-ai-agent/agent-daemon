@@ -162,8 +162,3 @@ func runBubbleTeaUI(s *appState, noDoctor bool) error {
 	_, err := program.Run()
 	return err
 }
-
-func useBubbleTea() bool {
-	v := strings.ToLower(strings.TrimSpace(getenvOr("AGENT_UI_TUI_BUBBLETEA", "true")))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
-}
