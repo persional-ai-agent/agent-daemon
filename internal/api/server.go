@@ -104,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions/branch", s.handleUISessionBranch)
 	mux.HandleFunc("/v1/ui/sessions/resume", s.handleUISessionResume)
 	mux.HandleFunc("/v1/ui/sessions/compress", s.handleUISessionCompress)
+	mux.HandleFunc("/v1/ui/sessions/replay", s.handleUISessionReplay)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
@@ -527,6 +528,12 @@ type uiSessionCompressRequest struct {
 	KeepLastN int    `json:"keep_last_n,omitempty"`
 }
 
+type uiSessionReplayRequest struct {
+	SessionID string `json:"session_id"`
+	Offset    int    `json:"offset,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
 func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -691,6 +698,56 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 			"after_messages":   after,
 			"dropped_messages": before - after,
 			"keep_last_n":      keep,
+		},
+	})
+}
+
+func (s *Server) handleUISessionReplay(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionReplayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	if req.SessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	offset := req.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	detailer, ok := s.Engine.SessionStore.(sessionDetailStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session replay not supported")
+		return
+	}
+	msgs, err := detailer.LoadMessagesPage(req.SessionID, offset, limit)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"session_id": req.SessionID,
+			"offset":     offset,
+			"limit":      limit,
+			"count":      len(msgs),
+			"messages":   msgs,
+			"replayed":   true,
 		},
 	})
 }

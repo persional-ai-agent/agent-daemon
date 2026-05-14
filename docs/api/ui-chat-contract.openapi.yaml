@@ -301,6 +301,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/sessions/replay:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+                offset:
+                  type: integer
+                  minimum: 0
+                limit:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Replay paged messages from a session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+                        required: [session_id, offset, limit, count, messages, replayed]
+                        properties:
+                          session_id:
+                            type: string
+                          offset:
+                            type: integer
+                          limit:
+                            type: integer
+                          count:
+                            type: integer
+                          messages:
+                            type: array
+                            items:
+                              type: object
+                          replayed:
+                            type: boolean
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/config:
     get:
       responses:
