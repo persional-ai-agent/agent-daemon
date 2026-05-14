@@ -205,6 +205,15 @@ func TestUIEndpoints(t *testing.T) {
 		GatewayActionFn: func(action string) (map[string]any, error) {
 			return map[string]any{"success": true, "action": action}, nil
 		},
+		SkillListFn: func() ([]map[string]any, error) {
+			return []map[string]any{
+				{"name": "skill-a", "path": "skills/skill-a/SKILL.md"},
+				{"name": "skill-b", "path": "skills/skill-b/SKILL.md"},
+			}, nil
+		},
+		SkillsReloadFn: func() (map[string]any, error) {
+			return map[string]any{"success": true, "count": 2}, nil
+		},
 	}
 
 	t.Run("tools", func(t *testing.T) {
@@ -301,6 +310,30 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"action":"enable"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("skills", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/skills", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"skill-a"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("skills_reload", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/skills/reload", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"count":2`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

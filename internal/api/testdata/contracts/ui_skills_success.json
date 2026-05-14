@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": true,
+    "count": 2,
+    "skills": [
+      {
+        "name": "skill-a",
+        "path": "skills/skill-a/SKILL.md"
+      },
+      {
+        "name": "skill-b",
+        "path": "skills/skill-b/SKILL.md"
+      }
+    ],
+    "api_version": "v1",
+    "compat": "2026-05-13"
+  }
+}

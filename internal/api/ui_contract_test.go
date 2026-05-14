@@ -65,6 +65,12 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		},
 		ConfigSnapshotFn: func() map[string]any { return map[string]any{"k": "v"} },
 		GatewayStatusFn:  func() map[string]any { return map[string]any{"enabled": true} },
+		SkillListFn: func() ([]map[string]any, error) {
+			return []map[string]any{{"name": "skill-a", "path": "skills/skill-a/SKILL.md"}}, nil
+		},
+		SkillsReloadFn: func() (map[string]any, error) {
+			return map[string]any{"success": true, "count": 1}, nil
+		},
 	}
 
 	cases := []struct {
@@ -79,6 +85,8 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "session_detail", method: http.MethodGet, path: "/v1/ui/sessions/s1?offset=0&limit=1"},
 		{name: "config", method: http.MethodGet, path: "/v1/ui/config"},
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
+		{name: "skills", method: http.MethodGet, path: "/v1/ui/skills"},
+		{name: "skills_reload", method: http.MethodPost, path: "/v1/ui/skills/reload"},
 		{name: "agents", method: http.MethodGet, path: "/v1/ui/agents"},
 		{name: "agents_history", method: http.MethodGet, path: "/v1/ui/agents/history?limit=2"},
 		{name: "complete_slash", method: http.MethodPost, path: "/v1/ui/complete/slash", body: `{"text":"/to"}`},

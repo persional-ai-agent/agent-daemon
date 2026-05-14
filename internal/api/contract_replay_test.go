@@ -150,6 +150,15 @@ func replayServer() *Server {
 		GatewayActionFn: func(action string) (map[string]any, error) {
 			return map[string]any{"success": true, "action": action}, nil
 		},
+		SkillListFn: func() ([]map[string]any, error) {
+			return []map[string]any{
+				{"name": "skill-a", "path": "skills/skill-a/SKILL.md"},
+				{"name": "skill-b", "path": "skills/skill-b/SKILL.md"},
+			}, nil
+		},
+		SkillsReloadFn: func() (map[string]any, error) {
+			return map[string]any{"success": true, "count": 2}, nil
+		},
 	}
 }
 

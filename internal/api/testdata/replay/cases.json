@@ -79,6 +79,20 @@
     "snapshot": "ui_agents_history_success"
   },
   {
+    "name": "ui_skills_success",
+    "method": "GET",
+    "path": "/v1/ui/skills",
+    "contract_path": "/v1/ui/skills",
+    "snapshot": "ui_skills_success"
+  },
+  {
+    "name": "ui_skills_reload_success",
+    "method": "POST",
+    "path": "/v1/ui/skills/reload",
+    "contract_path": "/v1/ui/skills/reload",
+    "snapshot": "ui_skills_reload_success"
+  },
+  {
     "name": "ui_agents_interrupt_not_found",
     "method": "POST",
     "path": "/v1/ui/agents/interrupt",

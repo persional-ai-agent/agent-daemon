@@ -31,6 +31,8 @@ type Server struct {
 	GatewayStatusFn  func() map[string]any
 	ConfigUpdateFn   func(key, value string) (map[string]any, error)
 	GatewayActionFn  func(action string) (map[string]any, error)
+	SkillListFn      func() ([]map[string]any, error)
+	SkillsReloadFn   func() (map[string]any, error)
 	mu               sync.Mutex
 	active           map[string]activeRun
 }
@@ -99,6 +101,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/agents", s.handleUIAgents)
 	mux.HandleFunc("/v1/ui/agents/interrupt", s.handleUIAgentsInterrupt)
 	mux.HandleFunc("/v1/ui/agents/history", s.handleUIAgentsHistory)
+	mux.HandleFunc("/v1/ui/skills", s.handleUISkills)
+	mux.HandleFunc("/v1/ui/skills/reload", s.handleUISkillsReload)
 	return mux
 }
 
@@ -871,6 +875,106 @@ func (s *Server) handleUIAgentsHistory(w http.ResponseWriter, r *http.Request) {
 		"count":   len(history),
 		"history": history,
 	})
+}
+
+func (s *Server) handleUISkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var (
+		skills []map[string]any
+		err    error
+	)
+	if s.SkillListFn != nil {
+		skills, err = s.SkillListFn()
+	} else {
+		workdir := "."
+		if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
+			workdir = s.Engine.Workdir
+		}
+		skills, err = listLocalSkills(workdir)
+	}
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"count":  len(skills),
+		"skills": skills,
+	})
+}
+
+func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var (
+		result map[string]any
+		err    error
+	)
+	if s.SkillsReloadFn != nil {
+		result, err = s.SkillsReloadFn()
+	} else {
+		workdir := "."
+		if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
+			workdir = s.Engine.Workdir
+		}
+		skills, listErr := listLocalSkills(workdir)
+		if listErr != nil {
+			err = listErr
+		} else {
+			result = map[string]any{
+				"success": true,
+				"count":   len(skills),
+			}
+		}
+	}
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": result,
+	})
+}
+
+func listLocalSkills(workdir string) ([]map[string]any, error) {
+	root := filepath.Join(workdir, "skills")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []map[string]any{}, nil
+		}
+		return nil, err
+	}
+	skills := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name())
+		if name == "" {
+			continue
+		}
+		skillMD := filepath.Join(root, name, "SKILL.md")
+		if _, statErr := os.Stat(skillMD); statErr != nil {
+			continue
+		}
+		skills = append(skills, map[string]any{
+			"name": name,
+			"path": skillMD,
+		})
+	}
+	sort.Slice(skills, func(i, j int) bool {
+		li, _ := skills[i]["name"].(string)
+		lj, _ := skills[j]["name"].(string)
+		return li < lj
+	})
+	return skills, nil
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
