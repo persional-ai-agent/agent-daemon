@@ -101,6 +101,43 @@ func TestWhatsAppWebhookMessageDispatch(t *testing.T) {
 	}
 }
 
+func TestWhatsAppWebhookMediaDispatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v21.0/mid-1" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"url":"https://cdn.example.com/media-1.jpg"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.baseURL = srv.URL
+	a.httpClient = srv.Client()
+	var got gateway.MessageEvent
+	a.OnMessage(context.Background(), func(_ context.Context, event gateway.MessageEvent) {
+		got = event
+	})
+
+	body := `{"entry":[{"changes":[{"value":{"messages":[{"from":"8613800138000","id":"wamid.msg2","type":"image","image":{"id":"mid-1","caption":"请看图片"}}]}}]}]}`
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	a.HandleWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got.Text != "请看图片" {
+		t.Fatalf("text=%q", got.Text)
+	}
+	if len(got.MediaURLs) != 1 || got.MediaURLs[0] != "https://cdn.example.com/media-1.jpg" {
+		t.Fatalf("media=%v", got.MediaURLs)
+	}
+}
+
 func anyToString(v any) string {
 	if s, ok := v.(string); ok {
 		return s

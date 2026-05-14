@@ -1,6 +1,9 @@
 package gateway
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
 	tests := []struct {
@@ -30,5 +33,19 @@ func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
 func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "状态"); got != "状态" {
 		t.Fatalf("non-yuanbao should keep input, got=%q", got)
+	}
+}
+
+func TestGatewayUserInputWithMedia(t *testing.T) {
+	in := MessageEvent{
+		Text:      "分析这张图",
+		MediaURLs: []string{"https://cdn.example.com/a.png"},
+	}
+	got := gatewayUserInput(in)
+	if got == "" || got == "分析这张图" {
+		t.Fatalf("unexpected input=%q", got)
+	}
+	if want := "Media URLs:"; !strings.Contains(got, want) {
+		t.Fatalf("missing %q in %q", want, got)
 	}
 }

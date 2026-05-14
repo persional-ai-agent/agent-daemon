@@ -565,7 +565,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		}()
 	}
 
-	res, runErr := eng.Run(runCtx, sessionKey, event.Text, agent.DefaultSystemPrompt(), history)
+	userInput := gatewayUserInput(event)
+	res, runErr := eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
 
 	w.mu.Lock()
 	w.cancelCurrent = nil
@@ -639,6 +640,28 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			"at":          time.Now().Format(time.RFC3339Nano),
 		})
 	}
+}
+
+func gatewayUserInput(event MessageEvent) string {
+	text := strings.TrimSpace(event.Text)
+	if len(event.MediaURLs) == 0 {
+		return text
+	}
+	lines := make([]string, 0, 1+len(event.MediaURLs))
+	if text != "" {
+		lines = append(lines, text)
+	} else {
+		lines = append(lines, "[gateway_media_message]")
+	}
+	lines = append(lines, "Media URLs:")
+	for _, mediaURL := range event.MediaURLs {
+		mediaURL = strings.TrimSpace(mediaURL)
+		if mediaURL == "" {
+			continue
+		}
+		lines = append(lines, "- "+mediaURL)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func pendingApprovalDetails(parsed map[string]any) (string, string, string, bool) {

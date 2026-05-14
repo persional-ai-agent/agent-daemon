@@ -160,12 +160,13 @@ func (w *WhatsAppAdapter) HandleWebhook(resp http.ResponseWriter, req *http.Requ
 		for _, entry := range payload.Entry {
 			for _, change := range entry.Changes {
 				for _, msg := range change.Value.Messages {
-					text := strings.TrimSpace(msg.Text.Body)
-					if text == "" {
-						continue
-					}
+					text := strings.TrimSpace(primaryWebhookText(msg))
 					userID := strings.TrimSpace(msg.From)
 					if userID == "" {
+						continue
+					}
+					mediaURLs := w.resolveWebhookMediaURLs(req.Context(), msg)
+					if text == "" && len(mediaURLs) == 0 {
 						continue
 					}
 					replyTo := strings.TrimSpace(msg.Context.ID)
@@ -176,6 +177,7 @@ func (w *WhatsAppAdapter) HandleWebhook(resp http.ResponseWriter, req *http.Requ
 						ChatType:  "dm",
 						UserID:    userID,
 						UserName:  userID,
+						MediaURLs: mediaURLs,
 						ReplyToID: replyTo,
 						IsCommand: strings.HasPrefix(text, "/"),
 					})
@@ -199,6 +201,24 @@ type whatsAppWebhookPayload struct {
 					Text struct {
 						Body string `json:"body"`
 					} `json:"text"`
+					Image struct {
+						ID      string `json:"id"`
+						Caption string `json:"caption"`
+					} `json:"image"`
+					Video struct {
+						ID      string `json:"id"`
+						Caption string `json:"caption"`
+					} `json:"video"`
+					Document struct {
+						ID      string `json:"id"`
+						Caption string `json:"caption"`
+					} `json:"document"`
+					Audio struct {
+						ID string `json:"id"`
+					} `json:"audio"`
+					Sticker struct {
+						ID string `json:"id"`
+					} `json:"sticker"`
 					Context struct {
 						ID string `json:"id"`
 					} `json:"context"`
@@ -206,4 +226,131 @@ type whatsAppWebhookPayload struct {
 			} `json:"value"`
 		} `json:"changes"`
 	} `json:"entry"`
+}
+
+func primaryWebhookText(msg struct {
+	From string `json:"from"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Text struct {
+		Body string `json:"body"`
+	} `json:"text"`
+	Image struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"image"`
+	Video struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"video"`
+	Document struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"document"`
+	Audio struct {
+		ID string `json:"id"`
+	} `json:"audio"`
+	Sticker struct {
+		ID string `json:"id"`
+	} `json:"sticker"`
+	Context struct {
+		ID string `json:"id"`
+	} `json:"context"`
+}) string {
+	if text := strings.TrimSpace(msg.Text.Body); text != "" {
+		return text
+	}
+	if caption := strings.TrimSpace(msg.Image.Caption); caption != "" {
+		return caption
+	}
+	if caption := strings.TrimSpace(msg.Video.Caption); caption != "" {
+		return caption
+	}
+	if caption := strings.TrimSpace(msg.Document.Caption); caption != "" {
+		return caption
+	}
+	if strings.TrimSpace(msg.Type) != "" {
+		return "[whatsapp_" + strings.ToLower(strings.TrimSpace(msg.Type)) + "_message]"
+	}
+	return ""
+}
+
+func (w *WhatsAppAdapter) resolveWebhookMediaURLs(ctx context.Context, msg struct {
+	From string `json:"from"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Text struct {
+		Body string `json:"body"`
+	} `json:"text"`
+	Image struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"image"`
+	Video struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"video"`
+	Document struct {
+		ID      string `json:"id"`
+		Caption string `json:"caption"`
+	} `json:"document"`
+	Audio struct {
+		ID string `json:"id"`
+	} `json:"audio"`
+	Sticker struct {
+		ID string `json:"id"`
+	} `json:"sticker"`
+	Context struct {
+		ID string `json:"id"`
+	} `json:"context"`
+}) []string {
+	mediaIDs := []string{
+		strings.TrimSpace(msg.Image.ID),
+		strings.TrimSpace(msg.Video.ID),
+		strings.TrimSpace(msg.Document.ID),
+		strings.TrimSpace(msg.Audio.ID),
+		strings.TrimSpace(msg.Sticker.ID),
+	}
+	out := make([]string, 0, len(mediaIDs))
+	for _, mediaID := range mediaIDs {
+		if mediaID == "" {
+			continue
+		}
+		mediaURL, err := w.fetchMediaURL(ctx, mediaID)
+		if err != nil || strings.TrimSpace(mediaURL) == "" {
+			continue
+		}
+		out = append(out, strings.TrimSpace(mediaURL))
+	}
+	return out
+}
+
+func (w *WhatsAppAdapter) fetchMediaURL(ctx context.Context, mediaID string) (string, error) {
+	endpoint := strings.TrimRight(w.baseURL, "/") + "/" + strings.Trim(strings.TrimSpace(w.apiVersion), "/") + "/" + strings.TrimSpace(mediaID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+w.accessToken)
+
+	client := w.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	bs, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("whatsapp media metadata failed: %s", strings.TrimSpace(string(bs)))
+	}
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(bs, &out); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out.URL), nil
 }
