@@ -313,9 +313,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			s.setStatus(true, "ok", "timeline listed")
 		case strings.HasPrefix(current, "/rerun "):
-			idx, pErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/rerun ")))
-			if pErr != nil || idx <= 0 {
-				return lines, fmt.Errorf("usage: /rerun <index>"), false
+			idx, pErr := parseRequiredPositiveIntArg(current, "/rerun")
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			items, rErr := s.readHistory(500)
 			if rErr != nil {
@@ -741,9 +741,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emit("session switched: " + s.session)
 			}
 		case strings.HasPrefix(current, "/pick "):
-			idx, pErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/pick ")))
-			if pErr != nil || idx <= 0 {
-				return lines, fmt.Errorf("usage: /pick <index>"), false
+			idx, pErr := parseRequiredPositiveIntArg(current, "/pick")
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			if idx > len(s.lastSessions) {
 				return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false
@@ -968,6 +968,18 @@ func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
 	v, err := strconv.Atoi(parts[1])
 	if err != nil || v <= 0 {
 		return 0, fmt.Errorf("用法: %s [n]（n 必须是正整数）", prefix)
+	}
+	return v, nil
+}
+
+func parseRequiredPositiveIntArg(input, prefix string) (int, error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("用法: %s <index>", prefix)
+	}
+	v, err := strconv.Atoi(parts[1])
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("用法: %s <index>（index 必须是正整数）", prefix)
 	}
 	return v, nil
 }

@@ -50,6 +50,21 @@ func TestParseOptionalPositiveIntArg(t *testing.T) {
 	})
 }
 
+func TestParseRequiredPositiveIntArg(t *testing.T) {
+	v, err := parseRequiredPositiveIntArg("/pick 3", "/pick")
+	if err != nil || v != 3 {
+		t.Fatalf("unexpected parse result: v=%d err=%v", v, err)
+	}
+	_, err = parseRequiredPositiveIntArg("/pick", "/pick")
+	if err == nil {
+		t.Fatal("expected error for missing argument")
+	}
+	_, err = parseRequiredPositiveIntArg("/pick 0", "/pick")
+	if err == nil {
+		t.Fatal("expected error for non-positive integer")
+	}
+}
+
 func TestParsePendingArgs(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		limit, action, idx, err := parsePendingArgs("/pending")
