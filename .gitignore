@@ -1,6 +1,7 @@
 
 agent-daemon
 .idea/
+.cache/
 .dj-agent/
 AGENTS.md
 web/dist/
