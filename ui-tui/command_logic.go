@@ -629,7 +629,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/api "):
 			next := strings.TrimSpace(strings.TrimPrefix(current, "/api "))
 			if !strings.HasPrefix(next, "ws://") && !strings.HasPrefix(next, "wss://") {
-				return lines, fmt.Errorf("api must start with ws:// or wss://"), false
+				return lines, fmt.Errorf("API 地址必须以 ws:// 或 wss:// 开头"), false
 			}
 			s.wsBase = next
 			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) == "" {
@@ -644,7 +644,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/http "):
 			next := strings.TrimSpace(strings.TrimPrefix(current, "/http "))
 			if !strings.HasPrefix(next, "http://") && !strings.HasPrefix(next, "https://") {
-				return lines, fmt.Errorf("http api must start with http:// or https://"), false
+				return lines, fmt.Errorf("HTTP API 地址必须以 http:// 或 https:// 开头"), false
 			}
 			s.httpBase = strings.TrimRight(next, "/")
 			_ = s.saveRuntimeState()

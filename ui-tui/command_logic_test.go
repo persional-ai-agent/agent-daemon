@@ -339,6 +339,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/show s1 bad", "用法: /show [session] [offset>=0] [limit>0] [pick <index>]"},
 		{"/stats s1 extra", "用法: /stats [session]"},
 		{"/pending approve", "用法: /pending [limit] [approve|deny|a|d <index>]"},
+		{"/api http://bad", "API 地址必须以 ws:// 或 wss:// 开头"},
+		{"/http ws://bad", "HTTP API 地址必须以 http:// 或 https:// 开头"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
