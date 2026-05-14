@@ -210,6 +210,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/sessions/resume:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+                turn_id:
+                  type: string
+      responses:
+        "200":
+          description: Resume an existing session handle
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+                        required: [session_id, resumed, transport]
+                        properties:
+                          session_id:
+                            type: string
+                          turn_id:
+                            type: string
+                          resumed:
+                            type: boolean
+                          transport:
+                            type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/config:
     get:
       responses:

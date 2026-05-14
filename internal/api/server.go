@@ -101,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
 	mux.HandleFunc("/v1/ui/sessions/", s.handleUISessionDetail)
 	mux.HandleFunc("/v1/ui/sessions/branch", s.handleUISessionBranch)
+	mux.HandleFunc("/v1/ui/sessions/resume", s.handleUISessionResume)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
@@ -511,6 +512,11 @@ type uiSessionBranchRequest struct {
 	LastN        int    `json:"last_n,omitempty"`
 }
 
+type uiSessionResumeRequest struct {
+	SessionID string `json:"session_id"`
+	TurnID    string `json:"turn_id,omitempty"`
+}
+
 func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -593,6 +599,42 @@ func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
 			"source_session_id": req.SessionID,
 			"new_session_id":    req.NewSessionID,
 			"copied_messages":   len(msgs),
+		},
+	})
+}
+
+func (s *Server) handleUISessionResume(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionResumeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.TurnID = strings.TrimSpace(req.TurnID)
+	if req.SessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	_, err := s.Engine.SessionStore.LoadMessages(req.SessionID, 1)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"session_id": req.SessionID,
+			"turn_id":    req.TurnID,
+			"resumed":    true,
+			"transport":  "http",
 		},
 	})
 }
