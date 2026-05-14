@@ -365,4 +365,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /pretty on|off" {
 		t.Fatalf("unexpected /pretty error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/gateway", nil, nil)
+	if err == nil || err.Error() != "用法: /gateway status|enable|disable" {
+		t.Fatalf("unexpected /gateway error: %v", err)
+	}
 }

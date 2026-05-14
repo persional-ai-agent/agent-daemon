@@ -867,10 +867,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "stats", "result"))
 			s.setStatus(true, "ok", "stats loaded")
-		case strings.HasPrefix(current, "/gateway "):
+		case current == "/gateway" || strings.HasPrefix(current, "/gateway "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 {
-				return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false
+				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
 			}
 			if parts[1] == "status" {
 				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
@@ -889,7 +889,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emitData(uiPayload(out, "result"))
 				s.setStatus(true, "ok", "gateway action applied")
 			} else {
-				return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false
+				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
 			}
 		case current == "/config get":
 			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config", nil)
