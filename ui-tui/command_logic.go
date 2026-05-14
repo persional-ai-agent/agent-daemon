@@ -913,10 +913,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(map[string]any{"effective": map[string]any{"ws_base": s.wsBase, "http_base": s.httpBase, "view_mode": s.viewMode, "ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second), "ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second), "ws_reconnect_max": s.wsMaxReconnect, "history_max_lines": s.historyMaxLines, "event_max_items": s.eventMaxItems, "auto_doctor": s.autoDoctor}, "configured": map[string]any{"ws_base": cfg.UITUIWSBase, "http_base": cfg.UITUIHTTPBase, "view_mode": cfg.UITUIViewMode}, "source": src}, "result"))
 			s.setStatus(true, "ok", "ui-tui config shown")
+		case current == "/config":
+			return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
 		case strings.HasPrefix(current, "/config set "):
 			parts := strings.SplitN(strings.TrimPrefix(current, "/config set "), " ", 2)
 			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-				return lines, fmt.Errorf("usage: /config set <section.key> <value>"), false
+				return lines, fmt.Errorf("用法: /config set <section.key> <value>"), false
 			}
 			key := strings.TrimSpace(parts[0])
 			value := parts[1]

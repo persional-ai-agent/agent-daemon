@@ -369,4 +369,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /gateway status|enable|disable" {
 		t.Fatalf("unexpected /gateway error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/config", nil, nil)
+	if err == nil || err.Error() != "用法: /config get|set <section.key> <value>|tui" {
+		t.Fatalf("unexpected /config error: %v", err)
+	}
 }
