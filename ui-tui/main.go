@@ -1382,7 +1382,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				}
 			}
 			seenPayload[key] = struct{}{}
-			if line := printEvent(evt, !s.fullscreen); strings.TrimSpace(line) != "" {
+			if line := printEvent(evt, false); strings.TrimSpace(line) != "" {
 				s.addChatLine(line)
 			}
 			if onEvent != nil {
@@ -1417,6 +1417,9 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 }
 
 func main() {
+	if strings.TrimSpace(os.Getenv("COLORFGBG")) == "" {
+		_ = os.Setenv("COLORFGBG", "15;0")
+	}
 	s := newState()
 	noDoctor, fullscreen, fullscreenSet := parseStartupFlags(os.Args[1:])
 	if fullscreenSet {

@@ -155,11 +155,12 @@ func printEvent(evt map[string]any, emit bool) string {
 		}
 	}
 	switch evtType {
+	case "session", "turn_started", "completed":
+		return ""
+	case "user_message":
+		return ""
 	case "assistant_message":
-		if emit {
-			fmt.Printf("[assistant] %v\n", evt["content"])
-		}
-		return fmt.Sprintf("assistant: %v", evt["content"])
+		return ""
 	case "tool_started", "tool_finished":
 		toolName := evt["tool_name"]
 		if toolName == nil {
@@ -174,6 +175,8 @@ func printEvent(evt map[string]any, emit bool) string {
 			fmt.Printf("[result] %v\n", evt["final_response"])
 		}
 		return fmt.Sprintf("result: %v", evt["final_response"])
+	case "model_stream_event":
+		return ""
 	case "error":
 		if emit {
 			fmt.Printf("[error] %v\n", evt["error"])
