@@ -480,3 +480,43 @@ func TestPanelCommandCaseInsensitiveSubcommands(t *testing.T) {
 		t.Fatalf("panel next failed: %v", err)
 	}
 }
+
+func TestConfigCommandCaseInsensitiveSubcommands(t *testing.T) {
+	var setKey, setValue string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/ui/config":
+			_ = json.NewEncoder(w).Encode(map[string]any{"snapshot": map[string]any{"ok": true}})
+		case "/v1/ui/config/set":
+			var in map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			setKey, _ = in["key"].(string)
+			setValue, _ = in["value"].(string)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	s := &appState{
+		httpBase:         ts.URL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+	if _, err, _ := handleTUICommand(s, "/config GET", nil, nil); err != nil {
+		t.Fatalf("config GET failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/config SET agent.workdir /tmp/demo", nil, nil); err != nil {
+		t.Fatalf("config SET failed: %v", err)
+	}
+	if setKey != "agent.workdir" || setValue != "/tmp/demo" {
+		t.Fatalf("unexpected set payload: key=%q value=%q", setKey, setValue)
+	}
+}

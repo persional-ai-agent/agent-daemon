@@ -896,45 +896,62 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			} else {
 				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
 			}
-		case current == "/config get":
-			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config", nil)
-			if hErr != nil {
-				s.setErrStatus(hErr)
-				return lines, hErr, false
+		case strings.HasPrefix(current, "/config"):
+			parts := strings.Fields(current)
+			if len(parts) == 1 {
+				return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
 			}
-			emitData(uiPayload(out, "snapshot", "result"))
-			s.setStatus(true, "ok", "config loaded")
-		case current == "/config tui":
-			cfg := appconfig.Load()
-			src := map[string]string{"ws_base": "config.ini", "http_base": "config.ini", "view_mode": "config.ini"}
-			if strings.TrimSpace(os.Getenv("AGENT_API_BASE")) != "" {
-				src["ws_base"] = "env"
+			sub := strings.ToLower(strings.TrimSpace(parts[1]))
+			if sub == "get" && len(parts) == 2 {
+				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config", nil)
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				emitData(uiPayload(out, "snapshot", "result"))
+				s.setStatus(true, "ok", "config loaded")
+				continue
 			}
-			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) != "" {
-				src["http_base"] = "env"
+			if sub == "tui" && len(parts) == 2 {
+				cfg := appconfig.Load()
+				src := map[string]string{"ws_base": "config.ini", "http_base": "config.ini", "view_mode": "config.ini"}
+				if strings.TrimSpace(os.Getenv("AGENT_API_BASE")) != "" {
+					src["ws_base"] = "env"
+				}
+				if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) != "" {
+					src["http_base"] = "env"
+				}
+				if strings.TrimSpace(os.Getenv("AGENT_UI_TUI_VIEW_MODE")) != "" {
+					src["view_mode"] = "env"
+				}
+				emitData(uiPayload(map[string]any{"effective": map[string]any{"ws_base": s.wsBase, "http_base": s.httpBase, "view_mode": s.viewMode, "ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second), "ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second), "ws_reconnect_max": s.wsMaxReconnect, "history_max_lines": s.historyMaxLines, "event_max_items": s.eventMaxItems, "auto_doctor": s.autoDoctor}, "configured": map[string]any{"ws_base": cfg.UITUIWSBase, "http_base": cfg.UITUIHTTPBase, "view_mode": cfg.UITUIViewMode}, "source": src}, "result"))
+				s.setStatus(true, "ok", "ui-tui config shown")
+				continue
 			}
-			if strings.TrimSpace(os.Getenv("AGENT_UI_TUI_VIEW_MODE")) != "" {
-				src["view_mode"] = "env"
+			if sub == "set" {
+				rest := strings.TrimSpace(current[len("/config"):])
+				if len(rest) >= 3 && strings.EqualFold(strings.TrimSpace(rest[:3]), "set") {
+					rest = strings.TrimSpace(rest[3:])
+				} else {
+					rest = strings.TrimSpace(strings.TrimPrefix(current, "/config set "))
+				}
+				parts := strings.SplitN(rest, " ", 2)
+				if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+					return lines, fmt.Errorf("用法: /config set <section.key> <value>"), false
+				}
+				key := strings.TrimSpace(parts[0])
+				value := parts[1]
+				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/config/set", map[string]any{"key": key, "value": value})
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				emitData(out)
+				s.audit("config_set", "key="+key)
+				s.setStatus(true, "ok", "config updated")
+				continue
 			}
-			emitData(uiPayload(map[string]any{"effective": map[string]any{"ws_base": s.wsBase, "http_base": s.httpBase, "view_mode": s.viewMode, "ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second), "ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second), "ws_reconnect_max": s.wsMaxReconnect, "history_max_lines": s.historyMaxLines, "event_max_items": s.eventMaxItems, "auto_doctor": s.autoDoctor}, "configured": map[string]any{"ws_base": cfg.UITUIWSBase, "http_base": cfg.UITUIHTTPBase, "view_mode": cfg.UITUIViewMode}, "source": src}, "result"))
-			s.setStatus(true, "ok", "ui-tui config shown")
-		case current == "/config":
 			return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
-		case strings.HasPrefix(current, "/config set "):
-			parts := strings.SplitN(strings.TrimPrefix(current, "/config set "), " ", 2)
-			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-				return lines, fmt.Errorf("用法: /config set <section.key> <value>"), false
-			}
-			key := strings.TrimSpace(parts[0])
-			value := parts[1]
-			out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/config/set", map[string]any{"key": key, "value": value})
-			if hErr != nil {
-				s.setErrStatus(hErr)
-				return lines, hErr, false
-			}
-			emitData(out)
-			s.audit("config_set", "key="+key)
-			s.setStatus(true, "ok", "config updated")
 		default:
 			s.addChatLine("user: " + current)
 			if onEvent == nil {
