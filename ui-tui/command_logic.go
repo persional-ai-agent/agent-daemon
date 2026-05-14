@@ -159,13 +159,29 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				s.fullscreenPanel = target
 			}
-			_ = s.refreshCurrentPanel(); _ = s.saveRuntimeState(); emit("panel switched: "+s.fullscreenPanel); s.setStatus(true, "ok", "panel switched")
+			_ = s.refreshCurrentPanel()
+			_ = s.saveRuntimeState()
+			emit("panel switched: " + s.fullscreenPanel)
+			s.setStatus(true, "ok", "panel switched")
 		case current == "/version":
-			emitData(map[string]any{"version": BuildVersion, "commit": BuildCommit, "build_time": BuildTime}); s.setStatus(true, "ok", "version shown")
+			emitData(map[string]any{"version": BuildVersion, "commit": BuildCommit, "build_time": BuildTime})
+			s.setStatus(true, "ok", "version shown")
 		case current == "/doctor":
-			items, allOK := s.runDoctor(); emitData(map[string]any{"checks": items, "ok": allOK}); if allOK { s.setStatus(true, "ok", "doctor checks passed") } else { s.setStatus(false, "doctor_failed", "doctor checks found failures") }
+			items, allOK := s.runDoctor()
+			emitData(map[string]any{"checks": items, "ok": allOK})
+			if allOK {
+				s.setStatus(true, "ok", "doctor checks passed")
+			} else {
+				s.setStatus(false, "doctor_failed", "doctor checks found failures")
+			}
 		case strings.HasPrefix(current, "/view "):
-			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/view "))); if mode != "human" && mode != "json" { return lines, fmt.Errorf("usage: /view human|json"), false }; s.viewMode = mode; emit("view mode: "+mode); s.setStatus(true, "ok", "view mode switched")
+			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/view ")))
+			if mode != "human" && mode != "json" {
+				return lines, fmt.Errorf("usage: /view human|json"), false
+			}
+			s.viewMode = mode
+			emit("view mode: " + mode)
+			s.setStatus(true, "ok", "view mode switched")
 		case current == "/reload-config":
 			cfg := appconfig.Load()
 			s.applyConfig(cfg)
@@ -181,10 +197,21 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			})
 			s.setStatus(true, "ok", "config reloaded")
 		case current == "/status":
-			emit(fmt.Sprintf("status=%s code=%s detail=%s", s.lastStatus, s.lastCode, s.lastDetail)); emit(fmt.Sprintf("reconnect enabled=%v state=%s max=%d timeout_action=%s", s.reconnectEnabled, s.reconnectState, s.wsMaxReconnect, s.timeoutAction))
-		case current == "/fullscreen": emit(fmt.Sprintf("fullscreen: %v", s.fullscreen)); s.setStatus(true, "ok", "fullscreen status shown")
-		case current == "/fullscreen on": s.fullscreen = true; _ = s.saveRuntimeState(); emit("fullscreen: on"); s.setStatus(true, "ok", "fullscreen enabled")
-		case current == "/fullscreen off": s.fullscreen = false; _ = s.saveRuntimeState(); emit("fullscreen: off"); s.setStatus(true, "ok", "fullscreen disabled")
+			emit(fmt.Sprintf("status=%s code=%s detail=%s", s.lastStatus, s.lastCode, s.lastDetail))
+			emit(fmt.Sprintf("reconnect enabled=%v state=%s max=%d timeout_action=%s", s.reconnectEnabled, s.reconnectState, s.wsMaxReconnect, s.timeoutAction))
+		case current == "/fullscreen":
+			emit(fmt.Sprintf("fullscreen: %v", s.fullscreen))
+			s.setStatus(true, "ok", "fullscreen status shown")
+		case current == "/fullscreen on":
+			s.fullscreen = true
+			_ = s.saveRuntimeState()
+			emit("fullscreen: on")
+			s.setStatus(true, "ok", "fullscreen enabled")
+		case current == "/fullscreen off":
+			s.fullscreen = false
+			_ = s.saveRuntimeState()
+			emit("fullscreen: off")
+			s.setStatus(true, "ok", "fullscreen disabled")
 		case current == "/reconnect status":
 			emitData(map[string]any{
 				"enabled":         s.reconnectEnabled,
@@ -210,33 +237,152 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emit("diagnostics exported: " + path)
 			s.setStatus(true, "ok", "diagnostics exported")
-		case current == "/reconnect on": s.reconnectEnabled = true; emit("reconnect: on"); s.setStatus(true, "ok", "reconnect enabled")
-		case current == "/reconnect off": s.reconnectEnabled = false; emit("reconnect: off"); s.setStatus(true, "ok", "reconnect disabled")
+		case current == "/reconnect on":
+			s.reconnectEnabled = true
+			emit("reconnect: on")
+			s.setStatus(true, "ok", "reconnect enabled")
+		case current == "/reconnect off":
+			s.reconnectEnabled = false
+			emit("reconnect: off")
+			s.setStatus(true, "ok", "reconnect disabled")
 		case current == "/reconnect now":
-			conn, _, dErr := websocket.DefaultDialer.Dial(s.wsBase, nil); if dErr != nil { s.reconnectState = "failed"; s.setErrStatus(dErr); return lines, dErr, false }; _ = conn.Close(); s.reconnectState = "connecting"; emit("reconnect probe ok"); s.setStatus(true, "ok", "reconnect probe ok")
+			conn, _, dErr := websocket.DefaultDialer.Dial(s.wsBase, nil)
+			if dErr != nil {
+				s.reconnectState = "failed"
+				s.setErrStatus(dErr)
+				return lines, dErr, false
+			}
+			_ = conn.Close()
+			s.reconnectState = "connecting"
+			emit("reconnect probe ok")
+			s.setStatus(true, "ok", "reconnect probe ok")
 		case strings.HasPrefix(current, "/reconnect timeout "):
-			mode := strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout ")); if mode != "wait" && mode != "reconnect" && mode != "cancel" { return lines, fmt.Errorf("usage: /reconnect timeout wait|reconnect|cancel"), false }; s.timeoutAction = mode; emit("reconnect timeout action: "+mode); s.setStatus(true, "ok", "reconnect timeout action updated")
+			mode := strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout "))
+			if mode != "wait" && mode != "reconnect" && mode != "cancel" {
+				return lines, fmt.Errorf("usage: /reconnect timeout wait|reconnect|cancel"), false
+			}
+			s.timeoutAction = mode
+			emit("reconnect timeout action: " + mode)
+			s.setStatus(true, "ok", "reconnect timeout action updated")
 		case current == "/health":
-			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/health", nil); if hErr != nil { s.setErrStatus(hErr); return lines, hErr, false }; emitData(uiPayload(out, "status", "result")); s.setStatus(true, "ok", "health checked")
+			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/health", nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(uiPayload(out, "status", "result"))
+			s.setStatus(true, "ok", "health checked")
 		case current == "/cancel":
-			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session}); if cErr != nil { s.setErrStatus(cErr); return lines, cErr, false }; s.audit("cancel", "requested"); emitData(uiPayload(out, "result")); s.setStatus(true, "ok", "cancel requested")
+			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
+			if cErr != nil {
+				s.setErrStatus(cErr)
+				return lines, cErr, false
+			}
+			s.audit("cancel", "requested")
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "cancel requested")
 		case strings.HasPrefix(current, "/history"):
-			parts := strings.Fields(current); limit := 20; if len(parts) > 1 { if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 { limit = v } }; if limit > s.historyMaxLines { limit = s.historyMaxLines }; items, rErr := s.readHistory(limit); if rErr != nil { s.setErrStatus(rErr); return lines, rErr, false }; for i, it := range items { emit(fmt.Sprintf("%d. %s", i+1, it)) }; s.setStatus(true, "ok", "history loaded")
+			limit, pErr := parseOptionalPositiveIntArg(current, "/history", 20)
+			if pErr != nil {
+				return lines, pErr, false
+			}
+			if s.historyMaxLines > 0 && limit > s.historyMaxLines {
+				limit = s.historyMaxLines
+			}
+			items, rErr := s.readHistory(limit)
+			if rErr != nil {
+				s.setErrStatus(rErr)
+				return lines, rErr, false
+			}
+			for i, it := range items {
+				emit(fmt.Sprintf("%d. %s", i+1, it))
+			}
+			s.setStatus(true, "ok", "history loaded")
 		case strings.HasPrefix(current, "/timeline"):
-			parts := strings.Fields(current); limit := 20; if len(parts) > 1 { if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 { limit = v } }; items := s.timelineSlice(limit); if len(items)==0 { emit("timeline empty") } else { for i, it := range items { emit(fmt.Sprintf("%d. %s", i+1, it)) } }; s.setStatus(true, "ok", "timeline listed")
+			parts := strings.Fields(current)
+			limit := 20
+			if len(parts) > 1 {
+				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
+					limit = v
+				}
+			}
+			items := s.timelineSlice(limit)
+			if len(items) == 0 {
+				emit("timeline empty")
+			} else {
+				for i, it := range items {
+					emit(fmt.Sprintf("%d. %s", i+1, it))
+				}
+			}
+			s.setStatus(true, "ok", "timeline listed")
 		case strings.HasPrefix(current, "/rerun "):
-			idx, pErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/rerun "))); if pErr != nil || idx <= 0 { return lines, fmt.Errorf("usage: /rerun <index>"), false }; items, rErr := s.readHistory(500); if rErr != nil { s.setErrStatus(rErr); return lines, rErr, false }; if idx > len(items) { return lines, fmt.Errorf("index out of range, max=%d", len(items)), false }; queue = append([]string{items[idx-1]}, queue...); emit("rerun: "+items[idx-1]); s.setStatus(true, "ok", "rerun selected")
+			idx, pErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/rerun ")))
+			if pErr != nil || idx <= 0 {
+				return lines, fmt.Errorf("usage: /rerun <index>"), false
+			}
+			items, rErr := s.readHistory(500)
+			if rErr != nil {
+				s.setErrStatus(rErr)
+				return lines, rErr, false
+			}
+			if idx > len(items) {
+				return lines, fmt.Errorf("index out of range, max=%d", len(items)), false
+			}
+			queue = append([]string{items[idx-1]}, queue...)
+			emit("rerun: " + items[idx-1])
+			s.setStatus(true, "ok", "rerun selected")
 		case strings.HasPrefix(current, "/events"):
-			if strings.HasPrefix(current, "/events save ") { path, format, since, until, pErr := parseEventSaveArgs(current); if pErr != nil { return lines, pErr, false }; filtered := filterEventsByTime(s.eventLog, since, until); if svErr := saveEvents(path, format, filtered); svErr != nil { s.setErrStatus(svErr); return lines, svErr, false }; emit(fmt.Sprintf("saved events: %s (format=%s count=%d)", path, format, len(filtered))); s.setStatus(true, "ok", "events saved"); continue }
-			parts := strings.Fields(current); limit := 20; if len(parts) > 1 { if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 { limit = v } }; if limit > s.eventMaxItems { limit = s.eventMaxItems }; start := len(s.eventLog)-limit; if start < 0 { start = 0 }; emitData(s.eventLog[start:]); s.setStatus(true, "ok", "events listed")
+			if strings.HasPrefix(current, "/events save ") {
+				path, format, since, until, pErr := parseEventSaveArgs(current)
+				if pErr != nil {
+					return lines, pErr, false
+				}
+				filtered := filterEventsByTime(s.eventLog, since, until)
+				if svErr := saveEvents(path, format, filtered); svErr != nil {
+					s.setErrStatus(svErr)
+					return lines, svErr, false
+				}
+				emit(fmt.Sprintf("saved events: %s (format=%s count=%d)", path, format, len(filtered)))
+				s.setStatus(true, "ok", "events saved")
+				continue
+			}
+			parts := strings.Fields(current)
+			limit := 20
+			if len(parts) > 1 {
+				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
+					limit = v
+				}
+			}
+			if limit > s.eventMaxItems {
+				limit = s.eventMaxItems
+			}
+			start := len(s.eventLog) - limit
+			if start < 0 {
+				start = 0
+			}
+			emitData(s.eventLog[start:])
+			s.setStatus(true, "ok", "events listed")
 		case current == "/approve" || strings.HasPrefix(current, "/approve "):
 			approve := true
 			id := strings.TrimSpace(strings.TrimPrefix(current, "/approve"))
 			if id == "" {
-				out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil); if hErr != nil { s.setErrStatus(hErr); return lines, hErr, false }
-				msgs, _ := out["messages"].([]any); lastID, _ := findLatestPendingApproval(msgs); if lastID == "" { return lines, fmt.Errorf("no pending approval found; usage: /approve <approval_id>"), false }; id = lastID
+				out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				msgs, _ := out["messages"].([]any)
+				lastID, _ := findLatestPendingApproval(msgs)
+				if lastID == "" {
+					return lines, fmt.Errorf("no pending approval found; usage: /approve <approval_id>"), false
+				}
+				id = lastID
 			}
-			out, aErr := s.confirmApproval(id, approve); if aErr != nil { s.setErrStatus(aErr); return lines, aErr, false }
+			out, aErr := s.confirmApproval(id, approve)
+			if aErr != nil {
+				s.setErrStatus(aErr)
+				return lines, aErr, false
+			}
 			s.audit("approve", "approval_id="+id)
 			s.setStatus(true, "ok", "approval confirmed")
 			emitData(uiPayload(out, "result"))
@@ -244,10 +390,23 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			approve := false
 			id := strings.TrimSpace(strings.TrimPrefix(current, "/deny"))
 			if id == "" {
-				out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil); if hErr != nil { s.setErrStatus(hErr); return lines, hErr, false }
-				msgs, _ := out["messages"].([]any); lastID, _ := findLatestPendingApproval(msgs); if lastID == "" { return lines, fmt.Errorf("no pending approval found; usage: /deny <approval_id>"), false }; id = lastID
+				out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				msgs, _ := out["messages"].([]any)
+				lastID, _ := findLatestPendingApproval(msgs)
+				if lastID == "" {
+					return lines, fmt.Errorf("no pending approval found; usage: /deny <approval_id>"), false
+				}
+				id = lastID
 			}
-			out, aErr := s.confirmApproval(id, approve); if aErr != nil { s.setErrStatus(aErr); return lines, aErr, false }
+			out, aErr := s.confirmApproval(id, approve)
+			if aErr != nil {
+				s.setErrStatus(aErr)
+				return lines, aErr, false
+			}
 			s.audit("deny", "approval_id="+id)
 			s.setStatus(true, "ok", "approval denied")
 			emitData(uiPayload(out, "result"))
@@ -270,8 +429,16 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 					}
 				}
 			}
-			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil); if hErr != nil { s.setErrStatus(hErr); return lines, hErr, false }
-			msgs,_ := out["messages"].([]any); items := findPendingApprovals(msgs,limit); if len(items)==0 { return lines, fmt.Errorf("no pending approval found"), false }
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			msgs, _ := out["messages"].([]any)
+			items := findPendingApprovals(msgs, limit)
+			if len(items) == 0 {
+				return lines, fmt.Errorf("no pending approval found"), false
+			}
 			s.pendingCache = items
 			if limit <= 1 {
 				emit(fmt.Sprintf("pending approval id: %v", items[0]["approval_id"]))
@@ -300,45 +467,290 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			s.setStatus(true, "ok", "pending approval found")
 		case strings.HasPrefix(current, "/bookmark "):
-			parts := strings.Fields(current); if len(parts)>=2 && parts[1]=="list" { list,bErr:=s.loadBookmarks(); if bErr!=nil { s.setErrStatus(bErr); return lines,bErr,false }; emitData(list); s.setStatus(true,"ok","bookmarks listed"); continue }
-			if len(parts)>=3 && parts[1]=="add" { if bErr:=s.addBookmark(parts[2]); bErr!=nil { s.setErrStatus(bErr); return lines,bErr,false }; emit("bookmark saved: "+parts[2]); s.setStatus(true,"ok","bookmark saved"); continue }
-			if len(parts)>=3 && parts[1]=="use" { if bErr:=s.useBookmark(parts[2]); bErr!=nil { s.setErrStatus(bErr); return lines,bErr,false }; _ = s.saveRuntimeState(); emit(fmt.Sprintf("bookmark loaded: %s (session=%s)", parts[2], s.session)); s.setStatus(true,"ok","bookmark loaded"); continue }
+			parts := strings.Fields(current)
+			if len(parts) >= 2 && parts[1] == "list" {
+				list, bErr := s.loadBookmarks()
+				if bErr != nil {
+					s.setErrStatus(bErr)
+					return lines, bErr, false
+				}
+				emitData(list)
+				s.setStatus(true, "ok", "bookmarks listed")
+				continue
+			}
+			if len(parts) >= 3 && parts[1] == "add" {
+				if bErr := s.addBookmark(parts[2]); bErr != nil {
+					s.setErrStatus(bErr)
+					return lines, bErr, false
+				}
+				emit("bookmark saved: " + parts[2])
+				s.setStatus(true, "ok", "bookmark saved")
+				continue
+			}
+			if len(parts) >= 3 && parts[1] == "use" {
+				if bErr := s.useBookmark(parts[2]); bErr != nil {
+					s.setErrStatus(bErr)
+					return lines, bErr, false
+				}
+				_ = s.saveRuntimeState()
+				emit(fmt.Sprintf("bookmark loaded: %s (session=%s)", parts[2], s.session))
+				s.setStatus(true, "ok", "bookmark loaded")
+				continue
+			}
 			return lines, fmt.Errorf("usage: /bookmark add <name> | /bookmark list | /bookmark use <name>"), false
 		case strings.HasPrefix(current, "/workbench "):
-			parts := strings.Fields(current); if len(parts)<2 { return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false }
-			sub:=parts[1]; name:=""; if len(parts)>2 { name = strings.TrimSpace(parts[2]) }
-			switch sub { case "list": list,wErr:=s.loadWorkbenchProfiles(); if wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emitData(map[string]any{"count":len(list),"workbenches":list}); s.setStatus(true,"ok","workbench listed")
-			case "save": if name=="" { return lines, fmt.Errorf("usage: /workbench save <name>"), false }; if wErr:=s.saveWorkbench(name); wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emit("workbench saved: "+name); s.audit("workbench_save","name="+name); s.setStatus(true,"ok","workbench saved")
-			case "load": if name=="" { return lines, fmt.Errorf("usage: /workbench load <name>"), false }; if wErr:=s.loadWorkbench(name); wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; _ = s.saveRuntimeState(); _ = s.refreshCurrentPanel(); emit("workbench loaded: "+name); s.audit("workbench_load","name="+name); s.setStatus(true,"ok","workbench loaded")
-			case "delete": if name=="" { return lines, fmt.Errorf("usage: /workbench delete <name>"), false }; if wErr:=s.deleteWorkbench(name); wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emit("workbench deleted: "+name); s.audit("workbench_delete","name="+name); s.setStatus(true,"ok","workbench deleted")
-			default: return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false }
+			parts := strings.Fields(current)
+			if len(parts) < 2 {
+				return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false
+			}
+			sub := parts[1]
+			name := ""
+			if len(parts) > 2 {
+				name = strings.TrimSpace(parts[2])
+			}
+			switch sub {
+			case "list":
+				list, wErr := s.loadWorkbenchProfiles()
+				if wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emitData(map[string]any{"count": len(list), "workbenches": list})
+				s.setStatus(true, "ok", "workbench listed")
+			case "save":
+				if name == "" {
+					return lines, fmt.Errorf("usage: /workbench save <name>"), false
+				}
+				if wErr := s.saveWorkbench(name); wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emit("workbench saved: " + name)
+				s.audit("workbench_save", "name="+name)
+				s.setStatus(true, "ok", "workbench saved")
+			case "load":
+				if name == "" {
+					return lines, fmt.Errorf("usage: /workbench load <name>"), false
+				}
+				if wErr := s.loadWorkbench(name); wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				_ = s.saveRuntimeState()
+				_ = s.refreshCurrentPanel()
+				emit("workbench loaded: " + name)
+				s.audit("workbench_load", "name="+name)
+				s.setStatus(true, "ok", "workbench loaded")
+			case "delete":
+				if name == "" {
+					return lines, fmt.Errorf("usage: /workbench delete <name>"), false
+				}
+				if wErr := s.deleteWorkbench(name); wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emit("workbench deleted: " + name)
+				s.audit("workbench_delete", "name="+name)
+				s.setStatus(true, "ok", "workbench deleted")
+			default:
+				return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false
+			}
 		case strings.HasPrefix(current, "/workflow "):
-			parts := strings.Fields(current); if len(parts)<2 { return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false }
-			sub:=parts[1]
-			switch sub { case "list": list,wErr:=s.loadWorkflows(); if wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emitData(map[string]any{"count":len(list),"workflows":list}); s.setStatus(true,"ok","workflow listed")
-			case "save": if len(parts)<4 { return lines, fmt.Errorf("usage: /workflow save <name> <cmd1;cmd2;...>"), false }; name:=strings.TrimSpace(parts[2]); raw:=strings.TrimSpace(strings.TrimPrefix(current, "/workflow save "+name)); cmds:=parseWorkflowCommands(raw); if len(cmds)==0 { return lines, fmt.Errorf("workflow commands empty"), false }; if wErr:=s.saveWorkflow(name,cmds); wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emit(fmt.Sprintf("workflow saved: %s (%d commands)",name,len(cmds))); s.audit("workflow_save",fmt.Sprintf("name=%s count=%d",name,len(cmds))); s.setStatus(true,"ok","workflow saved")
-			case "run": if len(parts)<3 { return lines, fmt.Errorf("usage: /workflow run <name> [dry]"), false }; name:=strings.TrimSpace(parts[2]); wf,ok,wErr:=s.getWorkflow(name); if wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; if !ok { return lines, fmt.Errorf("workflow not found: %s",name), false }; dry:=len(parts)>3 && strings.EqualFold(strings.TrimSpace(parts[3]),"dry"); if dry { emitData(map[string]any{"name":wf.Name,"commands":wf.Commands,"dry_run":true}); s.setStatus(true,"ok","workflow dry-run shown"); continue }; queue=append(queue,wf.Commands...); emit(fmt.Sprintf("workflow queued: %s (%d commands)", wf.Name, len(wf.Commands))); s.audit("workflow_run",fmt.Sprintf("name=%s count=%d", wf.Name, len(wf.Commands))); s.setStatus(true,"ok","workflow queued")
-			case "delete": if len(parts)<3 { return lines, fmt.Errorf("usage: /workflow delete <name>"), false }; name:=strings.TrimSpace(parts[2]); if wErr:=s.deleteWorkflow(name); wErr!=nil { s.setErrStatus(wErr); return lines,wErr,false }; emit("workflow deleted: "+name); s.audit("workflow_delete", "name="+name); s.setStatus(true,"ok","workflow deleted")
-			default: return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false }
-		case current == "/session": emit("session: "+s.session); s.setStatus(true,"ok","session shown")
-		case strings.HasPrefix(current, "/session "): next := strings.TrimSpace(strings.TrimPrefix(current, "/session ")); if next=="" { return lines, fmt.Errorf("session id required"), false }; s.session=next; _=s.saveRuntimeState(); emit("session switched: "+s.session); s.setStatus(true,"ok","session switched")
-		case current == "/api": emit("ws: "+s.wsBase); s.setStatus(true,"ok","ws shown")
-		case strings.HasPrefix(current, "/api "): next:=strings.TrimSpace(strings.TrimPrefix(current, "/api ")); if !strings.HasPrefix(next,"ws://") && !strings.HasPrefix(next,"wss://") { return lines, fmt.Errorf("api must start with ws:// or wss://"), false }; s.wsBase=next; if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE"))=="" { s.httpBase=deriveHTTPBase(s.wsBase) }; _=s.saveRuntimeState(); emit("ws switched: "+s.wsBase); s.setStatus(true,"ok","ws switched")
-		case current == "/http": emit("http: "+s.httpBase); s.setStatus(true,"ok","http shown")
-		case strings.HasPrefix(current, "/http "): next:=strings.TrimSpace(strings.TrimPrefix(current, "/http ")); if !strings.HasPrefix(next,"http://") && !strings.HasPrefix(next,"https://") { return lines, fmt.Errorf("http api must start with http:// or https://"), false }; s.httpBase=strings.TrimRight(next,"/"); _=s.saveRuntimeState(); emit("http switched: "+s.httpBase); s.setStatus(true,"ok","http switched")
-		case current == "/last": if s.lastJSON == nil { return lines, fmt.Errorf("no last json payload"), false }; emitData(s.lastJSON); s.setStatus(true,"ok","last json shown")
-		case strings.HasPrefix(current, "/save "): path:=strings.TrimSpace(strings.TrimPrefix(current, "/save ")); if path=="" { return lines, fmt.Errorf("usage: /save <file>"), false }; if s.lastJSON==nil { return lines, fmt.Errorf("no last json payload"), false }; bs, mErr := json.MarshalIndent(s.lastJSON,"","  "); if !s.pretty || mErr != nil { bs,_ = json.Marshal(s.lastJSON) }; if wErr := os.WriteFile(path, bs, 0o644); wErr != nil { s.setErrStatus(wErr); return lines, wErr, false }; emit("saved: "+path); s.setStatus(true,"ok","json saved")
-		case strings.HasPrefix(current, "/pretty "): mode:=strings.TrimSpace(strings.TrimPrefix(current, "/pretty ")); if mode=="on" { s.pretty=true; emit("pretty json: on"); s.setStatus(true,"ok","pretty on") } else if mode=="off" { s.pretty=false; emit("pretty json: off"); s.setStatus(true,"ok","pretty off") } else { return lines, fmt.Errorf("usage: /pretty on|off"), false }
-		case current == "/tools": out,tErr:=httpJSON(http.MethodGet,s.httpBase+"/v1/ui/tools",nil); if tErr!=nil { s.setErrStatus(tErr); return lines,tErr,false }; emitData(uiPayload(out,"tools","result")); s.setStatus(true,"ok","tools listed")
-		case strings.HasPrefix(current, "/tool "): name:=strings.TrimSpace(strings.TrimPrefix(current, "/tool ")); if name=="" { return lines, fmt.Errorf("usage: /tool <name>"), false }; out,tErr:=httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil); if tErr!=nil { s.setErrStatus(tErr); return lines,tErr,false }; emitData(uiPayload(out,"schema","result")); s.setStatus(true,"ok","tool schema loaded")
+			parts := strings.Fields(current)
+			if len(parts) < 2 {
+				return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false
+			}
+			sub := parts[1]
+			switch sub {
+			case "list":
+				list, wErr := s.loadWorkflows()
+				if wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emitData(map[string]any{"count": len(list), "workflows": list})
+				s.setStatus(true, "ok", "workflow listed")
+			case "save":
+				if len(parts) < 4 {
+					return lines, fmt.Errorf("usage: /workflow save <name> <cmd1;cmd2;...>"), false
+				}
+				name := strings.TrimSpace(parts[2])
+				raw := strings.TrimSpace(strings.TrimPrefix(current, "/workflow save "+name))
+				cmds := parseWorkflowCommands(raw)
+				if len(cmds) == 0 {
+					return lines, fmt.Errorf("workflow commands empty"), false
+				}
+				if wErr := s.saveWorkflow(name, cmds); wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emit(fmt.Sprintf("workflow saved: %s (%d commands)", name, len(cmds)))
+				s.audit("workflow_save", fmt.Sprintf("name=%s count=%d", name, len(cmds)))
+				s.setStatus(true, "ok", "workflow saved")
+			case "run":
+				if len(parts) < 3 {
+					return lines, fmt.Errorf("usage: /workflow run <name> [dry]"), false
+				}
+				name := strings.TrimSpace(parts[2])
+				wf, ok, wErr := s.getWorkflow(name)
+				if wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				if !ok {
+					return lines, fmt.Errorf("workflow not found: %s", name), false
+				}
+				dry := len(parts) > 3 && strings.EqualFold(strings.TrimSpace(parts[3]), "dry")
+				if dry {
+					emitData(map[string]any{"name": wf.Name, "commands": wf.Commands, "dry_run": true})
+					s.setStatus(true, "ok", "workflow dry-run shown")
+					continue
+				}
+				queue = append(queue, wf.Commands...)
+				emit(fmt.Sprintf("workflow queued: %s (%d commands)", wf.Name, len(wf.Commands)))
+				s.audit("workflow_run", fmt.Sprintf("name=%s count=%d", wf.Name, len(wf.Commands)))
+				s.setStatus(true, "ok", "workflow queued")
+			case "delete":
+				if len(parts) < 3 {
+					return lines, fmt.Errorf("usage: /workflow delete <name>"), false
+				}
+				name := strings.TrimSpace(parts[2])
+				if wErr := s.deleteWorkflow(name); wErr != nil {
+					s.setErrStatus(wErr)
+					return lines, wErr, false
+				}
+				emit("workflow deleted: " + name)
+				s.audit("workflow_delete", "name="+name)
+				s.setStatus(true, "ok", "workflow deleted")
+			default:
+				return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false
+			}
+		case current == "/session":
+			emit("session: " + s.session)
+			s.setStatus(true, "ok", "session shown")
+		case strings.HasPrefix(current, "/session "):
+			next := strings.TrimSpace(strings.TrimPrefix(current, "/session "))
+			if next == "" {
+				return lines, fmt.Errorf("session id required"), false
+			}
+			s.session = next
+			_ = s.saveRuntimeState()
+			emit("session switched: " + s.session)
+			s.setStatus(true, "ok", "session switched")
+		case current == "/api":
+			emit("ws: " + s.wsBase)
+			s.setStatus(true, "ok", "ws shown")
+		case strings.HasPrefix(current, "/api "):
+			next := strings.TrimSpace(strings.TrimPrefix(current, "/api "))
+			if !strings.HasPrefix(next, "ws://") && !strings.HasPrefix(next, "wss://") {
+				return lines, fmt.Errorf("api must start with ws:// or wss://"), false
+			}
+			s.wsBase = next
+			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) == "" {
+				s.httpBase = deriveHTTPBase(s.wsBase)
+			}
+			_ = s.saveRuntimeState()
+			emit("ws switched: " + s.wsBase)
+			s.setStatus(true, "ok", "ws switched")
+		case current == "/http":
+			emit("http: " + s.httpBase)
+			s.setStatus(true, "ok", "http shown")
+		case strings.HasPrefix(current, "/http "):
+			next := strings.TrimSpace(strings.TrimPrefix(current, "/http "))
+			if !strings.HasPrefix(next, "http://") && !strings.HasPrefix(next, "https://") {
+				return lines, fmt.Errorf("http api must start with http:// or https://"), false
+			}
+			s.httpBase = strings.TrimRight(next, "/")
+			_ = s.saveRuntimeState()
+			emit("http switched: " + s.httpBase)
+			s.setStatus(true, "ok", "http switched")
+		case current == "/last":
+			if s.lastJSON == nil {
+				return lines, fmt.Errorf("no last json payload"), false
+			}
+			emitData(s.lastJSON)
+			s.setStatus(true, "ok", "last json shown")
+		case strings.HasPrefix(current, "/save "):
+			path := strings.TrimSpace(strings.TrimPrefix(current, "/save "))
+			if path == "" {
+				return lines, fmt.Errorf("usage: /save <file>"), false
+			}
+			if s.lastJSON == nil {
+				return lines, fmt.Errorf("no last json payload"), false
+			}
+			bs, mErr := json.MarshalIndent(s.lastJSON, "", "  ")
+			if !s.pretty || mErr != nil {
+				bs, _ = json.Marshal(s.lastJSON)
+			}
+			if wErr := os.WriteFile(path, bs, 0o644); wErr != nil {
+				s.setErrStatus(wErr)
+				return lines, wErr, false
+			}
+			emit("saved: " + path)
+			s.setStatus(true, "ok", "json saved")
+		case strings.HasPrefix(current, "/pretty "):
+			mode := strings.TrimSpace(strings.TrimPrefix(current, "/pretty "))
+			if mode == "on" {
+				s.pretty = true
+				emit("pretty json: on")
+				s.setStatus(true, "ok", "pretty on")
+			} else if mode == "off" {
+				s.pretty = false
+				emit("pretty json: off")
+				s.setStatus(true, "ok", "pretty off")
+			} else {
+				return lines, fmt.Errorf("usage: /pretty on|off"), false
+			}
+		case current == "/tools":
+			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
+			if tErr != nil {
+				s.setErrStatus(tErr)
+				return lines, tErr, false
+			}
+			emitData(uiPayload(out, "tools", "result"))
+			s.setStatus(true, "ok", "tools listed")
+		case strings.HasPrefix(current, "/tool "):
+			name := strings.TrimSpace(strings.TrimPrefix(current, "/tool "))
+			if name == "" {
+				return lines, fmt.Errorf("usage: /tool <name>"), false
+			}
+			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
+			if tErr != nil {
+				s.setErrStatus(tErr)
+				return lines, tErr, false
+			}
+			emitData(uiPayload(out, "schema", "result"))
+			s.setStatus(true, "ok", "tool schema loaded")
 		case strings.HasPrefix(current, "/sessions"):
-			parts:=strings.Fields(current); limit:=20; pick:=0
-			if len(parts)>1 { if v,pErr:=strconv.Atoi(parts[1]); pErr==nil && v>0 { limit=v } }
+			parts := strings.Fields(current)
+			limit := 20
+			pick := 0
+			if len(parts) > 1 {
+				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
+					limit = v
+				}
+			}
 			if len(parts) > 3 && strings.EqualFold(parts[2], "pick") {
 				pick, _ = strconv.Atoi(parts[3])
 			}
-			out,hErr:=httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, limit), nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }
-			payload := uiPayload(out,"sessions","result"); s.lastSessions = s.lastSessions[:0]; if rows,ok := payload.([]any); ok { for _,row := range rows { if m,ok:=row.(map[string]any); ok { if sid,ok:=m["session_id"].(string); ok && strings.TrimSpace(sid)!="" { s.lastSessions = append(s.lastSessions,sid) } } } }; emitData(payload); s.setStatus(true,"ok","sessions listed")
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, limit), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			payload := uiPayload(out, "sessions", "result")
+			s.lastSessions = s.lastSessions[:0]
+			if rows, ok := payload.([]any); ok {
+				for _, row := range rows {
+					if m, ok := row.(map[string]any); ok {
+						if sid, ok := m["session_id"].(string); ok && strings.TrimSpace(sid) != "" {
+							s.lastSessions = append(s.lastSessions, sid)
+						}
+					}
+				}
+			}
+			emitData(payload)
+			s.setStatus(true, "ok", "sessions listed")
 			if pick > 0 {
 				if pick > len(s.lastSessions) {
 					return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false
@@ -349,7 +761,20 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				_ = s.saveRuntimeState()
 				emit("session switched: " + s.session)
 			}
-		case strings.HasPrefix(current, "/pick "): idx,pErr:=strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/pick "))); if pErr!=nil||idx<=0 { return lines, fmt.Errorf("usage: /pick <index>"), false }; if idx > len(s.lastSessions) { return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false }; s.session=s.lastSessions[idx-1]; s.lastShowSession=s.session; s.lastShowOffset=0; _=s.saveRuntimeState(); emit("session switched: "+s.session); s.setStatus(true,"ok","session switched")
+		case strings.HasPrefix(current, "/pick "):
+			idx, pErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(current, "/pick ")))
+			if pErr != nil || idx <= 0 {
+				return lines, fmt.Errorf("usage: /pick <index>"), false
+			}
+			if idx > len(s.lastSessions) {
+				return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false
+			}
+			s.session = s.lastSessions[idx-1]
+			s.lastShowSession = s.session
+			s.lastShowOffset = 0
+			_ = s.saveRuntimeState()
+			emit("session switched: " + s.session)
+			s.setStatus(true, "ok", "session switched")
 		case strings.HasPrefix(current, "/open "):
 			args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(current, "/open ")))
 			if len(args) == 0 {
@@ -406,13 +831,35 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				return lines, fmt.Errorf("open is available for panels: sessions/tools/approvals"), false
 			}
 		case strings.HasPrefix(current, "/show"):
-			parts := strings.Fields(current); sid:=s.session; offset:=0; limit:=20; pick:=0
-			if len(parts)>1 { sid=parts[1] }
-			if len(parts)>2 { if v,pErr:=strconv.Atoi(parts[2]); pErr==nil && v>=0 { offset=v } }
-			if len(parts)>3 { if v,pErr:=strconv.Atoi(parts[3]); pErr==nil && v>0 { limit=v } }
-			if len(parts)>5 && strings.EqualFold(parts[4], "pick") { pick, _ = strconv.Atoi(parts[5]) }
-			s.lastShowSession=sid; s.lastShowOffset=offset; s.lastShowLimit=limit
-			out,hErr:=httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(sid), offset, limit), nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }
+			parts := strings.Fields(current)
+			sid := s.session
+			offset := 0
+			limit := 20
+			pick := 0
+			if len(parts) > 1 {
+				sid = parts[1]
+			}
+			if len(parts) > 2 {
+				if v, pErr := strconv.Atoi(parts[2]); pErr == nil && v >= 0 {
+					offset = v
+				}
+			}
+			if len(parts) > 3 {
+				if v, pErr := strconv.Atoi(parts[3]); pErr == nil && v > 0 {
+					limit = v
+				}
+			}
+			if len(parts) > 5 && strings.EqualFold(parts[4], "pick") {
+				pick, _ = strconv.Atoi(parts[5])
+			}
+			s.lastShowSession = sid
+			s.lastShowOffset = offset
+			s.lastShowLimit = limit
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(sid), offset, limit), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
 			emitData(out)
 			if msgs, ok := out["messages"].([]any); ok && len(msgs) > 0 {
 				if pick > 0 {
@@ -424,15 +871,103 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 					emit("hint: /show <session> <offset> <limit> pick <index>")
 				}
 			}
-			s.setStatus(true,"ok","show loaded")
-		case current == "/next": s.lastShowOffset += s.lastShowLimit; out,hErr:=httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil); if hErr!=nil { s.lastShowOffset -= s.lastShowLimit; s.setErrStatus(hErr); return lines,hErr,false }; emitData(out); s.setStatus(true,"ok","next page loaded")
-		case current == "/prev": s.lastShowOffset -= s.lastShowLimit; if s.lastShowOffset < 0 { s.lastShowOffset = 0 }; out,hErr:=httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(out); s.setStatus(true,"ok","prev page loaded")
+			s.setStatus(true, "ok", "show loaded")
+		case current == "/next":
+			s.lastShowOffset += s.lastShowLimit
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil)
+			if hErr != nil {
+				s.lastShowOffset -= s.lastShowLimit
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(out)
+			s.setStatus(true, "ok", "next page loaded")
+		case current == "/prev":
+			s.lastShowOffset -= s.lastShowLimit
+			if s.lastShowOffset < 0 {
+				s.lastShowOffset = 0
+			}
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(out)
+			s.setStatus(true, "ok", "prev page loaded")
 		case strings.HasPrefix(current, "/stats"):
-			parts:=strings.Fields(current); sid:=s.session; if len(parts)>1 { sid=parts[1] }; out,hErr:=httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(uiPayload(out,"stats","result")); s.setStatus(true,"ok","stats loaded")
-		case strings.HasPrefix(current, "/gateway "): parts := strings.Fields(current); if len(parts)!=2 { return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false }; if parts[1]=="status" { out,hErr:=httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status",nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(uiPayload(out,"status","result")); s.setStatus(true,"ok","gateway status loaded") } else if parts[1]=="enable" || parts[1]=="disable" { out,hErr:=httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action",map[string]any{"action":parts[1]}); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(uiPayload(out,"result")); s.setStatus(true,"ok","gateway action applied") } else { return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false }
-		case current == "/config get": out,hErr:=httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config",nil); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(uiPayload(out,"snapshot","result")); s.setStatus(true,"ok","config loaded")
-		case current == "/config tui": cfg:=appconfig.Load(); src:=map[string]string{"ws_base":"config.ini","http_base":"config.ini","view_mode":"config.ini"}; if strings.TrimSpace(os.Getenv("AGENT_API_BASE"))!="" { src["ws_base"]="env" }; if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE"))!="" { src["http_base"]="env" }; if strings.TrimSpace(os.Getenv("AGENT_UI_TUI_VIEW_MODE"))!="" { src["view_mode"]="env" }; emitData(uiPayload(map[string]any{"effective":map[string]any{"ws_base":s.wsBase,"http_base":s.httpBase,"view_mode":s.viewMode,"ws_read_timeout_seconds":int(s.wsReadTimeout/time.Second),"ws_turn_timeout_seconds":int(s.wsTurnTimeout/time.Second),"ws_reconnect_max":s.wsMaxReconnect,"history_max_lines":s.historyMaxLines,"event_max_items":s.eventMaxItems,"auto_doctor":s.autoDoctor},"configured":map[string]any{"ws_base":cfg.UITUIWSBase,"http_base":cfg.UITUIHTTPBase,"view_mode":cfg.UITUIViewMode},"source":src},"result")); s.setStatus(true,"ok","ui-tui config shown")
-		case strings.HasPrefix(current, "/config set "): parts := strings.SplitN(strings.TrimPrefix(current, "/config set "), " ", 2); if len(parts)!=2 || strings.TrimSpace(parts[0])=="" { return lines, fmt.Errorf("usage: /config set <section.key> <value>"), false }; key:=strings.TrimSpace(parts[0]); value:=parts[1]; out,hErr:=httpJSON(http.MethodPost, s.httpBase+"/v1/ui/config/set", map[string]any{"key":key,"value":value}); if hErr!=nil { s.setErrStatus(hErr); return lines,hErr,false }; emitData(out); s.audit("config_set", "key="+key); s.setStatus(true,"ok","config updated")
+			parts := strings.Fields(current)
+			sid := s.session
+			if len(parts) > 1 {
+				sid = parts[1]
+			}
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(uiPayload(out, "stats", "result"))
+			s.setStatus(true, "ok", "stats loaded")
+		case strings.HasPrefix(current, "/gateway "):
+			parts := strings.Fields(current)
+			if len(parts) != 2 {
+				return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false
+			}
+			if parts[1] == "status" {
+				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				emitData(uiPayload(out, "status", "result"))
+				s.setStatus(true, "ok", "gateway status loaded")
+			} else if parts[1] == "enable" || parts[1] == "disable" {
+				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				emitData(uiPayload(out, "result"))
+				s.setStatus(true, "ok", "gateway action applied")
+			} else {
+				return lines, fmt.Errorf("usage: /gateway status|enable|disable"), false
+			}
+		case current == "/config get":
+			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/config", nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(uiPayload(out, "snapshot", "result"))
+			s.setStatus(true, "ok", "config loaded")
+		case current == "/config tui":
+			cfg := appconfig.Load()
+			src := map[string]string{"ws_base": "config.ini", "http_base": "config.ini", "view_mode": "config.ini"}
+			if strings.TrimSpace(os.Getenv("AGENT_API_BASE")) != "" {
+				src["ws_base"] = "env"
+			}
+			if strings.TrimSpace(os.Getenv("AGENT_HTTP_BASE")) != "" {
+				src["http_base"] = "env"
+			}
+			if strings.TrimSpace(os.Getenv("AGENT_UI_TUI_VIEW_MODE")) != "" {
+				src["view_mode"] = "env"
+			}
+			emitData(uiPayload(map[string]any{"effective": map[string]any{"ws_base": s.wsBase, "http_base": s.httpBase, "view_mode": s.viewMode, "ws_read_timeout_seconds": int(s.wsReadTimeout / time.Second), "ws_turn_timeout_seconds": int(s.wsTurnTimeout / time.Second), "ws_reconnect_max": s.wsMaxReconnect, "history_max_lines": s.historyMaxLines, "event_max_items": s.eventMaxItems, "auto_doctor": s.autoDoctor}, "configured": map[string]any{"ws_base": cfg.UITUIWSBase, "http_base": cfg.UITUIHTTPBase, "view_mode": cfg.UITUIViewMode}, "source": src}, "result"))
+			s.setStatus(true, "ok", "ui-tui config shown")
+		case strings.HasPrefix(current, "/config set "):
+			parts := strings.SplitN(strings.TrimPrefix(current, "/config set "), " ", 2)
+			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+				return lines, fmt.Errorf("usage: /config set <section.key> <value>"), false
+			}
+			key := strings.TrimSpace(parts[0])
+			value := parts[1]
+			out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/config/set", map[string]any{"key": key, "value": value})
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(out)
+			s.audit("config_set", "key="+key)
+			s.setStatus(true, "ok", "config updated")
 		default:
 			s.addChatLine("user: " + current)
 			if onEvent == nil {
@@ -453,4 +988,19 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		}
 	}
 	return lines, nil, false
+}
+
+func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	if len(parts) <= 1 {
+		return def, nil
+	}
+	if len(parts) > 2 {
+		return 0, fmt.Errorf("usage: %s [n]", prefix)
+	}
+	v, err := strconv.Atoi(parts[1])
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("usage: %s [n]  (n must be a positive integer)", prefix)
+	}
+	return v, nil
 }
