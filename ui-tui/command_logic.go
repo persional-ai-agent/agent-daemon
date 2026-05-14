@@ -484,10 +484,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				continue
 			}
 			return lines, fmt.Errorf("用法: /bookmark add <name> | /bookmark list | /bookmark use <name>"), false
-		case strings.HasPrefix(current, "/workbench "):
+		case current == "/workbench" || strings.HasPrefix(current, "/workbench "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {
-				return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false
+				return lines, fmt.Errorf("用法: /workbench save|list|load|delete ..."), false
 			}
 			sub := parts[1]
 			name := ""
@@ -505,7 +505,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench listed")
 			case "save":
 				if name == "" {
-					return lines, fmt.Errorf("usage: /workbench save <name>"), false
+					return lines, fmt.Errorf("用法: /workbench save <name>"), false
 				}
 				if wErr := s.saveWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -516,7 +516,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench saved")
 			case "load":
 				if name == "" {
-					return lines, fmt.Errorf("usage: /workbench load <name>"), false
+					return lines, fmt.Errorf("用法: /workbench load <name>"), false
 				}
 				if wErr := s.loadWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -529,7 +529,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench loaded")
 			case "delete":
 				if name == "" {
-					return lines, fmt.Errorf("usage: /workbench delete <name>"), false
+					return lines, fmt.Errorf("用法: /workbench delete <name>"), false
 				}
 				if wErr := s.deleteWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -539,12 +539,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.audit("workbench_delete", "name="+name)
 				s.setStatus(true, "ok", "workbench deleted")
 			default:
-				return lines, fmt.Errorf("usage: /workbench save|list|load|delete ..."), false
+				return lines, fmt.Errorf("用法: /workbench save|list|load|delete ..."), false
 			}
-		case strings.HasPrefix(current, "/workflow "):
+		case current == "/workflow" || strings.HasPrefix(current, "/workflow "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {
-				return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false
+				return lines, fmt.Errorf("用法: /workflow save|list|run|delete ..."), false
 			}
 			sub := parts[1]
 			switch sub {
@@ -558,7 +558,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow listed")
 			case "save":
 				if len(parts) < 4 {
-					return lines, fmt.Errorf("usage: /workflow save <name> <cmd1;cmd2;...>"), false
+					return lines, fmt.Errorf("用法: /workflow save <name> <cmd1;cmd2;...>"), false
 				}
 				name := strings.TrimSpace(parts[2])
 				raw := strings.TrimSpace(strings.TrimPrefix(current, "/workflow save "+name))
@@ -575,7 +575,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow saved")
 			case "run":
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("usage: /workflow run <name> [dry]"), false
+					return lines, fmt.Errorf("用法: /workflow run <name> [dry]"), false
 				}
 				name := strings.TrimSpace(parts[2])
 				wf, ok, wErr := s.getWorkflow(name)
@@ -598,7 +598,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow queued")
 			case "delete":
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("usage: /workflow delete <name>"), false
+					return lines, fmt.Errorf("用法: /workflow delete <name>"), false
 				}
 				name := strings.TrimSpace(parts[2])
 				if wErr := s.deleteWorkflow(name); wErr != nil {
@@ -609,7 +609,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.audit("workflow_delete", "name="+name)
 				s.setStatus(true, "ok", "workflow deleted")
 			default:
-				return lines, fmt.Errorf("usage: /workflow save|list|run|delete ..."), false
+				return lines, fmt.Errorf("用法: /workflow save|list|run|delete ..."), false
 			}
 		case current == "/session":
 			emit("session: " + s.session)
