@@ -456,7 +456,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "pending approval found")
 		case current == "/bookmark" || strings.HasPrefix(current, "/bookmark "):
 			parts := strings.Fields(current)
-			if len(parts) >= 2 && parts[1] == "list" {
+			sub := ""
+			if len(parts) >= 2 {
+				sub = strings.ToLower(strings.TrimSpace(parts[1]))
+			}
+			if len(parts) >= 2 && sub == "list" {
 				list, bErr := s.loadBookmarks()
 				if bErr != nil {
 					s.setErrStatus(bErr)
@@ -466,7 +470,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "bookmarks listed")
 				continue
 			}
-			if len(parts) >= 3 && parts[1] == "add" {
+			if len(parts) >= 3 && sub == "add" {
 				if bErr := s.addBookmark(parts[2]); bErr != nil {
 					s.setErrStatus(bErr)
 					return lines, bErr, false
@@ -475,7 +479,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "bookmark saved")
 				continue
 			}
-			if len(parts) >= 3 && parts[1] == "use" {
+			if len(parts) >= 3 && sub == "use" {
 				if bErr := s.useBookmark(parts[2]); bErr != nil {
 					s.setErrStatus(bErr)
 					return lines, bErr, false
