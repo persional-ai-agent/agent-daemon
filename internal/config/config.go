@@ -53,6 +53,9 @@ type Config struct {
 	SlackBotToken           string
 	SlackAppToken           string
 	SlackAllowed            string
+	WhatsAppAccessToken     string
+	WhatsAppPhoneNumberID   string
+	WhatsAppAllowed         string
 	YuanbaoToken            string
 	YuanbaoAppID            string
 	YuanbaoAppSecret        string
@@ -302,6 +305,9 @@ func loadFromINIValues(iv iniValues) Config {
 		SlackBotToken:           iniStr(iv, "gateway.slack", "bot_token", "AGENT_SLACK_BOT_TOKEN", ""),
 		SlackAppToken:           iniStr(iv, "gateway.slack", "app_token", "AGENT_SLACK_APP_TOKEN", ""),
 		SlackAllowed:            iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
+		WhatsAppAccessToken:     iniStr(iv, "gateway.whatsapp", "access_token", "AGENT_WHATSAPP_ACCESS_TOKEN", ""),
+		WhatsAppPhoneNumberID:   iniStr(iv, "gateway.whatsapp", "phone_number_id", "AGENT_WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppAllowed:         iniStr(iv, "gateway.whatsapp", "allowed_users", "AGENT_WHATSAPP_ALLOWED_USERS", ""),
 		YuanbaoToken:            iniStr(iv, "gateway.yuanbao", "token", "YUANBAO_TOKEN", ""),
 		YuanbaoAppID:            iniStr(iv, "gateway.yuanbao", "app_id", "YUANBAO_APP_ID", ""),
 		YuanbaoAppSecret:        iniStr(iv, "gateway.yuanbao", "app_secret", "YUANBAO_APP_SECRET", ""),
