@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestParseOptionalPositiveIntArg(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
@@ -106,4 +109,23 @@ func TestParsePendingArgs(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+func TestHandleTUICommandRerunEmptyHistory(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+	}
+	_, err, _ := handleTUICommand(s, "/rerun 1", nil, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "no history available" {
+		t.Fatalf("unexpected err: %v", err)
+	}
 }

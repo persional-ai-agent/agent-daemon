@@ -322,6 +322,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setErrStatus(rErr)
 				return lines, rErr, false
 			}
+			if n := len(items); n > 0 && strings.TrimSpace(items[n-1]) == current {
+				items = items[:n-1]
+			}
+			if len(items) == 0 {
+				return lines, fmt.Errorf("no history available"), false
+			}
 			if idx > len(items) {
 				return lines, fmt.Errorf("index out of range, max=%d", len(items)), false
 			}
