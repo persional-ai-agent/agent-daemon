@@ -535,6 +535,12 @@ func TestConfigCommandCaseInsensitiveSubcommands(t *testing.T) {
 	if setKey != "agent.workdir" || setValue != "/tmp/demo" {
 		t.Fatalf("unexpected set payload: key=%q value=%q", setKey, setValue)
 	}
+	if _, err, _ := handleTUICommand(s, "/config set agent.note hello world", nil, nil); err != nil {
+		t.Fatalf("config set with spaced value failed: %v", err)
+	}
+	if setKey != "agent.note" || setValue != "hello world" {
+		t.Fatalf("unexpected spaced payload: key=%q value=%q", setKey, setValue)
+	}
 }
 
 func TestBookmarkCommandCaseInsensitiveSubcommands(t *testing.T) {
