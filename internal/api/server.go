@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/tools/", s.handleUIToolSchema)
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
 	mux.HandleFunc("/v1/ui/sessions/", s.handleUISessionDetail)
+	mux.HandleFunc("/v1/ui/sessions/branch", s.handleUISessionBranch)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
@@ -215,6 +216,11 @@ type recentSessionsStore interface {
 type sessionDetailStore interface {
 	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
 	SessionStats(sessionID string) (map[string]any, error)
+}
+
+type sessionBranchStore interface {
+	LoadMessages(sessionID string, limit int) ([]core.Message, error)
+	AppendMessage(sessionID string, msg core.Message) error
 }
 
 type agentListItem struct {
@@ -499,6 +505,12 @@ type uiConfigSetRequest struct {
 	Value string `json:"value"`
 }
 
+type uiSessionBranchRequest struct {
+	SessionID    string `json:"session_id"`
+	NewSessionID string `json:"new_session_id,omitempty"`
+	LastN        int    `json:"last_n,omitempty"`
+}
+
 func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -526,6 +538,62 @@ func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
 		"result": res,
+	})
+}
+
+func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionBranchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.NewSessionID = strings.TrimSpace(req.NewSessionID)
+	if req.SessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	if req.NewSessionID == "" {
+		req.NewSessionID = uuid.NewString()
+	}
+	if req.NewSessionID == req.SessionID {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "new_session_id must differ from session_id")
+		return
+	}
+	ss, ok := s.Engine.SessionStore.(sessionBranchStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session branching not supported")
+		return
+	}
+	msgs, err := ss.LoadMessages(req.SessionID, 500)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	if req.LastN > 0 && req.LastN < len(msgs) {
+		msgs = msgs[len(msgs)-req.LastN:]
+	}
+	for _, msg := range msgs {
+		if err := ss.AppendMessage(req.NewSessionID, msg); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"source_session_id": req.SessionID,
+			"new_session_id":    req.NewSessionID,
+			"copied_messages":   len(msgs),
+		},
 	})
 }
 

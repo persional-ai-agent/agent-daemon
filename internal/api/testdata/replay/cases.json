@@ -28,6 +28,19 @@
     "snapshot": "ui_session_detail_success"
   },
   {
+    "name": "ui_session_branch_success",
+    "method": "POST",
+    "path": "/v1/ui/sessions/branch",
+    "contract_path": "/v1/ui/sessions/branch",
+    "content_type": "application/json",
+    "body": {
+      "session_id": "s1",
+      "new_session_id": "s-branch",
+      "last_n": 1
+    },
+    "snapshot": "ui_session_branch_success"
+  },
+  {
     "name": "ui_config_success",
     "method": "GET",
     "path": "/v1/ui/config",

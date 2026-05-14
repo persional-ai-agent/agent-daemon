@@ -116,6 +116,7 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "tool_schema", method: http.MethodGet, path: "/v1/ui/tools/x/schema"},
 		{name: "sessions", method: http.MethodGet, path: "/v1/ui/sessions?limit=1"},
 		{name: "session_detail", method: http.MethodGet, path: "/v1/ui/sessions/s1?offset=0&limit=1"},
+		{name: "session_branch", method: http.MethodPost, path: "/v1/ui/sessions/branch", body: `{"session_id":"s1","new_session_id":"s-branch","last_n":1}`},
 		{name: "config", method: http.MethodGet, path: "/v1/ui/config"},
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
 		{name: "skills", method: http.MethodGet, path: "/v1/ui/skills"},

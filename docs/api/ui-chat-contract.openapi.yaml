@@ -166,6 +166,50 @@ paths:
                           type: object
                       stats:
                         type: object
+  /v1/ui/sessions/branch:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+                new_session_id:
+                  type: string
+                last_n:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Branch one session into another
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+                        required: [source_session_id, new_session_id, copied_messages]
+                        properties:
+                          source_session_id:
+                            type: string
+                          new_session_id:
+                            type: string
+                          copied_messages:
+                            type: integer
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/config:
     get:
       responses:
