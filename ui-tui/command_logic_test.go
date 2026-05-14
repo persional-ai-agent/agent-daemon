@@ -397,6 +397,14 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /reconnect timeout wait|reconnect|cancel" {
 		t.Fatalf("unexpected /reconnect timeout error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/panel auto maybe", nil, nil)
+	if err == nil || err.Error() != "用法: /panel auto on|off" {
+		t.Fatalf("unexpected /panel auto error: %v", err)
+	}
+	_, err, _ = handleTUICommand(s, "/panel interval 0", nil, nil)
+	if err == nil || err.Error() != "panel interval must be 1..300 seconds" {
+		t.Fatalf("unexpected /panel interval error: %v", err)
+	}
 	_, err, _ = handleTUICommand(s, "/workbench", nil, nil)
 	if err == nil || err.Error() != "用法: /workbench save|list|load|delete ..." {
 		t.Fatalf("unexpected /workbench error: %v", err)
