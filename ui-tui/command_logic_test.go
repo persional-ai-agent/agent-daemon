@@ -109,6 +109,13 @@ func TestParsePendingArgs(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+
+	t.Run("action_without_index", func(t *testing.T) {
+		_, _, _, err := parsePendingArgs("/pending approve")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestHandleTUICommandRerunEmptyHistory(t *testing.T) {

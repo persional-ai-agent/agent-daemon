@@ -1017,7 +1017,7 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	}
 	pos++
 	if pos >= len(parts) {
-		return limit, action, 0, nil
+		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	actionIndex, err = strconv.Atoi(parts[pos])
 	if err != nil || actionIndex <= 0 {
