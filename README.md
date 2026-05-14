@@ -260,7 +260,7 @@ go run ./cmd/agentd gateway enable
 go run ./cmd/agentd gateway disable
 go run ./cmd/agentd gateway setup -platform telegram -token "$AGENT_TELEGRAM_BOT_TOKEN"
 go run ./cmd/agentd gateway setup -platform slack -bot-token "$AGENT_SLACK_BOT_TOKEN" -app-token "$AGENT_SLACK_APP_TOKEN"
-go run ./cmd/agentd gateway setup -platform whatsapp -access-token "$AGENT_WHATSAPP_ACCESS_TOKEN" -phone-number-id "$AGENT_WHATSAPP_PHONE_NUMBER_ID" -verify-token "$AGENT_WHATSAPP_VERIFY_TOKEN"
+go run ./cmd/agentd gateway setup -platform whatsapp -access-token "$AGENT_WHATSAPP_ACCESS_TOKEN" -phone-number-id "$AGENT_WHATSAPP_PHONE_NUMBER_ID" -verify-token "$AGENT_WHATSAPP_VERIFY_TOKEN" -webhook-secret "$AGENT_WHATSAPP_WEBHOOK_SECRET"
 ```
 
 WhatsApp webhook endpoint（用于 Meta 回调）：

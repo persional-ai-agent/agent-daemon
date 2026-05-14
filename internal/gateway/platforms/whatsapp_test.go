@@ -2,6 +2,9 @@ package platforms
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +15,7 @@ import (
 )
 
 func TestWhatsAppAdapterName(t *testing.T) {
-	a, err := NewWhatsAppAdapter("token", "123", "verify")
+	a, err := NewWhatsAppAdapter("token", "123", "verify", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +43,7 @@ func TestWhatsAppAdapterSend(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a, err := NewWhatsAppAdapter("test-token", "555", "verify")
+	a, err := NewWhatsAppAdapter("test-token", "555", "verify", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +68,7 @@ func TestWhatsAppAdapterSend(t *testing.T) {
 }
 
 func TestWhatsAppWebhookVerify(t *testing.T) {
-	a, err := NewWhatsAppAdapter("token", "123", "verify-token")
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +84,7 @@ func TestWhatsAppWebhookVerify(t *testing.T) {
 }
 
 func TestWhatsAppWebhookMessageDispatch(t *testing.T) {
-	a, err := NewWhatsAppAdapter("token", "123", "verify-token")
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +115,7 @@ func TestWhatsAppWebhookMediaDispatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a, err := NewWhatsAppAdapter("token", "123", "verify-token")
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,6 +138,45 @@ func TestWhatsAppWebhookMediaDispatch(t *testing.T) {
 	}
 	if len(got.MediaURLs) != 1 || got.MediaURLs[0] != "https://cdn.example.com/media-1.jpg" {
 		t.Fatalf("media=%v", got.MediaURLs)
+	}
+}
+
+func TestWhatsAppWebhookSignatureRequired(t *testing.T) {
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token", "secret-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"entry":[{"changes":[{"value":{"messages":[{"from":"8613800138000","id":"wamid.msg3","type":"text","text":{"body":"hello"}}]}}]}]}`
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	a.HandleWebhook(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestWhatsAppWebhookSignatureValid(t *testing.T) {
+	a, err := NewWhatsAppAdapter("token", "123", "verify-token", "secret-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got gateway.MessageEvent
+	a.OnMessage(context.Background(), func(_ context.Context, event gateway.MessageEvent) {
+		got = event
+	})
+	body := `{"entry":[{"changes":[{"value":{"messages":[{"from":"8613800138000","id":"wamid.msg4","type":"text","text":{"body":"hello signed"}}]}}]}]}`
+	mac := hmac.New(sha256.New, []byte("secret-1"))
+	_, _ = mac.Write([]byte(body))
+	sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	req.Header.Set("X-Hub-Signature-256", sig)
+	rr := httptest.NewRecorder()
+	a.HandleWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got.Text != "hello signed" {
+		t.Fatalf("event=%+v", got)
 	}
 }
 

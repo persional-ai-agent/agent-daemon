@@ -3,6 +3,10 @@ package platforms
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,13 +21,14 @@ type WhatsAppAdapter struct {
 	accessToken   string
 	phoneNumberID string
 	verifyToken   string
+	webhookSecret string
 	baseURL       string
 	apiVersion    string
 	httpClient    *http.Client
 	handler       gateway.MessageHandler
 }
 
-func NewWhatsAppAdapter(accessToken, phoneNumberID, verifyToken string) (*WhatsAppAdapter, error) {
+func NewWhatsAppAdapter(accessToken, phoneNumberID, verifyToken, webhookSecret string) (*WhatsAppAdapter, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	phoneNumberID = strings.TrimSpace(phoneNumberID)
 	if accessToken == "" {
@@ -36,6 +41,7 @@ func NewWhatsAppAdapter(accessToken, phoneNumberID, verifyToken string) (*WhatsA
 		accessToken:   accessToken,
 		phoneNumberID: phoneNumberID,
 		verifyToken:   strings.TrimSpace(verifyToken),
+		webhookSecret: strings.TrimSpace(webhookSecret),
 		baseURL:       "https://graph.facebook.com",
 		apiVersion:    "v21.0",
 		httpClient:    http.DefaultClient,
@@ -156,6 +162,10 @@ func (w *WhatsAppAdapter) HandleWebhook(resp http.ResponseWriter, req *http.Requ
 		http.Error(resp, "bad request", http.StatusBadRequest)
 		return
 	}
+	if !w.verifyWebhookSignature(req.Header.Get("X-Hub-Signature-256"), bs) {
+		http.Error(resp, "forbidden", http.StatusForbidden)
+		return
+	}
 	if w.handler != nil {
 		for _, entry := range payload.Entry {
 			for _, change := range entry.Changes {
@@ -188,6 +198,36 @@ func (w *WhatsAppAdapter) HandleWebhook(resp http.ResponseWriter, req *http.Requ
 	resp.Header().Set("Content-Type", "application/json")
 	resp.WriteHeader(http.StatusOK)
 	_, _ = resp.Write([]byte(`{"ok":true}`))
+}
+
+func (w *WhatsAppAdapter) verifyWebhookSignature(header string, body []byte) bool {
+	secret := strings.TrimSpace(w.webhookSecret)
+	if secret == "" {
+		return true
+	}
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return false
+	}
+	const prefix = "sha256="
+	if !strings.HasPrefix(strings.ToLower(header), prefix) {
+		return false
+	}
+	gotHex := strings.TrimSpace(header[len(prefix):])
+	if gotHex == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(body)
+	want := mac.Sum(nil)
+	got, err := hex.DecodeString(strings.ToLower(gotHex))
+	if err != nil {
+		return false
+	}
+	if len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
 type whatsAppWebhookPayload struct {
