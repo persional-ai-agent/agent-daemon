@@ -1,6 +1,9 @@
 SHELL := /bin/bash
 
-.PHONY: test contract-test contract-replay contract-ws-replay contract-coverage contract-diff diag-check contract-check contract-release
+.PHONY: all test contract-test contract-replay contract-ws-replay contract-coverage contract-diff diag-check contract-check contract-release
+
+all:
+	go build -o agent-daemon cmd/agentd/main.go 
 
 test:
 	go test ./...

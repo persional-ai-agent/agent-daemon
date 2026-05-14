@@ -299,12 +299,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			s.setStatus(true, "ok", "history loaded")
 		case strings.HasPrefix(current, "/timeline"):
-			parts := strings.Fields(current)
-			limit := 20
-			if len(parts) > 1 {
-				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
-					limit = v
-				}
+			limit, pErr := parseOptionalPositiveIntArg(current, "/timeline", 20)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			items := s.timelineSlice(limit)
 			if len(items) == 0 {
@@ -346,12 +343,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "events saved")
 				continue
 			}
-			parts := strings.Fields(current)
-			limit := 20
-			if len(parts) > 1 {
-				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
-					limit = v
-				}
+			limit, pErr := parseOptionalPositiveIntArg(current, "/events", 20)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			if limit > s.eventMaxItems {
 				limit = s.eventMaxItems
