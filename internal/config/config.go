@@ -74,6 +74,9 @@ type Config struct {
 	WeComWebhookURL         string
 	WeComInboundSecret      string
 	WeComAllowed            string
+	MattermostWebhookURL    string
+	MattermostInboundSecret string
+	MattermostAllowed       string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -359,6 +362,9 @@ func loadFromINIValues(iv iniValues) Config {
 		WeComWebhookURL:         iniStr(iv, "gateway.wecom", "webhook_url", "AGENT_WECOM_WEBHOOK_URL", ""),
 		WeComInboundSecret:      iniStr(iv, "gateway.wecom", "inbound_secret", "AGENT_WECOM_INBOUND_SECRET", ""),
 		WeComAllowed:            iniStr(iv, "gateway.wecom", "allowed_users", "AGENT_WECOM_ALLOWED_USERS", ""),
+		MattermostWebhookURL:    iniStr(iv, "gateway.mattermost", "webhook_url", "AGENT_MATTERMOST_WEBHOOK_URL", ""),
+		MattermostInboundSecret: iniStr(iv, "gateway.mattermost", "inbound_secret", "AGENT_MATTERMOST_INBOUND_SECRET", ""),
+		MattermostAllowed:       iniStr(iv, "gateway.mattermost", "allowed_users", "AGENT_MATTERMOST_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),

@@ -102,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/gateway/feishu/webhook", s.handleGatewayFeishuWebhook)
 	mux.HandleFunc("/v1/gateway/dingtalk/webhook", s.handleGatewayDingTalkWebhook)
 	mux.HandleFunc("/v1/gateway/wecom/webhook", s.handleGatewayWeComWebhook)
+	mux.HandleFunc("/v1/gateway/mattermost/webhook", s.handleGatewayMattermostWebhook)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
@@ -243,6 +244,22 @@ func (s *Server) handleGatewayWeComWebhook(w http.ResponseWriter, r *http.Reques
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "wecom webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayMattermostWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("mattermost")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "mattermost gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "mattermost webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

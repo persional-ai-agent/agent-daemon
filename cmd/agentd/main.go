@@ -925,7 +925,7 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (matrix/feishu/dingtalk/wecom/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	gatewayMatrixBaseURL := fs.String("gateway-matrix-base-url", "", "matrix homeserver base URL")
 	gatewayMatrixToken := fs.String("gateway-matrix-token", "", "matrix access token")
 	gatewayMatrixSecret := fs.String("gateway-matrix-secret", "", "matrix inbound secret")
@@ -935,6 +935,8 @@ func runSetup(cfg config.Config, args []string) {
 	gatewayDingTalkSecret := fs.String("gateway-dingtalk-secret", "", "dingtalk inbound secret")
 	gatewayWeComWebhookURL := fs.String("gateway-wecom-webhook-url", "", "wecom webhook URL")
 	gatewayWeComSecret := fs.String("gateway-wecom-secret", "", "wecom inbound secret")
+	gatewayMattermostWebhookURL := fs.String("gateway-mattermost-webhook-url", "", "mattermost webhook URL")
+	gatewayMattermostSecret := fs.String("gateway-mattermost-secret", "", "mattermost inbound secret")
 	gatewaySignalBaseURL := fs.String("gateway-signal-base-url", "", "signal REST base URL")
 	gatewaySignalAccount := fs.String("gateway-signal-account", "", "signal account number")
 	gatewaySignalSecret := fs.String("gateway-signal-secret", "", "signal inbound secret")
@@ -999,6 +1001,8 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*gatewayDingTalkSecret),
 		strings.TrimSpace(*gatewayWeComWebhookURL),
 		strings.TrimSpace(*gatewayWeComSecret),
+		strings.TrimSpace(*gatewayMattermostWebhookURL),
+		strings.TrimSpace(*gatewayMattermostSecret),
 		strings.TrimSpace(*gatewaySignalBaseURL),
 		strings.TrimSpace(*gatewaySignalAccount),
 		strings.TrimSpace(*gatewaySignalSecret),
@@ -3641,7 +3645,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/matrix/feishu/dingtalk/wecom/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
@@ -3655,6 +3659,8 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewayDingTalkSecret := ""
 	gatewayWeComWebhookURL := ""
 	gatewayWeComSecret := ""
+	gatewayMattermostWebhookURL := ""
+	gatewayMattermostSecret := ""
 	gatewaySignalBaseURL := ""
 	gatewaySignalAccount := ""
 	gatewaySignalSecret := ""
@@ -3696,6 +3702,10 @@ func runSetupWizard(cfg config.Config, args []string) {
 	case "wecom":
 		gatewayWeComWebhookURL = promptInput(reader, "wecom webhook url", "")
 		gatewayWeComSecret = promptInput(reader, "wecom inbound secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "mattermost":
+		gatewayMattermostWebhookURL = promptInput(reader, "mattermost webhook url", "")
+		gatewayMattermostSecret = promptInput(reader, "mattermost inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "signal":
 		gatewaySignalBaseURL = promptInput(reader, "signal base url", "")
@@ -3758,6 +3768,8 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayDingTalkSecret,
 		gatewayWeComWebhookURL,
 		gatewayWeComSecret,
+		gatewayMattermostWebhookURL,
+		gatewayMattermostSecret,
 		gatewaySignalBaseURL,
 		gatewaySignalAccount,
 		gatewaySignalSecret,
@@ -3810,7 +3822,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewayFeishuWebhookURL, gatewayFeishuSecret, gatewayDingTalkWebhookURL, gatewayDingTalkSecret, gatewayWeComWebhookURL, gatewayWeComSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewayFeishuWebhookURL, gatewayFeishuSecret, gatewayDingTalkWebhookURL, gatewayDingTalkSecret, gatewayWeComWebhookURL, gatewayWeComSecret, gatewayMattermostWebhookURL, gatewayMattermostSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3834,7 +3846,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewayFeishuWebhookURL, gatewayFeishuSecret, gatewayDingTalkWebhookURL, gatewayDingTalkSecret, gatewayWeComWebhookURL, gatewayWeComSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewayFeishuWebhookURL, gatewayFeishuSecret, gatewayDingTalkWebhookURL, gatewayDingTalkSecret, gatewayWeComWebhookURL, gatewayWeComSecret, gatewayMattermostWebhookURL, gatewayMattermostSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -4571,7 +4583,7 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	if !cfg.GatewayEnabled {
 		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
 	}
-	configured := make([]string, 0, 13)
+	configured := make([]string, 0, 14)
 	if strings.TrimSpace(cfg.MatrixBaseURL) != "" && strings.TrimSpace(cfg.MatrixAccessToken) != "" {
 		configured = append(configured, "matrix")
 	}
@@ -4583,6 +4595,9 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	}
 	if strings.TrimSpace(cfg.WeComWebhookURL) != "" {
 		configured = append(configured, "wecom")
+	}
+	if strings.TrimSpace(cfg.MattermostWebhookURL) != "" {
+		configured = append(configured, "mattermost")
 	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		configured = append(configured, "signal")
@@ -5250,6 +5265,8 @@ func runGatewayForeground(cfg config.Config) {
 			return cfg.DingTalkAllowed
 		case "wecom":
 			return cfg.WeComAllowed
+		case "mattermost":
+			return cfg.MattermostAllowed
 		case "signal":
 			return cfg.SignalAllowed
 		case "email":
@@ -5985,7 +6002,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -6048,7 +6065,7 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	matrixBaseURL := fs.String("matrix-base-url", "", "matrix homeserver base URL")
 	matrixToken := fs.String("matrix-token", "", "matrix access token")
 	matrixSecret := fs.String("matrix-secret", "", "matrix inbound secret")
@@ -6058,6 +6075,8 @@ func runGatewaySetup(args []string) {
 	dingtalkSecret := fs.String("dingtalk-secret", "", "dingtalk inbound secret")
 	wecomWebhookURL := fs.String("wecom-webhook-url", "", "wecom webhook URL")
 	wecomSecret := fs.String("wecom-secret", "", "wecom inbound secret")
+	mattermostWebhookURL := fs.String("mattermost-webhook-url", "", "mattermost webhook URL")
+	mattermostSecret := fs.String("mattermost-secret", "", "mattermost inbound secret")
 	signalBaseURL := fs.String("signal-base-url", "", "signal REST base URL")
 	signalAccount := fs.String("signal-account", "", "signal account number")
 	signalSecret := fs.String("signal-secret", "", "signal inbound secret")
@@ -6085,7 +6104,7 @@ func runGatewaySetup(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|mattermost|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -6104,6 +6123,8 @@ func runGatewaySetup(args []string) {
 		strings.TrimSpace(*dingtalkSecret),
 		strings.TrimSpace(*wecomWebhookURL),
 		strings.TrimSpace(*wecomSecret),
+		strings.TrimSpace(*mattermostWebhookURL),
+		strings.TrimSpace(*mattermostSecret),
 		strings.TrimSpace(*signalBaseURL),
 		strings.TrimSpace(*signalAccount),
 		strings.TrimSpace(*signalSecret),
@@ -6146,7 +6167,7 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSecret, feishuWebhookURL, feishuSecret, dingtalkWebhookURL, dingtalkSecret, wecomWebhookURL, wecomSecret, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSecret, feishuWebhookURL, feishuSecret, dingtalkWebhookURL, dingtalkSecret, wecomWebhookURL, wecomSecret, mattermostWebhookURL, mattermostSecret, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
@@ -6208,6 +6229,20 @@ func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSec
 		if allowedUsers != "" {
 			values["gateway.wecom.allowed_users"] = allowedUsers
 			written = append(written, "gateway.wecom.allowed_users")
+		}
+	case "mattermost":
+		if mattermostWebhookURL == "" {
+			return nil, fmt.Errorf("mattermost setup requires -mattermost-webhook-url")
+		}
+		values["gateway.mattermost.webhook_url"] = mattermostWebhookURL
+		written = append(written, "gateway.mattermost.webhook_url")
+		if mattermostSecret != "" {
+			values["gateway.mattermost.inbound_secret"] = mattermostSecret
+			written = append(written, "gateway.mattermost.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.mattermost.allowed_users"] = allowedUsers
+			written = append(written, "gateway.mattermost.allowed_users")
 		}
 	case "signal":
 		if signalBaseURL == "" || signalAccount == "" {
@@ -6785,6 +6820,9 @@ func gatewayTokenFingerprint(cfg config.Config) string {
 	if strings.TrimSpace(cfg.WeComWebhookURL) != "" {
 		parts = append(parts, "wecom:"+strings.TrimSpace(cfg.WeComWebhookURL))
 	}
+	if strings.TrimSpace(cfg.MattermostWebhookURL) != "" {
+		parts = append(parts, "mattermost:"+strings.TrimSpace(cfg.MattermostWebhookURL))
+	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" || strings.TrimSpace(cfg.SignalAccount) != "" {
 		parts = append(parts, "signal:"+strings.TrimSpace(cfg.SignalBaseURL)+":"+strings.TrimSpace(cfg.SignalAccount))
 	}
@@ -6880,11 +6918,11 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"matrix", "feishu", "dingtalk", "wecom", "signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
+	return []string{"matrix", "feishu", "dingtalk", "wecom", "mattermost", "signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
-	out := make([]string, 0, 13)
+	out := make([]string, 0, 14)
 	if strings.TrimSpace(cfg.MatrixBaseURL) != "" && strings.TrimSpace(cfg.MatrixAccessToken) != "" {
 		out = append(out, "matrix")
 	}
@@ -6896,6 +6934,9 @@ func configuredGatewayPlatforms(cfg config.Config) []string {
 	}
 	if strings.TrimSpace(cfg.WeComWebhookURL) != "" {
 		out = append(out, "wecom")
+	}
+	if strings.TrimSpace(cfg.MattermostWebhookURL) != "" {
+		out = append(out, "mattermost")
 	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		out = append(out, "signal")
@@ -7351,6 +7392,8 @@ func runServe(cfg config.Config) {
 						return cfg.DingTalkAllowed
 					case "wecom":
 						return cfg.WeComAllowed
+					case "mattermost":
+						return cfg.MattermostAllowed
 					case "signal":
 						return cfg.SignalAllowed
 					case "email":
@@ -7430,6 +7473,15 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, wa)
 			log.Printf("wecom adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.MattermostWebhookURL) != "" {
+		ma, err := platforms.NewMattermostAdapter(cfg.MattermostWebhookURL, cfg.MattermostInboundSecret)
+		if err != nil {
+			log.Printf("mattermost adapter: %v", err)
+		} else {
+			adapters = append(adapters, ma)
+			log.Printf("mattermost adapter configured")
 		}
 	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {

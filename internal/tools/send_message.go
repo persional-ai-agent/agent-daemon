@@ -38,7 +38,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 					},
 					"platform": map[string]any{
 						"type":        "string",
-						"description": "Platform name (matrix/feishu/dingtalk/wecom/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)",
+						"description": "Platform name (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)",
 					},
 					"chat_id": map[string]any{
 						"type":        "string",
