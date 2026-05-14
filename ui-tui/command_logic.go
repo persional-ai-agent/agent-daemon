@@ -452,7 +452,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				queue = append([]string{actionCmd + id}, queue...)
 			}
 			s.setStatus(true, "ok", "pending approval found")
-		case strings.HasPrefix(current, "/bookmark "):
+		case current == "/bookmark" || strings.HasPrefix(current, "/bookmark "):
 			parts := strings.Fields(current)
 			if len(parts) >= 2 && parts[1] == "list" {
 				list, bErr := s.loadBookmarks()
@@ -483,7 +483,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "bookmark loaded")
 				continue
 			}
-			return lines, fmt.Errorf("usage: /bookmark add <name> | /bookmark list | /bookmark use <name>"), false
+			return lines, fmt.Errorf("用法: /bookmark add <name> | /bookmark list | /bookmark use <name>"), false
 		case strings.HasPrefix(current, "/workbench "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {

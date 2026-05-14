@@ -373,4 +373,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /config get|set <section.key> <value>|tui" {
 		t.Fatalf("unexpected /config error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/bookmark", nil, nil)
+	if err == nil || err.Error() != "用法: /bookmark add <name> | /bookmark list | /bookmark use <name>" {
+		t.Fatalf("unexpected /bookmark error: %v", err)
+	}
 }
