@@ -263,3 +263,18 @@ func TestHandleTUICommandNextPrevRequireShow(t *testing.T) {
 		t.Fatalf("unexpected /prev err: %v", err)
 	}
 }
+
+func TestParseStatsArgs(t *testing.T) {
+	sid, err := parseStatsArgs("/stats", "s1")
+	if err != nil || sid != "s1" {
+		t.Fatalf("unexpected /stats parse: sid=%q err=%v", sid, err)
+	}
+	sid, err = parseStatsArgs("/stats s2", "s1")
+	if err != nil || sid != "s2" {
+		t.Fatalf("unexpected /stats s2 parse: sid=%q err=%v", sid, err)
+	}
+	_, err = parseStatsArgs("/stats s2 extra", "s1")
+	if err == nil {
+		t.Fatal("expected error for extra args")
+	}
+}

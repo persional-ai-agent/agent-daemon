@@ -863,10 +863,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emitData(out)
 			s.setStatus(true, "ok", "prev page loaded")
 		case strings.HasPrefix(current, "/stats"):
-			parts := strings.Fields(current)
-			sid := s.session
-			if len(parts) > 1 {
-				sid = parts[1]
+			sid, pErr := parseStatsArgs(current, s.session)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
 			if hErr != nil {
@@ -1093,4 +1092,19 @@ func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pic
 		pick = idx
 	}
 	return sid, offset, limit, pick, nil
+}
+
+func parseStatsArgs(input, defaultSession string) (string, error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	if len(parts) == 1 {
+		return strings.TrimSpace(defaultSession), nil
+	}
+	if len(parts) == 2 {
+		sid := strings.TrimSpace(parts[1])
+		if sid == "" {
+			return "", fmt.Errorf("usage: /stats [session]")
+		}
+		return sid, nil
+	}
+	return "", fmt.Errorf("usage: /stats [session]")
 }
