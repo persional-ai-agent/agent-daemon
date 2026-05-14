@@ -71,6 +71,9 @@ type Config struct {
 	DingTalkWebhookURL      string
 	DingTalkInboundSecret   string
 	DingTalkAllowed         string
+	WeComWebhookURL         string
+	WeComInboundSecret      string
+	WeComAllowed            string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -353,6 +356,9 @@ func loadFromINIValues(iv iniValues) Config {
 		DingTalkWebhookURL:      iniStr(iv, "gateway.dingtalk", "webhook_url", "AGENT_DINGTALK_WEBHOOK_URL", ""),
 		DingTalkInboundSecret:   iniStr(iv, "gateway.dingtalk", "inbound_secret", "AGENT_DINGTALK_INBOUND_SECRET", ""),
 		DingTalkAllowed:         iniStr(iv, "gateway.dingtalk", "allowed_users", "AGENT_DINGTALK_ALLOWED_USERS", ""),
+		WeComWebhookURL:         iniStr(iv, "gateway.wecom", "webhook_url", "AGENT_WECOM_WEBHOOK_URL", ""),
+		WeComInboundSecret:      iniStr(iv, "gateway.wecom", "inbound_secret", "AGENT_WECOM_INBOUND_SECRET", ""),
+		WeComAllowed:            iniStr(iv, "gateway.wecom", "allowed_users", "AGENT_WECOM_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),

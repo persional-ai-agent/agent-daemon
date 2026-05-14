@@ -74,7 +74,7 @@
 | `TODO-002` | `partial` | 网关命令一致性与部分统一已做，未完成统一 dispatcher 全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
 | `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
 | `TODO-004` | `done` | `signal`、`email`、`webhook`、`homeassistant` 已具备最小 inbound/outbound 闭环，并接入 gateway setup/status/platforms 与运行时适配器装配。 | `internal/gateway/platforms/signal.go`、`internal/gateway/platforms/email.go`、`internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/homeassistant_adapter.go`、`cmd/agentd/main.go` |
-| `TODO-005` | `partial` | 已补 `matrix` + `feishu` + `dingtalk` 网关适配器（inbound/outbound 最小闭环）；`wecom/mattermost/sms/bluebubbles` 仍待实现。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`cmd/agentd/main.go` |
+| `TODO-005` | `partial` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` 网关适配器（inbound/outbound 最小闭环）；`mattermost/sms/bluebubbles` 仍待实现。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`cmd/agentd/main.go` |
 | `TODO-006` | `partial` | 审批命令链路已推进，平台原生交互深度仍未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
 | `TODO-008` | `partial` | toolsets 最小对齐已完成，动态可用性与 UI 管理仍未完全到位。 | `docs/dev/0036-summary-summary-merged.md`（`# 063`、`# 107`） |
