@@ -755,13 +755,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emit("session switched: " + s.session)
 			s.setStatus(true, "ok", "session switched")
 		case strings.HasPrefix(current, "/open "):
-			args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(current, "/open ")))
-			if len(args) == 0 {
-				return lines, fmt.Errorf("usage: /open <index> [a|d|approve|deny]"), false
-			}
-			idx, pErr := strconv.Atoi(args[0])
-			if pErr != nil || idx <= 0 {
-				return lines, fmt.Errorf("usage: /open <index> [a|d|approve|deny]"), false
+			idx, action, pErr := parseOpenArgs(current)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			payload := s.panelData[s.fullscreenPanel]
 			switch s.fullscreenPanel {
@@ -795,14 +791,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				emit("selected pending approval: " + id)
 				emit("use /approve " + id + " or /deny " + id)
-				if len(args) > 1 {
-					act := strings.ToLower(strings.TrimSpace(args[1]))
-					if act == "a" || act == "approve" {
+				if action != "" {
+					if action == "a" || action == "approve" {
 						queue = append([]string{"/approve " + id}, queue...)
-					} else if act == "d" || act == "deny" {
+					} else if action == "d" || action == "deny" {
 						queue = append([]string{"/deny " + id}, queue...)
-					} else {
-						return lines, fmt.Errorf("usage: /open <index> [a|d|approve|deny]"), false
 					}
 				}
 				s.setStatus(true, "ok", "approval selected")
@@ -1119,4 +1112,23 @@ func parseStatsArgs(input, defaultSession string) (string, error) {
 		return sid, nil
 	}
 	return "", fmt.Errorf("用法: /stats [session]")
+}
+
+func parseOpenArgs(input string) (index int, action string, err error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+	}
+	idx, convErr := strconv.Atoi(parts[1])
+	if convErr != nil || idx <= 0 {
+		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+	}
+	if len(parts) == 2 {
+		return idx, "", nil
+	}
+	action = strings.ToLower(strings.TrimSpace(parts[2]))
+	if action != "a" && action != "d" && action != "approve" && action != "deny" {
+		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+	}
+	return idx, action, nil
 }

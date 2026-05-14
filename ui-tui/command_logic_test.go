@@ -294,6 +294,29 @@ func TestParseStatsArgs(t *testing.T) {
 	}
 }
 
+func TestParseOpenArgs(t *testing.T) {
+	idx, action, err := parseOpenArgs("/open 2")
+	if err != nil || idx != 2 || action != "" {
+		t.Fatalf("unexpected parse: idx=%d action=%q err=%v", idx, action, err)
+	}
+	idx, action, err = parseOpenArgs("/open 3 approve")
+	if err != nil || idx != 3 || action != "approve" {
+		t.Fatalf("unexpected parse with action: idx=%d action=%q err=%v", idx, action, err)
+	}
+	_, _, err = parseOpenArgs("/open")
+	if err == nil {
+		t.Fatal("expected error for missing index")
+	}
+	_, _, err = parseOpenArgs("/open x")
+	if err == nil {
+		t.Fatal("expected error for invalid index")
+	}
+	_, _, err = parseOpenArgs("/open 1 maybe")
+	if err == nil {
+		t.Fatal("expected error for invalid action")
+	}
+}
+
 func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	s := &appState{
 		historyPath:      filepath.Join(t.TempDir(), "history.log"),
