@@ -10,109 +10,115 @@ import (
 )
 
 type Config struct {
-	ModelProvider           string
-	ModelFallbackProvider   string
-	ModelUseStreaming       bool
-	ModelRaceEnabled        bool
-	ModelCircuitThreshold   int
-	ModelCircuitRecoverySec int
-	ModelCircuitHalfOpenMax int
-	ModelBaseURL            string
-	ModelAPIKey             string
-	ModelName               string
-	CodexBaseURL            string
-	CodexAPIKey             string
-	CodexModel              string
-	AnthropicBaseURL        string
-	AnthropicAPIKey         string
-	AnthropicModel          string
-	MCPEndpoint             string
-	MCPTransport            string
-	MCPStdioCommand         string
-	MCPOAuthTokenURL        string
-	MCPOAuthAuthURL         string
-	MCPOAuthRedirectURL     string
-	MCPOAuthClientID        string
-	MCPOAuthClientSecret    string
-	MCPOAuthScopes          string
-	MCPOAuthGrantType       string
-	MCPOAuthCallbackPort    int
-	MCPTimeoutSeconds       int
-	ApprovalTTLSeconds      int
-	MaxIterations           int
-	MaxContextChars         int
-	CompressionTailMessages int
-	DataDir                 string
-	ListenAddr              string
-	Workdir                 string
-	GatewayEnabled          bool
-	SignalBaseURL           string
-	SignalAccount           string
-	SignalInboundSecret     string
-	SignalAllowed           string
-	EmailSMTPHost           string
-	EmailSMTPPort           string
-	EmailSMTPUsername       string
-	EmailSMTPPassword       string
-	EmailFromAddress        string
-	EmailInboundSecret      string
-	EmailAllowed            string
-	HomeAssistantBaseURL    string
-	HomeAssistantToken      string
-	HomeAssistantSecret     string
-	HomeAssistantAllowed    string
-	MatrixBaseURL           string
-	MatrixAccessToken       string
-	MatrixInboundSecret     string
-	MatrixAllowed           string
-	FeishuWebhookURL        string
-	FeishuInboundSecret     string
-	FeishuAllowed           string
-	DingTalkWebhookURL      string
-	DingTalkInboundSecret   string
-	DingTalkAllowed         string
-	WeComWebhookURL         string
-	WeComInboundSecret      string
-	WeComAllowed            string
-	MattermostWebhookURL    string
-	MattermostInboundSecret string
-	MattermostAllowed       string
-	TelegramToken           string
-	TelegramAllowed         string
-	DiscordToken            string
-	DiscordAllowed          string
-	SlackBotToken           string
-	SlackAppToken           string
-	SlackAllowed            string
-	WhatsAppAccessToken     string
-	WhatsAppPhoneNumberID   string
-	WhatsAppVerifyToken     string
-	WhatsAppWebhookSecret   string
-	WhatsAppAllowed         string
-	WebhookOutboundURL      string
-	WebhookInboundSecret    string
-	WebhookAllowed          string
-	YuanbaoToken            string
-	YuanbaoAppID            string
-	YuanbaoAppSecret        string
-	YuanbaoAllowed          string
-	ModelCascade            string
-	ModelCostAware          bool
-	DisabledTools           string
-	DisabledPlugins         string
-	CronEnabled             bool
-	CronTickSeconds         int
-	CronMaxConcurrency      int
-	EnabledToolsets         string
-	UITUIWSBase             string
-	UITUIHTTPBase           string
-	UITUIWSReadTimeoutSec   int
-	UITUITurnTimeoutSec     int
-	UITUIReconnectMax       int
-	UITUIHistoryMaxLines    int
-	UITUIEventMaxItems      int
-	UITUIViewMode           string
-	UITUIAutoDoctor         *bool
+	ModelProvider            string
+	ModelFallbackProvider    string
+	ModelUseStreaming        bool
+	ModelRaceEnabled         bool
+	ModelCircuitThreshold    int
+	ModelCircuitRecoverySec  int
+	ModelCircuitHalfOpenMax  int
+	ModelBaseURL             string
+	ModelAPIKey              string
+	ModelName                string
+	CodexBaseURL             string
+	CodexAPIKey              string
+	CodexModel               string
+	AnthropicBaseURL         string
+	AnthropicAPIKey          string
+	AnthropicModel           string
+	MCPEndpoint              string
+	MCPTransport             string
+	MCPStdioCommand          string
+	MCPOAuthTokenURL         string
+	MCPOAuthAuthURL          string
+	MCPOAuthRedirectURL      string
+	MCPOAuthClientID         string
+	MCPOAuthClientSecret     string
+	MCPOAuthScopes           string
+	MCPOAuthGrantType        string
+	MCPOAuthCallbackPort     int
+	MCPTimeoutSeconds        int
+	ApprovalTTLSeconds       int
+	MaxIterations            int
+	MaxContextChars          int
+	CompressionTailMessages  int
+	DataDir                  string
+	ListenAddr               string
+	Workdir                  string
+	GatewayEnabled           bool
+	SignalBaseURL            string
+	SignalAccount            string
+	SignalInboundSecret      string
+	SignalAllowed            string
+	EmailSMTPHost            string
+	EmailSMTPPort            string
+	EmailSMTPUsername        string
+	EmailSMTPPassword        string
+	EmailFromAddress         string
+	EmailInboundSecret       string
+	EmailAllowed             string
+	HomeAssistantBaseURL     string
+	HomeAssistantToken       string
+	HomeAssistantSecret      string
+	HomeAssistantAllowed     string
+	MatrixBaseURL            string
+	MatrixAccessToken        string
+	MatrixInboundSecret      string
+	MatrixAllowed            string
+	FeishuWebhookURL         string
+	FeishuInboundSecret      string
+	FeishuAllowed            string
+	DingTalkWebhookURL       string
+	DingTalkInboundSecret    string
+	DingTalkAllowed          string
+	WeComWebhookURL          string
+	WeComInboundSecret       string
+	WeComAllowed             string
+	MattermostWebhookURL     string
+	MattermostInboundSecret  string
+	MattermostAllowed        string
+	SMSOutboundURL           string
+	SMSInboundSecret         string
+	SMSAllowed               string
+	BlueBubblesOutboundURL   string
+	BlueBubblesInboundSecret string
+	BlueBubblesAllowed       string
+	TelegramToken            string
+	TelegramAllowed          string
+	DiscordToken             string
+	DiscordAllowed           string
+	SlackBotToken            string
+	SlackAppToken            string
+	SlackAllowed             string
+	WhatsAppAccessToken      string
+	WhatsAppPhoneNumberID    string
+	WhatsAppVerifyToken      string
+	WhatsAppWebhookSecret    string
+	WhatsAppAllowed          string
+	WebhookOutboundURL       string
+	WebhookInboundSecret     string
+	WebhookAllowed           string
+	YuanbaoToken             string
+	YuanbaoAppID             string
+	YuanbaoAppSecret         string
+	YuanbaoAllowed           string
+	ModelCascade             string
+	ModelCostAware           bool
+	DisabledTools            string
+	DisabledPlugins          string
+	CronEnabled              bool
+	CronTickSeconds          int
+	CronMaxConcurrency       int
+	EnabledToolsets          string
+	UITUIWSBase              string
+	UITUIHTTPBase            string
+	UITUIWSReadTimeoutSec    int
+	UITUITurnTimeoutSec      int
+	UITUIReconnectMax        int
+	UITUIHistoryMaxLines     int
+	UITUIEventMaxItems       int
+	UITUIViewMode            string
+	UITUIAutoDoctor          *bool
 }
 
 type iniValues struct {
@@ -298,108 +304,114 @@ func loadFromINIValues(iv iniValues) Config {
 	}
 
 	return Config{
-		ModelProvider:           apiType,
-		ModelFallbackProvider:   iniStr(iv, "provider", "fallback", "AGENT_MODEL_FALLBACK_PROVIDER", ""),
-		ModelUseStreaming:       streaming,
-		ModelRaceEnabled:        raceEnabled,
-		ModelCircuitThreshold:   circuitThreshold,
-		ModelCircuitRecoverySec: circuitRecoverySec,
-		ModelCircuitHalfOpenMax: circuitHalfOpenMax,
-		ModelBaseURL:            baseURL,
-		ModelAPIKey:             apiKey,
-		ModelName:               model,
-		CodexBaseURL:            codexBase,
-		CodexAPIKey:             codexKey,
-		CodexModel:              codexModel,
-		AnthropicBaseURL:        anthropicBase,
-		AnthropicAPIKey:         anthropicKey,
-		AnthropicModel:          anthropicModel,
-		MCPEndpoint:             iniStr(iv, "mcp", "endpoint", "AGENT_MCP_ENDPOINT", ""),
-		MCPTransport:            iniStr(iv, "mcp", "transport", "AGENT_MCP_TRANSPORT", "http"),
-		MCPStdioCommand:         iniStr(iv, "mcp", "stdio_command", "AGENT_MCP_STDIO_COMMAND", ""),
-		MCPOAuthTokenURL:        iniStr(iv, "mcp", "oauth_token_url", "AGENT_MCP_OAUTH_TOKEN_URL", ""),
-		MCPOAuthAuthURL:         iniStr(iv, "mcp", "oauth_auth_url", "AGENT_MCP_OAUTH_AUTH_URL", ""),
-		MCPOAuthRedirectURL:     iniStr(iv, "mcp", "oauth_redirect_url", "AGENT_MCP_OAUTH_REDIRECT_URL", ""),
-		MCPOAuthClientID:        iniStr(iv, "mcp", "oauth_client_id", "AGENT_MCP_OAUTH_CLIENT_ID", ""),
-		MCPOAuthClientSecret:    iniStr(iv, "mcp", "oauth_client_secret", "AGENT_MCP_OAUTH_CLIENT_SECRET", ""),
-		MCPOAuthScopes:          iniStr(iv, "mcp", "oauth_scopes", "AGENT_MCP_OAUTH_SCOPES", ""),
-		MCPOAuthGrantType:       iniStr(iv, "mcp", "oauth_grant_type", "AGENT_MCP_OAUTH_GRANT_TYPE", ""),
-		MCPOAuthCallbackPort:    mcpCallbackPort,
-		MCPTimeoutSeconds:       mcpTimeout,
-		ApprovalTTLSeconds:      approvalTTL,
-		MaxIterations:           maxTurns,
-		MaxContextChars:         maxContextChars,
-		CompressionTailMessages: tailMessages,
-		DataDir:                 dataDir,
-		ListenAddr:              iniStr(iv, "agent", "listen_addr", "AGENT_DAEMON_ADDR", ":8080"),
-		Workdir:                 iniStr(iv, "agent", "workdir", "AGENT_WORKDIR", wd),
-		GatewayEnabled:          gatewayEnabled,
-		SignalBaseURL:           iniStr(iv, "gateway.signal", "base_url", "AGENT_SIGNAL_BASE_URL", ""),
-		SignalAccount:           iniStr(iv, "gateway.signal", "account", "AGENT_SIGNAL_ACCOUNT", ""),
-		SignalInboundSecret:     iniStr(iv, "gateway.signal", "inbound_secret", "AGENT_SIGNAL_INBOUND_SECRET", ""),
-		SignalAllowed:           iniStr(iv, "gateway.signal", "allowed_users", "AGENT_SIGNAL_ALLOWED_USERS", ""),
-		EmailSMTPHost:           iniStr(iv, "gateway.email", "smtp_host", "AGENT_EMAIL_SMTP_HOST", ""),
-		EmailSMTPPort:           iniStr(iv, "gateway.email", "smtp_port", "AGENT_EMAIL_SMTP_PORT", "587"),
-		EmailSMTPUsername:       iniStr(iv, "gateway.email", "smtp_username", "AGENT_EMAIL_SMTP_USERNAME", ""),
-		EmailSMTPPassword:       iniStr(iv, "gateway.email", "smtp_password", "AGENT_EMAIL_SMTP_PASSWORD", ""),
-		EmailFromAddress:        iniStr(iv, "gateway.email", "from_address", "AGENT_EMAIL_FROM_ADDRESS", ""),
-		EmailInboundSecret:      iniStr(iv, "gateway.email", "inbound_secret", "AGENT_EMAIL_INBOUND_SECRET", ""),
-		EmailAllowed:            iniStr(iv, "gateway.email", "allowed_users", "AGENT_EMAIL_ALLOWED_USERS", ""),
-		HomeAssistantBaseURL:    iniStr(iv, "gateway.homeassistant", "base_url", "AGENT_HOMEASSISTANT_BASE_URL", ""),
-		HomeAssistantToken:      iniStr(iv, "gateway.homeassistant", "token", "AGENT_HOMEASSISTANT_TOKEN", ""),
-		HomeAssistantSecret:     iniStr(iv, "gateway.homeassistant", "inbound_secret", "AGENT_HOMEASSISTANT_INBOUND_SECRET", ""),
-		HomeAssistantAllowed:    iniStr(iv, "gateway.homeassistant", "allowed_users", "AGENT_HOMEASSISTANT_ALLOWED_USERS", ""),
-		MatrixBaseURL:           iniStr(iv, "gateway.matrix", "base_url", "AGENT_MATRIX_BASE_URL", ""),
-		MatrixAccessToken:       iniStr(iv, "gateway.matrix", "access_token", "AGENT_MATRIX_ACCESS_TOKEN", ""),
-		MatrixInboundSecret:     iniStr(iv, "gateway.matrix", "inbound_secret", "AGENT_MATRIX_INBOUND_SECRET", ""),
-		MatrixAllowed:           iniStr(iv, "gateway.matrix", "allowed_users", "AGENT_MATRIX_ALLOWED_USERS", ""),
-		FeishuWebhookURL:        iniStr(iv, "gateway.feishu", "webhook_url", "AGENT_FEISHU_WEBHOOK_URL", ""),
-		FeishuInboundSecret:     iniStr(iv, "gateway.feishu", "inbound_secret", "AGENT_FEISHU_INBOUND_SECRET", ""),
-		FeishuAllowed:           iniStr(iv, "gateway.feishu", "allowed_users", "AGENT_FEISHU_ALLOWED_USERS", ""),
-		DingTalkWebhookURL:      iniStr(iv, "gateway.dingtalk", "webhook_url", "AGENT_DINGTALK_WEBHOOK_URL", ""),
-		DingTalkInboundSecret:   iniStr(iv, "gateway.dingtalk", "inbound_secret", "AGENT_DINGTALK_INBOUND_SECRET", ""),
-		DingTalkAllowed:         iniStr(iv, "gateway.dingtalk", "allowed_users", "AGENT_DINGTALK_ALLOWED_USERS", ""),
-		WeComWebhookURL:         iniStr(iv, "gateway.wecom", "webhook_url", "AGENT_WECOM_WEBHOOK_URL", ""),
-		WeComInboundSecret:      iniStr(iv, "gateway.wecom", "inbound_secret", "AGENT_WECOM_INBOUND_SECRET", ""),
-		WeComAllowed:            iniStr(iv, "gateway.wecom", "allowed_users", "AGENT_WECOM_ALLOWED_USERS", ""),
-		MattermostWebhookURL:    iniStr(iv, "gateway.mattermost", "webhook_url", "AGENT_MATTERMOST_WEBHOOK_URL", ""),
-		MattermostInboundSecret: iniStr(iv, "gateway.mattermost", "inbound_secret", "AGENT_MATTERMOST_INBOUND_SECRET", ""),
-		MattermostAllowed:       iniStr(iv, "gateway.mattermost", "allowed_users", "AGENT_MATTERMOST_ALLOWED_USERS", ""),
-		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
-		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
-		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
-		DiscordAllowed:          iniStr(iv, "gateway.discord", "allowed_users", "AGENT_DISCORD_ALLOWED_USERS", ""),
-		SlackBotToken:           iniStr(iv, "gateway.slack", "bot_token", "AGENT_SLACK_BOT_TOKEN", ""),
-		SlackAppToken:           iniStr(iv, "gateway.slack", "app_token", "AGENT_SLACK_APP_TOKEN", ""),
-		SlackAllowed:            iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
-		WhatsAppAccessToken:     iniStr(iv, "gateway.whatsapp", "access_token", "AGENT_WHATSAPP_ACCESS_TOKEN", ""),
-		WhatsAppPhoneNumberID:   iniStr(iv, "gateway.whatsapp", "phone_number_id", "AGENT_WHATSAPP_PHONE_NUMBER_ID", ""),
-		WhatsAppVerifyToken:     iniStr(iv, "gateway.whatsapp", "verify_token", "AGENT_WHATSAPP_VERIFY_TOKEN", ""),
-		WhatsAppWebhookSecret:   iniStr(iv, "gateway.whatsapp", "webhook_secret", "AGENT_WHATSAPP_WEBHOOK_SECRET", ""),
-		WhatsAppAllowed:         iniStr(iv, "gateway.whatsapp", "allowed_users", "AGENT_WHATSAPP_ALLOWED_USERS", ""),
-		WebhookOutboundURL:      iniStr(iv, "gateway.webhook", "outbound_url", "AGENT_WEBHOOK_OUTBOUND_URL", ""),
-		WebhookInboundSecret:    iniStr(iv, "gateway.webhook", "inbound_secret", "AGENT_WEBHOOK_INBOUND_SECRET", ""),
-		WebhookAllowed:          iniStr(iv, "gateway.webhook", "allowed_users", "AGENT_WEBHOOK_ALLOWED_USERS", ""),
-		YuanbaoToken:            iniStr(iv, "gateway.yuanbao", "token", "YUANBAO_TOKEN", ""),
-		YuanbaoAppID:            iniStr(iv, "gateway.yuanbao", "app_id", "YUANBAO_APP_ID", ""),
-		YuanbaoAppSecret:        iniStr(iv, "gateway.yuanbao", "app_secret", "YUANBAO_APP_SECRET", ""),
-		YuanbaoAllowed:          iniStr(iv, "gateway.yuanbao", "allowed_users", "AGENT_YUANBAO_ALLOWED_USERS", ""),
-		ModelCascade:            iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
-		ModelCostAware:          costAware,
-		DisabledTools:           iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),
-		DisabledPlugins:         iniStr(iv, "plugins", "disabled", "AGENT_DISABLED_PLUGINS", ""),
-		EnabledToolsets:         iniStr(iv, "tools", "enabled_toolsets", "AGENT_ENABLED_TOOLSETS", ""),
-		CronEnabled:             cronEnabled,
-		CronTickSeconds:         cronTickSeconds,
-		CronMaxConcurrency:      cronMaxConc,
-		UITUIWSBase:             iniStr(iv, "ui-tui", "ws_base", "AGENT_API_BASE", ""),
-		UITUIHTTPBase:           iniStr(iv, "ui-tui", "http_base", "AGENT_HTTP_BASE", ""),
-		UITUIWSReadTimeoutSec:   uiWSReadTimeout,
-		UITUITurnTimeoutSec:     uiTurnTimeout,
-		UITUIReconnectMax:       uiReconnectMax,
-		UITUIHistoryMaxLines:    uiHistoryMaxLines,
-		UITUIEventMaxItems:      uiEventMaxItems,
-		UITUIViewMode:           uiViewMode,
-		UITUIAutoDoctor:         autoDoctorPtr,
+		ModelProvider:            apiType,
+		ModelFallbackProvider:    iniStr(iv, "provider", "fallback", "AGENT_MODEL_FALLBACK_PROVIDER", ""),
+		ModelUseStreaming:        streaming,
+		ModelRaceEnabled:         raceEnabled,
+		ModelCircuitThreshold:    circuitThreshold,
+		ModelCircuitRecoverySec:  circuitRecoverySec,
+		ModelCircuitHalfOpenMax:  circuitHalfOpenMax,
+		ModelBaseURL:             baseURL,
+		ModelAPIKey:              apiKey,
+		ModelName:                model,
+		CodexBaseURL:             codexBase,
+		CodexAPIKey:              codexKey,
+		CodexModel:               codexModel,
+		AnthropicBaseURL:         anthropicBase,
+		AnthropicAPIKey:          anthropicKey,
+		AnthropicModel:           anthropicModel,
+		MCPEndpoint:              iniStr(iv, "mcp", "endpoint", "AGENT_MCP_ENDPOINT", ""),
+		MCPTransport:             iniStr(iv, "mcp", "transport", "AGENT_MCP_TRANSPORT", "http"),
+		MCPStdioCommand:          iniStr(iv, "mcp", "stdio_command", "AGENT_MCP_STDIO_COMMAND", ""),
+		MCPOAuthTokenURL:         iniStr(iv, "mcp", "oauth_token_url", "AGENT_MCP_OAUTH_TOKEN_URL", ""),
+		MCPOAuthAuthURL:          iniStr(iv, "mcp", "oauth_auth_url", "AGENT_MCP_OAUTH_AUTH_URL", ""),
+		MCPOAuthRedirectURL:      iniStr(iv, "mcp", "oauth_redirect_url", "AGENT_MCP_OAUTH_REDIRECT_URL", ""),
+		MCPOAuthClientID:         iniStr(iv, "mcp", "oauth_client_id", "AGENT_MCP_OAUTH_CLIENT_ID", ""),
+		MCPOAuthClientSecret:     iniStr(iv, "mcp", "oauth_client_secret", "AGENT_MCP_OAUTH_CLIENT_SECRET", ""),
+		MCPOAuthScopes:           iniStr(iv, "mcp", "oauth_scopes", "AGENT_MCP_OAUTH_SCOPES", ""),
+		MCPOAuthGrantType:        iniStr(iv, "mcp", "oauth_grant_type", "AGENT_MCP_OAUTH_GRANT_TYPE", ""),
+		MCPOAuthCallbackPort:     mcpCallbackPort,
+		MCPTimeoutSeconds:        mcpTimeout,
+		ApprovalTTLSeconds:       approvalTTL,
+		MaxIterations:            maxTurns,
+		MaxContextChars:          maxContextChars,
+		CompressionTailMessages:  tailMessages,
+		DataDir:                  dataDir,
+		ListenAddr:               iniStr(iv, "agent", "listen_addr", "AGENT_DAEMON_ADDR", ":8080"),
+		Workdir:                  iniStr(iv, "agent", "workdir", "AGENT_WORKDIR", wd),
+		GatewayEnabled:           gatewayEnabled,
+		SignalBaseURL:            iniStr(iv, "gateway.signal", "base_url", "AGENT_SIGNAL_BASE_URL", ""),
+		SignalAccount:            iniStr(iv, "gateway.signal", "account", "AGENT_SIGNAL_ACCOUNT", ""),
+		SignalInboundSecret:      iniStr(iv, "gateway.signal", "inbound_secret", "AGENT_SIGNAL_INBOUND_SECRET", ""),
+		SignalAllowed:            iniStr(iv, "gateway.signal", "allowed_users", "AGENT_SIGNAL_ALLOWED_USERS", ""),
+		EmailSMTPHost:            iniStr(iv, "gateway.email", "smtp_host", "AGENT_EMAIL_SMTP_HOST", ""),
+		EmailSMTPPort:            iniStr(iv, "gateway.email", "smtp_port", "AGENT_EMAIL_SMTP_PORT", "587"),
+		EmailSMTPUsername:        iniStr(iv, "gateway.email", "smtp_username", "AGENT_EMAIL_SMTP_USERNAME", ""),
+		EmailSMTPPassword:        iniStr(iv, "gateway.email", "smtp_password", "AGENT_EMAIL_SMTP_PASSWORD", ""),
+		EmailFromAddress:         iniStr(iv, "gateway.email", "from_address", "AGENT_EMAIL_FROM_ADDRESS", ""),
+		EmailInboundSecret:       iniStr(iv, "gateway.email", "inbound_secret", "AGENT_EMAIL_INBOUND_SECRET", ""),
+		EmailAllowed:             iniStr(iv, "gateway.email", "allowed_users", "AGENT_EMAIL_ALLOWED_USERS", ""),
+		HomeAssistantBaseURL:     iniStr(iv, "gateway.homeassistant", "base_url", "AGENT_HOMEASSISTANT_BASE_URL", ""),
+		HomeAssistantToken:       iniStr(iv, "gateway.homeassistant", "token", "AGENT_HOMEASSISTANT_TOKEN", ""),
+		HomeAssistantSecret:      iniStr(iv, "gateway.homeassistant", "inbound_secret", "AGENT_HOMEASSISTANT_INBOUND_SECRET", ""),
+		HomeAssistantAllowed:     iniStr(iv, "gateway.homeassistant", "allowed_users", "AGENT_HOMEASSISTANT_ALLOWED_USERS", ""),
+		MatrixBaseURL:            iniStr(iv, "gateway.matrix", "base_url", "AGENT_MATRIX_BASE_URL", ""),
+		MatrixAccessToken:        iniStr(iv, "gateway.matrix", "access_token", "AGENT_MATRIX_ACCESS_TOKEN", ""),
+		MatrixInboundSecret:      iniStr(iv, "gateway.matrix", "inbound_secret", "AGENT_MATRIX_INBOUND_SECRET", ""),
+		MatrixAllowed:            iniStr(iv, "gateway.matrix", "allowed_users", "AGENT_MATRIX_ALLOWED_USERS", ""),
+		FeishuWebhookURL:         iniStr(iv, "gateway.feishu", "webhook_url", "AGENT_FEISHU_WEBHOOK_URL", ""),
+		FeishuInboundSecret:      iniStr(iv, "gateway.feishu", "inbound_secret", "AGENT_FEISHU_INBOUND_SECRET", ""),
+		FeishuAllowed:            iniStr(iv, "gateway.feishu", "allowed_users", "AGENT_FEISHU_ALLOWED_USERS", ""),
+		DingTalkWebhookURL:       iniStr(iv, "gateway.dingtalk", "webhook_url", "AGENT_DINGTALK_WEBHOOK_URL", ""),
+		DingTalkInboundSecret:    iniStr(iv, "gateway.dingtalk", "inbound_secret", "AGENT_DINGTALK_INBOUND_SECRET", ""),
+		DingTalkAllowed:          iniStr(iv, "gateway.dingtalk", "allowed_users", "AGENT_DINGTALK_ALLOWED_USERS", ""),
+		WeComWebhookURL:          iniStr(iv, "gateway.wecom", "webhook_url", "AGENT_WECOM_WEBHOOK_URL", ""),
+		WeComInboundSecret:       iniStr(iv, "gateway.wecom", "inbound_secret", "AGENT_WECOM_INBOUND_SECRET", ""),
+		WeComAllowed:             iniStr(iv, "gateway.wecom", "allowed_users", "AGENT_WECOM_ALLOWED_USERS", ""),
+		MattermostWebhookURL:     iniStr(iv, "gateway.mattermost", "webhook_url", "AGENT_MATTERMOST_WEBHOOK_URL", ""),
+		MattermostInboundSecret:  iniStr(iv, "gateway.mattermost", "inbound_secret", "AGENT_MATTERMOST_INBOUND_SECRET", ""),
+		MattermostAllowed:        iniStr(iv, "gateway.mattermost", "allowed_users", "AGENT_MATTERMOST_ALLOWED_USERS", ""),
+		SMSOutboundURL:           iniStr(iv, "gateway.sms", "outbound_url", "AGENT_SMS_OUTBOUND_URL", ""),
+		SMSInboundSecret:         iniStr(iv, "gateway.sms", "inbound_secret", "AGENT_SMS_INBOUND_SECRET", ""),
+		SMSAllowed:               iniStr(iv, "gateway.sms", "allowed_users", "AGENT_SMS_ALLOWED_USERS", ""),
+		BlueBubblesOutboundURL:   iniStr(iv, "gateway.bluebubbles", "outbound_url", "AGENT_BLUEBUBBLES_OUTBOUND_URL", ""),
+		BlueBubblesInboundSecret: iniStr(iv, "gateway.bluebubbles", "inbound_secret", "AGENT_BLUEBUBBLES_INBOUND_SECRET", ""),
+		BlueBubblesAllowed:       iniStr(iv, "gateway.bluebubbles", "allowed_users", "AGENT_BLUEBUBBLES_ALLOWED_USERS", ""),
+		TelegramToken:            iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
+		TelegramAllowed:          iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
+		DiscordToken:             iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
+		DiscordAllowed:           iniStr(iv, "gateway.discord", "allowed_users", "AGENT_DISCORD_ALLOWED_USERS", ""),
+		SlackBotToken:            iniStr(iv, "gateway.slack", "bot_token", "AGENT_SLACK_BOT_TOKEN", ""),
+		SlackAppToken:            iniStr(iv, "gateway.slack", "app_token", "AGENT_SLACK_APP_TOKEN", ""),
+		SlackAllowed:             iniStr(iv, "gateway.slack", "allowed_users", "AGENT_SLACK_ALLOWED_USERS", ""),
+		WhatsAppAccessToken:      iniStr(iv, "gateway.whatsapp", "access_token", "AGENT_WHATSAPP_ACCESS_TOKEN", ""),
+		WhatsAppPhoneNumberID:    iniStr(iv, "gateway.whatsapp", "phone_number_id", "AGENT_WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppVerifyToken:      iniStr(iv, "gateway.whatsapp", "verify_token", "AGENT_WHATSAPP_VERIFY_TOKEN", ""),
+		WhatsAppWebhookSecret:    iniStr(iv, "gateway.whatsapp", "webhook_secret", "AGENT_WHATSAPP_WEBHOOK_SECRET", ""),
+		WhatsAppAllowed:          iniStr(iv, "gateway.whatsapp", "allowed_users", "AGENT_WHATSAPP_ALLOWED_USERS", ""),
+		WebhookOutboundURL:       iniStr(iv, "gateway.webhook", "outbound_url", "AGENT_WEBHOOK_OUTBOUND_URL", ""),
+		WebhookInboundSecret:     iniStr(iv, "gateway.webhook", "inbound_secret", "AGENT_WEBHOOK_INBOUND_SECRET", ""),
+		WebhookAllowed:           iniStr(iv, "gateway.webhook", "allowed_users", "AGENT_WEBHOOK_ALLOWED_USERS", ""),
+		YuanbaoToken:             iniStr(iv, "gateway.yuanbao", "token", "YUANBAO_TOKEN", ""),
+		YuanbaoAppID:             iniStr(iv, "gateway.yuanbao", "app_id", "YUANBAO_APP_ID", ""),
+		YuanbaoAppSecret:         iniStr(iv, "gateway.yuanbao", "app_secret", "YUANBAO_APP_SECRET", ""),
+		YuanbaoAllowed:           iniStr(iv, "gateway.yuanbao", "allowed_users", "AGENT_YUANBAO_ALLOWED_USERS", ""),
+		ModelCascade:             iniStr(iv, "provider", "cascade", "AGENT_MODEL_CASCADE", ""),
+		ModelCostAware:           costAware,
+		DisabledTools:            iniStr(iv, "tools", "disabled", "AGENT_DISABLED_TOOLS", ""),
+		DisabledPlugins:          iniStr(iv, "plugins", "disabled", "AGENT_DISABLED_PLUGINS", ""),
+		EnabledToolsets:          iniStr(iv, "tools", "enabled_toolsets", "AGENT_ENABLED_TOOLSETS", ""),
+		CronEnabled:              cronEnabled,
+		CronTickSeconds:          cronTickSeconds,
+		CronMaxConcurrency:       cronMaxConc,
+		UITUIWSBase:              iniStr(iv, "ui-tui", "ws_base", "AGENT_API_BASE", ""),
+		UITUIHTTPBase:            iniStr(iv, "ui-tui", "http_base", "AGENT_HTTP_BASE", ""),
+		UITUIWSReadTimeoutSec:    uiWSReadTimeout,
+		UITUITurnTimeoutSec:      uiTurnTimeout,
+		UITUIReconnectMax:        uiReconnectMax,
+		UITUIHistoryMaxLines:     uiHistoryMaxLines,
+		UITUIEventMaxItems:       uiEventMaxItems,
+		UITUIViewMode:            uiViewMode,
+		UITUIAutoDoctor:          autoDoctorPtr,
 	}
 }

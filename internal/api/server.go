@@ -103,6 +103,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/gateway/dingtalk/webhook", s.handleGatewayDingTalkWebhook)
 	mux.HandleFunc("/v1/gateway/wecom/webhook", s.handleGatewayWeComWebhook)
 	mux.HandleFunc("/v1/gateway/mattermost/webhook", s.handleGatewayMattermostWebhook)
+	mux.HandleFunc("/v1/gateway/sms/webhook", s.handleGatewaySMSWebhook)
+	mux.HandleFunc("/v1/gateway/bluebubbles/webhook", s.handleGatewayBlueBubblesWebhook)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
@@ -260,6 +262,38 @@ func (s *Server) handleGatewayMattermostWebhook(w http.ResponseWriter, r *http.R
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "mattermost webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewaySMSWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("sms")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "sms gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "sms webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayBlueBubblesWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("bluebubbles")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "bluebubbles gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "bluebubbles webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

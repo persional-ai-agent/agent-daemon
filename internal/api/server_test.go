@@ -425,6 +425,72 @@ func TestGatewayMattermostWebhookEndpoint(t *testing.T) {
 	})
 }
 
+func TestGatewaySMSWebhookEndpoint(t *testing.T) {
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     tools.NewRegistry(),
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+	}
+
+	t.Run("adapter_unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/sms/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("adapter_available", func(t *testing.T) {
+		adapter := &stubWebhookAdapter{name: "sms"}
+		platform.Register(adapter)
+		t.Cleanup(func() { platform.Unregister("sms") })
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/sms/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestGatewayBlueBubblesWebhookEndpoint(t *testing.T) {
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     tools.NewRegistry(),
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+	}
+
+	t.Run("adapter_unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/bluebubbles/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("adapter_available", func(t *testing.T) {
+		adapter := &stubWebhookAdapter{name: "bluebubbles"}
+		platform.Register(adapter)
+		t.Cleanup(func() { platform.Unregister("bluebubbles") })
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/bluebubbles/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
 func TestGatewayEmailWebhookEndpoint(t *testing.T) {
 	srv := &Server{
 		Engine: &agent.Engine{

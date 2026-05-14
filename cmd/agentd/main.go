@@ -925,7 +925,7 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (matrix/feishu/dingtalk/wecom/mattermost/sms/bluebubbles/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	gatewayMatrixBaseURL := fs.String("gateway-matrix-base-url", "", "matrix homeserver base URL")
 	gatewayMatrixToken := fs.String("gateway-matrix-token", "", "matrix access token")
 	gatewayMatrixSecret := fs.String("gateway-matrix-secret", "", "matrix inbound secret")
@@ -3645,7 +3645,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/matrix/feishu/dingtalk/wecom/mattermost/sms/bluebubbles/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
@@ -3707,6 +3707,10 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayMattermostWebhookURL = promptInput(reader, "mattermost webhook url", "")
 		gatewayMattermostSecret = promptInput(reader, "mattermost inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "sms", "bluebubbles", "webhook":
+		gatewayWebhookOutboundURL = promptInput(reader, gatewayPlatform+" outbound url", "")
+		gatewayWebhookInboundSecret = promptInput(reader, gatewayPlatform+" inbound secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "signal":
 		gatewaySignalBaseURL = promptInput(reader, "signal base url", "")
 		gatewaySignalAccount = promptInput(reader, "signal account", "")
@@ -3737,10 +3741,6 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayPhoneNumberID = promptInput(reader, "whatsapp phone number id", "")
 		gatewayVerifyToken = promptInput(reader, "whatsapp verify token (optional, for webhook challenge)", "")
 		gatewayWebhookSecret = promptInput(reader, "whatsapp webhook secret (optional, for X-Hub-Signature-256)", "")
-		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
-	case "webhook":
-		gatewayWebhookOutboundURL = promptInput(reader, "webhook outbound url", "")
-		gatewayWebhookInboundSecret = promptInput(reader, "webhook inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "yuanbao":
 		gatewayToken = promptInput(reader, "yuanbao token (optional)", "")
@@ -5267,6 +5267,10 @@ func runGatewayForeground(cfg config.Config) {
 			return cfg.WeComAllowed
 		case "mattermost":
 			return cfg.MattermostAllowed
+		case "sms":
+			return cfg.SMSAllowed
+		case "bluebubbles":
+			return cfg.BlueBubblesAllowed
 		case "signal":
 			return cfg.SignalAllowed
 		case "email":
@@ -6002,7 +6006,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/sms/bluebubbles/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -6065,7 +6069,7 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (matrix/feishu/dingtalk/wecom/mattermost/sms/bluebubbles/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	matrixBaseURL := fs.String("matrix-base-url", "", "matrix homeserver base URL")
 	matrixToken := fs.String("matrix-token", "", "matrix access token")
 	matrixSecret := fs.String("matrix-secret", "", "matrix inbound secret")
@@ -6104,7 +6108,7 @@ func runGatewaySetup(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|mattermost|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|mattermost|sms|bluebubbles|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -6243,6 +6247,34 @@ func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSec
 		if allowedUsers != "" {
 			values["gateway.mattermost.allowed_users"] = allowedUsers
 			written = append(written, "gateway.mattermost.allowed_users")
+		}
+	case "sms":
+		if webhookOutboundURL == "" {
+			return nil, fmt.Errorf("sms setup requires -outbound-url")
+		}
+		values["gateway.sms.outbound_url"] = webhookOutboundURL
+		written = append(written, "gateway.sms.outbound_url")
+		if webhookInboundSecret != "" {
+			values["gateway.sms.inbound_secret"] = webhookInboundSecret
+			written = append(written, "gateway.sms.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.sms.allowed_users"] = allowedUsers
+			written = append(written, "gateway.sms.allowed_users")
+		}
+	case "bluebubbles":
+		if webhookOutboundURL == "" {
+			return nil, fmt.Errorf("bluebubbles setup requires -outbound-url")
+		}
+		values["gateway.bluebubbles.outbound_url"] = webhookOutboundURL
+		written = append(written, "gateway.bluebubbles.outbound_url")
+		if webhookInboundSecret != "" {
+			values["gateway.bluebubbles.inbound_secret"] = webhookInboundSecret
+			written = append(written, "gateway.bluebubbles.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.bluebubbles.allowed_users"] = allowedUsers
+			written = append(written, "gateway.bluebubbles.allowed_users")
 		}
 	case "signal":
 		if signalBaseURL == "" || signalAccount == "" {
@@ -6428,7 +6460,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <matrix|feishu|dingtalk|wecom|mattermost|sms|bluebubbles|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
@@ -6918,7 +6950,7 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"matrix", "feishu", "dingtalk", "wecom", "mattermost", "signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
+	return []string{"matrix", "feishu", "dingtalk", "wecom", "mattermost", "sms", "bluebubbles", "signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
@@ -7394,6 +7426,10 @@ func runServe(cfg config.Config) {
 						return cfg.WeComAllowed
 					case "mattermost":
 						return cfg.MattermostAllowed
+					case "sms":
+						return cfg.SMSAllowed
+					case "bluebubbles":
+						return cfg.BlueBubblesAllowed
 					case "signal":
 						return cfg.SignalAllowed
 					case "email":
@@ -7482,6 +7518,24 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, ma)
 			log.Printf("mattermost adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.SMSOutboundURL) != "" {
+		sa, err := platforms.NewSMSAdapter(cfg.SMSOutboundURL, cfg.SMSInboundSecret)
+		if err != nil {
+			log.Printf("sms adapter: %v", err)
+		} else {
+			adapters = append(adapters, sa)
+			log.Printf("sms adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.BlueBubblesOutboundURL) != "" {
+		ba, err := platforms.NewBlueBubblesAdapter(cfg.BlueBubblesOutboundURL, cfg.BlueBubblesInboundSecret)
+		if err != nil {
+			log.Printf("bluebubbles adapter: %v", err)
+		} else {
+			adapters = append(adapters, ba)
+			log.Printf("bluebubbles adapter configured")
 		}
 	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
