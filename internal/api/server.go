@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,6 +111,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/agents/interrupt", s.handleUIAgentsInterrupt)
 	mux.HandleFunc("/v1/ui/agents/history", s.handleUIAgentsHistory)
 	mux.HandleFunc("/v1/ui/skills", s.handleUISkills)
+	mux.HandleFunc("/v1/ui/skills/detail", s.handleUISkillDetail)
+	mux.HandleFunc("/v1/ui/skills/manage", s.handleUISkillManage)
 	mux.HandleFunc("/v1/ui/skills/reload", s.handleUISkillsReload)
 	mux.HandleFunc("/v1/ui/voice/status", s.handleUIVoiceStatus)
 	mux.HandleFunc("/v1/ui/voice/toggle", s.handleUIVoiceToggle)
@@ -561,6 +564,21 @@ type uiVoiceTTSRequest struct {
 	Text string `json:"text"`
 }
 
+type uiSkillDetailRequest struct {
+	Name string `json:"name"`
+}
+
+type uiSkillManageRequest struct {
+	Action     string `json:"action"`
+	Name       string `json:"name"`
+	Content    string `json:"content,omitempty"`
+	OldString  string `json:"old_string,omitempty"`
+	NewString  string `json:"new_string,omitempty"`
+	ReplaceAll bool   `json:"replace_all,omitempty"`
+}
+
+var apiSkillNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+
 var uiSlashCommands = []string{
 	"/help", "/tools", "/tool", "/sessions", "/session", "/show", "/pick", "/open", "/stats",
 	"/gateway", "/config", "/panel", "/refresh", "/fullscreen", "/diag", "/doctor", "/pending",
@@ -985,6 +1003,150 @@ func (s *Server) handleUISkills(w http.ResponseWriter, r *http.Request) {
 		"count":  len(skills),
 		"skills": skills,
 	})
+}
+
+func (s *Server) handleUISkillDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "name required")
+		return
+	}
+	if !apiSkillNameRE.MatchString(name) {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "invalid skill name")
+		return
+	}
+	workdir := "."
+	if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
+		workdir = s.Engine.Workdir
+	}
+	path := filepath.Join(workdir, "skills", name, "SKILL.md")
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
+			return
+		}
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"skill": map[string]any{
+			"name":    name,
+			"path":    path,
+			"content": string(bs),
+		},
+	})
+}
+
+func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSkillManageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	name := strings.TrimSpace(req.Name)
+	if name == "" || !apiSkillNameRE.MatchString(name) {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "invalid skill name")
+		return
+	}
+	workdir := "."
+	if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
+		workdir = s.Engine.Workdir
+	}
+	skillDir := filepath.Join(workdir, "skills", name)
+	skillMD := filepath.Join(skillDir, "SKILL.md")
+	result := map[string]any{"action": action, "name": name}
+	switch action {
+	case "create":
+		if strings.TrimSpace(req.Content) == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "content required")
+			return
+		}
+		if _, err := os.Stat(skillMD); err == nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "skill already exists")
+			return
+		}
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		if err := os.WriteFile(skillMD, []byte(req.Content), 0o644); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		result["path"] = skillMD
+	case "edit":
+		if strings.TrimSpace(req.Content) == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "content required")
+			return
+		}
+		if _, err := os.Stat(skillMD); err != nil {
+			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
+			return
+		}
+		if err := os.WriteFile(skillMD, []byte(req.Content), 0o644); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		result["path"] = skillMD
+	case "patch":
+		if req.OldString == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "old_string required")
+			return
+		}
+		bs, err := os.ReadFile(skillMD)
+		if err != nil {
+			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
+			return
+		}
+		content := string(bs)
+		matchCount := strings.Count(content, req.OldString)
+		if matchCount == 0 {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "old_string not found")
+			return
+		}
+		if !req.ReplaceAll && matchCount != 1 {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "old_string matched multiple times; set replace_all=true")
+			return
+		}
+		replacements := 1
+		updated := strings.Replace(content, req.OldString, req.NewString, 1)
+		if req.ReplaceAll {
+			replacements = matchCount
+			updated = strings.ReplaceAll(content, req.OldString, req.NewString)
+		}
+		if err := os.WriteFile(skillMD, []byte(updated), 0o644); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		result["path"] = skillMD
+		result["replacements"] = replacements
+	case "delete":
+		if _, err := os.Stat(skillDir); err != nil {
+			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
+			return
+		}
+		if err := os.RemoveAll(skillDir); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		result["path"] = skillDir
+	default:
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "unsupported action")
+		return
+	}
+	result["success"] = true
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
 }
 
 func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {

@@ -100,6 +100,27 @@
     "snapshot": "ui_skills_reload_success"
   },
   {
+    "name": "ui_skill_detail_success",
+    "method": "GET",
+    "path": "/v1/ui/skills/detail?name=skill-x",
+    "contract_path": "/v1/ui/skills/detail",
+    "snapshot": "ui_skill_detail_success"
+  },
+  {
+    "name": "ui_skill_manage_patch_success",
+    "method": "POST",
+    "path": "/v1/ui/skills/manage",
+    "contract_path": "/v1/ui/skills/manage",
+    "content_type": "application/json",
+    "body": {
+      "action": "patch",
+      "name": "skill-x",
+      "old_string": "body",
+      "new_string": "updated"
+    },
+    "snapshot": "ui_skill_manage_patch_success"
+  },
+  {
     "name": "ui_voice_status_success",
     "method": "GET",
     "path": "/v1/ui/voice/status",

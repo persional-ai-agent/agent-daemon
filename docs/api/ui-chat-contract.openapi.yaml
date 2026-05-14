@@ -445,6 +445,83 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/skills/detail:
+    get:
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Skill detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [skill]
+                    properties:
+                      skill:
+                        type: object
+                        required: [name, path, content]
+                        properties:
+                          name:
+                            type: string
+                          path:
+                            type: string
+                          content:
+                            type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/skills/manage:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, name]
+              properties:
+                action:
+                  type: string
+                  enum: [create, edit, patch, delete]
+                name:
+                  type: string
+                content:
+                  type: string
+                old_string:
+                  type: string
+                new_string:
+                  type: string
+                replace_all:
+                  type: boolean
+      responses:
+        "200":
+          description: Skill manage result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/skills/reload:
     post:
       responses:

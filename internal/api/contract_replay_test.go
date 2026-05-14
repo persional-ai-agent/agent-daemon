@@ -117,6 +117,9 @@ func loadWSContract(t *testing.T) wsContract {
 }
 
 func replayServer() *Server {
+	workdir, _ := os.MkdirTemp("", "agent-daemon-replay-skills-*")
+	_ = os.MkdirAll(filepath.Join(workdir, "skills", "skill-x"), 0o755)
+	_ = os.WriteFile(filepath.Join(workdir, "skills", "skill-x", "SKILL.md"), []byte("# skill-x\nbody"), 0o644)
 	reg := tools.NewRegistry()
 	reg.Register(apiTestTool{
 		name: "x",
@@ -141,6 +144,7 @@ func replayServer() *Server {
 			Registry:     reg,
 			SessionStore: &stubSessionStore{},
 			SystemPrompt: agent.DefaultSystemPrompt(),
+			Workdir:      workdir,
 		},
 		ConfigSnapshotFn: func() map[string]any { return map[string]any{"model_provider": "openai"} },
 		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
@@ -294,6 +298,39 @@ func replaySnapshotPayload(name string, status int, headers map[string]any, body
 				"result":      body["result"],
 				"session_id":  body["session_id"],
 				"cancelled":   body["cancelled"],
+			},
+		}
+	case "ui_skill_detail_success":
+		skill, _ := body["skill"].(map[string]any)
+		return map[string]any{
+			"status":  status,
+			"headers": headers,
+			"body": map[string]any{
+				"ok":          body["ok"],
+				"api_version": body["api_version"],
+				"compat":      body["compat"],
+				"skill": map[string]any{
+					"name": skill["name"],
+					"path": "REDACTED",
+				},
+			},
+		}
+	case "ui_skill_manage_patch_success":
+		result, _ := body["result"].(map[string]any)
+		return map[string]any{
+			"status":  status,
+			"headers": headers,
+			"body": map[string]any{
+				"ok":          body["ok"],
+				"api_version": body["api_version"],
+				"compat":      body["compat"],
+				"result": map[string]any{
+					"action":       result["action"],
+					"name":         result["name"],
+					"path":         "REDACTED",
+					"replacements": result["replacements"],
+					"success":      result["success"],
+				},
 			},
 		}
 	default:

@@ -350,6 +350,43 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("skills_detail_and_manage", func(t *testing.T) {
+		workdir := t.TempDir()
+		skillDir := filepath.Join(workdir, "skills", "skill-x")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# old"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		localSrv := &Server{
+			Engine: &agent.Engine{
+				Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+				Registry:     reg,
+				SessionStore: &stubSessionStore{},
+				SystemPrompt: agent.DefaultSystemPrompt(),
+				Workdir:      workdir,
+			},
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/skills/detail?name=skill-x", nil)
+		localSrv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "# old") {
+			t.Fatalf("detail status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/skills/manage", bytes.NewBufferString(`{"action":"patch","name":"skill-x","old_string":"old","new_string":"new"}`))
+		req.Header.Set("Content-Type", "application/json")
+		localSrv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("manage status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		bs, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+		if err != nil || !strings.Contains(string(bs), "new") {
+			t.Fatalf("patch failed err=%v content=%q", err, string(bs))
+		}
+	})
+
 	t.Run("voice_status", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/v1/ui/voice/status", nil)
