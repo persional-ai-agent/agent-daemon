@@ -314,6 +314,53 @@ func TestLoadRuntimeStateCorruptBackup(t *testing.T) {
 	}
 }
 
+func TestNewStateConfigOverridesRuntimeEndpoints(t *testing.T) {
+	tmpHome := t.TempDir()
+	stateDir := filepath.Join(tmpHome, ".agent-daemon")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(stateDir, "ui-tui-state.json")
+	stateJSON := `{
+  "ws_base": "ws://127.0.0.1:8080/v1/chat/ws",
+  "http_base": "http://127.0.0.1:8080"
+}`
+	if err := os.WriteFile(statePath, []byte(stateJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfgPath := filepath.Join(t.TempDir(), "config.ini")
+	cfgINI := `
+[ui-tui]
+ws_base = ws://127.0.0.1:8200/v1/chat/ws
+http_base = http://127.0.0.1:8200
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgINI), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldHome := os.Getenv("HOME")
+	oldCfg := os.Getenv("AGENT_CONFIG_FILE")
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("AGENT_CONFIG_FILE", oldCfg)
+	}()
+	if err := os.Setenv("HOME", tmpHome); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("AGENT_CONFIG_FILE", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+
+	s := newState()
+	if s.wsBase != "ws://127.0.0.1:8200/v1/chat/ws" {
+		t.Fatalf("wsBase=%q", s.wsBase)
+	}
+	if s.httpBase != "http://127.0.0.1:8200" {
+		t.Fatalf("httpBase=%q", s.httpBase)
+	}
+}
+
 func TestSendTurnReconnect(t *testing.T) {
 	var tries int32
 	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}

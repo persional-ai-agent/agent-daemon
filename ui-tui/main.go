@@ -213,6 +213,9 @@ func newState() *appState {
 		commandQueue:     make([]string, 0),
 	}
 	st.loadRuntimeState()
+	// Runtime state can restore last interactive endpoint choices, but
+	// config/env should remain authoritative for connection endpoints.
+	st.applyConfig(cfg)
 	return st
 }
 
