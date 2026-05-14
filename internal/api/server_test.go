@@ -186,6 +186,18 @@ func TestUIEndpoints(t *testing.T) {
 			}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "skill_search",
+		call: func(_ context.Context, _ map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{"success": true, "count": 1, "skills": []map[string]any{{"name": "skill-remote"}}}, nil
+		},
+	})
+	reg.Register(apiTestTool{
+		name: "skill_manage",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{"success": true, "action": args["action"], "source": args["source"], "name": args["name"]}, nil
+		},
+	})
 	srv := &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
@@ -346,6 +358,32 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"count":2`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("skills_search", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/skills/search", bytes.NewBufferString(`{"query":"code review","repo":"anthropics/skills"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"skill-remote"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("skills_sync", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/skills/sync", bytes.NewBufferString(`{"name":"skill-sync","source":"url","url":"https://example.com/SKILL.md"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"source":"url"`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

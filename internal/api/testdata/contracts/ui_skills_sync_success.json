@@ -6,13 +6,12 @@
   },
   "body": {
     "ok": true,
-    "count": 4,
-    "tools": [
-      "approval",
-      "skill_manage",
-      "skill_search",
-      "x"
-    ],
+    "result": {
+      "success": true,
+      "action": "sync",
+      "source": "url",
+      "name": "skill-sync"
+    },
     "api_version": "v1",
     "compat": "2026-05-13"
   }

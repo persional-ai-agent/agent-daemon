@@ -116,6 +116,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/skills/detail", s.handleUISkillDetail)
 	mux.HandleFunc("/v1/ui/skills/manage", s.handleUISkillManage)
 	mux.HandleFunc("/v1/ui/skills/reload", s.handleUISkillsReload)
+	mux.HandleFunc("/v1/ui/skills/search", s.handleUISkillsSearch)
+	mux.HandleFunc("/v1/ui/skills/sync", s.handleUISkillsSync)
 	mux.HandleFunc("/v1/ui/voice/status", s.handleUIVoiceStatus)
 	mux.HandleFunc("/v1/ui/voice/toggle", s.handleUIVoiceToggle)
 	mux.HandleFunc("/v1/ui/voice/record", s.handleUIVoiceRecord)
@@ -587,6 +589,19 @@ type uiSkillManageRequest struct {
 	OldString  string `json:"old_string,omitempty"`
 	NewString  string `json:"new_string,omitempty"`
 	ReplaceAll bool   `json:"replace_all,omitempty"`
+}
+
+type uiSkillsSearchRequest struct {
+	Query string `json:"query"`
+	Repo  string `json:"repo,omitempty"`
+}
+
+type uiSkillsSyncRequest struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	URL    string `json:"url,omitempty"`
+	Repo   string `json:"repo,omitempty"`
+	Path   string `json:"path,omitempty"`
 }
 
 var apiSkillNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
@@ -1247,6 +1262,123 @@ func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"result": result,
 	})
+}
+
+func (s *Server) handleUISkillsSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.Engine == nil || s.Engine.Registry == nil {
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
+		return
+	}
+	var req uiSkillsSearchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Query = strings.TrimSpace(req.Query)
+	req.Repo = strings.TrimSpace(req.Repo)
+	if req.Query == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "query required")
+		return
+	}
+	args := map[string]any{"query": req.Query}
+	if req.Repo != "" {
+		args["repo"] = req.Repo
+	}
+	raw := s.Engine.Registry.Dispatch(r.Context(), "skill_search", args, tools.ToolContext{
+		Workdir: s.engineWorkdir(),
+	})
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
+		writeUIError(w, http.StatusBadRequest, "tool_error", e)
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": out,
+	})
+}
+
+func (s *Server) handleUISkillsSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.Engine == nil || s.Engine.Registry == nil {
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
+		return
+	}
+	var req uiSkillsSyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Source = strings.TrimSpace(strings.ToLower(req.Source))
+	req.URL = strings.TrimSpace(req.URL)
+	req.Repo = strings.TrimSpace(req.Repo)
+	req.Path = strings.TrimSpace(req.Path)
+	if req.Name == "" || !apiSkillNameRE.MatchString(req.Name) {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "invalid skill name")
+		return
+	}
+	if req.Source == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "source required")
+		return
+	}
+	args := map[string]any{
+		"action": "sync",
+		"name":   req.Name,
+		"source": req.Source,
+	}
+	switch req.Source {
+	case "url":
+		if req.URL == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "url required")
+			return
+		}
+		args["url"] = req.URL
+	case "github":
+		if req.Repo == "" || req.Path == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "repo and path required")
+			return
+		}
+		args["repo"] = req.Repo
+		args["sub_path"] = req.Path
+	default:
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "unsupported source")
+		return
+	}
+	raw := s.Engine.Registry.Dispatch(r.Context(), "skill_manage", args, tools.ToolContext{
+		Workdir: s.engineWorkdir(),
+	})
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
+		writeUIError(w, http.StatusBadRequest, "tool_error", e)
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": out,
+	})
+}
+
+func (s *Server) engineWorkdir() string {
+	if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
+		return s.Engine.Workdir
+	}
+	return "."
 }
 
 func listLocalSkills(workdir string) ([]map[string]any, error) {

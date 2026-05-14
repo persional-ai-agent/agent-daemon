@@ -56,6 +56,27 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 			return map[string]any{"success": true}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "skill_search",
+		call: func(context.Context, map[string]any, tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success": true,
+				"count":   1,
+				"skills":  []map[string]any{{"name": "skill-remote"}},
+			}, nil
+		},
+	})
+	reg.Register(apiTestTool{
+		name: "skill_manage",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success": true,
+				"action":  args["action"],
+				"source":  args["source"],
+				"name":    args["name"],
+			}, nil
+		},
+	})
 	srv := &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
@@ -99,6 +120,8 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
 		{name: "skills", method: http.MethodGet, path: "/v1/ui/skills"},
 		{name: "skills_reload", method: http.MethodPost, path: "/v1/ui/skills/reload"},
+		{name: "skills_search", method: http.MethodPost, path: "/v1/ui/skills/search", body: `{"query":"code review","repo":"anthropics/skills"}`},
+		{name: "skills_sync", method: http.MethodPost, path: "/v1/ui/skills/sync", body: `{"name":"skill-sync","source":"url","url":"https://example.com/SKILL.md"}`},
 		{name: "voice_status", method: http.MethodGet, path: "/v1/ui/voice/status"},
 		{name: "voice_toggle", method: http.MethodPost, path: "/v1/ui/voice/toggle", body: `{"action":"on"}`},
 		{name: "voice_record", method: http.MethodPost, path: "/v1/ui/voice/record", body: `{"action":"start"}`},

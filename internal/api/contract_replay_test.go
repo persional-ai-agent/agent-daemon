@@ -138,6 +138,27 @@ func replayServer() *Server {
 			}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "skill_search",
+		call: func(_ context.Context, _ map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success": true,
+				"count":   1,
+				"skills":  []map[string]any{{"name": "skill-remote"}},
+			}, nil
+		},
+	})
+	reg.Register(apiTestTool{
+		name: "skill_manage",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			return map[string]any{
+				"success": true,
+				"action":  args["action"],
+				"source":  args["source"],
+				"name":    args["name"],
+			}, nil
+		},
+	})
 	return &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},

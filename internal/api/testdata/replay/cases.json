@@ -107,6 +107,31 @@
     "snapshot": "ui_skills_reload_success"
   },
   {
+    "name": "ui_skills_search_success",
+    "method": "POST",
+    "path": "/v1/ui/skills/search",
+    "contract_path": "/v1/ui/skills/search",
+    "content_type": "application/json",
+    "body": {
+      "query": "code review",
+      "repo": "anthropics/skills"
+    },
+    "snapshot": "ui_skills_search_success"
+  },
+  {
+    "name": "ui_skills_sync_success",
+    "method": "POST",
+    "path": "/v1/ui/skills/sync",
+    "contract_path": "/v1/ui/skills/sync",
+    "content_type": "application/json",
+    "body": {
+      "name": "skill-sync",
+      "source": "url",
+      "url": "https://example.com/SKILL.md"
+    },
+    "snapshot": "ui_skills_sync_success"
+  },
+  {
     "name": "ui_skill_detail_success",
     "method": "GET",
     "path": "/v1/ui/skills/detail?name=skill-x",
