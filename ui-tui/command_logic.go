@@ -656,8 +656,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(s.lastJSON)
 			s.setStatus(true, "ok", "last json shown")
-		case strings.HasPrefix(current, "/save "):
-			path := strings.TrimSpace(strings.TrimPrefix(current, "/save "))
+		case current == "/save" || strings.HasPrefix(current, "/save "):
+			path := strings.TrimSpace(strings.TrimPrefix(current, "/save"))
 			if path == "" {
 				return lines, fmt.Errorf("用法: /save <file>"), false
 			}

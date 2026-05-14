@@ -357,4 +357,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /tool <name>" {
 		t.Fatalf("unexpected /tool error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/save", nil, nil)
+	if err == nil || err.Error() != "用法: /save <file>" {
+		t.Fatalf("unexpected /save error: %v", err)
+	}
 }
