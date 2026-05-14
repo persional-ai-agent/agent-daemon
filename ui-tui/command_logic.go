@@ -312,6 +312,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 			}
 			s.setStatus(true, "ok", "timeline listed")
+		case current == "/rerun":
+			return lines, fmt.Errorf("用法: /rerun <index>"), false
 		case strings.HasPrefix(current, "/rerun "):
 			idx, pErr := parseRequiredPositiveIntArg(current, "/rerun")
 			if pErr != nil {
@@ -740,6 +742,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				_ = s.saveRuntimeState()
 				emit("session switched: " + s.session)
 			}
+		case current == "/pick":
+			return lines, fmt.Errorf("用法: /pick <index>"), false
 		case strings.HasPrefix(current, "/pick "):
 			idx, pErr := parseRequiredPositiveIntArg(current, "/pick")
 			if pErr != nil {
