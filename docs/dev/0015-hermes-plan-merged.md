@@ -89,11 +89,11 @@
 
 ## 下一迭代优先级（先做功能）
 
-1. `TODO-004`：Gateway 第一批扩展（Signal/Email/Webhook/Home Assistant）。
-2. `TODO-005`：Gateway 第二批扩展（Matrix/Feishu/DingTalk/WeCom/Mattermost/SMS/BlueBubbles）。
-3. `TODO-001`：收口 TUI/CLI 流式渲染与输入稳定性残留问题。
-4. `TODO-002`：统一 command dispatcher，彻底消除 CLI/TUI/Gateway 语义漂移。
-5. `TODO-006`：补平台原生命令与审批交互深度。
+1. `TODO-001`：收口 TUI/CLI 流式渲染与输入稳定性残留问题。
+2. `TODO-002`：统一 command dispatcher，彻底消除 CLI/TUI/Gateway 语义漂移。
+3. `TODO-006`：补平台原生命令与审批交互深度。
+4. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
+5. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
 
 ## P0：先稳定用户入口与会话体验
 
