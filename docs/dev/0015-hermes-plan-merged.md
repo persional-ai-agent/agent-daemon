@@ -73,7 +73,7 @@
 | `TODO-001` | `partial` | TUI/CLI 已完成多轮重构与流式链路收口，但仍有交互与渲染边角待稳定。 | `docs/dev/0036-summary-summary-merged.md`（`# 274`） |
 | `TODO-002` | `partial` | 网关命令一致性与部分统一已做，未完成统一 dispatcher 全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
 | `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
-| `TODO-004` | `partial` | 已补 `webhook` 网关适配器（inbound/outbound 最小闭环）；`signal/email/home_assistant` 仍待实现。 | `internal/gateway/platforms/webhook.go`、`cmd/agentd/main.go` |
+| `TODO-004` | `partial` | 已补 `webhook` + `signal` 网关适配器（inbound/outbound 最小闭环）；`email/home_assistant` 仍待实现。 | `internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/signal.go`、`cmd/agentd/main.go` |
 | `TODO-005` | `todo` | 缺 Matrix/Feishu/DingTalk/WeCom/Mattermost/SMS/BlueBubbles 网关适配器级实现。 | `internal/gateway/platforms/` 现有平台清单 |
 | `TODO-006` | `partial` | 审批命令链路已推进，平台原生交互深度仍未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |

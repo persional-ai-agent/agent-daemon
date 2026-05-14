@@ -46,6 +46,10 @@ type Config struct {
 	ListenAddr              string
 	Workdir                 string
 	GatewayEnabled          bool
+	SignalBaseURL           string
+	SignalAccount           string
+	SignalInboundSecret     string
+	SignalAllowed           string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -303,6 +307,10 @@ func loadFromINIValues(iv iniValues) Config {
 		ListenAddr:              iniStr(iv, "agent", "listen_addr", "AGENT_DAEMON_ADDR", ":8080"),
 		Workdir:                 iniStr(iv, "agent", "workdir", "AGENT_WORKDIR", wd),
 		GatewayEnabled:          gatewayEnabled,
+		SignalBaseURL:           iniStr(iv, "gateway.signal", "base_url", "AGENT_SIGNAL_BASE_URL", ""),
+		SignalAccount:           iniStr(iv, "gateway.signal", "account", "AGENT_SIGNAL_ACCOUNT", ""),
+		SignalInboundSecret:     iniStr(iv, "gateway.signal", "inbound_secret", "AGENT_SIGNAL_INBOUND_SECRET", ""),
+		SignalAllowed:           iniStr(iv, "gateway.signal", "allowed_users", "AGENT_SIGNAL_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
