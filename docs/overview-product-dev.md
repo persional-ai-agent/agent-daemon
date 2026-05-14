@@ -11,7 +11,7 @@
 - `internal/memory`：`MEMORY.md` / `USER.md` 管理
 - `internal/cli`：CLI 交互层
 - `internal/api`：HTTP 服务层，提供同步、SSE 流式与 WebSocket 接口
-- `internal/gateway`：多平台消息网关层，`PlatformAdapter` 接口 + `GatewayRunner`；含 Telegram、Discord、Slack、Yuanbao 适配器（Yuanbao 当前仅最小 inbound：TIMTextElem push）
+- `internal/gateway`：多平台消息网关层，`PlatformAdapter` 接口 + `GatewayRunner`；含 Telegram、Discord、Slack、WhatsApp、Yuanbao 适配器（Yuanbao 当前仅最小 inbound：TIMTextElem push；WhatsApp 支持最小 webhook inbound）
 - `internal/config`：环境变量与 INI 配置加载；提供 `config list|get|set` 所需的配置文件读写能力
 
 ## Hermes 到 Go 的映射
@@ -164,7 +164,7 @@
 
 - 配置与 CLI 管理面：已具备最小 `config list|get|set`、`model show|providers|set`、`tools list|show|schemas|enable|disable`、`doctor`、`setup`、`setup wizard`、`bootstrap`、`update`、`gateway status|platforms|enable|disable|setup|run|start|stop|restart`；后续补齐完整安装器级 update 管理面。
 - Toolset 与插件系统：从固定内置工具列表演进为 toolset 解析、可用性检查、插件发现与动态 schema 过滤；插件侧已支持 JSON/YAML manifest、本地/marketplace 安装卸载、签名与文件校验、默认进程沙箱、tool/provider 运行时注册、command 执行与 dashboard slot API。
-- Gateway 完整体验：继续补更多平台的原生 slash UI / 审批按钮流、delivery、更完整 token lock 策略，再扩展更多平台；当前 Telegram 已有最小命令菜单/审批按钮/manifest 导出，Discord 已有最小 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出，Slack 已有最小审批按钮、通用 slash 命令入口与 manifest 导出，Yuanbao 已有最小审批快捷回复与 manifest 导出。
+- Gateway 完整体验：继续补更多平台的原生 slash UI / 审批按钮流、delivery、更完整 token lock 策略，再扩展更多平台；当前 Telegram 已有最小命令菜单/审批按钮/manifest 导出，Discord 已有最小 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出，Slack 已有最小审批按钮、通用 slash 命令入口与 manifest 导出，WhatsApp 已有最小 webhook 入站（challenge、`X-Hub-Signature-256`、文本/媒体 URL 入站），Yuanbao 已有最小审批快捷回复与 manifest 导出。
 - 执行环境：在 `internal/tools/process.go` 之外抽象本地、Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox 等后端。
 - ACP 与自动化：按需新增 ACP adapter 与 cron 脚本动作。
 
@@ -195,7 +195,7 @@
 | Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`（含别名 `skills_list`）、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
 | CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 部分对齐 | 已补最小 config/model/tools 查看与启停/doctor/`setup`/`setup wizard`/`bootstrap`/`version`/`update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall`/gateway 开关与 `gateway setup/run/start/stop/restart/install/uninstall`，且 update 安装脚本面已覆盖 `status/check/release/apply`；后续补完整安装器级 update 流，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
-| Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack/Yuanbao + `send_message` | 部分对齐 | 已补 HOME_CHANNEL 默认目标、Yuanbao 最小 inbound、Telegram/Discord/Slack 本地文件投递（MEDIA: / media_path）+ Yuanbao best-effort 媒体投递（COS 上传）+ 最小配对/slash command/队列中断/hooks 运维 + 最小 `gateway run/start/stop/restart/install/uninstall/manifest` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 token lock + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、通用 slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；后续补更多平台原生 slash UI、更完整 token lock 与更多平台 |
+| Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack/WhatsApp/Yuanbao + `send_message` | 部分对齐 | 已补 HOME_CHANNEL 默认目标、Yuanbao 最小 inbound、Telegram/Discord/Slack 本地文件投递（MEDIA: / media_path）+ Yuanbao best-effort 媒体投递（COS 上传）+ WhatsApp 最小 inbound webhook（`/v1/gateway/whatsapp/webhook` challenge、`X-Hub-Signature-256` 签名校验、文本/媒体 URL 入站）+ 最小配对/slash command/队列中断/hooks 运维 + 最小 `gateway run/start/stop/restart/install/uninstall/manifest` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 token lock + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、通用 slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；后续补更多平台原生 slash UI、更完整 token lock 与更多平台 |
 | Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 支持 JSON/YAML manifest 与 Hermes 风格 `plugin.yaml` 元数据发现；支持单能力 `type=tool/provider` 与多能力 plugin manifest（tools/providers/commands/dashboard）；支持 `plugins list/show/commands/dashboards/validate/verify/install/uninstall/exec/marketplace/enable/disable`；支持 Ed25519 manifest 签名、插件文件 sha256 校验、默认沙箱化环境、tool/provider 运行时注册、command 本地执行、`/v1/ui/plugins/dashboards` dashboard slot API | 核心对齐 | 后续补远程 marketplace 下载、依赖自动安装、版本兼容协商与前端 dashboard slot 真实挂载 |
 | ACP/IDE | `acp_adapter/` | 已有最小 ACP API 适配层（`/v1/acp/sessions`、`/v1/acp/message`、`/v1/acp/message/stream`、`/v1/acp/cancel`）复用现有 engine | 部分对齐 | 后续补 ACP 完整协议能力（更细事件、鉴权、能力声明） |
 | Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 已覆盖 interval/one-shot/RFC3339 时间戳/5 或 6 字段 cron 表达式的作业存储、调度、运行结果 Gateway 投递与可选链式上下文；后续补脚本动作 |

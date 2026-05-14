@@ -1,410 +1,148 @@
 # 需求文档索引
 
-- `001-research-hermes-agent-go-port.md`：Hermes Agent 架构调研与 Go 映射分析
-- `001-plan-hermes-agent-go-port.md`：Go 版 Agent 实施计划
-- `001-events-hermes-agent-go-port.md`：Agent 事件协议与结构化字段说明
-- `001-summary-hermes-agent-go-port.md`：实现总结与当前能力范围
-- `002-research-hermes-gap-closure.md`：Hermes 核心闭环剩余差异与补齐范围分析
-- `002-plan-hermes-gap-closure.md`：核心闭环差异补齐实施计划
-- `002-summary-hermes-gap-closure.md`：核心闭环差异补齐结果总结
-- `003-research-context-compression.md`：Context Compression 缺口调研与方案选择
-- `003-plan-context-compression.md`：Context Compression 实施计划
-- `003-summary-context-compression.md`：Context Compression 落地结果与边界
-- `004-research-approval-guardrails.md`：审批护栏缺口调研与最小补齐范围
-- `004-plan-approval-guardrails.md`：审批护栏补齐实施计划
-- `004-summary-approval-guardrails.md`：审批护栏补齐结果总结
-- `005-research-provider-modes.md`：Provider 多模式缺口调研与映射策略
-- `005-plan-provider-modes.md`：Provider 多模式补齐实施计划
-- `005-summary-provider-modes.md`：Provider 多模式补齐结果总结
-- `006-research-codex-responses-mode.md`：Codex Responses 模式缺口调研与映射策略
-- `006-plan-codex-responses-mode.md`：Codex Responses 模式补齐实施计划
-- `006-summary-codex-responses-mode.md`：Codex Responses 模式补齐结果总结
-- `007-research-mcp-minimal-bridge.md`：MCP 最小接入骨架调研
-- `007-plan-mcp-minimal-bridge.md`：MCP 最小接入骨架实施计划
-- `007-summary-mcp-minimal-bridge.md`：MCP 最小接入骨架结果总结
-- `008-research-skills-minimal-skeleton.md`：Skills 最小骨架调研
-- `008-plan-skills-minimal-skeleton.md`：Skills 最小骨架实施计划
-- `008-summary-skills-minimal-skeleton.md`：Skills 最小骨架结果总结
-- `009-research-session-approval-state.md`：会话级审批状态补齐调研
-- `009-plan-session-approval-state.md`：会话级审批状态补齐实施计划
-- `009-summary-session-approval-state.md`：会话级审批状态补齐结果总结
-- `010-research-skill-manage-minimal.md`：`skill_manage` 最小补齐调研
-- `010-plan-skill-manage-minimal.md`：`skill_manage` 最小补齐实施计划
-- `010-summary-skill-manage-minimal.md`：`skill_manage` 最小补齐结果总结
-- `011-research-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐调研
-- `011-plan-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐实施计划
-- `011-summary-skill-manage-support-files.md`：`skill_manage` 支撑文件能力补齐结果总结
-- `012-research-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接调研
-- `012-plan-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接实施计划
-- `012-summary-mcp-stdio-bridge.md`：MCP `stdio` 最小桥接结果总结
-- `013-research-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐调研
-- `013-plan-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐实施计划
-- `013-summary-mcp-oauth-client-credentials.md`：MCP OAuth（Client Credentials）最小补齐结果总结
-- `014-research-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容调研
-- `014-plan-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容实施计划
-- `014-summary-mcp-call-streaming-compat.md`：MCP `/call` 流式响应兼容结果总结
-- `015-research-provider-fallback-minimal.md`：Provider 故障切换最小补齐调研
-- `015-plan-provider-fallback-minimal.md`：Provider 故障切换最小补齐实施计划
-- `015-summary-provider-fallback-minimal.md`：Provider 故障切换最小补齐结果总结
-- `016-research-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）调研
-- `016-plan-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）实施计划
-- `016-summary-provider-streaming-openai-minimal.md`：Provider 流式统一（OpenAI 最小落地）结果总结
-- `017-research-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）调研
-- `017-plan-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）实施计划
-- `017-summary-provider-streaming-anthropic-minimal.md`：Provider 流式统一（Anthropic 最小落地）结果总结
-- `018-research-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）调研
-- `018-plan-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）实施计划
-- `018-summary-provider-streaming-codex-minimal.md`：Provider 流式统一（Codex 最小落地）结果总结
-- `019-research-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）调研
-- `019-plan-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）实施计划
-- `019-summary-provider-stream-events-passthrough.md`：Provider 增量事件透传（最小版）结果总结
-- `020-research-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）调研
-- `020-plan-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）实施计划
-- `020-summary-model-stream-event-schema-v1.md`：`model_stream_event` 标准字典（v1）结果总结
-- `021-research-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）调研
-- `021-plan-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）实施计划
-- `021-summary-model-stream-event-schema-v2.md`：`model_stream_event` 标准字典（v2 最小扩展）结果总结
-- `022-research-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐调研
-- `022-plan-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐实施计划
-- `022-summary-model-stream-event-schema-v2-args-lifecycle.md`：`model_stream_event` v2 参数生命周期补齐结果总结
-- `023-research-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐调研
-- `023-plan-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐实施计划
-- `023-summary-model-stream-event-schema-v2-usage.md`：`model_stream_event` v2 用量事件补齐结果总结
-- `024-research-model-stream-event-schema-v2-finish-reason-and-id-aliases.md`：`model_stream_event` v2 结束原因与 ID 别名归一调研
-- `024-plan-model-stream-event-schema-v2-finish-reason-and-id-aliases.md`：`model_stream_event` v2 结束原因与 ID 别名归一实施计划
-- `024-summary-model-stream-event-schema-v2-finish-reason-and-id-aliases.md`：`model_stream_event` v2 结束原因与 ID 别名归一结果总结
-- `025-research-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐调研
-- `025-plan-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐实施计划
-- `025-summary-model-stream-event-schema-v2-id-source-compat.md`：`model_stream_event` v2 消息/工具 ID 来源兼容补齐结果总结
-- `026-research-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐调研
-- `026-plan-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐实施计划
-- `026-summary-model-stream-event-schema-v2-termination-metadata.md`：`model_stream_event` v2 终止元数据补齐结果总结
-- `027-research-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐调研
-- `027-plan-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐实施计划
-- `027-summary-model-stream-event-schema-v2-finish-incomplete-consistency.md`：`model_stream_event` v2 终止原因一致性补齐结果总结
-- `028-research-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐调研
-- `028-plan-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐实施计划
-- `028-summary-model-stream-event-schema-v2-usage-cache-tokens.md`：`model_stream_event` v2 用量缓存 token 字段补齐结果总结
-- `029-research-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐调研
-- `029-plan-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐实施计划
-- `029-summary-model-stream-event-schema-v2-usage-reasoning-tokens.md`：`model_stream_event` v2 用量推理 token 字段补齐结果总结
-- `030-research-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐调研
-- `030-plan-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐实施计划
-- `030-summary-model-stream-event-schema-v2-usage-total-consistency.md`：`model_stream_event` v2 用量总量一致性补齐结果总结
-- `031-research-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐调研
-- `031-plan-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐实施计划
-- `031-summary-model-stream-event-schema-v2-usage-consistency-status.md`：`model_stream_event` v2 用量一致性状态字段补齐结果总结
-- `032-research-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐调研
-- `032-plan-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐实施计划
-- `032-summary-model-stream-event-schema-v2-usage-status-invalid.md`：`model_stream_event` v2 用量异常状态补齐结果总结
-- `033-research-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试调研
-- `033-plan-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试实施计划
-- `033-summary-model-stream-event-schema-v2-usage-status-provider-coverage.md`：`model_stream_event` v2 用量状态 provider 覆盖测试结果总结
-- `034-research-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试调研
-- `034-plan-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试实施计划
-- `034-summary-model-stream-event-schema-v2-usage-status-source-only-coverage.md`：`model_stream_event` v2 用量 `source_only` 状态 provider 覆盖测试结果总结
-- `035-research-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖调研
-- `035-plan-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖实施计划
-- `035-summary-model-stream-event-schema-v2-usage-status-e2e-provider-streaming.md`：`model_stream_event` v2 用量状态 provider 流式端到端覆盖结果总结
-- `036-research-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖调研
-- `036-plan-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖实施计划
-- `036-summary-model-stream-event-schema-v2-usage-status-adjusted-e2e.md`：`model_stream_event` v2 用量 `adjusted` 状态端到端覆盖结果总结
-- `037-research-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐调研
-- `037-plan-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐实施计划
-- `037-summary-model-stream-event-schema-v2-usage-status-adjusted-e2e-anthropic.md`：`model_stream_event` v2 用量 `adjusted` 状态 Anthropic 端到端补齐结果总结
-- `038-research-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐调研
-- `038-plan-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐实施计划
-- `038-summary-model-stream-event-schema-v2-usage-status-table-driven.md`：`model_stream_event` v2 用量状态表驱动测试补齐结果总结
-- `039-research-provider-race-circuit.md`：Provider 并行竞速与熔断补齐调研
-- `039-plan-provider-race-circuit.md`：Provider 并行竞速与熔断补齐实施计划
-- `039-summary-provider-race-circuit.md`：Provider 并行竞速与熔断补齐结果总结
-- `040-research-provider-event-coverage.md`：Provider 完整事件字典覆盖调研
-- `040-plan-provider-event-coverage.md`：Provider 完整事件字典覆盖实施计划
-- `040-summary-provider-event-coverage.md`：Provider 完整事件字典覆盖结果总结
-- `041-research-approval-persistence.md`：审批状态持久化与细粒度审批策略调研
-- `041-plan-approval-persistence.md`：审批状态持久化与细粒度审批策略实施计划
-- `041-summary-approval-persistence.md`：审批状态持久化与细粒度审批策略结果总结
-- `042-research-mcp-streaming-passthrough.md`：MCP 流式事件透传调研
-- `042-plan-mcp-streaming-passthrough.md`：MCP 流式事件透传实施计划
-- `042-summary-mcp-streaming-passthrough.md`：MCP 流式事件透传结果总结
-- `043-research-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌调研
-- `043-plan-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌实施计划
-- `043-summary-mcp-oauth-auth-code.md`：MCP OAuth 授权码流程与刷新令牌结果总结
-- `044-research-gateway-minimal.md`：多平台消息网关最小落地调研
-- `044-plan-gateway-minimal.md`：多平台消息网关最小落地实施计划
-- `044-summary-gateway-minimal.md`：多平台消息网关最小落地结果总结
-- `045-research-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）调研
-- `045-plan-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）实施计划
-- `045-summary-skills-adv-trigger-sync.md`：技能高级能力（自动触发 + 同步）结果总结
-- `046-summary-approval-interactive-confirm.md`：审批交互确认（pending approval + confirm）结果总结
-- `047-summary-gateway-discord.md`：Discord 网关适配器结果总结
-- `048-summary-websocket.md`：WebSocket 端点结果总结
-- `049-summary-provider-cascade.md`：Provider 多级级联 + 成本感知结果总结
-- `050-summary-gateway-slack.md`：Slack 网关适配器结果总结
-- `051-summary-skills-filter-preload.md`：技能条件过滤 + 预加载结果总结
-- `052-summary-skill-search-hub.md`：技能多源搜索（skill_search）结果总结
-- `053-research-hermes-feature-alignment.md`：Hermes 功能对齐复核调研
-- `053-plan-hermes-feature-alignment.md`：Hermes 功能对齐文档完善计划
-- `053-summary-hermes-feature-alignment.md`：Hermes 功能对齐复核与文档补齐总结
-- `054-research-cli-config-management.md`：CLI 配置管理最小对齐调研
-- `054-plan-cli-config-management.md`：CLI 配置管理最小实现计划
-- `054-summary-cli-config-management.md`：CLI 配置管理最小对齐总结
-- `055-research-cli-model-management.md`：CLI 模型管理最小对齐调研
-- `055-plan-cli-model-management.md`：CLI 模型管理最小实现计划
-- `055-summary-cli-model-management.md`：CLI 模型管理最小对齐总结
-- `056-research-cli-tools-inspection.md`：CLI 工具查看最小对齐调研
-- `056-plan-cli-tools-inspection.md`：CLI 工具查看最小实现计划
-- `056-summary-cli-tools-inspection.md`：CLI 工具查看最小对齐总结
-- `057-research-cli-doctor.md`：CLI 本地诊断最小对齐调研
-- `057-plan-cli-doctor.md`：CLI 本地诊断最小实现计划
-- `057-summary-cli-doctor.md`：CLI 本地诊断最小对齐总结
-- `058-research-cli-gateway-management.md`：CLI 网关管理最小对齐调研
-- `058-plan-cli-gateway-management.md`：CLI 网关管理最小实现计划
-- `058-summary-cli-gateway-management.md`：CLI 网关管理最小对齐总结
-- `059-research-tool-disable-config.md`：工具禁用配置最小对齐调研
-- `059-plan-tool-disable-config.md`：工具禁用配置最小实现计划
-- `059-summary-tool-disable-config.md`：工具禁用配置最小对齐总结
-- `060-research-cli-sessions.md`：CLI 会话列表与检索调研
-- `060-plan-cli-sessions.md`：CLI 会话列表与检索计划
-- `060-summary-cli-sessions.md`：CLI 会话列表与检索总结
-- `061-research-cli-session-show-stats.md`：CLI 会话详情查看与统计调研
-- `061-plan-cli-session-show-stats.md`：CLI 会话详情查看与统计计划
-- `061-summary-cli-session-show-stats.md`：CLI 会话详情查看与统计总结
-- `062-research-hermes-cron-alignment.md`：Hermes Cron 能力差异与最小对齐路径
-- `062-plan-hermes-cron-alignment.md`：Hermes Cron 最小对齐（interval/one-shot）
-- `062-summary-hermes-cron-alignment.md`：Hermes Cron 最小对齐总结与边界
-- `063-research-hermes-toolsets-alignment.md`：Hermes Toolsets 与 Go 版最小对齐
-- `063-plan-hermes-toolsets-alignment.md`：Hermes Toolsets 最小对齐计划
-- `063-summary-hermes-toolsets-alignment.md`：Hermes Toolsets 最小对齐总结与边界
-- `064-research-hermes-send-message-alignment.md`：Hermes send_message 与 Go 版最小对齐
-- `064-plan-hermes-send-message-alignment.md`：Hermes send_message 最小对齐计划
-- `064-summary-hermes-send-message-alignment.md`：Hermes send_message 最小对齐总结与边界
-- `065-research-hermes-patch-tool-alignment.md`：Hermes patch 工具与 Go 版最小对齐
-- `065-plan-hermes-patch-tool-alignment.md`：Hermes patch 工具最小对齐计划
-- `065-summary-hermes-patch-tool-alignment.md`：Hermes patch 工具最小对齐总结与边界
-- `066-research-hermes-web-tools-alignment.md`：Hermes web_search/web_extract 与 Go 版最小对齐
-- `066-plan-hermes-web-tools-alignment.md`：Hermes web tools 最小对齐计划
-- `066-summary-hermes-web-tools-alignment.md`：Hermes web tools 最小对齐总结
-- `067-research-hermes-clarify-tool-alignment.md`：Hermes clarify 工具与 Go 版最小对齐
-- `067-plan-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐计划
-- `067-summary-hermes-clarify-tool-alignment.md`：Hermes clarify 工具最小对齐总结
-- `068-research-hermes-execute-code-alignment.md`：Hermes execute_code 与 Go 版最小对齐
-- `068-plan-hermes-execute-code-alignment.md`：Hermes execute_code 最小对齐计划
-- `068-summary-hermes-execute-code-alignment.md`：Hermes execute_code 最小对齐总结
-- `069-research-hermes-read-file-alignment.md`：Hermes read_file 输出格式与 Go 版对齐
-- `070-summary-tool-result-success-field.md`：补齐工具结果 success 字段（兼容性增强）
-- `071-summary-hermes-core-tool-stubs.md`：Hermes core 工具缺口的 stub 对齐
-- `072-summary-read-file-max-chars.md`：read_file 增加 max_chars 防护（Hermes 风格）
-- `073-summary-tool-success-web-session-search.md`：web 与 session_search 工具返回补齐 success
-- `074-summary-tool-success-todo-memory.md`：todo/memory 工具返回补齐 success
-- `075-summary-tool-success-terminal-approval-skills.md`：terminal/approval/skills 工具返回补齐 success
-- `076-summary-process-list-action.md`：process 工具补齐 list 动作（对齐 Hermes 体验）
-- `077-summary-cronjob-update-action.md`：cronjob 补齐 update 动作
-- `078-summary-cronjob-runs-inspection.md`：cronjob 增加 runs/run_get（运行记录查询）
-- `079-summary-session-search-exclude.md`：session_search 支持排除/包含会话参数（对齐 Hermes 体验）
-- `080-summary-doctor-stub-tools.md`：doctor 增加 stub_tools 检查项
-- `081-summary-file-tools-reject-non-regular.md`：文件工具拒绝 FIFO/socket/device 等非普通文件
-- `082-summary-file-tools-reject-symlink-escape.md`：文件工具拒绝 symlink 逃逸 workdir
-- `083-summary-read-file-dedup.md`：read_file 增加去重返回（未变更文件返回 stub）
-- `084-summary-file-staleness-warning.md`：write_file/patch 增加“文件已变更”告警（staleness warning）
-- `085-summary-write-file-reject-status-text.md`：write_file 拒绝写入 read_file 内部状态文本
-- `086-summary-read-file-max-chars-reject.md`：read_file 超过 max_chars 默认拒绝（Hermes 行为）
-- `087-summary-read-file-loop-guard.md`：read_file 连续重复读取告警与阻断（防循环）
-- `088-summary-patch-v4a-mode.md`：patch 支持 V4A patch 格式（mode=patch）
-- `089-summary-homeassistant-kanban-tools.md`：实现 ha_* 与 kanban_* core tools
-- `090-summary-browser-vision-image-tts-minimal.md`：browser/vision/image/tts 从 stub 升级为最小可用实现
-- `091-summary-mixture-of-agents.md`：实现 mixture_of_agents（基于子代理聚合）
-- `092-summary-browser-light-actions.md`：browser_click/get_images/type/scroll/press 轻量实现
-- `093-summary-media-real-artifacts-and-browser-form.md`：media 输出增强 + browser 轻量表单提交
-- `094-summary-browser-vision-cdp-console-dialog.md`：补齐 browser_vision/cdp/console/dialog 轻量实现
-- `095-summary-video-analyze-tool.md`：实现 video_analyze（ffprobe 最小实现）
-- `096-summary-patch-v4a-fuzzy.md`：patch V4A UPDATE hunk best-effort 容错
-- `097-summary-fs-admin-tools.md`：新增 mkdir/list_dir/delete_file/move_file（可选工具集）
-- `098-summary-integration-tool-placeholders.md`：补齐 discord_admin/feishu/spotify/yb/rl 工具名（占位 + 凭证 gate）
-- `099-summary-discord-admin-implemented.md`：discord_admin 从占位升级为可用实现
-- `100-summary-spotify-tools-implemented.md`：Spotify 工具从占位升级为可用实现
-- `101-summary-feishu-tools-implemented.md`：飞书 doc/drive 工具从占位升级为可用实现
-- `102-summary-yuanbao-sticker-search.md`：实现 yb_search_sticker（贴纸目录搜索）
-- `103-summary-rl-tools-local-runner.md`：rl_* 从占位升级为本地 runner（可配置命令）
-- `104-summary-tirith-terminal-scan-and-discord-tool.md`：terminal 增加 tirith 预扫描 + 补齐 Hermes `discord` 工具名
-- `105-summary-process-tool-actions.md`：process 补齐 poll/log/wait/kill/write 动作（Hermes 体验对齐）
-- `106-summary-terminal-notify-on-complete.md`：terminal(background) 补齐 notify_on_complete（Hermes 体验对齐）
-- `107-summary-toolsets-parity-aliases.md`：补齐 Hermes toolsets 名称别名与平台 toolsets（配置兼容）
-- `108-summary-process-write-and-terminate.md`：process 支持 write + stop 改为 TERM->KILL（Hermes 体验对齐）
-- `109-summary-image-generate-gate.md`：image_generate 增加 FAL_KEY gate（Hermes 可用性对齐）
-- `110-summary-browser-snapshot-ref-ids.md`：browser_snapshot 增强 ref IDs + browser_click/type 支持 ref（轻量对齐）
-- `111-summary-send-message-home-channel.md`：send_message 支持 HOME_CHANNEL 默认目标（Hermes 体验对齐）
-- `112-summary-doc-parity-refresh.md`：刷新 Hermes 对齐文档描述（工具/网关/范围声明）
-- `113-summary-tts-openai-backend-media-prefix.md`：text_to_speech 增加可选 OpenAI 后端 + MEDIA: 前缀（Hermes 风格）
-- `114-summary-gateway-media-send-discord-slack.md`：Discord/Slack 网关适配器补齐本地文件投递（MEDIA: / media_path）
-- `115-summary-tts-deliver-to-gateway.md`：text_to_speech 支持 `deliver=true` 直接投递到当前网关会话（需适配器支持）
-- `116-summary-image-generate-deliver-to-gateway.md`：image_generate 支持 `deliver=true` 直接投递到当前网关会话（需适配器支持）
-- `117-summary-yuanbao-media-delivery-cos.md`：Yuanbao 网关适配器补齐媒体投递（COS 上传 best-effort）
-- `118-summary-gateway-auto-deliver-media-final.md`：网关在最终响应为 `MEDIA:` 时自动投递媒体文件（Hermes 体验对齐）
-- `119-summary-browser-cdp-backend.md`：browser_* 增加可选真实 CDP 后端（执行 JS/DOM；Hermes 能力级对齐）
-- `120-summary-browser-cdp-console-dialog.md`：CDP 模式补齐 browser_console/browser_dialog 与 pending_dialogs（Hermes 体验对齐）
-- `121-summary-vision-analyze-openai-backend.md`：vision_analyze 增加可选 OpenAI 视觉后端（无 key 时回退为元数据）
-- `122-summary-image-generate-openai-backend.md`：image_generate 增加可选 OpenAI 图片后端（无 key 时回退为占位图）
-- `123-summary-gateway-queue-and-cancel.md`：Gateway 增加 per-session 队列与 `/cancel` 中断（Hermes 体验对齐）
-- `124-summary-gateway-pairing.md`：Gateway 增加最小 `/pair <code>` 配对与持久化（Hermes 体验对齐）
-- `125-summary-gateway-pairing-management.md`：配对管理：`/unpair` + `agentd gateway pairs list/revoke`
-- `126-summary-gateway-slow-response-hint.md`：Gateway 增加慢响应提示消息（Hermes 体验对齐）
-- `127-summary-gateway-webhook-hooks.md`：Gateway 增加完成事件 webhook hooks（best-effort）
-- `128-summary-gateway-webhook-lifecycle.md`：Gateway webhook hooks 扩展生命周期事件与可选 tool 事件
-- `129-summary-gateway-webhook-signing-retry.md`：Gateway webhook hooks 增加 HMAC 签名与重试/backoff（best-effort）
-- `130-summary-gateway-webhook-delivery-events.md`：Gateway webhook hooks 增加投递事件（send/edit/media）
-- `131-summary-gateway-webhook-spool.md`：Gateway webhook hooks 增加本地 spool（失败落盘 + 定时补发）
-- `132-summary-gateway-webhook-event-id.md`：Gateway webhook envelope 增加 `id`（UUID）用于去重/追踪
-- `133-summary-gateway-webhook-spool-dedup.md`：Webhook spool 按 `event_id` 去重（减少重复与增长）
-- `134-summary-gateway-hook-spool-cli.md`：CLI 增加 webhook spool 的 status/clear 管理命令
-- `135-summary-gateway-hook-spool-replay-cli.md`：CLI 增加 webhook spool 的手动 replay 命令
-- `136-summary-gateway-hooks-ping-cli.md`：CLI 增加 webhook hooks 的连通性/签名健康检查（ping）
-- `137-summary-gateway-hook-spool-rotation.md`：Webhook spool 增加按大小滚动（控制磁盘占用）
-- `138-summary-gateway-hook-spool-rotated-cli.md`：CLI 支持 rotated spool 文件：list + replay -all
-- `139-summary-gateway-hook-spool-status-aggregate.md`：`spool status -all` 增加跨 rotated 文件的聚合积压统计
-- `140-summary-gateway-hook-spool-replay-filters.md`：`spool replay` 支持 `-type`/`-id` 定向重放
-- `141-summary-gateway-hook-spool-export-prune.md`：`spool export/prune` 支持按 type/id/time 过滤
-- `142-summary-gateway-hook-spool-compact.md`：`spool compact` 支持去重/排序/按 max-lines 裁剪
-- `143-summary-gateway-hook-spool-stats-command.md`：新增 `spool stats` 命令（支持 `-all` 聚合）
-- `144-summary-gateway-hook-spool-verify.md`：新增 `spool verify` 完整性校验命令（支持 `-all`）
-- `145-summary-gateway-hooks-doctor.md`：新增 `hooks doctor` 配置诊断命令
-- `146-summary-gateway-hook-spool-import.md`：新增 `spool import`（支持 append/覆盖与 event_id 去重）
-- `147-summary-gateway-hooks-doctor-and-verify.md`：补充 hooks doctor + spool verify 的诊断能力整合说明
-- `148-summary-gateway-hook-spool-import-all.md`：`spool import` 新增 `-all` 批量导入 JSONL 片段
-- `149-summary-gateway-hooks-doctor-next-actions.md`：`hooks doctor` 增加可执行的 `next_actions` 建议
-- `150-summary-gateway-hook-spool-import-filters.md`：`spool import` 增加 `-type/-id/-before` 过滤导入能力
-- `151-summary-gateway-hooks-doctor-strict.md`：`hooks doctor` 增加 `--strict` 非健康即非零退出
-- `152-summary-cli-gateway-setup.md`：新增 `gateway setup` 最小平台配置写入入口
-- `153-summary-cli-setup-entrypoint.md`：新增统一 `setup` 引导入口（模型 + 可选网关）
-- `154-summary-cli-setup-wizard.md`：新增交互式 `setup wizard` 引导流程
-- `155-summary-cli-update-command.md`：新增最小 `update` 命令（git checkout 检查/快进更新）
-- `156-summary-cli-version-command.md`：新增 `version` 命令（含可选更新状态检查）
-- `157-summary-cli-gateway-process-management.md`：新增 `gateway run/start/stop/restart` 最小进程管理
-- `158-summary-cli-bootstrap-command.md`：新增 `bootstrap init/status` 最小工作区初始化命令
-- `159-summary-cli-gateway-install-uninstall.md`：新增 `gateway install/uninstall` 最小脚本安装命令
-- `160-summary-cli-update-install-uninstall.md`：新增 `update install/uninstall` 最小脚本安装命令
-- `161-summary-gateway-single-instance-lock.md`：新增 gateway 同 workdir 单实例锁
-- `162-summary-gateway-token-lock.md`：新增 gateway 跨工作区 token lock
-- `163-summary-gateway-approval-text-commands.md`：新增 gateway 文本审批命令 `/approve` `/deny`
-- `164-summary-gateway-approval-status-command.md`：新增 gateway 审批状态命令 `/approvals`
-- `165-summary-gateway-approval-manage-commands.md`：新增 gateway 授权管理命令 `/grant` `/revoke`
-- `166-summary-gateway-status-command.md`：新增 gateway 文本状态命令 `/status`
-- `167-summary-gateway-pending-command.md`：新增 gateway 待审批查看命令 `/pending`
-- `168-summary-gateway-telegram-approval-buttons.md`：新增 Telegram 原生审批按钮最小闭环
-- `169-summary-gateway-telegram-command-menu.md`：新增 Telegram 原生命令菜单最小闭环
-- `170-summary-gateway-discord-approval-buttons.md`：新增 Discord 原生审批按钮最小闭环
-- `171-summary-gateway-slack-approval-buttons.md`：新增 Slack 原生审批按钮最小闭环
-- `172-summary-gateway-yuanbao-approval-quick-replies.md`：新增 Yuanbao 审批快捷回复最小闭环
-- `173-summary-gateway-discord-slash-commands.md`：新增 Discord 原生 slash 命令最小闭环
-- `174-summary-gateway-discord-grant-revoke-slash.md`：补齐 Discord `grant` / `revoke` 原生 slash 参数面
-- `175-summary-gateway-slack-slash-command-entrypoint.md`：新增 Slack slash 命令入口最小闭环
-- `176-summary-gateway-slack-generic-slash-forwarding.md`：增强 Slack 通用 slash 命令转发与即时确认
-- `177-summary-cli-gateway-slack-manifest-export.md`：新增 Slack gateway manifest 导出命令
-- `178-summary-cli-gateway-discord-manifest-export.md`：新增 Discord gateway 命令清单导出命令
-- `179-summary-cli-gateway-telegram-manifest-export.md`：新增 Telegram gateway 命令清单导出命令
-- `180-summary-cli-gateway-yuanbao-manifest-export.md`：新增 Yuanbao gateway 命令清单导出命令
-- `181-summary-cli-update-release-command.md`：新增 `update release` 最小 release 查询命令
-- `182-summary-cli-update-status-command.md`：新增 `update status` 聚合状态命令
-- `183-summary-cli-update-install-script-expansion.md`：扩展 update 安装脚本集合到 `status/check/release/apply`
-- `184-summary-cli-update-doctor-command.md`：新增 `update doctor` 诊断与 next actions 命令
-- `185-summary-cli-update-changelog-command.md`：新增 `update changelog` 本地变更摘要命令
-- `186-summary-cli-update-bundle-command.md`：新增 `update bundle` 本地 release 打包命令
-- `187-summary-cli-update-bundle-inspect-command.md`：新增 `update bundle inspect` 本地 bundle 校验命令
-- `188-summary-cli-update-bundle-verify-command.md`：新增 `update bundle verify` 严格校验命令
-- `189-summary-cli-update-bundle-unpack-command.md`：新增 `update bundle unpack` 本地解包命令
-- `190-summary-cli-update-bundle-apply-command.md`：新增 `update bundle apply` 本地覆盖安装命令
-- `191-summary-cli-update-bundle-rollback-command.md`：新增 `update bundle rollback` 本地回滚命令
-- `192-summary-cli-update-bundle-backups-command.md`：新增 `update bundle backups` 备份列表命令
-- `193-summary-cli-update-bundle-prune-command.md`：新增 `update bundle prune` 备份清理命令
-- `194-summary-cli-update-bundle-doctor-command.md`：新增 `update bundle doctor` 备份诊断命令
-- `195-summary-cli-update-bundle-status-command.md`：新增 `update bundle status` 聚合状态命令
-- `196-summary-cli-update-bundle-manifest-command.md`：新增 `update bundle manifest` 分发清单命令
-- `197-summary-cli-update-bundle-plan-command.md`：新增 `update bundle plan` dry-run 规划命令
-- `198-summary-cli-update-bundle-rollback-plan-command.md`：新增 `update bundle rollback-plan` 回滚预演命令
-- `199-summary-cli-update-bundle-snapshot-command.md`：新增 `update bundle snapshot` 目标快照命令
-- `200-summary-cli-update-bundle-snapshots-command.md`：新增 `update bundle snapshots` 快照列表命令
-- `201-summary-cli-update-bundle-snapshots-prune-command.md`：新增 `update bundle snapshots-prune` 快照清理命令
-- `202-summary-cli-update-bundle-snapshots-doctor-command.md`：新增 `update bundle snapshots-doctor` 快照诊断命令
-- `203-summary-cli-update-bundle-snapshots-status-command.md`：新增 `update bundle snapshots-status` 快照聚合状态命令
-- `204-summary-cli-update-bundle-snapshots-restore-command.md`：新增 `update bundle snapshots-restore` 快照恢复命令
-- `205-summary-cli-update-bundle-snapshots-restore-plan-command.md`：新增 `update bundle snapshots-restore-plan` 快照恢复预演命令
-- `206-summary-cli-update-bundle-snapshots-delete-command.md`：新增 `update bundle snapshots-delete` 快照定向删除命令
-- `207-research-frontend-tui-parity.md`：Frontend 与 TUI 功能对齐差距调研（Phase 1）
-- `207-plan-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施计划
-- `207-summary-frontend-tui-parity-phase1.md`：Frontend 与 TUI 对齐 Phase 1 实施总结
-- `208-summary-frontend-tui-parity-phase2-ui-api.md`：Frontend 与 TUI 对齐 Phase 2（UI API 与页面联通）
-- `209-summary-frontend-tui-parity-phase3-stream-timeline.md`：Frontend 与 TUI 对齐 Phase 3（流式会话与时间线）
-- `210-summary-frontend-tui-parity-phase4-detail-pages.md`：Frontend 与 TUI 对齐 Phase 4（详情页与可点击交互）
-- `211-summary-frontend-tui-parity-phase5-config-gateway-actions.md`：Frontend 与 TUI 对齐 Phase 5（配置与网关动作）
-- `212-summary-frontend-tui-parity-phase6-usability-and-docs.md`：Frontend 与 TUI 对齐 Phase 6（可用性增强与文档补齐）
-- `213-summary-frontend-tui-parity-phase7-tui-entry.md`：Frontend 与 TUI 对齐 Phase 7（独立 TUI 入口与实时事件轨迹）
-- `214-summary-frontend-tui-parity-phase8-standalone-ui-tui.md`：Frontend 与 TUI 对齐 Phase 8（独立 ui-tui 子工程）
-- `215-summary-frontend-tui-parity-phase9-ui-tui-commands.md`：Frontend 与 TUI 对齐 Phase 9（ui-tui 命令体系增强）
-- `216-summary-ui-tui-migrate-to-go.md`：ui-tui 从 Node.js 迁移到 Go 实现
-- `217-summary-ui-tui-parity-management-commands.md`：ui-tui 管理命令补齐（工具/会话/网关/配置）
-- `218-summary-ui-tui-ux-output-controls.md`：ui-tui 输出控制增强（pretty/last/save）
-- `219-summary-ui-tui-pagination-shortcuts.md`：ui-tui 分页快捷翻页（next/prev）
-- `220-summary-ui-tui-quick-session-pick.md`：ui-tui 快速会话选择（pick）
-- `221-summary-ui-tui-command-aliases.md`：ui-tui 命令别名与容错输入
-- `222-summary-ui-tui-command-status.md`：ui-tui 命令状态提示与状态查询
-- `223-summary-ui-tui-runtime-ops-and-persistence.md`：ui-tui 运行控制与持久化能力补齐
-- `224-summary-ui-tui-reliability-observability-e2e.md`：ui-tui 稳定性、可观测性与 e2e 烟测补齐
-- `225-summary-ui-tui-recovery-approval-alignment.md`：ui-tui 会话恢复、审批闭环与导出过滤对齐
-- `226-summary-ui-tui-config-ini-unification.md`：ui-tui 配置统一接入 config.ini
-- `227-summary-ui-tui-usability-finalization.md`：ui-tui 易用性收口（审批列表/默认审批/热更新/自修复）
-- `228-summary-ui-tui-final-audit-and-baseline.md`：ui-tui 最终审计、真实回归与基线标记
-- `229-summary-backend-compat-session-stats-and-approval-confirm.md`：后端兼容修复（SessionStats 空值 + approval confirm 检查）
-- `230-summary-ui-tui-doctor-command.md`：ui-tui 新增 /doctor 后端能力预检命令
-- `231-summary-ui-tui-efficiency-observability-bundle.md`：ui-tui 交互效率/可读性/审计/测试/发布一次性补全
-- `232-summary-ui-api-contract-freeze.md`：冻结 /v1/ui/* 接口契约、兼容策略与错误码规范
-- `233-summary-ui-tui-adapt-ui-api-contract.md`：ui-tui 适配冻结后的 /v1/ui/* 契约
-- `234-summary-cli-align-ui-contract-semantics.md`：CLI 输出语义对齐 UI 契约（ok/error.code/error.message）
-- `235-summary-chat-api-contract-alignment.md`：/v1/chat* 接口错误契约统一与兼容对齐
-- `236-summary-contract-consumer-regression.md`：契约消费者回归补齐（UI/Chat/CLI）
-- `237-summary-contract-governance-automation.md`：契约治理自动化（快照测试/CI/OpenAPI/版本策略）
-- `238-summary-contract-toolchain-and-breaking-gate.md`：契约工具链与 Breaking 门禁（Make/diff/baseline/CI）
-- `239-summary-contract-diff-field-level-and-report.md`：契约 Diff 字段级检测与报告产物
-- `240-summary-contract-replay-tests.md`：契约回放测试（Replay）与 CI 报告
-- `241-summary-contract-coverage-gate.md`：契约覆盖率度量与核心端点 100% 门禁
-- `242-summary-chat-stream-contract-replay.md`：纳入 /v1/chat/stream 契约与回放校验
-- `243-summary-ws-contract-replay.md`：WS 实时链路契约化与回放覆盖
-- `244-summary-resume-and-reconnect-alignment.md`：SSE/WS 恢复与重连一致性补全
-- `245-summary-ui-tui-reconnect-controls.md`：ui-tui 重连状态可视化与人工恢复控制
-- `246-summary-web-reconnect-controls.md`：Web Chat 重连状态可视化与控制对齐
-- `247-summary-web-ws-primary-fallback-sse.md`：Web Chat 升级 WS 主通道并保留 SSE 降级
-- `248-summary-web-realtime-diagnostics-panel.md`：Web Chat 实时诊断面板与诊断包导出
-- `249-summary-ui-tui-realtime-diagnostics-parity.md`：ui-tui 实时诊断能力对齐（/diag + 诊断包导出）
-- `250-summary-diagnostics-bundle-schema-and-replay.md`：统一 diag.v1 契约并新增诊断包 validate/replay
-- `251-summary-diag-v1-ci-artifacts-and-smoke.md`：diag.v1 接入 CI 烟测产物与 replay 报告上传
-- `252-summary-six-gap-closure-foundations.md`：六类差异基础收口（doctor 能力可观测、terminal backend、插件骨架、检索摘要、网关命令一致性）
-- `253-summary-tool-capability-closure-media-backends.md`：第 4 项工具能力收口（vision/image/tts 实后端回退链路完善）
-- `254-summary-plugin-runtime-and-cli-management.md`：插件运行时与 CLI 管理闭环补齐（manifest 校验、运行时注册、启停管理、doctor 检查）
-- `255-summary-provider-plugin-runtime-closure.md`：Provider 插件运行时闭环补齐（type=provider 契约、模型调用接入、CLI/doctor 对齐）
-- `256-summary-terminal-ssh-backend-alignment.md`：终端多环境补齐（新增 SSH 后端，形成 local/docker/ssh）
-- `257-summary-gateway-command-matrix-and-stale-lock-closure.md`：Gateway 命令矩阵与僵尸锁收口（跨平台命令一致性 + stale lock 自动清理）
-- `258-summary-acp-api-adapter-minimal.md`：ACP/IDE 最小 API 适配闭环（sessions/message/stream/cancel）
-- `259-summary-research-trajectory-runtime-minimal.md`：Research/RL/Trajectory 最小闭环（批跑、轨迹压缩、统计）
-- `260-summary-terminal-environment-matrix-alignment.md`：terminal 执行环境矩阵补齐（podman/singularity/daytona/vercel/modal + schema/test/doc 对齐）
-- `261-summary-cli-tui-standalone-auto-mode.md`：`agentd tui` 增加 standalone/lite/auto 模式，默认优先独立 ui-tui 并可自动回退
-- `262-summary-cli-tui-source-fallback-and-boot-message.md`：`agentd tui` 增加源码回退启动（go run ./ui-tui）与首条消息透传
-- `263-summary-ui-tui-fullscreen-dashboard-mode.md`：`ui-tui` 新增全屏看板模式并支持 `agentd tui -fullscreen` 透传
-- `264-summary-ui-tui-fullscreen-timeline-and-runtime-toggle.md`：`ui-tui` 全屏新增时间线面板与 `/fullscreen on|off` 运行时切换
-- `265-summary-ui-tui-actions-palette.md`：`ui-tui` 新增 `/actions` 快捷操作面板（编号选择高频管理动作）
-- `266-summary-ui-tui-fullscreen-quiet-and-timeline-command.md`：全屏模式静默刷屏并新增 `/timeline [n]` 时间线查看命令
-- `267-summary-ui-tui-fullscreen-multi-panel.md`：全屏模式新增多面板（overview/sessions/tools/gateway/diag）与 `/panel`、`/refresh` 管理
-- `268-summary-ui-tui-workbench-completion-bundle.md`：ui-tui 全屏工作台补齐（dashboard 聚合面板、panel list、状态持久化、测试与文档）
-- `269-summary-ui-tui-workbench-auto-refresh-and-persistence.md`：ui-tui 工作台补齐自动刷新策略与偏好持久化（panel auto/interval/status）
-- `270-summary-ui-tui-workbench-drilldown-and-approvals-panel.md`：ui-tui 工作台新增 approvals 面板与 `/open <index>` 条目钻取动作
-- `271-summary-ui-tui-workbench-open-action-closure.md`：ui-tui 工作台补齐统一 `/open <index>` 钻取闭环（sessions/tools/approvals）
-- `272-summary-ui-tui-workbench-profiles-bundle.md`：ui-tui 工作台新增 profile 方案（workbench save/list/load/delete）
-- `273-summary-ui-tui-workflow-orchestration-bundle.md`：ui-tui 新增 workflow 编排（save/list/run/delete + 命令队列执行）
-- `274-summary-cli-tui-stateful-command-surface.md`：CLI/TUI 状态化命令面补齐（会话切换、重试/撤销/压缩/导出、工具与状态查看）
-- `275-summary-memory-learning-loop-closure.md`：Memory / 学习闭环补齐（会话摘要召回、记忆抽取去重、主动记忆规则）
-- `276-summary-plugin-ecosystem-closure.md`：插件生态闭环补齐（marketplace、本地安装卸载、签名/文件校验、默认沙箱、多能力 manifest、command/dashboard slot 管理）
-- `277-summary-web-dashboard-functional-pages.md`：Web Dashboard 功能页补齐（Skills/Agents/Plugins/Gateway diagnostics/Voice）
-- `278-summary-web-cron-management.md`：Web Cron 管理面补齐（创建、列表、详情、暂停/恢复、触发、删除、运行记录）
-- `279-summary-web-model-provider-management.md`：Web Model / Provider 管理面补齐（当前模型、provider 列表、模型切换）
-- `280-summary-cron-expression-scheduler.md`：Cron 表达式调度执行（5/6 字段解析、NextRun、create/update/scheduler 打通）
-- `281-summary-cron-result-delivery.md`：Cron 运行结果投递闭环（delivery_target/deliver_on、run 投递状态、Web 创建入口）
-- `282-summary-cron-chained-context.md`：Cron 链式上下文模式（context_mode/chain_context、稳定 cron 会话、历史加载）
-- `283-summary-cron-script-run-mode.md`：Cron 脚本动作模式（run_mode=script、script_command/cwd/timeout、调度执行与 Web 入口）
+按模块归并（人工收敛后），每个模块固定三件套：research / plan / summary；编号从 0000 递增。
+
+- `0000-acp-research-merged.md`
+- `0000-acp-plan-merged.md`
+- `0000-acp-summary-merged.md`
+- `0001-api-research-merged.md`
+- `0001-api-plan-merged.md`
+- `0001-api-summary-merged.md`
+- `0002-approval-research-merged.md`
+- `0002-approval-plan-merged.md`
+- `0002-approval-summary-merged.md`
+- `0003-browser-research-merged.md`
+- `0003-browser-plan-merged.md`
+- `0003-browser-summary-merged.md`
+- `0004-cli-research-merged.md`
+- `0004-cli-plan-merged.md`
+- `0004-cli-summary-merged.md`
+- `0005-codex-research-merged.md`
+- `0005-codex-plan-merged.md`
+- `0005-codex-summary-merged.md`
+- `0006-context-research-merged.md`
+- `0006-context-plan-merged.md`
+- `0006-context-summary-merged.md`
+- `0007-contract-research-merged.md`
+- `0007-contract-plan-merged.md`
+- `0007-contract-summary-merged.md`
+- `0008-core-research-merged.md`
+- `0008-core-plan-merged.md`
+- `0008-core-summary-merged.md`
+- `0009-cron-research-merged.md`
+- `0009-cron-plan-merged.md`
+- `0009-cron-summary-merged.md`
+- `0010-diagnostics-research-merged.md`
+- `0010-diagnostics-plan-merged.md`
+- `0010-diagnostics-summary-merged.md`
+- `0011-docs-research-merged.md`
+- `0011-docs-plan-merged.md`
+- `0011-docs-summary-merged.md`
+- `0012-frontend-tui-research-merged.md`
+- `0012-frontend-tui-plan-merged.md`
+- `0012-frontend-tui-summary-merged.md`
+- `0013-fs-research-merged.md`
+- `0013-fs-plan-merged.md`
+- `0013-fs-summary-merged.md`
+- `0014-gateway-research-merged.md`
+- `0014-gateway-plan-merged.md`
+- `0014-gateway-summary-merged.md`
+- `0015-hermes-research-merged.md`
+- `0015-hermes-plan-merged.md`
+- `0015-hermes-summary-merged.md`
+- `0016-image-research-merged.md`
+- `0016-image-plan-merged.md`
+- `0016-image-summary-merged.md`
+- `0017-integration-research-merged.md`
+- `0017-integration-plan-merged.md`
+- `0017-integration-summary-merged.md`
+- `0018-mcp-research-merged.md`
+- `0018-mcp-plan-merged.md`
+- `0018-mcp-summary-merged.md`
+- `0019-media-research-merged.md`
+- `0019-media-plan-merged.md`
+- `0019-media-summary-merged.md`
+- `0020-memory-research-merged.md`
+- `0020-memory-plan-merged.md`
+- `0020-memory-summary-merged.md`
+- `0021-mixture-research-merged.md`
+- `0021-mixture-plan-merged.md`
+- `0021-mixture-summary-merged.md`
+- `0022-model-stream-event-schema-research-merged.md`
+- `0022-model-stream-event-schema-plan-merged.md`
+- `0022-model-stream-event-schema-summary-merged.md`
+- `0023-patch-research-merged.md`
+- `0023-patch-plan-merged.md`
+- `0023-patch-summary-merged.md`
+- `0024-plan-research-merged.md`
+- `0024-plan-plan-merged.md`
+- `0024-plan-summary-merged.md`
+- `0025-plugin-research-merged.md`
+- `0025-plugin-plan-merged.md`
+- `0025-plugin-summary-merged.md`
+- `0026-provider-research-merged.md`
+- `0026-provider-plan-merged.md`
+- `0026-provider-summary-merged.md`
+- `0027-read-research-merged.md`
+- `0027-read-plan-merged.md`
+- `0027-read-summary-merged.md`
+- `0028-research-research-merged.md`
+- `0028-research-plan-merged.md`
+- `0028-research-summary-merged.md`
+- `0029-resume-research-merged.md`
+- `0029-resume-plan-merged.md`
+- `0029-resume-summary-merged.md`
+- `0030-rl-research-merged.md`
+- `0030-rl-plan-merged.md`
+- `0030-rl-summary-merged.md`
+- `0031-send-research-merged.md`
+- `0031-send-plan-merged.md`
+- `0031-send-summary-merged.md`
+- `0032-session-research-merged.md`
+- `0032-session-plan-merged.md`
+- `0032-session-summary-merged.md`
+- `0033-six-research-merged.md`
+- `0033-six-plan-merged.md`
+- `0033-six-summary-merged.md`
+- `0034-skill-research-merged.md`
+- `0034-skill-plan-merged.md`
+- `0034-skill-summary-merged.md`
+- `0035-skills-research-merged.md`
+- `0035-skills-plan-merged.md`
+- `0035-skills-summary-merged.md`
+- `0036-summary-research-merged.md`
+- `0036-summary-plan-merged.md`
+- `0036-summary-summary-merged.md`
+- `0037-terminal-research-merged.md`
+- `0037-terminal-plan-merged.md`
+- `0037-terminal-summary-merged.md`
+- `0038-tirith-research-merged.md`
+- `0038-tirith-plan-merged.md`
+- `0038-tirith-summary-merged.md`
+- `0039-tools-research-merged.md`
+- `0039-tools-plan-merged.md`
+- `0039-tools-summary-merged.md`
+- `0040-toolsets-research-merged.md`
+- `0040-toolsets-plan-merged.md`
+- `0040-toolsets-summary-merged.md`
+- `0041-tts-research-merged.md`
+- `0041-tts-plan-merged.md`
+- `0041-tts-summary-merged.md`
+- `0042-ui-tui-research-merged.md`
+- `0042-ui-tui-plan-merged.md`
+- `0042-ui-tui-summary-merged.md`
+- `0043-video-research-merged.md`
+- `0043-video-plan-merged.md`
+- `0043-video-summary-merged.md`
+- `0044-vision-research-merged.md`
+- `0044-vision-plan-merged.md`
+- `0044-vision-summary-merged.md`
+- `0045-web-research-merged.md`
+- `0045-web-plan-merged.md`
+- `0045-web-summary-merged.md`
+- `0046-write-research-merged.md`
+- `0046-write-plan-merged.md`
+- `0046-write-summary-merged.md`
+- `0047-ws-research-merged.md`
+- `0047-ws-plan-merged.md`
+- `0047-ws-summary-merged.md`

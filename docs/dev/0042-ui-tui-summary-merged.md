@@ -1,0 +1,971 @@
+# 0042 ui-tui summary merged
+
+## 模块
+
+- `ui-tui`
+
+## 类型
+
+- `summary`
+
+## 合并来源
+
+- `0052-ui-summary-merged.md`
+- `0053-ui-tui-summary-merged.md`
+
+## 合并内容
+
+### 来源：`0052-ui-summary-merged.md`
+
+# 0052 ui summary merged
+
+## 模块
+
+- `ui`
+
+## 类型
+
+- `summary`
+
+## 合并来源
+
+- `0232-ui-api-contract-freeze.md`
+
+## 合并内容
+
+### 来源：`0232-ui-api-contract-freeze.md`
+
+# UI API 契约冻结（/v1/ui/*）
+
+本轮将 `/v1/ui/*` 管理接口统一为稳定契约，并补齐版本兼容与错误码规范。
+
+## 契约统一
+
+- 所有 `/v1/ui/*` 成功响应统一包含：
+  - `ok: true`
+  - `api_version: "v1"`
+  - `compat: "2026-05-13"`
+- 所有 `/v1/ui/*` 错误响应统一包含：
+  - `ok: false`
+  - `error.code`
+  - `error.message`
+  - `api_version` / `compat`
+- 所有 `/v1/ui/*` 响应统一携带 Header：
+  - `X-Agent-UI-API-Version: v1`
+  - `X-Agent-UI-API-Compat: 2026-05-13`
+
+## 错误码规范
+
+- `method_not_allowed`
+- `invalid_json`
+- `invalid_argument`
+- `not_found`
+- `not_supported`
+- `engine_unavailable`
+- `session_store_unavailable`
+- `internal_error`
+- `tool_error`
+
+## 兼容策略
+
+- `api_version` 用于主版本识别（当前 `v1`）。
+- `compat` 用于契约冻结日期标识（当前 `2026-05-13`）。
+- 新增字段只允许向后兼容扩展，不破坏既有字段含义。
+
+## 契约测试
+
+- 新增 `internal/api/ui_contract_test.go`：
+  - 验证成功 envelope + headers
+  - 验证错误 envelope（`ok=false` + `error.code/message`）
+
+### 来源：`0053-ui-tui-summary-merged.md`
+
+# 0053 ui-tui summary merged
+
+## 模块
+
+- `ui-tui`
+
+## 类型
+
+- `summary`
+
+## 合并来源
+
+- `0216-ui-tui-migrate-to-go.md`
+- `0217-ui-tui-parity-management-commands.md`
+- `0218-ui-tui-ux-output-controls.md`
+- `0219-ui-tui-pagination-shortcuts.md`
+- `0220-ui-tui-quick-session-pick.md`
+- `0221-ui-tui-command-aliases.md`
+- `0222-ui-tui-command-status.md`
+- `0223-ui-tui-runtime-ops-and-persistence.md`
+- `0224-ui-tui-reliability-observability-e2e.md`
+- `0225-ui-tui-recovery-approval-alignment.md`
+- `0226-ui-tui-config-ini-unification.md`
+- `0227-ui-tui-usability-finalization.md`
+- `0228-ui-tui-final-audit-and-baseline.md`
+- `0230-ui-tui-doctor-command.md`
+- `0231-ui-tui-efficiency-observability-bundle.md`
+- `0233-ui-tui-adapt-ui-api-contract.md`
+- `0245-ui-tui-reconnect-controls.md`
+- `0249-ui-tui-realtime-diagnostics-parity.md`
+- `0263-ui-tui-fullscreen-dashboard-mode.md`
+- `0264-ui-tui-fullscreen-timeline-and-runtime-toggle.md`
+- `0265-ui-tui-actions-palette.md`
+- `0266-ui-tui-fullscreen-quiet-and-timeline-command.md`
+- `0267-ui-tui-fullscreen-multi-panel.md`
+- `0268-ui-tui-workbench-completion-bundle.md`
+- `0269-ui-tui-workbench-auto-refresh-and-persistence.md`
+- `0270-ui-tui-workbench-drilldown-and-approvals-panel.md`
+- `0271-ui-tui-workbench-open-action-closure.md`
+- `0272-ui-tui-workbench-profiles-bundle.md`
+- `0273-ui-tui-workflow-orchestration-bundle.md`
+
+## 合并内容
+
+### 来源：`0216-ui-tui-migrate-to-go.md`
+
+# ui-tui 迁移总结（Go 实现）
+
+## 变更
+
+1. `ui-tui` 从 Node.js 实现迁移到 Go 实现。
+2. 删除：
+   - `ui-tui/package.json`
+   - `ui-tui/src/index.mjs`
+3. 新增：
+   - `ui-tui/main.go`（WebSocket 交互式客户端）
+4. 文档同步改为 `go run ./ui-tui` 启动方式。
+
+## 验证
+
+- `go test ./...` 通过。
+- `go run ./ui-tui` 可启动（需后端服务可用）。
+
+### 来源：`0217-ui-tui-parity-management-commands.md`
+
+# ui-tui 对齐总结（管理命令补齐）
+
+## 本阶段完成
+
+在 Go 版 `ui-tui` 中补齐管理面命令，使其可覆盖 Web 管理页的核心操作：
+
+1. 工具管理：`/tools`、`/tool <name>`
+2. 会话管理：`/sessions [n]`、`/show [sid] [offset] [limit]`、`/stats [sid]`
+3. 网关管理：`/gateway status|enable|disable`
+4. 配置管理：`/config get`、`/config set <section.key> <value>`
+5. 连接管理：`/http`、`/http <http-url>`（配合已有 `/api`）
+
+## 结果
+
+`ui-tui` 不依赖前端界面即可完成对话与运维管理的闭环操作。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0218-ui-tui-ux-output-controls.md`
+
+# ui-tui 体验增强总结（输出控制）
+
+## 本阶段完成
+
+1. 新增输出控制命令：
+   - `/pretty on|off`：切换 JSON 输出格式
+   - `/last`：回看最近一次 JSON 响应
+   - `/save <file>`：保存最近一次 JSON 响应
+2. 管理命令输出统一走可切换的格式化逻辑。
+
+## 结果
+
+Go 版 `ui-tui` 在纯终端下具备更稳定的“查看-复用-落盘”闭环体验。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0219-ui-tui-pagination-shortcuts.md`
+
+# ui-tui 体验增强总结（分页快捷翻页）
+
+## 本阶段完成
+
+1. 在 Go 版 `ui-tui` 中新增会话分页快捷命令：
+   - `/next`
+   - `/prev`
+2. 基于最近一次 `/show [sid] [offset] [limit]` 记住会话与分页上下文，支持连续翻页。
+
+## 结果
+
+会话浏览从“每次手输 offset/limit”升级为“show 一次后快捷翻页”，交互效率提升。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0220-ui-tui-quick-session-pick.md`
+
+# ui-tui 体验增强总结（快速会话选择）
+
+## 本阶段完成
+
+1. 新增 `/pick <index>` 命令：
+   - 基于最近一次 `/sessions [n]` 返回的会话列表按序号快速切换会话。
+2. `ui-tui` 内部维护最近会话缓存，减少手动复制 `session_id`。
+
+## 结果
+
+会话切换从“复制粘贴 session_id”优化为“列表 + 序号选择”。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0221-ui-tui-command-aliases.md`
+
+# ui-tui 体验增强总结（命令别名与容错输入）
+
+## 本阶段完成
+
+1. 新增命令别名与无斜杠输入容错：
+   - `:q` / `quit` -> `/quit`
+   - `ls` -> `/tools`
+   - `show ...` -> `/show ...`
+   - `gw` / `gw ...` -> `/gateway status` / `/gateway ...`
+   - `cfg` / `cfg ...` -> `/config get` / `/config ...`
+2. `help` 输出同步显示别名提示。
+
+## 结果
+
+在纯终端环境下减少输入负担，提升高频操作效率。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0222-ui-tui-command-status.md`
+
+# ui-tui 体验增强总结（命令状态提示）
+
+## 本阶段完成
+
+1. 新增 `/status` 命令，显示最近一次命令执行状态与详情。
+2. 提示符升级为 `tui[ok]>` / `tui[err]>`，即时反映最近一次命令结果。
+3. 对关键命令补齐状态更新（成功/失败）。
+
+## 验证
+
+- `go test ./...` 通过。
+
+### 来源：`0223-ui-tui-runtime-ops-and-persistence.md`
+
+# ui-tui 运行控制与持久化能力补齐（Phase 10）
+
+本阶段在纯 Go 的 `ui-tui` 上继续补齐运行控制、可追溯性和会话快捷管理能力，目标是让终端端产品面在不依赖前端页面的前提下，覆盖常见操作闭环。
+
+## 新增能力
+
+- 运行控制：
+  - `/health`：查看后端健康状态
+  - `/cancel`：取消当前会话中的运行任务
+- 可追溯能力：
+  - `/history [n]`：查看本地命令历史
+  - `/rerun <index>`：按历史序号重放命令
+  - `/events [n]`：查看最近运行事件
+  - `/events save <file>`：导出运行事件日志
+- 会话快捷管理：
+  - `/bookmark add <name> [sid]`
+  - `/bookmark list`
+  - `/bookmark use <name>`
+- 交互反馈增强：
+  - 提示符显示最近命令状态（`tui[ok]` / `tui[err]`）
+  - `/status` 输出最近一次命令状态与摘要
+
+## 持久化行为
+
+- 历史命令写入 `~/.agent-daemon/ui-tui-history.log`
+- 书签写入 `~/.agent-daemon/ui-tui-bookmarks.json`
+- 事件日志默认驻留内存，可按需落盘
+
+## 验证
+
+- 已执行：`go test ./...`
+- 结果：通过
+
+### 来源：`0224-ui-tui-reliability-observability-e2e.md`
+
+# ui-tui 稳定性与可观测性一次性补齐（Phase 11）
+
+本阶段一次性补齐了 ui-tui 在长连接稳定性、诊断可观测性、长会话容量治理与回归自测上的缺口，全部基于 Go 实现，不依赖前端页面。
+
+## 补齐内容
+
+- 事件流健壮性：
+  - WebSocket 断线自动重连（最多 2 次）
+  - 重连保持同 `session_id`，并携带 `turn_id` 与 `resume` 标志
+  - 45s 读超时提示（等待中），8m 单轮超时中断
+- 长会话性能：
+  - 本地历史命令文件滚动上限 2000 行
+  - 内存事件日志滚动上限 2000 条
+  - `/history`、`/events` 的读取请求自动受上限裁剪
+- 错误可诊断性：
+  - 统一错误分类：`network/timeout/auth/request/server/unknown`
+  - 提示符显示 `状态/错误码`，`/status` 输出 `status/code/detail`
+- 端到端回归：
+  - 新增 `ui-tui/e2e_smoke.sh`，覆盖命令面烟测与可选后端健康联通路径
+- 文档补齐：
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./...`：通过
+- `./ui-tui/e2e_smoke.sh`：通过（后端不可达时自动跳过 health 联通子场景）
+
+### 来源：`0225-ui-tui-recovery-approval-alignment.md`
+
+# ui-tui 收口对齐（会话恢复 + 审批闭环 + 导出过滤 + 回归）
+
+本次完成 ui-tui 收口对齐，聚焦四个目标：会话恢复、审批闭环、事件导出标准化、可靠性回归扩展。
+
+## 功能补齐
+
+- 会话恢复：
+  - 新增 `~/.agent-daemon/ui-tui-state.json`
+  - 启动自动恢复最近 `session_id`、`ws_base`、`http_base`
+  - 会话/endpoint 切换后自动持久化
+- 审批闭环：
+  - `ui-tui` 新增 `/pending`、`/approve <id>`、`/deny <id>`
+  - `/pending` 从会话消息中提取最近 `pending_approval` 与 `approval_id`
+  - 新增后端接口 `POST /v1/ui/approval/confirm`，直连 approval 工具确认，避免依赖模型回合
+- 导出标准化：
+  - `/events save` 支持 `json|ndjson`
+  - 支持 `since=<RFC3339>`、`until=<RFC3339>` 时间范围过滤
+- 回归扩展：
+  - 新增 `ui-tui/main_test.go`：
+    - 断线重连恢复（`resume`）回归
+    - pending approval 提取回归
+    - 导出参数/时间过滤回归
+  - `ui-tui/e2e_smoke.sh` 增加上述回归测试执行
+
+## 验证
+
+- `go test ./...`：通过
+- `./ui-tui/e2e_smoke.sh`：通过
+
+### 来源：`0226-ui-tui-config-ini-unification.md`
+
+# ui-tui 配置统一到 config.ini（Phase 12）
+
+本次将 ui-tui 关键运行参数统一接入 `config/config.ini`，并新增 `[ui-tui]` 配置段，确保终端端参数可集中管理。
+
+## 变更内容
+
+- 配置文件新增 `[ui-tui]` 示例项：
+  - `ws_base`
+  - `http_base`
+  - `ws_read_timeout_seconds`
+  - `ws_turn_timeout_seconds`
+  - `ws_reconnect_max`
+  - `history_max_lines`
+  - `event_max_items`
+- `ui-tui/main.go` 改为从 `internal/config.Load()` 读取上述配置（环境变量仍可覆盖）。
+- 配置加载路径增强：新增 `../config/config.ini` 兜底，适配在 `ui-tui/` 子目录执行 `go run .` 的场景。
+
+## 测试
+
+- `internal/config/config_test.go` 新增：
+  - `[ui-tui]` 配置读取验证
+  - `../config/config.ini` 路径发现验证
+- 全量验证：
+  - `go test ./...`
+  - `./ui-tui/e2e_smoke.sh`
+
+### 来源：`0227-ui-tui-usability-finalization.md`
+
+# ui-tui 易用性收口（Phase 13）
+
+本轮一次性完成 ui-tui 易用性收口，覆盖审批体验、配置热更新、状态文件自修复与运维文档。
+
+## 功能补齐
+
+- 审批体验：
+  - `/pending [n]`：支持查看最近 N 条待审批项
+  - `/approve [id]` / `/deny [id]`：不传 id 时默认处理最近一条
+- 配置热更新：
+  - 新增 `/reload-config`，运行时重载 `config/config.ini` 的 `[ui-tui]` 参数
+- 状态文件自修复：
+  - `ui-tui-state.json` 解析失败时自动备份为 `ui-tui-state.json.corrupt.<timestamp>` 并重建
+- 运维文档：
+  - 新增 `docs/ui-tui-ops.md`，覆盖网络/超时/鉴权/审批/状态文件等排障流程
+
+## 测试
+
+- `go test ./...`：通过
+- `./ui-tui/e2e_smoke.sh`：通过（已纳入 reload-config 与状态修复回归）
+
+### 来源：`0228-ui-tui-final-audit-and-baseline.md`
+
+# ui-tui 最终审计与基线标记（Phase 14）
+
+本轮完成了 ui-tui 的最终收尾动作：文档命令面审计、真实环境回归执行、发布基线标记。
+
+## 执行结果
+
+- 命令面与文档审计：
+  - 已核对 `ui-tui/main.go` 的 `/help` 命令列表与 `ui-tui/README.md`、`docs/ui-tui-ops.md`、`docs/frontend-tui-user.md`。
+  - 对齐结果：一致；补充了兼容性风险说明。
+- 真实环境回归：
+  - 执行命令链：`/reload-config`、`/health`、`/status`、`/pending 3`、`/approve`、`/deny`、`/events save ...`。
+  - 结果：
+    - 基础链路（reload/health/status/events）通过。
+    - 发现两项环境兼容风险：
+      1. `/pending` 在该环境返回 500（`converting NULL to int64`）。
+      2. `/approve`/`/deny` 返回 404（后端未启用 `POST /v1/ui/approval/confirm`）。
+  - 已将处理建议写入 `docs/ui-tui-ops.md`。
+- 发布基线：
+  - 创建里程碑标签：`ui-tui-parity-v1`
+
+## 结论
+
+ui-tui 当前代码基线已完成能力收口；剩余问题主要是“运行环境后端版本/历史数据兼容性”而非 ui-tui 端功能缺失。
+
+### 来源：`0230-ui-tui-doctor-command.md`
+
+# ui-tui 增加后端能力预检命令（Phase 16）
+
+新增 `ui-tui` 命令 `/doctor`，用于在交互期快速识别“后端接口版本不匹配/连通性异常”问题。
+
+## 覆盖检查项
+
+- `health`：`GET /health`
+- `sessions_detail`：`GET /v1/ui/sessions/{session_id}`
+- `approval_confirm`：`POST /v1/ui/approval/confirm`
+  - `404` 明确提示后端版本过旧
+  - `200/400` 视为接口已存在
+- `config_effective`：展示当前生效配置（ws/http/重连/超时/上限）
+- `ws_reachable`：WebSocket 握手检查
+
+## 回归
+
+- 新增 `TestRunDoctor` 覆盖 `/doctor` 主链路。
+- `ui-tui/e2e_smoke.sh` 已纳入 `/doctor` 执行。
+
+## 验证
+
+- `go test ./...`：通过
+- `./ui-tui/e2e_smoke.sh`：通过
+
+### 来源：`0231-ui-tui-efficiency-observability-bundle.md`
+
+# ui-tui 一次性优化补全（Phase 17）
+
+本轮一次性完成了交互效率、可读性、恢复建议、安全审计、测试矩阵、配置治理与发布体验补全。
+
+## 本轮补全
+
+- 交互效率：
+  - `/sessions` 支持列出后立即交互选择切换会话
+  - `/pending [n]` 支持交互选择并直接 approve/deny
+  - `/show` 支持消息索引交互提示
+- 输出可读性：
+  - 新增 `/view human|json` 视图模式切换
+- 错误恢复：
+  - `/approve`、`/deny`、`/events save`、`/save`、`/cancel` 失败时输出 retry suggestion
+- 安全与审计：
+  - 关键操作审计日志 `~/.agent-daemon/ui-tui-audit.log`
+  - 覆盖 `approve`/`deny`/`cancel`/`config set`
+- 可测试性：
+  - 扩展 mock 后端测试矩阵（含缺失 approval endpoint 的 doctor 场景）
+- 配置治理：
+  - 新增 `/config tui` 显示 ui-tui 生效配置与来源（env/config）
+  - `[ui-tui]` 增加 `view_mode`、`auto_doctor`
+- 发布体验：
+  - 新增 `ui-tui/release.sh` 单文件构建脚本
+  - 新增 `/version` 输出构建元信息
+
+## 验证
+
+- `go test ./...`：通过
+- `./ui-tui/e2e_smoke.sh`：通过
+
+### 来源：`0233-ui-tui-adapt-ui-api-contract.md`
+
+# ui-tui 适配冻结后的 /v1/ui/* 契约（Phase 18）
+
+本轮将 ui-tui 客户端解析逻辑对齐到已冻结的 UI API 契约，确保后端升级后前后端行为一致。
+
+## 适配点
+
+- `httpJSON`：
+  - 支持解析标准错误 envelope（`ok=false` + `error.code/message`）
+  - 优先输出结构化错误信息
+- 新增统一解包辅助：
+  - `uiPayload(...)` 支持优先读取新契约字段（如 `result/snapshot/status/schema/tools/stats`）
+  - 同时兼容旧契约顶层字段
+- 命令面适配：
+  - `/health`、`/cancel`、`/tools`、`/tool`、`/sessions`、`/stats`
+  - `/gateway status|enable|disable`
+  - `/config get|set`
+  - `/approve`、`/deny`、`/pending` 交互路径
+
+## 测试
+
+- 新增 `TestHTTPJSONParsesUIErrorEnvelope`，验证客户端错误 envelope 解析。
+- 全量 `go test ./...` 通过。
+
+### 来源：`0245-ui-tui-reconnect-controls.md`
+
+# ui-tui 重连状态可视化与人工恢复控制
+
+本轮补齐了 ui-tui 在实时会话中的“可感知、可控、可恢复”能力。
+
+## 主要改动
+
+- 新增重连状态机字段（`ui-tui/main.go`）
+  - `reconnectEnabled`
+  - `reconnectState`（`connecting/resumed/degraded/failed`）
+  - `timeoutAction`（`wait/reconnect/cancel`）
+- 新增命令
+  - `/reconnect status`
+  - `/reconnect on|off`
+  - `/reconnect now`
+  - `/reconnect timeout wait|reconnect|cancel`
+- `/status` 输出增强
+  - 追加展示重连启用状态、当前状态、最大重连次数与超时策略
+- `sendTurn` 重连逻辑增强
+  - 支持超时策略分支：
+    - `wait`：继续等待
+    - `reconnect`：强制断开并立即重连
+    - `cancel`：触发 `/v1/chat/cancel` 并结束本轮
+  - 重连期间按 payload 去重，避免重复 assistant 事件
+- 帮助文档更新
+  - `printHelp()` 增加 `/reconnect*` 命令说明
+- 回归测试
+  - `ui-tui/main_test.go` 的重连用例调整为验证去重效果（重复 assistant 仅一次，result 仅一次）
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `make contract-check`
+- `go test ./...`
+
+### 来源：`0249-ui-tui-realtime-diagnostics-parity.md`
+
+# ui-tui：实时诊断能力对齐（对齐 Web）
+
+本轮将 `ui-tui` 的流式会话可观测能力对齐到 Web 诊断面板能力，补齐诊断状态展示与诊断包导出。
+
+## 主要改动
+
+- `ui-tui/main.go`
+  - 在 `appState` 新增诊断字段：
+    - `activeTransport`、`lastTurnID`、`reconnectCount`
+    - `lastErrorCode`、`lastErrorText`、`fallbackHint`、`diagUpdatedAt`
+  - 增加诊断能力函数：
+    - `diagnosticsSnapshot()`：输出实时诊断快照
+    - `exportDiagnostics(path)`：导出诊断包（包含 `diagnostics/runtime_state/recent_events`）
+  - `sendTurn` 增强：
+    - 每轮初始化 `turn_id`、transport、重连计数
+    - 发生重连时累计 `reconnectCount` 并记录 `fallbackHint`
+    - 终止事件中补采集 `error_code/error`
+  - 新增命令：
+    - `/diag`：查看实时诊断
+    - `/diag export <file>`：导出诊断包
+  - 扩展 `/reconnect status` 输出，增加 `reconnect_count/fallback_hint/last_error_code`。
+- `ui-tui/main_test.go`
+  - 在 `TestSendTurnReconnect` 增加诊断字段断言（重连计数、fallback 提示、turn_id）。
+  - 新增 `TestExportDiagnostics`，校验导出文件结构和关键字段。
+- `ui-tui/README.md`
+  - 补充 `/diag` 与 `/diag export` 用法与诊断字段说明。
+
+## 验证
+
+- `go test ./ui-tui`
+- `go test ./...`
+
+### 来源：`0263-ui-tui-fullscreen-dashboard-mode.md`
+
+# 263-summary-ui-tui-fullscreen-dashboard-mode
+
+本轮对“CLI/TUI 差异项 1”继续收口，新增 `ui-tui` 全屏看板模式，并让 `agentd tui` 可直接开启该模式。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 新增启动参数解析：
+    - `--fullscreen`
+    - 环境变量 `AGENT_UI_TUI_FULLSCREEN=1|true`
+  - 新增全屏渲染帧：
+    - 清屏重绘
+    - 展示 session、ws/http、状态码、传输/重连信息、最近事件与操作提示
+  - 保持原命令面与输入循环不变（兼容现有脚本与操作习惯）。
+
+- `cmd/agentd/main.go`
+  - `agentd tui` 新增 `-fullscreen` 参数。
+  - 在 standalone/auto 独立 `ui-tui` 路径下透传为 `AGENT_UI_TUI_FULLSCREEN=1`。
+
+- 测试
+  - `ui-tui/main_test.go` 新增 `parseStartupFlags` 测试。
+
+- 文档
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+  - `ui-tui/README.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./cmd/agentd -count=1`
+- `go test ./...`
+
+### 来源：`0264-ui-tui-fullscreen-timeline-and-runtime-toggle.md`
+
+# 264-summary-ui-tui-fullscreen-timeline-and-runtime-toggle
+
+本轮继续完善 CLI/TUI 差异项 1，在现有全屏看板基础上补齐“时间线可视化 + 运行时切换”。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 全屏模式新增 `timeline` 面板，展示最近对话轨迹（user/assistant/tool/result/error 摘要）。
+  - 新增运行时命令：
+    - `/fullscreen`：查看当前状态
+    - `/fullscreen on|off`：运行时开关全屏看板
+  - 启动首条消息、普通输入消息、发送失败场景均会记录到时间线。
+  - 增加时间线容量控制（默认上限 2000，超限滚动清理）。
+
+- `ui-tui/main_test.go`
+  - 新增 `addChatLine` 截断与滚动上限测试。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0265-ui-tui-actions-palette.md`
+
+# 265-summary-ui-tui-actions-palette
+
+本轮继续推进 CLI/TUI 差异项 1，新增 `ui-tui` 快捷操作面板，提升高频运维与诊断动作的交互效率。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 新增命令：`/actions`
+  - 打开后展示编号动作列表，支持选择后直接执行：
+    - `/tools`
+    - `/sessions 20`
+    - `/show`
+    - `/gateway status`
+    - `/config get`
+    - `/doctor`
+    - `/diag`
+    - `/reconnect status`
+    - `/pending 5`
+    - `/fullscreen on|off`（根据当前状态动态切换）
+    - `/help`
+  - 新增 `actionMenuItems`、`actionCommandByIndex` 便于复用与测试。
+
+- 测试
+  - `ui-tui/main_test.go` 增加动作面板索引映射测试（含 fullscreen 动态分支）。
+
+- 文档
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0266-ui-tui-fullscreen-quiet-and-timeline-command.md`
+
+# 266-summary-ui-tui-fullscreen-quiet-and-timeline-command
+
+本轮继续完善 CLI/TUI 差异项 1，重点提升全屏模式可读性与时间线可用性。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 全屏模式下事件输出改为“静默控制台打印 + 写入时间线”，避免刷屏破坏看板布局。
+  - 新增 `/timeline [n]` 命令，在非全屏场景可查看最近对话时间线摘要。
+  - 新增 `timelineSlice` 统一时间线裁剪逻辑。
+  - `printEvent` 增加 `emit` 控制参数，支持“只记录不打印”。
+
+- `ui-tui/main_test.go`
+  - 新增 `timelineSlice` 行为测试。
+
+- 文档
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0267-ui-tui-fullscreen-multi-panel.md`
+
+# 267-summary-ui-tui-fullscreen-multi-panel
+
+本轮按“一次性完成 CLI/TUI 任务”的要求，集中补齐了全屏模式的多面板能力与统一刷新入口，减少在命令流中频繁切换上下文的成本。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 新增全屏面板状态：
+    - `overview`
+    - `sessions`
+    - `tools`
+    - `gateway`
+    - `diag`
+  - 新增命令：
+    - `/panel`（查看当前面板）
+    - `/panel <name>`（切换到指定面板）
+    - `/panel next|prev`（循环切换）
+    - `/refresh`（刷新当前面板数据）
+  - 新增面板数据刷新逻辑：
+    - sessions -> `/v1/ui/sessions`
+    - tools -> `/v1/ui/tools`
+    - gateway -> `/v1/ui/gateway/status`
+    - diag/overview -> 本地诊断快照
+  - `/actions` 快捷动作增加 `/panel next`。
+
+- `ui-tui/main_test.go`
+  - 新增面板循环逻辑测试（`nextPanel` / `prevPanel`）。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0268-ui-tui-workbench-completion-bundle.md`
+
+# 268-summary-ui-tui-workbench-completion-bundle
+
+本轮按“CLI/TUI 一次性完整实现”目标，集中补齐 `ui-tui` 全屏工作台的核心闭环能力，避免继续碎片化迭代。
+
+## 变更
+
+- 全屏工作台能力增强（`ui-tui/main.go`）
+  - 面板体系扩展为：
+    - `overview`
+    - `dashboard`（聚合 sessions/tools/gateway/diag）
+    - `sessions`
+    - `tools`
+    - `gateway`
+    - `diag`
+  - 新增面板管理能力：
+    - `/panel list`
+    - `/panel <name>`
+    - `/panel next|prev`
+    - `/refresh`
+  - 面板与全屏状态持久化到 `ui-tui-state.json`：
+    - `fullscreen`
+    - `fullscreen_panel`
+  - `actions` 面板增加 `panel` 快捷动作，支持工作台内快速切换。
+
+- 测试补齐（`ui-tui/main_test.go`）
+  - `parseStartupFlags` 兼容新返回值校验。
+  - 面板循环逻辑校验（含 `dashboard`）。
+  - 新增 runtime state 持久化回归（fullscreen + panel）。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0269-ui-tui-workbench-auto-refresh-and-persistence.md`
+
+# 269-summary-ui-tui-workbench-auto-refresh-and-persistence
+
+本轮继续按“CLI/TUI 一次性完整实现”收口，补齐全屏工作台的自动刷新策略与偏好持久化能力。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 全屏工作台新增面板自动刷新机制：
+    - `panel_auto_refresh`（默认开启）
+    - `panel_refresh_interval_seconds`（默认 8 秒）
+    - 循环输入前按间隔自动刷新当前面板
+  - 面板命令补齐：
+    - `/panel status`
+    - `/panel auto on|off`
+    - `/panel interval <sec>`（1..300）
+  - 状态持久化增强（`ui-tui-state.json`）：
+    - `fullscreen`
+    - `fullscreen_panel`
+    - `panel_auto`
+    - `panel_interval_seconds`
+  - `dashboard` 聚合面板纳入统一刷新链路。
+
+- `ui-tui/main_test.go`
+  - 更新 action 索引断言（面板命令增强后的新序号）。
+  - 新增/增强 runtime state 持久化回归：覆盖 fullscreen/panel/auto/interval。
+
+- 文档
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0270-ui-tui-workbench-drilldown-and-approvals-panel.md`
+
+# 270-summary-ui-tui-workbench-drilldown-and-approvals-panel
+
+本轮继续按“CLI/TUI 一次性完整实现”目标补齐工作台闭环，新增审批面板与条目钻取动作，减少命令跳转成本。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 全屏面板新增：`approvals`
+  - `dashboard` 聚合面板新增审批摘要
+  - 新增命令：`/open <index>`
+    - 在 `sessions` 面板：切换到对应会话
+    - 在 `tools` 面板：打开对应工具 schema
+    - 在 `approvals` 面板：交互式 approve/deny 执行
+  - `/panel` 帮助与提示同步更新（包含 approvals）
+
+- `ui-tui/main_test.go`
+  - 面板集合断言新增 `approvals`
+  - 新增 panel 数据选择辅助函数测试（session/tool/approval）
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0271-ui-tui-workbench-open-action-closure.md`
+
+# 271-summary-ui-tui-workbench-open-action-closure
+
+本轮继续按“CLI/TUI 一次性完整实现”推进，补齐工作台“面板查看 -> 条目操作”的最后一段闭环。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 全屏面板新增 `approvals`。
+  - `dashboard` 聚合面板新增审批摘要数据。
+  - 新增统一钻取命令：`/open <index>`
+    - 在 `sessions` 面板：按索引切换到指定会话。
+    - 在 `tools` 面板：按索引打开工具 schema。
+    - 在 `approvals` 面板：按索引执行 approve/deny 交互动作。
+  - `/panel` 帮助与面板枚举同步更新（包含 approvals）。
+
+- `ui-tui/main_test.go`
+  - 新增 panel 选择辅助函数测试（session/tool/approval）。
+  - 面板集合断言包含 `approvals`。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0272-ui-tui-workbench-profiles-bundle.md`
+
+# 272-summary-ui-tui-workbench-profiles-bundle
+
+本轮按“CLI/TUI 一次性完整实现”要求，补齐工作台配置方案能力，解决“状态靠手工重复配置”的问题。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 新增 `workbench profile` 模型与持久化文件：
+    - `~/.agent-daemon/ui-tui-workbenches.json`
+  - 新增命令：
+    - `/workbench save <name>`
+    - `/workbench list`
+    - `/workbench load <name>`
+    - `/workbench delete <name>`
+  - profile 覆盖字段：
+    - `session_id`
+    - `ws/http endpoint`
+    - `fullscreen/fullscreen_panel`
+    - `panel_auto_refresh/panel_refresh_sec`
+    - `view_mode`
+  - 与工作台行为联动：
+    - load 后自动落盘 runtime state 并触发当前面板 refresh
+    - actions 菜单新增 `workbench list` 快捷项
+
+- `ui-tui/main_test.go`
+  - 新增 workbench profile 的 save/load/delete 回归测试。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
+
+### 来源：`0273-ui-tui-workflow-orchestration-bundle.md`
+
+# 273-summary-ui-tui-workflow-orchestration-bundle
+
+本轮按“CLI/TUI 一次性完整实现”要求，补齐工作台的命令编排能力，使其从“可操作”升级为“可复用流程执行”。
+
+## 变更
+
+- `ui-tui/main.go`
+  - 新增 workflow 持久化文件：
+    - `~/.agent-daemon/ui-tui-workflows.json`
+  - 新增 workflow 命令：
+    - `/workflow save <name> <cmd1;cmd2;...>`
+    - `/workflow list`
+    - `/workflow run <name> [dry]`
+    - `/workflow delete <name>`
+  - 支持命令队列执行：
+    - run 时将命令序列入队，交互循环自动逐条消费执行
+    - `dry` 模式仅输出将执行的命令清单
+  - 与工作台能力联动：
+    - `actions` 增加 `workbench list` 快捷项
+    - workflow 关键动作写审计日志
+
+- `ui-tui/main_test.go`
+  - 新增 workflow 解析测试（`;` 分隔、自动补 `/`）。
+  - 新增 workflow save/get/delete 回归测试。
+
+- 文档更新
+  - `ui-tui/README.md`
+  - `docs/frontend-tui-user.md`
+  - `docs/frontend-tui-dev.md`
+
+## 验证
+
+- `go test ./ui-tui -count=1`
+- `go test ./...`
