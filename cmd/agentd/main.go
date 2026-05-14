@@ -925,7 +925,10 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (matrix/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayMatrixBaseURL := fs.String("gateway-matrix-base-url", "", "matrix homeserver base URL")
+	gatewayMatrixToken := fs.String("gateway-matrix-token", "", "matrix access token")
+	gatewayMatrixSecret := fs.String("gateway-matrix-secret", "", "matrix inbound secret")
 	gatewaySignalBaseURL := fs.String("gateway-signal-base-url", "", "signal REST base URL")
 	gatewaySignalAccount := fs.String("gateway-signal-account", "", "signal account number")
 	gatewaySignalSecret := fs.String("gateway-signal-secret", "", "signal inbound secret")
@@ -981,6 +984,9 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*apiKey),
 		strings.TrimSpace(*fallback),
 		strings.ToLower(strings.TrimSpace(*gatewayPlatform)),
+		strings.TrimSpace(*gatewayMatrixBaseURL),
+		strings.TrimSpace(*gatewayMatrixToken),
+		strings.TrimSpace(*gatewayMatrixSecret),
 		strings.TrimSpace(*gatewaySignalBaseURL),
 		strings.TrimSpace(*gatewaySignalAccount),
 		strings.TrimSpace(*gatewaySignalSecret),
@@ -3623,11 +3629,14 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/matrix/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
 	gatewayToken := ""
+	gatewayMatrixBaseURL := ""
+	gatewayMatrixToken := ""
+	gatewayMatrixSecret := ""
 	gatewaySignalBaseURL := ""
 	gatewaySignalAccount := ""
 	gatewaySignalSecret := ""
@@ -3653,6 +3662,11 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewayAllowedUsers := ""
 	switch gatewayPlatform {
 	case "":
+	case "matrix":
+		gatewayMatrixBaseURL = promptInput(reader, "matrix base url", "")
+		gatewayMatrixToken = promptInput(reader, "matrix access token", "")
+		gatewayMatrixSecret = promptInput(reader, "matrix inbound secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "signal":
 		gatewaySignalBaseURL = promptInput(reader, "signal base url", "")
 		gatewaySignalAccount = promptInput(reader, "signal account", "")
@@ -3705,6 +3719,9 @@ func runSetupWizard(cfg config.Config, args []string) {
 		apiKey,
 		fallback,
 		gatewayPlatform,
+		gatewayMatrixBaseURL,
+		gatewayMatrixToken,
+		gatewayMatrixSecret,
 		gatewaySignalBaseURL,
 		gatewaySignalAccount,
 		gatewaySignalSecret,
@@ -3757,7 +3774,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3781,7 +3798,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayMatrixBaseURL, gatewayMatrixToken, gatewayMatrixSecret, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -4518,7 +4535,10 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	if !cfg.GatewayEnabled {
 		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
 	}
-	configured := make([]string, 0, 9)
+	configured := make([]string, 0, 10)
+	if strings.TrimSpace(cfg.MatrixBaseURL) != "" && strings.TrimSpace(cfg.MatrixAccessToken) != "" {
+		configured = append(configured, "matrix")
+	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		configured = append(configured, "signal")
 	}
@@ -5177,6 +5197,8 @@ func runGatewayForeground(cfg config.Config) {
 	defer lock.Release()
 	runner := gateway.NewRunner(adapters, eng, func(platform string) string {
 		switch platform {
+		case "matrix":
+			return cfg.MatrixAllowed
 		case "signal":
 			return cfg.SignalAllowed
 		case "email":
@@ -5912,7 +5934,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (matrix/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -5975,7 +5997,10 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (matrix/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	matrixBaseURL := fs.String("matrix-base-url", "", "matrix homeserver base URL")
+	matrixToken := fs.String("matrix-token", "", "matrix access token")
+	matrixSecret := fs.String("matrix-secret", "", "matrix inbound secret")
 	signalBaseURL := fs.String("signal-base-url", "", "signal REST base URL")
 	signalAccount := fs.String("signal-account", "", "signal account number")
 	signalSecret := fs.String("signal-secret", "", "signal inbound secret")
@@ -6003,7 +6028,7 @@ func runGatewaySetup(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <matrix|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -6013,6 +6038,9 @@ func runGatewaySetup(args []string) {
 	written, err := setupGatewayConfig(
 		targetPath,
 		platformKey,
+		strings.TrimSpace(*matrixBaseURL),
+		strings.TrimSpace(*matrixToken),
+		strings.TrimSpace(*matrixSecret),
 		strings.TrimSpace(*signalBaseURL),
 		strings.TrimSpace(*signalAccount),
 		strings.TrimSpace(*signalSecret),
@@ -6055,12 +6083,27 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSecret, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
 	written := []string{"gateway.enabled"}
 	switch platformKey {
+	case "matrix":
+		if matrixBaseURL == "" || matrixToken == "" {
+			return nil, fmt.Errorf("matrix setup requires -matrix-base-url and -matrix-token")
+		}
+		values["gateway.matrix.base_url"] = matrixBaseURL
+		values["gateway.matrix.access_token"] = matrixToken
+		written = append(written, "gateway.matrix.base_url", "gateway.matrix.access_token")
+		if matrixSecret != "" {
+			values["gateway.matrix.inbound_secret"] = matrixSecret
+			written = append(written, "gateway.matrix.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.matrix.allowed_users"] = allowedUsers
+			written = append(written, "gateway.matrix.allowed_users")
+		}
 	case "signal":
 		if signalBaseURL == "" || signalAccount == "" {
 			return nil, fmt.Errorf("signal setup requires -signal-base-url and -signal-account")
@@ -6245,7 +6288,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <matrix|signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
@@ -6625,6 +6668,9 @@ func gatewayTokenFingerprint(cfg config.Config) string {
 	if strings.TrimSpace(cfg.SlackBotToken) != "" || strings.TrimSpace(cfg.SlackAppToken) != "" {
 		parts = append(parts, "slack:"+strings.TrimSpace(cfg.SlackBotToken)+":"+strings.TrimSpace(cfg.SlackAppToken))
 	}
+	if strings.TrimSpace(cfg.MatrixBaseURL) != "" || strings.TrimSpace(cfg.MatrixAccessToken) != "" {
+		parts = append(parts, "matrix:"+strings.TrimSpace(cfg.MatrixBaseURL)+":"+strings.TrimSpace(cfg.MatrixAccessToken))
+	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" || strings.TrimSpace(cfg.SignalAccount) != "" {
 		parts = append(parts, "signal:"+strings.TrimSpace(cfg.SignalBaseURL)+":"+strings.TrimSpace(cfg.SignalAccount))
 	}
@@ -6720,11 +6766,14 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
+	return []string{"matrix", "signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
-	out := make([]string, 0, 9)
+	out := make([]string, 0, 10)
+	if strings.TrimSpace(cfg.MatrixBaseURL) != "" && strings.TrimSpace(cfg.MatrixAccessToken) != "" {
+		out = append(out, "matrix")
+	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		out = append(out, "signal")
 	}
@@ -7171,6 +7220,8 @@ func runServe(cfg config.Config) {
 				defer lock.Release()
 				runner := gateway.NewRunner(adapters, eng, func(platform string) string {
 					switch platform {
+					case "matrix":
+						return cfg.MatrixAllowed
 					case "signal":
 						return cfg.SignalAllowed
 					case "email":
@@ -7216,6 +7267,15 @@ func runServe(cfg config.Config) {
 
 func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 	var adapters []gateway.PlatformAdapter
+	if strings.TrimSpace(cfg.MatrixBaseURL) != "" && strings.TrimSpace(cfg.MatrixAccessToken) != "" {
+		ma, err := platforms.NewMatrixAdapter(cfg.MatrixBaseURL, cfg.MatrixAccessToken, cfg.MatrixInboundSecret)
+		if err != nil {
+			log.Printf("matrix adapter: %v", err)
+		} else {
+			adapters = append(adapters, ma)
+			log.Printf("matrix adapter configured")
+		}
+	}
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		sa, err := platforms.NewSignalAdapter(cfg.SignalBaseURL, cfg.SignalAccount, cfg.SignalInboundSecret)
 		if err != nil {

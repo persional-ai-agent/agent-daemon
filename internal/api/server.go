@@ -98,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/stream", s.handleChatStream)
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
+	mux.HandleFunc("/v1/gateway/matrix/webhook", s.handleGatewayMatrixWebhook)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
@@ -175,6 +176,22 @@ func (s *Server) handleGatewaySignalWebhook(w http.ResponseWriter, r *http.Reque
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "signal webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayMatrixWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("matrix")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "matrix gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "matrix webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

@@ -61,6 +61,10 @@ type Config struct {
 	HomeAssistantToken      string
 	HomeAssistantSecret     string
 	HomeAssistantAllowed    string
+	MatrixBaseURL           string
+	MatrixAccessToken       string
+	MatrixInboundSecret     string
+	MatrixAllowed           string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -333,6 +337,10 @@ func loadFromINIValues(iv iniValues) Config {
 		HomeAssistantToken:      iniStr(iv, "gateway.homeassistant", "token", "AGENT_HOMEASSISTANT_TOKEN", ""),
 		HomeAssistantSecret:     iniStr(iv, "gateway.homeassistant", "inbound_secret", "AGENT_HOMEASSISTANT_INBOUND_SECRET", ""),
 		HomeAssistantAllowed:    iniStr(iv, "gateway.homeassistant", "allowed_users", "AGENT_HOMEASSISTANT_ALLOWED_USERS", ""),
+		MatrixBaseURL:           iniStr(iv, "gateway.matrix", "base_url", "AGENT_MATRIX_BASE_URL", ""),
+		MatrixAccessToken:       iniStr(iv, "gateway.matrix", "access_token", "AGENT_MATRIX_ACCESS_TOKEN", ""),
+		MatrixInboundSecret:     iniStr(iv, "gateway.matrix", "inbound_secret", "AGENT_MATRIX_INBOUND_SECRET", ""),
+		MatrixAllowed:           iniStr(iv, "gateway.matrix", "allowed_users", "AGENT_MATRIX_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
