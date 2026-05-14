@@ -30,6 +30,7 @@ type Server struct {
 	// Optional UI helpers for dashboard pages.
 	ConfigSnapshotFn func() map[string]any
 	GatewayStatusFn  func() map[string]any
+	GatewayDiagnosticsFn func() map[string]any
 	ConfigUpdateFn   func(key, value string) (map[string]any, error)
 	GatewayActionFn  func(action string) (map[string]any, error)
 	SkillListFn      func() ([]map[string]any, error)
@@ -106,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
+	mux.HandleFunc("/v1/ui/gateway/diagnostics", s.handleUIGatewayDiagnostics)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
@@ -261,6 +263,8 @@ const (
 	uiAPIVersion = "v1"
 	uiCompat     = "2026-05-13"
 )
+
+var apiProcessStartedAt = time.Now()
 
 func writeUIHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
@@ -703,6 +707,40 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
 		"status": s.GatewayStatusFn(),
+	})
+}
+
+func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.GatewayDiagnosticsFn != nil {
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok":          true,
+			"diagnostics": s.GatewayDiagnosticsFn(),
+		})
+		return
+	}
+	active := s.activeRunsSnapshot()
+	sessionIDs := make([]string, 0, len(active))
+	for sid := range active {
+		sessionIDs = append(sessionIDs, sid)
+	}
+	sort.Strings(sessionIDs)
+	uptimeSec := int64(time.Since(apiProcessStartedAt).Seconds())
+	if uptimeSec < 0 {
+		uptimeSec = 0
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"diagnostics": map[string]any{
+			"uptime_sec":             uptimeSec,
+			"active_run_count":       len(active),
+			"active_session_ids":     sessionIDs,
+			"status_endpoint_enabled": s.GatewayStatusFn != nil,
+			"action_endpoint_enabled": s.GatewayActionFn != nil,
+		},
 	})
 }
 

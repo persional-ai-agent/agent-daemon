@@ -223,6 +223,9 @@ func TestUIEndpoints(t *testing.T) {
 		GatewayStatusFn: func() map[string]any {
 			return map[string]any{"enabled": true, "running": false}
 		},
+		GatewayDiagnosticsFn: func() map[string]any {
+			return map[string]any{"uptime_sec": 12, "active_run_count": 1}
+		},
 		GatewayActionFn: func(action string) (map[string]any, error) {
 			return map[string]any{"success": true, "action": action}, nil
 		},
@@ -381,6 +384,18 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"enabled":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("gateway_diagnostics", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/gateway/diagnostics", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"uptime_sec":12`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

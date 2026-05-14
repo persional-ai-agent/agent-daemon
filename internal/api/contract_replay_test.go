@@ -172,6 +172,9 @@ func replayServer() *Server {
 			return map[string]any{"success": true, "key": key, "value": value}, nil
 		},
 		GatewayStatusFn: func() map[string]any { return map[string]any{"enabled": true, "running": false} },
+		GatewayDiagnosticsFn: func() map[string]any {
+			return map[string]any{"uptime_sec": 12, "active_run_count": 1}
+		},
 		GatewayActionFn: func(action string) (map[string]any, error) {
 			return map[string]any{"success": true, "action": action}, nil
 		},

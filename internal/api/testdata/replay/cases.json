@@ -91,6 +91,13 @@
     "snapshot": "ui_gateway_status_success"
   },
   {
+    "name": "ui_gateway_diagnostics_success",
+    "method": "GET",
+    "path": "/v1/ui/gateway/diagnostics",
+    "contract_path": "/v1/ui/gateway/diagnostics",
+    "snapshot": "ui_gateway_diagnostics_success"
+  },
+  {
     "name": "ui_gateway_action_success",
     "method": "POST",
     "path": "/v1/ui/gateway/action",

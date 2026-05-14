@@ -358,6 +358,21 @@ paths:
                     properties:
                       status:
                         type: object
+  /v1/ui/gateway/diagnostics:
+    get:
+      responses:
+        "200":
+          description: Gateway diagnostics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [diagnostics]
+                    properties:
+                      diagnostics:
+                        type: object
   /v1/ui/gateway/action:
     post:
       requestBody:
