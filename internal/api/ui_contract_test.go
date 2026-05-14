@@ -80,6 +80,7 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "config", method: http.MethodGet, path: "/v1/ui/config"},
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
 		{name: "agents", method: http.MethodGet, path: "/v1/ui/agents"},
+		{name: "agents_history", method: http.MethodGet, path: "/v1/ui/agents/history?limit=2"},
 		{name: "complete_slash", method: http.MethodPost, path: "/v1/ui/complete/slash", body: `{"text":"/to"}`},
 		{name: "complete_path", method: http.MethodPost, path: "/v1/ui/complete/path", body: `{"path":"./"}`},
 	}

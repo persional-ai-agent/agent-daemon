@@ -317,6 +317,18 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("agents_history", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/agents/history?limit=2", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"history"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("agents_interrupt_not_found", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/v1/ui/agents/interrupt", bytes.NewBufferString(`{"session_id":"missing"}`))

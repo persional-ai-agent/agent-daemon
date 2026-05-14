@@ -72,6 +72,13 @@
     "snapshot": "ui_agents_success"
   },
   {
+    "name": "ui_agents_history_success",
+    "method": "GET",
+    "path": "/v1/ui/agents/history?limit=2",
+    "contract_path": "/v1/ui/agents/history",
+    "snapshot": "ui_agents_history_success"
+  },
+  {
     "name": "ui_agents_interrupt_not_found",
     "method": "POST",
     "path": "/v1/ui/agents/interrupt",

@@ -309,6 +309,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/agents/history:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Delegate/subagent historical summary by session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [count, history]
+                    properties:
+                      count:
+                        type: integer
+                      history:
+                        type: array
+                        items:
+                          type: object
+                          required: [session_id, delegate_count]
+                          properties:
+                            session_id:
+                              type: string
+                            delegate_count:
+                              type: integer
+                            goals:
+                              type: array
+                              items:
+                                type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/approval/confirm:
     post:
       requestBody:
