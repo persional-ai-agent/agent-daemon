@@ -206,3 +206,40 @@ func TestParseSessionsArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestParseShowArgs(t *testing.T) {
+	cases := []struct {
+		in      string
+		sid     string
+		offset  int
+		limit   int
+		pick    int
+		wantErr bool
+	}{
+		{"/show", "s1", 0, 20, 0, false},
+		{"/show s2", "s2", 0, 20, 0, false},
+		{"/show s2 10", "s2", 10, 20, 0, false},
+		{"/show s2 10 30", "s2", 10, 30, 0, false},
+		{"/show s2 10 30 pick 2", "s2", 10, 30, 2, false},
+		{"/show s2 x", "", 0, 0, 0, true},
+		{"/show s2 -1", "", 0, 0, 0, true},
+		{"/show s2 1 0", "", 0, 0, 0, true},
+		{"/show s2 1 2 pick", "", 0, 0, 0, true},
+		{"/show s2 1 2 pick x", "", 0, 0, 0, true},
+	}
+	for _, tc := range cases {
+		sid, offset, limit, pick, err := parseShowArgs(tc.in, "s1")
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("%q expected error", tc.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q unexpected err: %v", tc.in, err)
+		}
+		if sid != tc.sid || offset != tc.offset || limit != tc.limit || pick != tc.pick {
+			t.Fatalf("%q got sid=%s offset=%d limit=%d pick=%d", tc.in, sid, offset, limit, pick)
+		}
+	}
+}

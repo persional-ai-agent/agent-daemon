@@ -810,26 +810,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				return lines, fmt.Errorf("open is available for panels: sessions/tools/approvals"), false
 			}
 		case strings.HasPrefix(current, "/show"):
-			parts := strings.Fields(current)
-			sid := s.session
-			offset := 0
-			limit := 20
-			pick := 0
-			if len(parts) > 1 {
-				sid = parts[1]
-			}
-			if len(parts) > 2 {
-				if v, pErr := strconv.Atoi(parts[2]); pErr == nil && v >= 0 {
-					offset = v
-				}
-			}
-			if len(parts) > 3 {
-				if v, pErr := strconv.Atoi(parts[3]); pErr == nil && v > 0 {
-					limit = v
-				}
-			}
-			if len(parts) > 5 && strings.EqualFold(parts[4], "pick") {
-				pick, _ = strconv.Atoi(parts[5])
+			sid, offset, limit, pick, pErr := parseShowArgs(current, s.session)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			s.lastShowSession = sid
 			s.lastShowOffset = offset
@@ -1058,4 +1041,50 @@ func parseSessionsArgs(input string) (limit int, pick int, err error) {
 		return v, idx, nil
 	}
 	return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+}
+
+func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pick int, err error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	sid = strings.TrimSpace(defaultSession)
+	offset = 0
+	limit = 20
+	pick = 0
+	usageErr := fmt.Errorf("usage: /show [session] [offset>=0] [limit>0] [pick <index>]")
+	if len(parts) == 1 {
+		return sid, offset, limit, pick, nil
+	}
+	if len(parts) >= 2 {
+		sid = strings.TrimSpace(parts[1])
+		if sid == "" {
+			return "", 0, 0, 0, usageErr
+		}
+	}
+	pos := 2
+	if len(parts) > pos {
+		v, convErr := strconv.Atoi(parts[pos])
+		if convErr != nil || v < 0 {
+			return "", 0, 0, 0, usageErr
+		}
+		offset = v
+		pos++
+	}
+	if len(parts) > pos {
+		v, convErr := strconv.Atoi(parts[pos])
+		if convErr != nil || v <= 0 {
+			return "", 0, 0, 0, usageErr
+		}
+		limit = v
+		pos++
+	}
+	if len(parts) > pos {
+		if len(parts) != pos+2 || !strings.EqualFold(parts[pos], "pick") {
+			return "", 0, 0, 0, usageErr
+		}
+		idx, idxErr := strconv.Atoi(parts[pos+1])
+		if idxErr != nil || idx <= 0 {
+			return "", 0, 0, 0, usageErr
+		}
+		pick = idx
+	}
+	return sid, offset, limit, pick, nil
 }
