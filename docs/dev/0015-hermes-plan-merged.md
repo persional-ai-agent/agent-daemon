@@ -41,6 +41,483 @@
 
 ## 合并内容
 
+### 来源：`2026-05-14-hermes-functional-gap-todo`
+
+# Hermes 功能差异补齐 TODO 总计划
+
+## 目标
+
+对齐 `/data/source/hermes-agent/` 的完整产品功能面。忽略技术栈差异，仅补齐用户可感知能力与系统行为差异。
+
+当前项目已经覆盖 Hermes 的核心 Agent daemon 主链路：Agent Loop、工具调用、会话存储、记忆、MCP、Skills、Provider 韧性、HTTP/SSE/WebSocket、基础 Gateway、插件基础闭环、Cron 最小闭环、Research trajectory 最小闭环。
+
+后续补齐重点不是重写核心 Loop，而是按入口体验、网关生态、工具能力、学习闭环、自动化和研究链路逐步扩展。
+
+## 执行原则
+
+- 一次实现一个大功能，完成后单独提交。
+- 先做用户可见主链路，再补外围生态。
+- 每个 TODO 都必须包含：代码实现、必要测试、文档更新。
+- CLI、TUI、Gateway、Web 中同名动作必须保持语义一致。
+- 不追求逐文件复刻 Hermes，只补功能行为。
+
+## P0：先稳定用户入口与会话体验
+
+### TODO-001：完整 TUI/CLI 交互体验
+
+目标：
+
+- 对齐 Hermes 的完整终端体验：多行编辑、slash 自动补全、历史浏览、中断后重定向、流式工具输出。
+- 让 `ui-tui` 成为主 CLI 入口，而不是只作为事件显示面。
+
+范围：
+
+- `ui-tui/`
+- `internal/cli/`
+- `cmd/agentd`
+
+功能项：
+
+- 多行输入与编辑。
+- slash 命令补全。
+- 命令历史与会话历史浏览。
+- `Ctrl+C` 中断当前 turn，并允许输入新消息重定向。
+- 流式 assistant / tool / thinking 分块稳定展示。
+- Markdown 流式稳定渲染，最终态不重复输出。
+- 多轮 session 内 user/assistant/tool 顺序稳定。
+
+验收：
+
+- 一个 session 内连续发送 5 轮消息，输出顺序保持 `user -> assistant/tool -> user -> assistant/tool`。
+- `/new`、`/reset`、`/retry`、`/undo`、`/compress`、`/usage`、`/skills`、`/personality`、`/model` 可在 TUI 中执行。
+- 工具执行过程中能实时显示开始、参数摘要、完成/失败状态。
+- 运行 `go test ./ui-tui` 与相关 CLI 测试通过。
+
+### TODO-002：CLI 与消息平台命令语义统一
+
+目标：
+
+- 让同一 slash 命令在 CLI、TUI、Gateway 中行为一致。
+
+范围：
+
+- `internal/cli/`
+- `ui-tui/`
+- `internal/gateway/`
+- `internal/gateway/platforms/`
+
+功能项：
+
+- 建立统一 command dispatcher。
+- 将 `/new`、`/reset`、`/model`、`/retry`、`/undo`、`/compress`、`/usage`、`/skills`、`/stop`、`/status`、`/sethome` 归一。
+- Gateway 平台命令只做适配，不复制业务逻辑。
+- 命令返回统一结构，便于 CLI/TUI/Gateway/Web 渲染。
+
+验收：
+
+- 同一命令在 CLI 与 Telegram/Discord/Slack/WhatsApp/Yuanbao 上结果一致。
+- `/stop` 可取消当前平台对应 session 的活动 turn。
+- `/model provider:model` 能切换当前会话模型并持久化。
+
+### TODO-003：Gateway 会话连续性与投递目标模型
+
+目标：
+
+- 对齐 Hermes 的 home channel、显式 target、跨平台 session continuity 和 channel directory 能力。
+
+范围：
+
+- `internal/gateway`
+- `internal/gateway/platforms`
+- `internal/tools/send_message.go`
+- `internal/store`
+
+功能项：
+
+- 统一 target 语法：`telegram`、`telegram:<id>`、`discord:<id>`、`slack:<id>`、`whatsapp:<id>`、`yuanbao:<id>`。
+- 建立 channel directory，记录平台、channel、用户、home target。
+- `send_message` 支持平台默认 home target 与显式 target。
+- 跨平台用户身份映射保留可扩展字段。
+- Gateway session 与 HTTP/CLI session 互通查询。
+
+验收：
+
+- `send_message(action=list)` 能列出可投递平台和 home target。
+- Cron / agent 工具可以投递到 bare platform name 或显式 target。
+- 同一用户从不同平台进入时可按配置恢复同一 session。
+
+## P1：补齐 Hermes 主要功能面
+
+### TODO-004：Gateway 平台第一批扩展
+
+目标：
+
+- 补齐 Hermes 文档明确高价值入口：Signal、Email、Webhook、Home Assistant。
+
+范围：
+
+- `internal/gateway/platforms`
+- `internal/gateway`
+- `internal/config`
+- `internal/tools/send_message.go`
+
+功能项：
+
+- Signal：文本 inbound/outbound、附件最小投递、rate-limit 基础处理。
+- Email：IMAP/SMTP 或 webhook 风格最小 inbound/outbound。
+- Webhook：通用 HTTP inbound，支持 deliver 转发到其他平台。
+- Home Assistant：事件 inbound 与 service/action outbound。
+- 每个平台接入状态诊断、配置检查、home target、基础权限。
+
+验收：
+
+- `agentd gateway platforms` 包含新增平台。
+- 每个平台支持最小文本收发和 `/status`。
+- `send_message` 可向新增平台投递。
+- 新增平台有最小单元测试或集成假实现测试。
+
+### TODO-005：Gateway 平台第二批扩展
+
+目标：
+
+- 补齐 Hermes 更完整平台矩阵：Matrix、Feishu、DingTalk、WeCom/Weixin、Mattermost、SMS、BlueBubbles。
+
+范围：
+
+- `internal/gateway/platforms`
+- `internal/config`
+- `internal/tools/send_message.go`
+
+功能项：
+
+- 先实现文本收发、session 映射、home target。
+- 第二阶段补媒体、按钮、线程、mention 策略。
+- 平台配置统一暴露到 `gateway setup/status/doctor`。
+
+验收：
+
+- 新平台均可独立 enable/disable。
+- inbound 消息能触发 agent turn。
+- outbound 能通过 `send_message` 和 Cron 投递。
+
+### TODO-006：Gateway 原生交互深度
+
+目标：
+
+- 补更多平台的原生 slash command、按钮审批、mention/free-response 策略、线程/群组策略。
+
+范围：
+
+- `internal/gateway`
+- `internal/gateway/platforms`
+- `internal/tools/approval_store.go`
+
+功能项：
+
+- 平台原生 `/approve`、`/deny`、`/grant`、`/revoke`、`/pending`。
+- 审批按钮或快捷回复。
+- mention required / free response channel / ignored channel。
+- thread/reply-to 策略。
+- group/dm policy。
+
+验收：
+
+- Telegram、Discord、Slack、WhatsApp、Yuanbao 与新增平台的审批命令行为一致。
+- 群组中可配置必须 mention 才响应。
+- 平台 manifest 或 setup 输出包含原生命令安装信息。
+
+### TODO-007：工具能力级补齐
+
+目标：
+
+- 将已有“工具名对齐”的轻量实现升级成能力级实现。
+
+范围：
+
+- `internal/tools`
+- `internal/model`
+- `internal/config`
+
+优先级：
+
+1. `browser`：真实页面状态、JS/DOM、截图、表单操作、导航历史。
+2. `vision`：图片理解走模型推理，支持本地文件和 URL。
+3. `tts`：真实语音合成，支持 provider 配置、音频输出、Gateway 投递。
+4. `image_generate`：接真实图像生成后端，支持 prompt、尺寸、输出路径。
+5. `transcription`：音频转写，用于语音备忘录入口。
+
+验收：
+
+- 每个工具有 schema、配置项、错误分类、测试。
+- Web/TUI/Gateway 能显示工具进度与结果文件。
+- 工具失败不会破坏 Agent Loop。
+
+### TODO-008：Toolsets 动态行为
+
+目标：
+
+- 对齐 Hermes toolsets 的 availability check、平台/环境动态过滤、UI 管理和 schema patch。
+
+范围：
+
+- `internal/tools/toolsets.go`
+- `internal/tools/registry.go`
+- `cmd/agentd`
+- `ui-tui`
+- `web`
+
+功能项：
+
+- toolset availability check。
+- 根据平台凭证、运行环境、enabled/disabled 配置动态过滤工具。
+- toolset includes / excludes / conflicts。
+- CLI/TUI/Web 管理 toolsets。
+- schema patch：按 toolset 或环境裁剪参数。
+
+验收：
+
+- 未配置凭证的平台工具不会暴露给模型。
+- `agentd toolsets list/show/resolve` 能解释工具来源和不可用原因。
+- TUI/Web 可启停 toolset 并立即影响新 turn。
+
+## P2：补齐系统级完整度
+
+### TODO-009：Provider 生态与 Profile
+
+目标：
+
+- 补 Hermes 支持的主流 provider 与 profile：Nous Portal、OpenRouter、NVIDIA NIM、MiMo、GLM、Kimi、MiniMax、HuggingFace、自定义端点。
+
+范围：
+
+- `internal/model`
+- `internal/config`
+- `cmd/agentd`
+- `web`
+- `ui-tui`
+
+功能项：
+
+- provider profile 管理。
+- provider capability 描述：tool calling、streaming、vision、image、tts、max context。
+- 密钥池与 credential profile。
+- provider 流式事件归一。
+- provider 失败隔离、熔断、fallback 复用现有能力。
+
+验收：
+
+- `agentd model providers` 可列出 provider、能力和配置状态。
+- `agentd model set provider:model` 支持新增 provider。
+- TUI/Web 可查看并切换 profile。
+
+### TODO-010：Skills 闭环学习
+
+目标：
+
+- 补复杂任务后自动创建 skill、使用中自我改进、来源/版本/冲突策略、多源 Skills Hub。
+
+范围：
+
+- `internal/tools` skills 相关工具。
+- `internal/agent`
+- `internal/store`
+- `cmd/agentd`
+- `web`
+
+功能项：
+
+- 任务完成后根据轨迹建议创建 skill。
+- skill provenance：来源、创建时间、触发任务、版本。
+- skill 使用统计和效果反馈。
+- skill update / audit / snapshot / import / export。
+- 多源 tap：GitHub repo、agentskills.io、local marketplace。
+- 冲突策略：同名、版本、文件覆盖。
+
+验收：
+
+- 长任务结束后可生成 skill 草稿。
+- `/skills` 能显示来源、版本、使用次数。
+- skill 修改可审计、可回滚。
+
+### TODO-011：Memory 与用户模型增强
+
+目标：
+
+- 补外部 memory provider、LLM 级摘要质量、用户画像/insights、周期性记忆提醒。
+
+范围：
+
+- `internal/memory`
+- `internal/store`
+- `internal/agent`
+- `cmd/agentd`
+- `web`
+
+功能项：
+
+- memory provider 接口。
+- `memory status/off/reset`。
+- `/insights`：按天数或 session 生成用户偏好、事实、近期主题。
+- 周期性 memory nudge：提醒 agent 保存稳定事实。
+- 记忆撤销、来源追踪、可信度。
+
+验收：
+
+- 新记忆有来源 session/turn。
+- 用户可查看、撤销、禁用外部 memory provider。
+- session search 摘要质量可通过 LLM 提升。
+
+### TODO-012：Cron 高级动作与无人值守自动化
+
+目标：
+
+- 补脚本动作、自然语言任务创建、平台投递策略、失败重试、运行审计。
+
+范围：
+
+- `internal/cron`
+- `internal/tools/cronjob.go`
+- `cmd/agentd`
+- `web`
+- `internal/gateway`
+
+功能项：
+
+- `no_agent` 脚本动作。
+- 自然语言创建 cron job。
+- deliver_on、retry、timeout、max_concurrency。
+- chained context 增强。
+- 运行审计与 replay。
+- CLI/Web 管理：create/edit/pause/resume/run/remove/status/tick。
+
+验收：
+
+- 能创建日报、备份、周审计任务并投递到 Gateway。
+- 失败任务可重试和查看日志。
+- `cronjob` 工具与 CLI 管理状态一致。
+
+### TODO-013：ACP/IDE 完整协议
+
+目标：
+
+- 从最小 API 适配升级到完整能力声明、细粒度事件、鉴权、取消、会话同步。
+
+范围：
+
+- `internal/api`
+- `internal/agent`
+- `internal/store`
+
+功能项：
+
+- ACP capability declaration。
+- session create/list/get/delete。
+- message send/stream/cancel/resume。
+- tool event / model event / approval event 细分。
+- 鉴权与权限边界。
+
+验收：
+
+- IDE 客户端可稳定创建 session、发送消息、流式接收、取消、恢复。
+- ACP 事件与内部 `AgentEvent` 可追踪映射。
+
+### TODO-014：Research/RL/trajectory 链路
+
+目标：
+
+- 补 batch trajectory、环境基准、策略评估、轨迹压缩和训练数据导出。
+
+范围：
+
+- `internal/research`
+- `cmd/agentd research`
+- `scripts`
+- `internal/tools`
+
+功能项：
+
+- batch runner：任务集、并发度、失败策略。
+- environment benchmark：可插拔任务环境。
+- trajectory schema：消息、工具、事件、奖励/结果。
+- trajectory compressor 增强。
+- stats、export、sample、filter。
+- RL/Atropos 兼容导出。
+
+验收：
+
+- `agentd research run/compress/stats/export` 可跑完整闭环。
+- 生成 JSONL 轨迹可复放。
+- 支持按成功/失败/工具/模型过滤。
+
+## P3：补运维、安装、Web 管理面完整度
+
+### TODO-015：安装、迁移与备份恢复
+
+目标：
+
+- 对齐 Hermes 的 install/setup/update/uninstall/migration 体验。
+
+功能项：
+
+- 完整 setup wizard。
+- OpenClaw/Hermes 数据迁移预览与导入。
+- backup/export/import/checkpoints。
+- update release/channel 管理。
+- shell completion 安装。
+
+验收：
+
+- 新用户可通过一个 setup wizard 完成模型、网关、工作区配置。
+- 迁移支持 dry-run、preset、overwrite。
+- update/backup 操作可回滚。
+
+### TODO-016：Web Dashboard 完整化
+
+目标：
+
+- 将当前 Web Phase 1 从数据页升级为可日常使用的管理后台。
+
+功能项：
+
+- Chat/TUI 同等流式体验。
+- Sessions 浏览、重命名、删除、导出。
+- Gateway 平台配置、状态、pairing、home channel。
+- Cron 可视化管理。
+- Skills/Plugins/Tools/Models 完整管理。
+- Logs/Diagnostics/Usage/Insights。
+
+验收：
+
+- Web 中可完成主要日常操作，不依赖 CLI。
+- Dashboard slot 插件可真实挂载。
+
+## 推荐执行顺序
+
+1. `TODO-001` 完整 TUI/CLI 交互体验。
+2. `TODO-002` CLI 与消息平台命令语义统一。
+3. `TODO-003` Gateway 会话连续性与投递目标模型。
+4. `TODO-004` Gateway 平台第一批扩展。
+5. `TODO-006` Gateway 原生交互深度。
+6. `TODO-007` 工具能力级补齐。
+7. `TODO-008` Toolsets 动态行为。
+8. `TODO-009` Provider 生态与 Profile。
+9. `TODO-010` Skills 闭环学习。
+10. `TODO-011` Memory 与用户模型增强。
+11. `TODO-012` Cron 高级动作。
+12. `TODO-013` ACP/IDE 完整协议。
+13. `TODO-014` Research/RL/trajectory 链路。
+14. `TODO-015` 安装、迁移与备份恢复。
+15. `TODO-016` Web Dashboard 完整化。
+
+## 每个 TODO 的完成定义
+
+- 功能可从至少一个用户入口实际使用。
+- CLI/TUI/Gateway/Web 的交叉影响已检查。
+- 有针对性自动化测试，或有明确无法自动化的手工验证步骤。
+- `README.md`、`docs/overview-product.md`、`docs/overview-product-dev.md` 根据状态更新。
+- `docs/dev/0015-hermes-summary-merged.md` 增加对应总结。
+- 单独提交，提交信息标明 TODO 编号。
+
 ### 来源：`0000-hermes-agent-go-port.md`
 
 # 001 计划：Hermes Agent Go 版实施计划
