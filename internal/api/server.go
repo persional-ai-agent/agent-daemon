@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
 	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
 	mux.HandleFunc("/v1/ui/agents", s.handleUIAgents)
+	mux.HandleFunc("/v1/ui/agents/detail", s.handleUIAgentsDetail)
 	mux.HandleFunc("/v1/ui/agents/interrupt", s.handleUIAgentsInterrupt)
 	mux.HandleFunc("/v1/ui/agents/history", s.handleUIAgentsHistory)
 	mux.HandleFunc("/v1/ui/skills", s.handleUISkills)
@@ -209,6 +210,15 @@ type agentHistoryItem struct {
 	SessionID     string   `json:"session_id"`
 	DelegateCount int      `json:"delegate_count"`
 	Goals         []string `json:"goals,omitempty"`
+}
+
+type agentDetailItem struct {
+	SessionID      string   `json:"session_id"`
+	Running        bool     `json:"running"`
+	DelegateCount  int      `json:"delegate_count"`
+	LastGoal       string   `json:"last_goal,omitempty"`
+	LastToolCallID string   `json:"last_tool_call_id,omitempty"`
+	Goals          []string `json:"goals,omitempty"`
 }
 
 const (
@@ -776,6 +786,54 @@ func (s *Server) handleUIAgents(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"count":  len(agents),
 		"agents": agents,
+	})
+}
+
+func (s *Server) handleUIAgentsDetail(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+	if sessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	msgs, err := s.Engine.SessionStore.LoadMessages(sessionID, 500)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	detail := agentDetailItem{SessionID: sessionID, Running: s.isActiveRun(sessionID)}
+	goalSet := map[string]struct{}{}
+	for _, msg := range msgs {
+		for _, tc := range msg.ToolCalls {
+			if strings.TrimSpace(tc.Function.Name) != "delegate_task" {
+				continue
+			}
+			detail.DelegateCount++
+			detail.LastToolCallID = tc.ID
+			args := tools.ParseJSONArgs(tc.Function.Arguments)
+			goal, _ := args["goal"].(string)
+			goal = strings.TrimSpace(goal)
+			if goal == "" {
+				continue
+			}
+			detail.LastGoal = goal
+			if _, ok := goalSet[goal]; ok {
+				continue
+			}
+			goalSet[goal] = struct{}{}
+			detail.Goals = append(detail.Goals, goal)
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"session": detail,
 	})
 }
 
@@ -1443,4 +1501,14 @@ func (s *Server) cancelActiveRun(sessionID string) bool {
 	}
 	run.cancel()
 	return true
+}
+
+func (s *Server) isActiveRun(sessionID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return false
+	}
+	_, ok := s.active[sessionID]
+	return ok
 }

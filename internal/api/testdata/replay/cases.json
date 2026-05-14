@@ -72,6 +72,13 @@
     "snapshot": "ui_agents_success"
   },
   {
+    "name": "ui_agents_detail_success",
+    "method": "GET",
+    "path": "/v1/ui/agents/detail?session_id=s1",
+    "contract_path": "/v1/ui/agents/detail",
+    "snapshot": "ui_agents_detail_success"
+  },
+  {
     "name": "ui_agents_history_success",
     "method": "GET",
     "path": "/v1/ui/agents/history?limit=2",
