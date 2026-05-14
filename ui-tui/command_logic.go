@@ -126,7 +126,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				if len(parts) < 3 {
 					return lines, fmt.Errorf("用法: /panel interval <sec>"), false
 				}
-				sec, cErr := strconv.Atoi(parts[2])
+				sec, cErr := strconv.Atoi(strings.TrimSpace(parts[2]))
 				if cErr != nil || sec < 1 || sec > 300 {
 					return lines, fmt.Errorf("panel 刷新间隔必须在 1..300 秒之间"), false
 				}

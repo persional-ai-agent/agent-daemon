@@ -458,3 +458,25 @@ func TestGatewayCommandCaseInsensitive(t *testing.T) {
 		t.Fatalf("lastAction=%q", lastAction)
 	}
 }
+
+func TestPanelCommandCaseInsensitiveSubcommands(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		panelAutoRefresh: false,
+	}
+	if _, err, _ := handleTUICommand(s, "/panel AUTO ON", nil, nil); err != nil {
+		t.Fatalf("panel auto on failed: %v", err)
+	}
+	if !s.panelAutoRefresh {
+		t.Fatal("expected panelAutoRefresh=true")
+	}
+	if _, err, _ := handleTUICommand(s, "/panel NEXT", nil, nil); err != nil {
+		t.Fatalf("panel next failed: %v", err)
+	}
+}
