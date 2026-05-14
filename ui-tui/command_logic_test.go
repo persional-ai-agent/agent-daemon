@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -134,5 +136,40 @@ func TestHandleTUICommandRerunEmptyHistory(t *testing.T) {
 	}
 	if err.Error() != "no history available" {
 		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestHandleTUICommandRerunSkipsTrailingSelfEntries(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history.log")
+	content := strings.Join([]string{
+		"2026-01-01T00:00:00Z\t/help",
+		"2026-01-01T00:00:01Z\t/rerun 1",
+		"2026-01-01T00:00:02Z\t/rerun 1",
+	}, "\n") + "\n"
+	if err := os.WriteFile(historyPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &appState{
+		historyPath:      historyPath,
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+	}
+	lines, err, _ := handleTUICommand(s, "/rerun 1", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	found := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "commands:") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected /help output, got lines=%v", lines)
 	}
 }

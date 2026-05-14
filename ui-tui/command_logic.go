@@ -322,7 +322,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setErrStatus(rErr)
 				return lines, rErr, false
 			}
-			if n := len(items); n > 0 && strings.TrimSpace(items[n-1]) == current {
+			for n := len(items); n > 0 && strings.TrimSpace(items[n-1]) == current; n = len(items) {
 				items = items[:n-1]
 			}
 			if len(items) == 0 {
