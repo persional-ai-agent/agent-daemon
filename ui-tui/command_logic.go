@@ -264,6 +264,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.timeoutAction = mode
 			emit("reconnect timeout action: " + mode)
 			s.setStatus(true, "ok", "reconnect timeout action updated")
+		case current == "/reconnect":
+			return lines, fmt.Errorf("用法: /reconnect status|on|off|now|timeout ..."), false
 		case current == "/health":
 			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/health", nil)
 			if hErr != nil {
