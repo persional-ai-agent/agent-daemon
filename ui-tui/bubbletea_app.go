@@ -231,7 +231,7 @@ func waitTurnStreamCmd(stream chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-stream
 		if !ok {
-			return turnDoneMsg{}
+			return nil
 		}
 		return msg
 	}

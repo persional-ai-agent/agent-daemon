@@ -1388,14 +1388,14 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			if onEvent != nil {
 				onEvent(evt)
 			}
-			if evtType == "result" || evtType == "error" || evtType == "cancelled" {
+			if evtType == "result" || evtType == "completed" || evtType == "error" || evtType == "cancelled" || evtType == "max_iterations_reached" {
 				_ = conn.Close()
-				if evtType == "result" {
+				if evtType == "result" || evtType == "completed" {
 					if s.reconnectState != "resumed" && s.reconnectState != "degraded" {
 						s.reconnectState = "connecting"
 					}
 				}
-				if evtType == "error" || evtType == "cancelled" {
+				if evtType == "error" || evtType == "cancelled" || evtType == "max_iterations_reached" {
 					s.reconnectState = "failed"
 					if code, ok := evt["error_code"].(string); ok && strings.TrimSpace(code) != "" {
 						s.lastErrorCode = code

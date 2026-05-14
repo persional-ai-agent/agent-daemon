@@ -881,6 +881,7 @@ func (engine *uiRenderEngine) renderMarkdown(content string) (string, error) {
 		renderer, err := glamour.NewTermRenderer(
 			glamour.WithStandardStyle("dark"),
 			glamour.WithWordWrap(width),
+			glamour.WithPreservedNewLines(),
 		)
 		if err != nil {
 			return "", err
