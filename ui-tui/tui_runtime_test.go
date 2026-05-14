@@ -186,3 +186,27 @@ func TestRuntimeDiffRenderNoChange(t *testing.T) {
 		t.Fatal("expected no diff patch on unchanged tree")
 	}
 }
+
+func TestRuntimeStreamingMarkdownRenderedBeforeDone(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("markdown")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "**bold** text"},
+		},
+	})
+	rt.consumePendingEvents()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	if !strings.Contains(out, "bold") {
+		t.Fatalf("expected rendered output contains bold text, got: %q", out)
+	}
+	if strings.Contains(out, "**bold**") {
+		t.Fatalf("expected markdown rendered during streaming, got raw markdown: %q", out)
+	}
+}

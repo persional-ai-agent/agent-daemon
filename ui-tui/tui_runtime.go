@@ -805,11 +805,13 @@ func (engine *uiRenderEngine) renderNode(node *uiNode) string {
 	case nodeError:
 		return engine.errorStyle.Render(node.Content)
 	case nodeAssistant:
-		if node.Status == "done" {
-			rendered, err := engine.renderMarkdown(node.Content)
-			if err == nil {
-				return strings.TrimSuffix(rendered, "\n")
-			}
+		markdownContent := node.Content
+		if node.Status != "done" {
+			markdownContent = normalizeStreamingMarkdown(markdownContent)
+		}
+		rendered, err := engine.renderMarkdown(markdownContent)
+		if err == nil {
+			return strings.TrimSuffix(rendered, "\n")
 		}
 		return node.Content
 	case nodeSystem:
@@ -889,6 +891,16 @@ func (engine *uiRenderEngine) effectiveWidth() int {
 		return 20
 	}
 	return engine.width
+}
+
+func normalizeStreamingMarkdown(content string) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+	if strings.Count(content, "```")%2 != 0 {
+		return content + "\n```"
+	}
+	return content
 }
 
 func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
