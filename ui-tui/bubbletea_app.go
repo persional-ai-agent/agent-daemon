@@ -85,7 +85,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.state.setStatus(true, "ok", "turn completed")
 		}
-		m.syncViewport(true)
+		m.syncViewport(false)
 		return m, nil
 	case doctorDoneMsg:
 		if msg.ok {

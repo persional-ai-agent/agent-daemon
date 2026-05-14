@@ -905,6 +905,9 @@ func normalizeStreamingMarkdown(content string) string {
 	if strings.TrimSpace(content) == "" {
 		return content
 	}
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
 	if strings.Count(content, "```")%2 != 0 {
 		return content + "\n```"
 	}
