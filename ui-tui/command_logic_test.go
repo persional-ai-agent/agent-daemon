@@ -315,6 +315,9 @@ func TestParseOpenArgs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid action")
 	}
+	if err.Error() != "用法: /open <index> [a|d|approve|deny]" {
+		t.Fatalf("unexpected usage error: %v", err)
+	}
 }
 
 func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {

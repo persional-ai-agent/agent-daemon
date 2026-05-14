@@ -631,7 +631,7 @@ func parseIntEnvWithDefault(key string, def int) int {
 func main() {
 	cfg := config.Load()
 	if len(os.Args) < 2 {
-		runChat(cfg, "")
+		runServe(cfg)
 		return
 	}
 	switch os.Args[1] {

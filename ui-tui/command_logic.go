@@ -1117,18 +1117,18 @@ func parseStatsArgs(input, defaultSession string) (string, error) {
 func parseOpenArgs(input string) (index int, action string, err error) {
 	parts := strings.Fields(strings.TrimSpace(input))
 	if len(parts) < 2 || len(parts) > 3 {
-		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
 	}
 	idx, convErr := strconv.Atoi(parts[1])
 	if convErr != nil || idx <= 0 {
-		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
 	}
 	if len(parts) == 2 {
 		return idx, "", nil
 	}
 	action = strings.ToLower(strings.TrimSpace(parts[2]))
 	if action != "a" && action != "d" && action != "approve" && action != "deny" {
-		return 0, "", fmt.Errorf("usage: /open <index> [a|d|approve|deny]")
+		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
 	}
 	return idx, action, nil
 }
