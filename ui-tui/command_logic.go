@@ -659,7 +659,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/save "):
 			path := strings.TrimSpace(strings.TrimPrefix(current, "/save "))
 			if path == "" {
-				return lines, fmt.Errorf("usage: /save <file>"), false
+				return lines, fmt.Errorf("用法: /save <file>"), false
 			}
 			if s.lastJSON == nil {
 				return lines, fmt.Errorf("no last json payload"), false
@@ -685,7 +685,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emit("pretty json: off")
 				s.setStatus(true, "ok", "pretty off")
 			} else {
-				return lines, fmt.Errorf("usage: /pretty on|off"), false
+				return lines, fmt.Errorf("用法: /pretty on|off"), false
 			}
 		case current == "/tools":
 			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
@@ -695,10 +695,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "tools", "result"))
 			s.setStatus(true, "ok", "tools listed")
-		case strings.HasPrefix(current, "/tool "):
-			name := strings.TrimSpace(strings.TrimPrefix(current, "/tool "))
+		case current == "/tool" || strings.HasPrefix(current, "/tool "):
+			name := strings.TrimSpace(strings.TrimPrefix(current, "/tool"))
 			if name == "" {
-				return lines, fmt.Errorf("usage: /tool <name>"), false
+				return lines, fmt.Errorf("用法: /tool <name>"), false
 			}
 			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
 			if tErr != nil {

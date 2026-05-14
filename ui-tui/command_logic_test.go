@@ -341,6 +341,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/pending approve", "用法: /pending [limit] [approve|deny|a|d <index>]"},
 		{"/api http://bad", "API 地址必须以 ws:// 或 wss:// 开头"},
 		{"/http ws://bad", "HTTP API 地址必须以 http:// 或 https:// 开头"},
+		{"/pretty maybe", "用法: /pretty on|off"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
@@ -350,5 +351,10 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		if err.Error() != tc.want {
 			t.Fatalf("%q got err=%q want=%q", tc.cmd, err.Error(), tc.want)
 		}
+	}
+
+	_, err, _ := handleTUICommand(s, "/tool", nil, nil)
+	if err == nil || err.Error() != "用法: /tool <name>" {
+		t.Fatalf("unexpected /tool error: %v", err)
 	}
 }
