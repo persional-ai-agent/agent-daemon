@@ -835,6 +835,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			s.setStatus(true, "ok", "show loaded")
 		case current == "/next":
+			if strings.TrimSpace(s.lastShowSession) == "" || s.lastShowLimit <= 0 {
+				return lines, fmt.Errorf("run /show first before /next"), false
+			}
 			s.lastShowOffset += s.lastShowLimit
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=%d&limit=%d", s.httpBase, url.PathEscape(s.lastShowSession), s.lastShowOffset, s.lastShowLimit), nil)
 			if hErr != nil {
@@ -845,6 +848,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emitData(out)
 			s.setStatus(true, "ok", "next page loaded")
 		case current == "/prev":
+			if strings.TrimSpace(s.lastShowSession) == "" || s.lastShowLimit <= 0 {
+				return lines, fmt.Errorf("run /show first before /prev"), false
+			}
 			s.lastShowOffset -= s.lastShowLimit
 			if s.lastShowOffset < 0 {
 				s.lastShowOffset = 0

@@ -243,3 +243,23 @@ func TestParseShowArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleTUICommandNextPrevRequireShow(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+	}
+	_, err, _ := handleTUICommand(s, "/next", nil, nil)
+	if err == nil || err.Error() != "run /show first before /next" {
+		t.Fatalf("unexpected /next err: %v", err)
+	}
+	_, err, _ = handleTUICommand(s, "/prev", nil, nil)
+	if err == nil || err.Error() != "run /show first before /prev" {
+		t.Fatalf("unexpected /prev err: %v", err)
+	}
+}
