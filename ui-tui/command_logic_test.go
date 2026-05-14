@@ -412,6 +412,18 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "panel 刷新间隔必须在 1..300 秒之间" {
 		t.Fatalf("unexpected /panel interval error: %v", err)
 	}
+	if _, err, _ = handleTUICommand(s, "/panel interval   10", nil, nil); err != nil {
+		t.Fatalf("unexpected spaced /panel interval error: %v", err)
+	}
+	if s.panelRefreshSec != 10 {
+		t.Fatalf("panelRefreshSec=%d", s.panelRefreshSec)
+	}
+	if _, err, _ = handleTUICommand(s, "/panel interval +11", nil, nil); err != nil {
+		t.Fatalf("unexpected plus /panel interval error: %v", err)
+	}
+	if s.panelRefreshSec != 11 {
+		t.Fatalf("panelRefreshSec=%d", s.panelRefreshSec)
+	}
 	_, err, _ = handleTUICommand(s, "/workbench", nil, nil)
 	if err == nil || err.Error() != "用法: /workbench save|list|load|delete ..." {
 		t.Fatalf("unexpected /workbench error: %v", err)
