@@ -1,10 +1,13 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestRuntimeThinkingBlockCollapsedAndExpanded(t *testing.T) {
 	rt := newTerminalRuntime(80)
@@ -238,5 +241,233 @@ func TestRuntimeNoDuplicateOnCompletedAfterStream(t *testing.T) {
 	}
 	if strings.Count(out, "hello") != 1 {
 		t.Fatalf("expected no duplicate final output, got: %q", out)
+	}
+}
+
+func TestRuntimeFreezeStableAssistantPrefixDuringStream(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("freeze")
+
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "# Headline\n\nBody tail"},
+		},
+	})
+	rt.consumePendingEvents()
+
+	doneCount := 0
+	streamCount := 0
+	for _, node := range rt.stateTree.nodes {
+		if node == nil || node.Type != nodeAssistant {
+			continue
+		}
+		if node.Status == "done" {
+			doneCount++
+		}
+		if node.Status == "streaming" {
+			streamCount++
+		}
+	}
+	if doneCount == 0 || streamCount == 0 {
+		t.Fatalf("expected done+streaming assistant nodes, got done=%d streaming=%d", doneCount, streamCount)
+	}
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	if strings.Contains(plain, "# Headline") {
+		t.Fatalf("expected finalized prefix rendered as markdown heading, got raw output: %q", out)
+	}
+	if !strings.Contains(plain, "Body tail") {
+		t.Fatalf("expected streaming tail still visible, got: %q", out)
+	}
+}
+
+func TestRuntimeFinalContentOverridesDivergedStream(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("final-override")
+
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "temporary text"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "completed",
+		"content": "# Final Title\n\nfinal body",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	if strings.Contains(plain, "temporary text") {
+		t.Fatalf("expected diverged streamed content replaced by final, got: %q", out)
+	}
+	if strings.Contains(plain, "# Final Title") {
+		t.Fatalf("expected final markdown rendered, got raw heading: %q", out)
+	}
+	if !strings.Contains(plain, "Final Title") || !strings.Contains(plain, "final body") {
+		t.Fatalf("expected final content visible, got: %q", out)
+	}
+}
+
+func TestRuntimeCollapseAssistantChunksOnFinal(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("collapse-final")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "# T\n\ntail"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "completed",
+		"content": "# T\n\ntail",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	assistantCount := 0
+	for _, node := range rt.stateTree.nodes {
+		if node != nil && node.Type == nodeAssistant {
+			assistantCount++
+			if node.Status != "done" {
+				t.Fatalf("expected final assistant node done, got: %s", node.Status)
+			}
+		}
+	}
+	if assistantCount != 1 {
+		t.Fatalf("expected single assistant node after final collapse, got: %d", assistantCount)
+	}
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	if strings.Contains(plain, "# T") {
+		t.Fatalf("expected markdown formatted output, got raw heading: %q", out)
+	}
+	if !strings.Contains(plain, "tail") {
+		t.Fatalf("expected final content visible, got: %q", out)
+	}
+}
+
+func TestRuntimeStreamLiteralEscapedNewlineGetsFormatted(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("escaped-nl")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "line1\\n\\n- item1\\n- item2"},
+		},
+	})
+	rt.consumePendingEvents()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	if strings.Contains(plain, "\\n") {
+		t.Fatalf("expected escaped newline converted, got: %q", out)
+	}
+	if !strings.Contains(plain, "line1") || !strings.Contains(plain, "item1") || !strings.Contains(plain, "item2") {
+		t.Fatalf("expected formatted streamed content visible, got: %q", out)
+	}
+}
+
+func TestRuntimeStreamingKeepsWhitespaceOnlyDeltaTokens(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("ws-delta")
+
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "line1"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "\n"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "line2"},
+		},
+	})
+	rt.consumePendingEvents()
+
+	full := rt.stateTree.fullAssistantText()
+	if full != "line1\nline2" {
+		t.Fatalf("expected newline delta preserved, got: %q", full)
+	}
+}
+
+func TestRuntimeMultiTurnKeepsAssistantBoundaries(t *testing.T) {
+	rt := newTerminalRuntime(80)
+
+	rt.startTurn("turn-one")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "hello from one"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "completed",
+		"content": "hello from one",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	rt.startTurn("turn-two")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "# Title Two\n\nbody two"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "completed",
+		"content": "# Title Two\n\nbody two",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	idxU1 := strings.Index(plain, "turn-one")
+	idxA1 := strings.Index(plain, "hello from one")
+	idxU2 := strings.Index(plain, "turn-two")
+	idxA2 := strings.Index(plain, "body two")
+	if idxU1 < 0 || idxA1 < 0 || idxU2 < 0 || idxA2 < 0 {
+		t.Fatalf("expected all turn markers present, got: %q", out)
+	}
+	if !(idxU1 < idxA1 && idxA1 < idxU2 && idxU2 < idxA2) {
+		t.Fatalf("expected chronological turn ordering, got: %q", out)
 	}
 }

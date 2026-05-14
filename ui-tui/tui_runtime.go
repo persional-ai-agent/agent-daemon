@@ -155,6 +155,7 @@ type runtimeEventParser struct {
 	pendingText      string
 	toolStarts       map[string]time.Time
 	inlineThinkingID string
+	sawAssistantDelta bool
 }
 
 func newRuntimeEventParser() *runtimeEventParser {
@@ -171,15 +172,18 @@ func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
 		p.flushPendingText(tree)
 		tree.closeStreamingAssistantNode()
 		tree.endAllThinkingBlocks()
+		tree.beginAssistantTurn()
 		tree.addBlankNode()
 		tree.addUserNode(event.Text)
+		p.sawAssistantDelta = false
 	case runtimeEventTokenDelta:
 		p.consumeAssistantDelta(tree, event.Text)
 	case runtimeEventAssistantFinal:
 		p.flushPendingText(tree)
-		tree.finalizeAssistantNode(event.Text)
+		tree.finalizeAssistantNode(event.Text, p.sawAssistantDelta)
 		tree.endAllThinkingBlocks()
 		p.state = parserStateNormal
+		p.sawAssistantDelta = false
 	case runtimeEventToolStart:
 		p.onToolStart(tree, event)
 	case runtimeEventToolEnd:
@@ -199,6 +203,7 @@ func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
 		tree.closeStreamingAssistantNode()
 		tree.endAllThinkingBlocks()
 		p.state = parserStateNormal
+		p.sawAssistantDelta = false
 	}
 }
 
@@ -232,6 +237,7 @@ func (p *runtimeEventParser) consumeAssistantDelta(tree *uiStateTree, delta stri
 	if delta == "" {
 		return
 	}
+	p.sawAssistantDelta = true
 	p.pendingText += delta
 	const openTag = "<thinking>"
 	const closeTag = "</thinking>"
@@ -337,6 +343,7 @@ type uiStateTree struct {
 	nodes              []*uiNode
 	nextID             int
 	streamingAssistant string
+	currentTurnAssistantIDs []string
 	thinkingNodeByID   map[string]string
 	thinkingExpanded   bool
 	toolNodeByCallID   map[string]string
@@ -386,9 +393,15 @@ func (tree *uiStateTree) appendAssistantToken(token string) {
 	node.Content += token
 	node.Status = "streaming"
 	node.Dirty = true
+	tree.freezeStableAssistantPrefix(node)
 }
 
-func (tree *uiStateTree) finalizeAssistantNode(content string) {
+func (tree *uiStateTree) finalizeAssistantNode(content string, hadStreamDelta bool) {
+	if hadStreamDelta {
+		tree.reconcileAssistantWithFinal(content)
+		tree.collapseAssistantNodesToFinal(content)
+		return
+	}
 	node := tree.findStreamingAssistantNode()
 	if node == nil {
 		if strings.TrimSpace(content) == "" {
@@ -412,6 +425,99 @@ func (tree *uiStateTree) finalizeAssistantNode(content string) {
 	tree.streamingAssistant = ""
 }
 
+func (tree *uiStateTree) collapseAssistantNodesToFinal(preferredFinal string) {
+	finalText := preferredFinal
+	if strings.TrimSpace(finalText) == "" {
+		finalText = tree.fullAssistantText()
+	}
+	if strings.TrimSpace(finalText) == "" {
+		tree.streamingAssistant = ""
+		return
+	}
+	tree.replaceAllAssistantWithFinal(finalText)
+}
+
+func (tree *uiStateTree) reconcileAssistantWithFinal(finalText string) {
+	if strings.TrimSpace(finalText) == "" {
+		return
+	}
+	currentText := tree.fullAssistantText()
+	if currentText == "" {
+		node := tree.ensureAssistantStreamingNode()
+		node.Content = finalText
+		node.Status = "streaming"
+		node.Dirty = true
+		return
+	}
+	if currentText == finalText {
+		return
+	}
+	if strings.HasPrefix(finalText, currentText) {
+		tree.appendAssistantToken(finalText[len(currentText):])
+		return
+	}
+	tree.replaceAllAssistantWithFinal(finalText)
+}
+
+func (tree *uiStateTree) fullAssistantText() string {
+	if len(tree.currentTurnAssistantIDs) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for _, nodeID := range tree.currentTurnAssistantIDs {
+		node := tree.findNodeByID(nodeID)
+		if node == nil || node.Type != nodeAssistant {
+			continue
+		}
+		builder.WriteString(node.Content)
+	}
+	return builder.String()
+}
+
+func (tree *uiStateTree) replaceAllAssistantWithFinal(finalText string) {
+	if len(tree.currentTurnAssistantIDs) == 0 {
+		node := tree.addNode(nodeAssistant, finalText, "done")
+		node.Dirty = true
+		tree.streamingAssistant = ""
+		tree.currentTurnAssistantIDs = []string{node.ID}
+		return
+	}
+	keepID := tree.currentTurnAssistantIDs[0]
+	keepNode := tree.findNodeByID(keepID)
+	if keepNode == nil {
+		node := tree.addNode(nodeAssistant, finalText, "done")
+		node.Dirty = true
+		tree.streamingAssistant = ""
+		tree.currentTurnAssistantIDs = []string{node.ID}
+		return
+	}
+	keepNode.Content = finalText
+	keepNode.Status = "done"
+	keepNode.Dirty = true
+
+	removeSet := make(map[string]struct{}, len(tree.currentTurnAssistantIDs))
+	for idx, id := range tree.currentTurnAssistantIDs {
+		if idx == 0 {
+			continue
+		}
+		removeSet[id] = struct{}{}
+	}
+
+	filtered := make([]*uiNode, 0, len(tree.nodes))
+	for _, node := range tree.nodes {
+		if node == nil {
+			continue
+		}
+		if _, shouldRemove := removeSet[node.ID]; shouldRemove {
+			continue
+		}
+		filtered = append(filtered, node)
+	}
+	tree.nodes = filtered
+	tree.streamingAssistant = ""
+	tree.currentTurnAssistantIDs = []string{keepID}
+}
+
 func (tree *uiStateTree) closeStreamingAssistantNode() {
 	node := tree.findStreamingAssistantNode()
 	if node == nil {
@@ -428,6 +534,7 @@ func (tree *uiStateTree) ensureAssistantStreamingNode() *uiNode {
 	}
 	node := tree.addNode(nodeAssistant, "", "streaming")
 	tree.streamingAssistant = node.ID
+	tree.currentTurnAssistantIDs = append(tree.currentTurnAssistantIDs, node.ID)
 	return node
 }
 
@@ -441,6 +548,32 @@ func (tree *uiStateTree) findStreamingAssistantNode() *uiNode {
 		}
 	}
 	return nil
+}
+
+func (tree *uiStateTree) freezeStableAssistantPrefix(node *uiNode) {
+	if node == nil {
+		return
+	}
+	boundary := findStableMarkdownBoundary(node.Content)
+	if boundary <= 0 {
+		return
+	}
+	stable := node.Content[:boundary]
+	remainder := node.Content[boundary:]
+	node.Content = stable
+	node.Status = "done"
+	node.Dirty = true
+	tree.streamingAssistant = ""
+	if remainder == "" {
+		return
+	}
+	tail := tree.addNode(nodeAssistant, remainder, "streaming")
+	tree.streamingAssistant = tail.ID
+	tree.currentTurnAssistantIDs = append(tree.currentTurnAssistantIDs, tail.ID)
+}
+
+func (tree *uiStateTree) beginAssistantTurn() {
+	tree.currentTurnAssistantIDs = tree.currentTurnAssistantIDs[:0]
 }
 
 func (tree *uiStateTree) startThinkingBlock(thinkingID string) {
@@ -596,6 +729,7 @@ type uiRenderEngine struct {
 	mdWidth     int
 	cache       map[string]string
 	order       []string
+	nodeTypes   map[string]uiNodeType
 	fingerprint map[string]string
 	lastOutput  string
 	userStyle   lipgloss.Style
@@ -607,6 +741,7 @@ func newUIRenderEngine(width int) *uiRenderEngine {
 	return &uiRenderEngine{
 		width:       width,
 		cache:       make(map[string]string),
+		nodeTypes:   make(map[string]uiNodeType),
 		fingerprint: make(map[string]string),
 		userStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#A8A8A8")).Padding(0, 1),
 		metaStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
@@ -629,11 +764,15 @@ func (engine *uiRenderEngine) setWidth(width int) {
 	for key := range engine.fingerprint {
 		delete(engine.fingerprint, key)
 	}
+	for key := range engine.nodeTypes {
+		delete(engine.nodeTypes, key)
+	}
 	engine.order = nil
 }
 
 func (engine *uiRenderEngine) reset() {
 	engine.cache = make(map[string]string)
+	engine.nodeTypes = make(map[string]uiNodeType)
 	engine.fingerprint = make(map[string]string)
 	engine.order = nil
 	engine.lastOutput = ""
@@ -751,6 +890,7 @@ func (engine *uiRenderEngine) applyPatches(tree *uiStateTree, patches []renderPa
 		switch patch.Kind {
 		case renderPatchRemove:
 			delete(engine.cache, patch.NodeID)
+			delete(engine.nodeTypes, patch.NodeID)
 			delete(engine.fingerprint, patch.NodeID)
 		case renderPatchAdd, renderPatchUpdate:
 			node := nodeIndex[patch.NodeID]
@@ -758,6 +898,7 @@ func (engine *uiRenderEngine) applyPatches(tree *uiStateTree, patches []renderPa
 				continue
 			}
 			engine.cache[patch.NodeID] = engine.renderNode(node)
+			engine.nodeTypes[patch.NodeID] = node.Type
 			engine.fingerprint[patch.NodeID] = nodeSignature(node)
 			node.Dirty = false
 		case renderPatchReorder:
@@ -773,11 +914,23 @@ func (engine *uiRenderEngine) buildOutput() string {
 	if len(engine.order) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(engine.order))
+	var builder strings.Builder
+	prevType := uiNodeType(-1)
+	hasPrev := false
 	for _, id := range engine.order {
-		parts = append(parts, engine.cache[id])
+		part := engine.cache[id]
+		currentType, ok := engine.nodeTypes[id]
+		if !ok {
+			currentType = nodeSystem
+		}
+		if hasPrev && !(prevType == nodeAssistant && currentType == nodeAssistant) {
+			builder.WriteString("\n")
+		}
+		builder.WriteString(part)
+		prevType = currentType
+		hasPrev = true
 	}
-	return strings.Join(parts, "\n")
+	return builder.String()
 }
 
 func nodeSignature(node *uiNode) string {
@@ -819,9 +972,9 @@ func (engine *uiRenderEngine) renderNode(node *uiNode) string {
 		}
 		rendered, err := engine.renderMarkdown(markdownContent)
 		if err == nil {
-			return strings.TrimSuffix(rendered, "\n")
+			return rendered
 		}
-		return node.Content
+		return wrapPlainContent(node.Content, engine.effectiveWidth())
 	case nodeSystem:
 		fallthrough
 	default:
@@ -915,6 +1068,33 @@ func normalizeStreamingMarkdown(content string) string {
 	return content
 }
 
+func findStableMarkdownBoundary(content string) int {
+	if content == "" {
+		return 0
+	}
+	inCodeFence := false
+	lastStable := 0
+	lineStart := 0
+	for idx := 0; idx < len(content); idx++ {
+		if content[idx] != '\n' {
+			continue
+		}
+		line := content[lineStart:idx]
+		trimmedLine := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmedLine, "```") {
+			inCodeFence = !inCodeFence
+			if !inCodeFence {
+				lastStable = idx + 1
+			}
+		}
+		if !inCodeFence && idx+1 < len(content) && content[idx+1] == '\n' {
+			lastStable = idx + 2
+		}
+		lineStart = idx + 1
+	}
+	return lastStable
+}
+
 func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	evtType := extractEventType(evt)
 	switch evtType {
@@ -924,12 +1104,12 @@ func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 		return nil
 	case "result":
 		if text, _ := evt["final_response"].(string); strings.TrimSpace(text) != "" {
-			return []runtimeEvent{{Type: runtimeEventAssistantFinal, Text: text}}
+			return []runtimeEvent{{Type: runtimeEventAssistantFinal, Text: normalizeStreamText(text)}}
 		}
 		return nil
 	case "completed":
 		if text, _ := evt["content"].(string); strings.TrimSpace(text) != "" {
-			return []runtimeEvent{{Type: runtimeEventAssistantFinal, Text: text}}
+			return []runtimeEvent{{Type: runtimeEventAssistantFinal, Text: normalizeStreamText(text)}}
 		}
 		return nil
 	case "tool_started":
@@ -972,14 +1152,14 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 
 	switch eventType {
 	case "text_delta":
-		text := asStringFromMap(eventData, "text")
+		text := asStringFromMapRaw(eventData, "text")
 		if text == "" {
-			text = asStringFromMap(eventData, "delta")
+			text = asStringFromMapRaw(eventData, "delta")
 		}
 		if text == "" {
 			return nil
 		}
-		return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: text}}
+		return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: normalizeStreamText(text)}}
 	case "tool_call_start", "tool_args_start":
 		return []runtimeEvent{{
 			Type:       runtimeEventToolStart,
@@ -999,9 +1179,9 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	if strings.Contains(eventType, "reasoning") {
 		thinkingID := buildThinkingID(eventType, eventData)
 		if strings.Contains(eventType, "delta") {
-			text := asStringFromMap(eventData, "text")
+			text := asStringFromMapRaw(eventData, "text")
 			if text == "" {
-				text = asStringFromMap(eventData, "delta")
+				text = asStringFromMapRaw(eventData, "delta")
 			}
 			if text == "" {
 				return nil
@@ -1012,7 +1192,7 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 			}
 		}
 		if strings.Contains(eventType, "done") {
-			text := asStringFromMap(eventData, "text")
+			text := asStringFromMapRaw(eventData, "text")
 			events := make([]runtimeEvent, 0, 3)
 			events = append(events, runtimeEvent{Type: runtimeEventThinkingStart, ThinkingID: thinkingID})
 			if text != "" {
@@ -1058,14 +1238,18 @@ func extractToolName(evt map[string]any) string {
 	return "unknown"
 }
 
-func asStringFromMap(data map[string]any, key string) string {
+func asStringFromMapRaw(data map[string]any, key string) string {
 	if data == nil {
 		return ""
 	}
-	if value, _ := data[key].(string); strings.TrimSpace(value) != "" {
-		return strings.TrimSpace(value)
+	if value, _ := data[key].(string); value != "" {
+		return value
 	}
 	return ""
+}
+
+func asStringFromMap(data map[string]any, key string) string {
+	return strings.TrimSpace(asStringFromMapRaw(data, key))
 }
 
 func buildThinkingID(eventType string, eventData map[string]any) string {
@@ -1100,4 +1284,67 @@ func asIntFromMap(data map[string]any, key string) int {
 	default:
 		return 0
 	}
+}
+
+func normalizeStreamText(text string) string {
+	if text == "" {
+		return text
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	if strings.Contains(text, `\n`) && !strings.Contains(text, "\n") {
+		text = strings.ReplaceAll(text, `\n`, "\n")
+	}
+	if strings.Contains(text, `\t`) && !strings.Contains(text, "\t") {
+		text = strings.ReplaceAll(text, `\t`, "\t")
+	}
+	return text
+}
+
+func wrapPlainContent(content string, width int) string {
+	if content == "" {
+		return content
+	}
+	if width <= 0 {
+		width = 80
+	}
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line == "" {
+			out = append(out, "")
+			continue
+		}
+		out = append(out, hardWrapLine(line, width)...)
+	}
+	return strings.Join(out, "\n")
+}
+
+func hardWrapLine(line string, width int) []string {
+	if width <= 1 {
+		return []string{line}
+	}
+	runes := []rune(line)
+	segments := make([]string, 0, len(runes)/width+1)
+	start := 0
+	currentWidth := 0
+	for idx, r := range runes {
+		runeWidth := lipgloss.Width(string(r))
+		if runeWidth <= 0 {
+			runeWidth = 1
+		}
+		if currentWidth+runeWidth > width && idx > start {
+			segments = append(segments, string(runes[start:idx]))
+			start = idx
+			currentWidth = 0
+		}
+		currentWidth += runeWidth
+	}
+	if start < len(runes) {
+		segments = append(segments, string(runes[start:]))
+	}
+	if len(segments) == 0 {
+		return []string{""}
+	}
+	return segments
 }
