@@ -925,7 +925,7 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	gatewaySignalBaseURL := fs.String("gateway-signal-base-url", "", "signal REST base URL")
 	gatewaySignalAccount := fs.String("gateway-signal-account", "", "signal account number")
 	gatewaySignalSecret := fs.String("gateway-signal-secret", "", "signal inbound secret")
@@ -935,6 +935,9 @@ func runSetup(cfg config.Config, args []string) {
 	gatewayEmailSMTPPassword := fs.String("gateway-email-smtp-password", "", "email SMTP password")
 	gatewayEmailFromAddress := fs.String("gateway-email-from", "", "email from address")
 	gatewayEmailSecret := fs.String("gateway-email-secret", "", "email inbound secret")
+	gatewayHABaseURL := fs.String("gateway-ha-base-url", "", "homeassistant base URL")
+	gatewayHAToken := fs.String("gateway-ha-token", "", "homeassistant token")
+	gatewayHASecret := fs.String("gateway-ha-secret", "", "homeassistant inbound secret")
 	gatewayToken := fs.String("gateway-token", "", "shared gateway token (telegram/discord/yuanbao)")
 	gatewayBotToken := fs.String("gateway-bot-token", "", "slack bot token")
 	gatewayAppToken := fs.String("gateway-app-token", "", "slack app token")
@@ -987,6 +990,9 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*gatewayEmailSMTPPassword),
 		strings.TrimSpace(*gatewayEmailFromAddress),
 		strings.TrimSpace(*gatewayEmailSecret),
+		strings.TrimSpace(*gatewayHABaseURL),
+		strings.TrimSpace(*gatewayHAToken),
+		strings.TrimSpace(*gatewayHASecret),
 		strings.TrimSpace(*gatewayToken),
 		strings.TrimSpace(*gatewayBotToken),
 		strings.TrimSpace(*gatewayAppToken),
@@ -3617,7 +3623,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
@@ -3631,6 +3637,9 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewayEmailSMTPPassword := ""
 	gatewayEmailFromAddress := ""
 	gatewayEmailSecret := ""
+	gatewayHABaseURL := ""
+	gatewayHAToken := ""
+	gatewayHASecret := ""
 	gatewayBotToken := ""
 	gatewayAppToken := ""
 	gatewayAccessToken := ""
@@ -3656,6 +3665,11 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayEmailSMTPPassword = promptInput(reader, "email smtp password", "")
 		gatewayEmailFromAddress = promptInput(reader, "email from address", "")
 		gatewayEmailSecret = promptInput(reader, "email inbound secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "homeassistant":
+		gatewayHABaseURL = promptInput(reader, "homeassistant base url", "")
+		gatewayHAToken = promptInput(reader, "homeassistant token", "")
+		gatewayHASecret = promptInput(reader, "homeassistant inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "telegram", "discord":
 		gatewayToken = promptInput(reader, "gateway token", "")
@@ -3700,6 +3714,9 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayEmailSMTPPassword,
 		gatewayEmailFromAddress,
 		gatewayEmailSecret,
+		gatewayHABaseURL,
+		gatewayHAToken,
+		gatewayHASecret,
 		gatewayToken,
 		gatewayBotToken,
 		gatewayAppToken,
@@ -3740,7 +3757,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3764,7 +3781,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayHABaseURL, gatewayHAToken, gatewayHASecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -4501,12 +4518,15 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	if !cfg.GatewayEnabled {
 		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
 	}
-	configured := make([]string, 0, 8)
+	configured := make([]string, 0, 9)
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		configured = append(configured, "signal")
 	}
 	if strings.TrimSpace(cfg.EmailSMTPHost) != "" && strings.TrimSpace(cfg.EmailSMTPUsername) != "" && strings.TrimSpace(cfg.EmailFromAddress) != "" {
 		configured = append(configured, "email")
+	}
+	if strings.TrimSpace(cfg.HomeAssistantBaseURL) != "" && strings.TrimSpace(cfg.HomeAssistantToken) != "" {
+		configured = append(configured, "homeassistant")
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
 		configured = append(configured, "telegram")
@@ -5161,6 +5181,8 @@ func runGatewayForeground(cfg config.Config) {
 			return cfg.SignalAllowed
 		case "email":
 			return cfg.EmailAllowed
+		case "homeassistant":
+			return cfg.HomeAssistantAllowed
 		case "telegram":
 			return cfg.TelegramAllowed
 		case "discord":
@@ -5890,7 +5912,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -5953,7 +5975,7 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (signal/email/homeassistant/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	signalBaseURL := fs.String("signal-base-url", "", "signal REST base URL")
 	signalAccount := fs.String("signal-account", "", "signal account number")
 	signalSecret := fs.String("signal-secret", "", "signal inbound secret")
@@ -5963,6 +5985,9 @@ func runGatewaySetup(args []string) {
 	emailSMTPPassword := fs.String("email-smtp-password", "", "email SMTP password")
 	emailFrom := fs.String("email-from", "", "email from address")
 	emailSecret := fs.String("email-secret", "", "email inbound secret")
+	haBaseURL := fs.String("ha-base-url", "", "homeassistant base URL")
+	haToken := fs.String("ha-token", "", "homeassistant token")
+	haSecret := fs.String("ha-secret", "", "homeassistant inbound secret")
 	token := fs.String("token", "", "shared token field (telegram/discord/yuanbao)")
 	botToken := fs.String("bot-token", "", "slack bot token")
 	appToken := fs.String("app-token", "", "slack app token")
@@ -5978,7 +6003,7 @@ func runGatewaySetup(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <signal|email|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -5997,6 +6022,9 @@ func runGatewaySetup(args []string) {
 		strings.TrimSpace(*emailSMTPPassword),
 		strings.TrimSpace(*emailFrom),
 		strings.TrimSpace(*emailSecret),
+		strings.TrimSpace(*haBaseURL),
+		strings.TrimSpace(*haToken),
+		strings.TrimSpace(*haSecret),
 		strings.TrimSpace(*token),
 		strings.TrimSpace(*botToken),
 		strings.TrimSpace(*appToken),
@@ -6027,7 +6055,7 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
@@ -6068,6 +6096,21 @@ func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalS
 		if allowedUsers != "" {
 			values["gateway.email.allowed_users"] = allowedUsers
 			written = append(written, "gateway.email.allowed_users")
+		}
+	case "homeassistant":
+		if haBaseURL == "" || haToken == "" {
+			return nil, fmt.Errorf("homeassistant setup requires -ha-base-url and -ha-token")
+		}
+		values["gateway.homeassistant.base_url"] = haBaseURL
+		values["gateway.homeassistant.token"] = haToken
+		written = append(written, "gateway.homeassistant.base_url", "gateway.homeassistant.token")
+		if haSecret != "" {
+			values["gateway.homeassistant.inbound_secret"] = haSecret
+			written = append(written, "gateway.homeassistant.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.homeassistant.allowed_users"] = allowedUsers
+			written = append(written, "gateway.homeassistant.allowed_users")
 		}
 	case "telegram":
 		if token == "" {
@@ -6202,7 +6245,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <signal|email|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <signal|email|homeassistant|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
@@ -6588,6 +6631,9 @@ func gatewayTokenFingerprint(cfg config.Config) string {
 	if strings.TrimSpace(cfg.EmailSMTPHost) != "" || strings.TrimSpace(cfg.EmailSMTPUsername) != "" || strings.TrimSpace(cfg.EmailFromAddress) != "" {
 		parts = append(parts, "email:"+strings.TrimSpace(cfg.EmailSMTPHost)+":"+strings.TrimSpace(cfg.EmailSMTPUsername)+":"+strings.TrimSpace(cfg.EmailFromAddress))
 	}
+	if strings.TrimSpace(cfg.HomeAssistantBaseURL) != "" || strings.TrimSpace(cfg.HomeAssistantToken) != "" {
+		parts = append(parts, "homeassistant:"+strings.TrimSpace(cfg.HomeAssistantBaseURL)+":"+strings.TrimSpace(cfg.HomeAssistantToken))
+	}
 	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" || strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
 		parts = append(parts, "whatsapp:"+strings.TrimSpace(cfg.WhatsAppAccessToken)+":"+strings.TrimSpace(cfg.WhatsAppPhoneNumberID))
 	}
@@ -6674,16 +6720,19 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"signal", "email", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
+	return []string{"signal", "email", "homeassistant", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
-	out := make([]string, 0, 8)
+	out := make([]string, 0, 9)
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		out = append(out, "signal")
 	}
 	if strings.TrimSpace(cfg.EmailSMTPHost) != "" && strings.TrimSpace(cfg.EmailSMTPUsername) != "" && strings.TrimSpace(cfg.EmailFromAddress) != "" {
 		out = append(out, "email")
+	}
+	if strings.TrimSpace(cfg.HomeAssistantBaseURL) != "" && strings.TrimSpace(cfg.HomeAssistantToken) != "" {
+		out = append(out, "homeassistant")
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
 		out = append(out, "telegram")
@@ -7126,6 +7175,8 @@ func runServe(cfg config.Config) {
 						return cfg.SignalAllowed
 					case "email":
 						return cfg.EmailAllowed
+					case "homeassistant":
+						return cfg.HomeAssistantAllowed
 					case "telegram":
 						return cfg.TelegramAllowed
 					case "discord":
@@ -7181,6 +7232,15 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, ea)
 			log.Printf("email adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.HomeAssistantBaseURL) != "" && strings.TrimSpace(cfg.HomeAssistantToken) != "" {
+		ha, err := platforms.NewHomeAssistantAdapter(cfg.HomeAssistantBaseURL, cfg.HomeAssistantToken, cfg.HomeAssistantSecret)
+		if err != nil {
+			log.Printf("homeassistant adapter: %v", err)
+		} else {
+			adapters = append(adapters, ha)
+			log.Printf("homeassistant adapter configured")
 		}
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {

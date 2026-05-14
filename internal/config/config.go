@@ -57,6 +57,10 @@ type Config struct {
 	EmailFromAddress        string
 	EmailInboundSecret      string
 	EmailAllowed            string
+	HomeAssistantBaseURL    string
+	HomeAssistantToken      string
+	HomeAssistantSecret     string
+	HomeAssistantAllowed    string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -325,6 +329,10 @@ func loadFromINIValues(iv iniValues) Config {
 		EmailFromAddress:        iniStr(iv, "gateway.email", "from_address", "AGENT_EMAIL_FROM_ADDRESS", ""),
 		EmailInboundSecret:      iniStr(iv, "gateway.email", "inbound_secret", "AGENT_EMAIL_INBOUND_SECRET", ""),
 		EmailAllowed:            iniStr(iv, "gateway.email", "allowed_users", "AGENT_EMAIL_ALLOWED_USERS", ""),
+		HomeAssistantBaseURL:    iniStr(iv, "gateway.homeassistant", "base_url", "AGENT_HOMEASSISTANT_BASE_URL", ""),
+		HomeAssistantToken:      iniStr(iv, "gateway.homeassistant", "token", "AGENT_HOMEASSISTANT_TOKEN", ""),
+		HomeAssistantSecret:     iniStr(iv, "gateway.homeassistant", "inbound_secret", "AGENT_HOMEASSISTANT_INBOUND_SECRET", ""),
+		HomeAssistantAllowed:    iniStr(iv, "gateway.homeassistant", "allowed_users", "AGENT_HOMEASSISTANT_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),

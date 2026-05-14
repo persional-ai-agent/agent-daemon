@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
+	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
 	mux.HandleFunc("/v1/gateway/whatsapp/webhook", s.handleGatewayWhatsAppWebhook)
 	mux.HandleFunc("/v1/gateway/webhook/inbound", s.handleGatewayWebhookInbound)
 	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
@@ -190,6 +191,22 @@ func (s *Server) handleGatewayEmailWebhook(w http.ResponseWriter, r *http.Reques
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "email webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayHomeAssistantWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("homeassistant")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "homeassistant gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "homeassistant webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)
