@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/gateway/matrix/webhook", s.handleGatewayMatrixWebhook)
 	mux.HandleFunc("/v1/gateway/feishu/webhook", s.handleGatewayFeishuWebhook)
+	mux.HandleFunc("/v1/gateway/dingtalk/webhook", s.handleGatewayDingTalkWebhook)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
@@ -209,6 +210,22 @@ func (s *Server) handleGatewayFeishuWebhook(w http.ResponseWriter, r *http.Reque
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "feishu webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayDingTalkWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("dingtalk")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "dingtalk gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "dingtalk webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

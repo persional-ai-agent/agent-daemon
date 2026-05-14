@@ -68,6 +68,9 @@ type Config struct {
 	FeishuWebhookURL        string
 	FeishuInboundSecret     string
 	FeishuAllowed           string
+	DingTalkWebhookURL      string
+	DingTalkInboundSecret   string
+	DingTalkAllowed         string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -347,6 +350,9 @@ func loadFromINIValues(iv iniValues) Config {
 		FeishuWebhookURL:        iniStr(iv, "gateway.feishu", "webhook_url", "AGENT_FEISHU_WEBHOOK_URL", ""),
 		FeishuInboundSecret:     iniStr(iv, "gateway.feishu", "inbound_secret", "AGENT_FEISHU_INBOUND_SECRET", ""),
 		FeishuAllowed:           iniStr(iv, "gateway.feishu", "allowed_users", "AGENT_FEISHU_ALLOWED_USERS", ""),
+		DingTalkWebhookURL:      iniStr(iv, "gateway.dingtalk", "webhook_url", "AGENT_DINGTALK_WEBHOOK_URL", ""),
+		DingTalkInboundSecret:   iniStr(iv, "gateway.dingtalk", "inbound_secret", "AGENT_DINGTALK_INBOUND_SECRET", ""),
+		DingTalkAllowed:         iniStr(iv, "gateway.dingtalk", "allowed_users", "AGENT_DINGTALK_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
