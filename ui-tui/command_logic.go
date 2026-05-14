@@ -708,16 +708,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emitData(uiPayload(out, "schema", "result"))
 			s.setStatus(true, "ok", "tool schema loaded")
 		case strings.HasPrefix(current, "/sessions"):
-			parts := strings.Fields(current)
-			limit := 20
-			pick := 0
-			if len(parts) > 1 {
-				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
-					limit = v
-				}
-			}
-			if len(parts) > 3 && strings.EqualFold(parts[2], "pick") {
-				pick, _ = strconv.Atoi(parts[3])
+			limit, pick, pErr := parseSessionsArgs(current)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions?limit=%d", s.httpBase, limit), nil)
 			if hErr != nil {
@@ -1024,4 +1017,45 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	return limit, action, actionIndex, nil
+}
+
+func parseSessionsArgs(input string) (limit int, pick int, err error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	limit = 20
+	pick = 0
+	if len(parts) == 1 {
+		return limit, pick, nil
+	}
+	if len(parts) == 2 {
+		if strings.EqualFold(parts[1], "pick") {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		v, convErr := strconv.Atoi(parts[1])
+		if convErr != nil || v <= 0 {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		return v, 0, nil
+	}
+	if len(parts) == 3 {
+		if !strings.EqualFold(parts[1], "pick") {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		idx, convErr := strconv.Atoi(parts[2])
+		if convErr != nil || idx <= 0 {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		return limit, idx, nil
+	}
+	if len(parts) == 4 {
+		v, convErr := strconv.Atoi(parts[1])
+		if convErr != nil || v <= 0 || !strings.EqualFold(parts[2], "pick") {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		idx, idxErr := strconv.Atoi(parts[3])
+		if idxErr != nil || idx <= 0 {
+			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+		}
+		return v, idx, nil
+	}
+	return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
 }

@@ -173,3 +173,36 @@ func TestHandleTUICommandRerunSkipsTrailingSelfEntries(t *testing.T) {
 		t.Fatalf("expected /help output, got lines=%v", lines)
 	}
 }
+
+func TestParseSessionsArgs(t *testing.T) {
+	cases := []struct {
+		in      string
+		limit   int
+		pick    int
+		wantErr bool
+	}{
+		{"/sessions", 20, 0, false},
+		{"/sessions 50", 50, 0, false},
+		{"/sessions pick 2", 20, 2, false},
+		{"/sessions 30 pick 4", 30, 4, false},
+		{"/sessions pick", 0, 0, true},
+		{"/sessions x", 0, 0, true},
+		{"/sessions 0", 0, 0, true},
+		{"/sessions 10 pick x", 0, 0, true},
+	}
+	for _, tc := range cases {
+		limit, pick, err := parseSessionsArgs(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("%q expected error", tc.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q unexpected err: %v", tc.in, err)
+		}
+		if limit != tc.limit || pick != tc.pick {
+			t.Fatalf("%q got limit=%d pick=%d", tc.in, limit, pick)
+		}
+	}
+}
