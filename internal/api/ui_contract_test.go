@@ -104,6 +104,7 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "voice_record", method: http.MethodPost, path: "/v1/ui/voice/record", body: `{"action":"start"}`},
 		{name: "voice_tts", method: http.MethodPost, path: "/v1/ui/voice/tts", body: `{"text":"hello"}`},
 		{name: "agents", method: http.MethodGet, path: "/v1/ui/agents"},
+		{name: "agents_active", method: http.MethodGet, path: "/v1/ui/agents/active"},
 		{name: "agents_detail", method: http.MethodGet, path: "/v1/ui/agents/detail?session_id=s1"},
 		{name: "agents_history", method: http.MethodGet, path: "/v1/ui/agents/history?limit=2"},
 		{name: "complete_slash", method: http.MethodPost, path: "/v1/ui/complete/slash", body: `{"text":"/to"}`},

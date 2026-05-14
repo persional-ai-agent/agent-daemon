@@ -77,8 +77,9 @@ type chatResponsePayload struct {
 }
 
 type activeRun struct {
-	token  string
-	cancel context.CancelFunc
+	token     string
+	cancel    context.CancelFunc
+	startedAt time.Time
 }
 
 func (s *Server) Handler() http.Handler {
@@ -107,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
 	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
 	mux.HandleFunc("/v1/ui/agents", s.handleUIAgents)
+	mux.HandleFunc("/v1/ui/agents/active", s.handleUIAgentsActive)
 	mux.HandleFunc("/v1/ui/agents/detail", s.handleUIAgentsDetail)
 	mux.HandleFunc("/v1/ui/agents/interrupt", s.handleUIAgentsInterrupt)
 	mux.HandleFunc("/v1/ui/agents/history", s.handleUIAgentsHistory)
@@ -233,6 +235,16 @@ type agentDetailItem struct {
 	LastGoal       string   `json:"last_goal,omitempty"`
 	LastToolCallID string   `json:"last_tool_call_id,omitempty"`
 	Goals          []string `json:"goals,omitempty"`
+}
+
+type agentActiveItem struct {
+	SessionID      string `json:"session_id"`
+	Running        bool   `json:"running"`
+	StartedAt      string `json:"started_at"`
+	DurationSec    int64  `json:"duration_sec"`
+	DelegateCount  int    `json:"delegate_count"`
+	LastGoal       string `json:"last_goal,omitempty"`
+	LastToolCallID string `json:"last_tool_call_id,omitempty"`
 }
 
 const (
@@ -827,6 +839,58 @@ func (s *Server) handleUIAgents(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"count":  len(agents),
 		"agents": agents,
+	})
+}
+
+func (s *Server) handleUIAgentsActive(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	filterSessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+	now := time.Now()
+	runs := s.activeRunsSnapshot()
+	items := make([]agentActiveItem, 0, len(runs))
+	for sid, run := range runs {
+		if filterSessionID != "" && sid != filterSessionID {
+			continue
+		}
+		msgs, err := s.Engine.SessionStore.LoadMessages(sid, 500)
+		if err != nil {
+			continue
+		}
+		item := agentActiveItem{
+			SessionID:   sid,
+			Running:     true,
+			StartedAt:   run.startedAt.UTC().Format(time.RFC3339),
+			DurationSec: int64(now.Sub(run.startedAt).Seconds()),
+		}
+		for _, msg := range msgs {
+			for _, tc := range msg.ToolCalls {
+				if strings.TrimSpace(tc.Function.Name) != "delegate_task" {
+					continue
+				}
+				item.DelegateCount++
+				item.LastToolCallID = tc.ID
+				args := tools.ParseJSONArgs(tc.Function.Arguments)
+				goal, _ := args["goal"].(string)
+				goal = strings.TrimSpace(goal)
+				if goal != "" {
+					item.LastGoal = goal
+				}
+			}
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].SessionID < items[j].SessionID })
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"count":  len(items),
+		"active": items,
 	})
 }
 
@@ -1849,7 +1913,7 @@ func (s *Server) registerActiveRun(sessionID string, cancel context.CancelFunc) 
 		s.active = make(map[string]activeRun)
 	}
 	token := uuid.NewString()
-	s.active[sessionID] = activeRun{token: token, cancel: cancel}
+	s.active[sessionID] = activeRun{token: token, cancel: cancel, startedAt: time.Now()}
 	return token
 }
 
@@ -1882,4 +1946,14 @@ func (s *Server) isActiveRun(sessionID string) bool {
 	}
 	_, ok := s.active[sessionID]
 	return ok
+}
+
+func (s *Server) activeRunsSnapshot() map[string]activeRun {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]activeRun, len(s.active))
+	for sid, run := range s.active {
+		out[sid] = run
+	}
+	return out
 }

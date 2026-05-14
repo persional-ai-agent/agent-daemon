@@ -450,6 +450,23 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("agents_active", func(t *testing.T) {
+		srv.mu.Lock()
+		srv.active = map[string]activeRun{
+			"s1": {token: "tok-a", cancel: func() {}, startedAt: time.Now().Add(-3 * time.Second)},
+		}
+		srv.mu.Unlock()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/agents/active", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"active"`) || !strings.Contains(rec.Body.String(), `"running":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("agents_detail", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/v1/ui/agents/detail?session_id=s1", nil)

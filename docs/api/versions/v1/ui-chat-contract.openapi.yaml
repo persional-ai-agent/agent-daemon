@@ -273,6 +273,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/agents/active:
+    get:
+      parameters:
+        - in: query
+          name: session_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Active delegate/subagent sessions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [count, active]
+                    properties:
+                      count:
+                        type: integer
+                      active:
+                        type: array
+                        items:
+                          type: object
+                          required: [session_id, running, started_at, duration_sec, delegate_count]
+                          properties:
+                            session_id:
+                              type: string
+                            running:
+                              type: boolean
+                            started_at:
+                              type: string
+                            duration_sec:
+                              type: integer
+                            delegate_count:
+                              type: integer
+                            last_goal:
+                              type: string
+                            last_tool_call_id:
+                              type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/agents/detail:
     get:
       parameters:
