@@ -374,7 +374,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, fmt.Errorf("no pending approval found; usage: /approve <approval_id>"), false
+					return lines, fmt.Errorf("未找到待处理审批；用法: /approve <approval_id>"), false
 				}
 				id = lastID
 			}
@@ -398,7 +398,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, fmt.Errorf("no pending approval found; usage: /deny <approval_id>"), false
+					return lines, fmt.Errorf("未找到待处理审批；用法: /deny <approval_id>"), false
 				}
 				id = lastID
 			}
@@ -423,7 +423,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			msgs, _ := out["messages"].([]any)
 			items := findPendingApprovals(msgs, limit)
 			if len(items) == 0 {
-				return lines, fmt.Errorf("no pending approval found"), false
+				return lines, fmt.Errorf("未找到待处理审批"), false
 			}
 			s.pendingCache = items
 			if limit <= 1 {
@@ -434,10 +434,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if action != "" {
 				if action != "approve" && action != "deny" && action != "a" && action != "d" {
-					return lines, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]"), false
+					return lines, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]"), false
 				}
 				if actionIndex <= 0 || actionIndex > len(items) {
-					return lines, fmt.Errorf("pending action index out of range, max=%d", len(items)), false
+					return lines, fmt.Errorf("待处理审批索引越界，最大值=%d", len(items)), false
 				}
 				chosen := items[actionIndex-1]
 				id, _ := chosen["approval_id"].(string)

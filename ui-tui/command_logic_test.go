@@ -297,6 +297,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/sessions pick", "用法: /sessions [limit] [pick <index>]"},
 		{"/show s1 bad", "用法: /show [session] [offset>=0] [limit>0] [pick <index>]"},
 		{"/stats s1 extra", "用法: /stats [session]"},
+		{"/pending approve", "用法: /pending [limit] [approve|deny|a|d <index>]"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
