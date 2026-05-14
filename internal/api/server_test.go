@@ -214,6 +214,18 @@ func TestUIEndpoints(t *testing.T) {
 		SkillsReloadFn: func() (map[string]any, error) {
 			return map[string]any{"success": true, "count": 2}, nil
 		},
+		VoiceStatusFn: func() (map[string]any, error) {
+			return map[string]any{"enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceToggleFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceRecordFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": action == "start", "tts": true}, nil
+		},
+		VoiceTTSFn: func(text string) (map[string]any, error) {
+			return map[string]any{"spoken": true, "text": text, "length": len(text)}, nil
+		},
 	}
 
 	t.Run("tools", func(t *testing.T) {
@@ -334,6 +346,57 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"count":2`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("voice_status", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/voice/status", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("voice_toggle", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/voice/toggle", bytes.NewBufferString(`{"action":"on"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"action":"on"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("voice_record", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/voice/record", bytes.NewBufferString(`{"action":"start"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"recording":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("voice_tts", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/voice/tts", bytes.NewBufferString(`{"text":"hello"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"spoken":true`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

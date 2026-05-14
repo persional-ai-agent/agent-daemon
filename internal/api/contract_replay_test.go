@@ -159,6 +159,18 @@ func replayServer() *Server {
 		SkillsReloadFn: func() (map[string]any, error) {
 			return map[string]any{"success": true, "count": 2}, nil
 		},
+		VoiceStatusFn: func() (map[string]any, error) {
+			return map[string]any{"enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceToggleFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceRecordFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": action == "start", "tts": true}, nil
+		},
+		VoiceTTSFn: func(text string) (map[string]any, error) {
+			return map[string]any{"spoken": true, "text": text, "length": len(text)}, nil
+		},
 	}
 }
 

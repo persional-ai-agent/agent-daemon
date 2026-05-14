@@ -71,6 +71,18 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		SkillsReloadFn: func() (map[string]any, error) {
 			return map[string]any{"success": true, "count": 1}, nil
 		},
+		VoiceStatusFn: func() (map[string]any, error) {
+			return map[string]any{"enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceToggleFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": false, "tts": true}, nil
+		},
+		VoiceRecordFn: func(action string) (map[string]any, error) {
+			return map[string]any{"action": action, "enabled": true, "recording": action == "start", "tts": true}, nil
+		},
+		VoiceTTSFn: func(text string) (map[string]any, error) {
+			return map[string]any{"spoken": true, "text": text, "length": len(text)}, nil
+		},
 	}
 
 	cases := []struct {
@@ -87,6 +99,10 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
 		{name: "skills", method: http.MethodGet, path: "/v1/ui/skills"},
 		{name: "skills_reload", method: http.MethodPost, path: "/v1/ui/skills/reload"},
+		{name: "voice_status", method: http.MethodGet, path: "/v1/ui/voice/status"},
+		{name: "voice_toggle", method: http.MethodPost, path: "/v1/ui/voice/toggle", body: `{"action":"on"}`},
+		{name: "voice_record", method: http.MethodPost, path: "/v1/ui/voice/record", body: `{"action":"start"}`},
+		{name: "voice_tts", method: http.MethodPost, path: "/v1/ui/voice/tts", body: `{"text":"hello"}`},
 		{name: "agents", method: http.MethodGet, path: "/v1/ui/agents"},
 		{name: "agents_detail", method: http.MethodGet, path: "/v1/ui/agents/detail?session_id=s1"},
 		{name: "agents_history", method: http.MethodGet, path: "/v1/ui/agents/history?limit=2"},

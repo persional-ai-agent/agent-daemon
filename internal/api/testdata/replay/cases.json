@@ -100,6 +100,46 @@
     "snapshot": "ui_skills_reload_success"
   },
   {
+    "name": "ui_voice_status_success",
+    "method": "GET",
+    "path": "/v1/ui/voice/status",
+    "contract_path": "/v1/ui/voice/status",
+    "snapshot": "ui_voice_status_success"
+  },
+  {
+    "name": "ui_voice_toggle_success",
+    "method": "POST",
+    "path": "/v1/ui/voice/toggle",
+    "contract_path": "/v1/ui/voice/toggle",
+    "content_type": "application/json",
+    "body": {
+      "action": "on"
+    },
+    "snapshot": "ui_voice_toggle_success"
+  },
+  {
+    "name": "ui_voice_record_success",
+    "method": "POST",
+    "path": "/v1/ui/voice/record",
+    "contract_path": "/v1/ui/voice/record",
+    "content_type": "application/json",
+    "body": {
+      "action": "start"
+    },
+    "snapshot": "ui_voice_record_success"
+  },
+  {
+    "name": "ui_voice_tts_success",
+    "method": "POST",
+    "path": "/v1/ui/voice/tts",
+    "contract_path": "/v1/ui/voice/tts",
+    "content_type": "application/json",
+    "body": {
+      "text": "hello"
+    },
+    "snapshot": "ui_voice_tts_success"
+  },
+  {
     "name": "ui_agents_interrupt_not_found",
     "method": "POST",
     "path": "/v1/ui/agents/interrupt",

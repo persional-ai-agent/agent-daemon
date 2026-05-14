@@ -33,8 +33,15 @@ type Server struct {
 	GatewayActionFn  func(action string) (map[string]any, error)
 	SkillListFn      func() ([]map[string]any, error)
 	SkillsReloadFn   func() (map[string]any, error)
+	VoiceStatusFn    func() (map[string]any, error)
+	VoiceToggleFn    func(action string) (map[string]any, error)
+	VoiceRecordFn    func(action string) (map[string]any, error)
+	VoiceTTSFn       func(text string) (map[string]any, error)
 	mu               sync.Mutex
 	active           map[string]activeRun
+	voiceEnabled     bool
+	voiceRecording   bool
+	voiceTTSEnabled  bool
 }
 
 type chatRequest struct {
@@ -104,6 +111,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/agents/history", s.handleUIAgentsHistory)
 	mux.HandleFunc("/v1/ui/skills", s.handleUISkills)
 	mux.HandleFunc("/v1/ui/skills/reload", s.handleUISkillsReload)
+	mux.HandleFunc("/v1/ui/voice/status", s.handleUIVoiceStatus)
+	mux.HandleFunc("/v1/ui/voice/toggle", s.handleUIVoiceToggle)
+	mux.HandleFunc("/v1/ui/voice/record", s.handleUIVoiceRecord)
+	mux.HandleFunc("/v1/ui/voice/tts", s.handleUIVoiceTTS)
 	return mux
 }
 
@@ -536,6 +547,18 @@ type uiApprovalConfirmRequest struct {
 
 type uiAgentsInterruptRequest struct {
 	SessionID string `json:"session_id"`
+}
+
+type uiVoiceToggleRequest struct {
+	Action string `json:"action"`
+}
+
+type uiVoiceRecordRequest struct {
+	Action string `json:"action"`
+}
+
+type uiVoiceTTSRequest struct {
+	Text string `json:"text"`
 }
 
 var uiSlashCommands = []string{
@@ -1033,6 +1056,192 @@ func listLocalSkills(workdir string) ([]map[string]any, error) {
 		return li < lj
 	})
 	return skills, nil
+}
+
+func (s *Server) handleUIVoiceStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var (
+		status map[string]any
+		err    error
+	)
+	if s.VoiceStatusFn != nil {
+		status, err = s.VoiceStatusFn()
+	} else {
+		status = s.voiceStatus()
+	}
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "status": status})
+}
+
+func (s *Server) handleUIVoiceToggle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiVoiceToggleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Action = strings.TrimSpace(strings.ToLower(req.Action))
+	if req.Action == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "action required")
+		return
+	}
+	var (
+		result map[string]any
+		err    error
+	)
+	if s.VoiceToggleFn != nil {
+		result, err = s.VoiceToggleFn(req.Action)
+	} else {
+		result, err = s.voiceToggle(req.Action)
+	}
+	if err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+}
+
+func (s *Server) handleUIVoiceRecord(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiVoiceRecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Action = strings.TrimSpace(strings.ToLower(req.Action))
+	if req.Action == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "action required")
+		return
+	}
+	var (
+		result map[string]any
+		err    error
+	)
+	if s.VoiceRecordFn != nil {
+		result, err = s.VoiceRecordFn(req.Action)
+	} else {
+		result, err = s.voiceRecord(req.Action)
+	}
+	if err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+}
+
+func (s *Server) handleUIVoiceTTS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiVoiceTTSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Text = strings.TrimSpace(req.Text)
+	var (
+		result map[string]any
+		err    error
+	)
+	if s.VoiceTTSFn != nil {
+		result, err = s.VoiceTTSFn(req.Text)
+	} else {
+		result, err = s.voiceSpeak(req.Text)
+	}
+	if err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+}
+
+func (s *Server) voiceStatus() map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return map[string]any{
+		"enabled":   s.voiceEnabled,
+		"recording": s.voiceRecording,
+		"tts":       s.voiceTTSEnabled,
+	}
+}
+
+func (s *Server) voiceToggle(action string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch action {
+	case "on":
+		s.voiceEnabled = true
+	case "off":
+		s.voiceEnabled = false
+		s.voiceRecording = false
+	case "tts":
+		if !s.voiceEnabled {
+			return nil, errors.New("enable voice mode first")
+		}
+		s.voiceTTSEnabled = !s.voiceTTSEnabled
+	case "status":
+	default:
+		return nil, fmt.Errorf("unknown voice action: %s", action)
+	}
+	return map[string]any{
+		"enabled":   s.voiceEnabled,
+		"recording": s.voiceRecording,
+		"tts":       s.voiceTTSEnabled,
+		"action":    action,
+	}, nil
+}
+
+func (s *Server) voiceRecord(action string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch action {
+	case "start":
+		if !s.voiceEnabled {
+			return nil, errors.New("voice mode is off")
+		}
+		s.voiceRecording = true
+	case "stop":
+		s.voiceRecording = false
+	default:
+		return nil, fmt.Errorf("unknown voice action: %s", action)
+	}
+	return map[string]any{
+		"enabled":   s.voiceEnabled,
+		"recording": s.voiceRecording,
+		"tts":       s.voiceTTSEnabled,
+		"action":    action,
+	}, nil
+}
+
+func (s *Server) voiceSpeak(text string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.voiceEnabled {
+		return nil, errors.New("voice mode is off")
+	}
+	if !s.voiceTTSEnabled {
+		return nil, errors.New("tts is disabled")
+	}
+	return map[string]any{
+		"spoken":  true,
+		"text":    text,
+		"length":  len([]rune(text)),
+		"enabled": s.voiceEnabled,
+		"tts":     s.voiceTTSEnabled,
+	}, nil
 }
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
