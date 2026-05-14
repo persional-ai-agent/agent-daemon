@@ -546,3 +546,32 @@ func TestBookmarkCommandCaseInsensitiveSubcommands(t *testing.T) {
 		t.Fatalf("bookmark USE failed: %v", err)
 	}
 }
+
+func TestWorkbenchCommandCaseInsensitiveSubcommands(t *testing.T) {
+	dir := t.TempDir()
+	s := &appState{
+		workbenchPath:    filepath.Join(dir, "workbenches.json"),
+		historyPath:      filepath.Join(dir, "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+		wsBase:           "ws://127.0.0.1:8200/v1/chat/ws",
+		httpBase:         "http://127.0.0.1:8200",
+	}
+	if _, err, _ := handleTUICommand(s, "/workbench SAVE demo", nil, nil); err != nil {
+		t.Fatalf("workbench SAVE failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workbench LIST", nil, nil); err != nil {
+		t.Fatalf("workbench LIST failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workbench LOAD demo", nil, nil); err != nil {
+		t.Fatalf("workbench LOAD failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workbench DELETE demo", nil, nil); err != nil {
+		t.Fatalf("workbench DELETE failed: %v", err)
+	}
+}

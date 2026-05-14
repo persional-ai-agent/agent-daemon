@@ -495,7 +495,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			if len(parts) < 2 {
 				return lines, fmt.Errorf("用法: /workbench save|list|load|delete ..."), false
 			}
-			sub := parts[1]
+			sub := strings.ToLower(strings.TrimSpace(parts[1]))
 			name := ""
 			if len(parts) > 2 {
 				name = strings.TrimSpace(parts[2])
