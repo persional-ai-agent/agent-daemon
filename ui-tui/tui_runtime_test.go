@@ -108,3 +108,81 @@ func TestRuntimeToolFailedLine(t *testing.T) {
 		t.Fatalf("expected failed tool style line, got: %q", out)
 	}
 }
+
+func TestRuntimeMultiThinkingBlocks(t *testing.T) {
+	rt := newTerminalRuntime(100)
+	evt := func(eventType string, data map[string]any) map[string]any {
+		return map[string]any{
+			"type": "model_stream_event",
+			"data": map[string]any{
+				"event_type": eventType,
+				"event_data": data,
+			},
+		}
+	}
+
+	rt.publishTurnEvent(evt("response.reasoning_text.delta", map[string]any{
+		"item_id":       "rs_a",
+		"output_index":  0,
+		"content_index": 0,
+		"text":          "alpha",
+	}))
+	rt.publishTurnEvent(evt("response.reasoning_text.delta", map[string]any{
+		"item_id":       "rs_b",
+		"output_index":  0,
+		"content_index": 0,
+		"text":          "beta",
+	}))
+	rt.publishTurnEvent(evt("response.reasoning_text.done", map[string]any{
+		"item_id":       "rs_a",
+		"output_index":  0,
+		"content_index": 0,
+	}))
+	rt.publishTurnEvent(evt("response.reasoning_text.done", map[string]any{
+		"item_id":       "rs_b",
+		"output_index":  0,
+		"content_index": 0,
+	}))
+	rt.consumePendingEvents()
+
+	collapsed, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected render changed")
+	}
+	if count := strings.Count(collapsed, "Thinking"); count < 2 {
+		t.Fatalf("expected >=2 thinking lines, got %d: %q", count, collapsed)
+	}
+	if strings.Contains(collapsed, "alpha") || strings.Contains(collapsed, "beta") {
+		t.Fatalf("expected thinking content hidden in collapsed mode, got: %q", collapsed)
+	}
+
+	rt.toggleThinkingExpanded()
+	expanded, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected render changed after expand")
+	}
+	if !strings.Contains(expanded, "alpha") || !strings.Contains(expanded, "beta") {
+		t.Fatalf("expected all thinking content visible when expanded, got: %q", expanded)
+	}
+}
+
+func TestRuntimeDiffRenderNoChange(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("hello")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "pong"},
+		},
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	if _, changed := rt.render(true); !changed {
+		t.Fatal("expected first force render changed")
+	}
+	if _, changed := rt.render(false); changed {
+		t.Fatal("expected no diff patch on unchanged tree")
+	}
+}

@@ -117,6 +117,7 @@ type runtimeEvent struct {
 	Text       string
 	ToolName   string
 	ToolCallID string
+	ThinkingID string
 	Status     string
 }
 
@@ -150,13 +151,18 @@ const (
 )
 
 type runtimeEventParser struct {
-	state       parserState
-	pendingText string
-	toolStarts  map[string]time.Time
+	state            parserState
+	pendingText      string
+	toolStarts       map[string]time.Time
+	inlineThinkingID string
 }
 
 func newRuntimeEventParser() *runtimeEventParser {
-	return &runtimeEventParser{state: parserStateNormal, toolStarts: make(map[string]time.Time)}
+	return &runtimeEventParser{
+		state:            parserStateNormal,
+		toolStarts:       make(map[string]time.Time),
+		inlineThinkingID: "inline-thinking",
+	}
 }
 
 func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
@@ -164,7 +170,7 @@ func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
 	case runtimeEventUserInput:
 		p.flushPendingText(tree)
 		tree.closeStreamingAssistantNode()
-		tree.endThinkingBlock()
+		tree.endAllThinkingBlocks()
 		tree.addBlankNode()
 		tree.addUserNode(event.Text)
 	case runtimeEventTokenDelta:
@@ -172,18 +178,18 @@ func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
 	case runtimeEventAssistantFinal:
 		p.flushPendingText(tree)
 		tree.finalizeAssistantNode(event.Text)
-		tree.endThinkingBlock()
+		tree.endAllThinkingBlocks()
 		p.state = parserStateNormal
 	case runtimeEventToolStart:
 		p.onToolStart(tree, event)
 	case runtimeEventToolEnd:
 		p.onToolEnd(tree, event)
 	case runtimeEventThinkingStart:
-		tree.startThinkingBlock()
+		tree.startThinkingBlock(event.ThinkingID)
 	case runtimeEventThinkingDelta:
-		tree.appendThinkingToken(event.Text)
+		tree.appendThinkingToken(event.ThinkingID, event.Text)
 	case runtimeEventThinkingEnd:
-		tree.endThinkingBlock()
+		tree.endThinkingBlock(event.ThinkingID)
 	case runtimeEventSystemText:
 		tree.addSystemNode(event.Text)
 	case runtimeEventError:
@@ -191,7 +197,7 @@ func (p *runtimeEventParser) Apply(tree *uiStateTree, event runtimeEvent) {
 	case runtimeEventBlockFlush:
 		p.flushPendingText(tree)
 		tree.closeStreamingAssistantNode()
-		tree.endThinkingBlock()
+		tree.endAllThinkingBlocks()
 		p.state = parserStateNormal
 	}
 }
@@ -246,23 +252,23 @@ func (p *runtimeEventParser) consumeAssistantDelta(tree *uiStateTree, delta stri
 				tree.appendAssistantToken(p.pendingText[:idx])
 			}
 			p.pendingText = p.pendingText[idx+len(openTag):]
-			tree.startThinkingBlock()
+			tree.startThinkingBlock(p.inlineThinkingID)
 			p.state = parserStateThinking
 		case parserStateThinking:
 			idx := strings.Index(p.pendingText, closeTag)
 			if idx < 0 {
 				flushLen := len(p.pendingText) - suffixPrefixOverlap(p.pendingText, closeTag)
 				if flushLen > 0 {
-					tree.appendThinkingToken(p.pendingText[:flushLen])
+					tree.appendThinkingToken(p.inlineThinkingID, p.pendingText[:flushLen])
 					p.pendingText = p.pendingText[flushLen:]
 				}
 				return
 			}
 			if idx > 0 {
-				tree.appendThinkingToken(p.pendingText[:idx])
+				tree.appendThinkingToken(p.inlineThinkingID, p.pendingText[:idx])
 			}
 			p.pendingText = p.pendingText[idx+len(closeTag):]
-			tree.endThinkingBlock()
+			tree.endThinkingBlock(p.inlineThinkingID)
 			p.state = parserStateNormal
 		}
 	}
@@ -273,7 +279,7 @@ func (p *runtimeEventParser) flushPendingText(tree *uiStateTree) {
 		return
 	}
 	if p.state == parserStateThinking {
-		tree.appendThinkingToken(p.pendingText)
+		tree.appendThinkingToken(p.inlineThinkingID, p.pendingText)
 	} else {
 		tree.appendAssistantToken(p.pendingText)
 	}
@@ -331,13 +337,16 @@ type uiStateTree struct {
 	nodes              []*uiNode
 	nextID             int
 	streamingAssistant string
-	thinkingNodeID     string
+	thinkingNodeByID   map[string]string
 	thinkingExpanded   bool
 	toolNodeByCallID   map[string]string
 }
 
 func newUIStateTree() *uiStateTree {
-	return &uiStateTree{toolNodeByCallID: make(map[string]string)}
+	return &uiStateTree{
+		thinkingNodeByID: make(map[string]string),
+		toolNodeByCallID: make(map[string]string),
+	}
 }
 
 func (tree *uiStateTree) addNode(nodeType uiNodeType, content string, status string) *uiNode {
@@ -426,25 +435,31 @@ func (tree *uiStateTree) findStreamingAssistantNode() *uiNode {
 	return nil
 }
 
-func (tree *uiStateTree) startThinkingBlock() {
-	if node := tree.findThinkingNode(); node != nil {
+func (tree *uiStateTree) startThinkingBlock(thinkingID string) {
+	if thinkingID == "" {
+		thinkingID = "thinking-default"
+	}
+	if node := tree.findThinkingNode(thinkingID); node != nil {
 		node.Status = "streaming"
 		node.Dirty = true
 		return
 	}
 	node := tree.addNode(nodeThinking, "", "streaming")
 	node.Expanded = tree.thinkingExpanded
-	tree.thinkingNodeID = node.ID
+	tree.thinkingNodeByID[thinkingID] = node.ID
 }
 
-func (tree *uiStateTree) appendThinkingToken(token string) {
+func (tree *uiStateTree) appendThinkingToken(thinkingID, token string) {
+	if thinkingID == "" {
+		thinkingID = "thinking-default"
+	}
 	if token == "" {
 		return
 	}
-	node := tree.findThinkingNode()
+	node := tree.findThinkingNode(thinkingID)
 	if node == nil {
-		tree.startThinkingBlock()
-		node = tree.findThinkingNode()
+		tree.startThinkingBlock(thinkingID)
+		node = tree.findThinkingNode(thinkingID)
 	}
 	if node == nil {
 		return
@@ -453,22 +468,35 @@ func (tree *uiStateTree) appendThinkingToken(token string) {
 	node.Dirty = true
 }
 
-func (tree *uiStateTree) endThinkingBlock() {
-	node := tree.findThinkingNode()
+func (tree *uiStateTree) endThinkingBlock(thinkingID string) {
+	if thinkingID == "" {
+		thinkingID = "thinking-default"
+	}
+	node := tree.findThinkingNode(thinkingID)
 	if node == nil {
 		return
 	}
 	node.Status = "done"
 	node.Dirty = true
-	tree.thinkingNodeID = ""
+	delete(tree.thinkingNodeByID, thinkingID)
 }
 
-func (tree *uiStateTree) findThinkingNode() *uiNode {
-	if tree.thinkingNodeID == "" {
+func (tree *uiStateTree) endAllThinkingBlocks() {
+	for key := range tree.thinkingNodeByID {
+		tree.endThinkingBlock(key)
+	}
+}
+
+func (tree *uiStateTree) findThinkingNode(thinkingID string) *uiNode {
+	if thinkingID == "" {
+		return nil
+	}
+	nodeID, ok := tree.thinkingNodeByID[thinkingID]
+	if !ok || nodeID == "" {
 		return nil
 	}
 	for _, node := range tree.nodes {
-		if node.ID == tree.thinkingNodeID {
+		if node.ID == nodeID {
 			return node
 		}
 	}
@@ -555,23 +583,26 @@ func formatDuration(d time.Duration) string {
 }
 
 type uiRenderEngine struct {
-	width      int
-	markdown   *glamour.TermRenderer
-	mdWidth    int
-	cache      map[string]string
-	lastOutput string
-	userStyle  lipgloss.Style
-	metaStyle  lipgloss.Style
-	errorStyle lipgloss.Style
+	width       int
+	markdown    *glamour.TermRenderer
+	mdWidth     int
+	cache       map[string]string
+	order       []string
+	fingerprint map[string]string
+	lastOutput  string
+	userStyle   lipgloss.Style
+	metaStyle   lipgloss.Style
+	errorStyle  lipgloss.Style
 }
 
 func newUIRenderEngine(width int) *uiRenderEngine {
 	return &uiRenderEngine{
-		width:      width,
-		cache:      make(map[string]string),
-		userStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#A8A8A8")).Padding(0, 1),
-		metaStyle:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
-		errorStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true),
+		width:       width,
+		cache:       make(map[string]string),
+		fingerprint: make(map[string]string),
+		userStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#A8A8A8")).Padding(0, 1),
+		metaStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
+		errorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true),
 	}
 }
 
@@ -587,37 +618,177 @@ func (engine *uiRenderEngine) setWidth(width int) {
 	for key := range engine.cache {
 		delete(engine.cache, key)
 	}
+	for key := range engine.fingerprint {
+		delete(engine.fingerprint, key)
+	}
+	engine.order = nil
 }
 
 func (engine *uiRenderEngine) reset() {
 	engine.cache = make(map[string]string)
+	engine.fingerprint = make(map[string]string)
+	engine.order = nil
 	engine.lastOutput = ""
 	engine.markdown = nil
 	engine.mdWidth = 0
 }
 
 func (engine *uiRenderEngine) Render(tree *uiStateTree, force bool) (string, bool) {
-	parts := make([]string, 0, len(tree.nodes))
-	contentChanged := false
-	for _, node := range tree.nodes {
-		if node == nil {
-			continue
-		}
-		rendered, ok := engine.cache[node.ID]
-		if !ok || node.Dirty || force {
-			rendered = engine.renderNode(node)
-			engine.cache[node.ID] = rendered
-			node.Dirty = false
-			contentChanged = true
-		}
-		parts = append(parts, rendered)
+	patches := engine.computePatches(tree)
+	contentChanged := force || len(patches) > 0
+	if force {
+		patches = engine.forcePatches(tree)
 	}
-	output := strings.Join(parts, "\n")
+	if contentChanged {
+		engine.applyPatches(tree, patches)
+	}
+	output := engine.buildOutput()
 	if !contentChanged && output == engine.lastOutput {
 		return "", false
 	}
 	engine.lastOutput = output
 	return output, true
+}
+
+type renderPatchKind string
+
+const (
+	renderPatchAdd     renderPatchKind = "add"
+	renderPatchUpdate  renderPatchKind = "update"
+	renderPatchRemove  renderPatchKind = "remove"
+	renderPatchReorder renderPatchKind = "reorder"
+)
+
+type renderPatch struct {
+	Kind   renderPatchKind
+	NodeID string
+	Index  int
+}
+
+func (engine *uiRenderEngine) computePatches(tree *uiStateTree) []renderPatch {
+	if tree == nil {
+		return nil
+	}
+	currentOrder := make([]string, 0, len(tree.nodes))
+	currentNodes := make(map[string]*uiNode, len(tree.nodes))
+	for _, node := range tree.nodes {
+		if node == nil {
+			continue
+		}
+		currentOrder = append(currentOrder, node.ID)
+		currentNodes[node.ID] = node
+	}
+	patches := make([]renderPatch, 0)
+	prevIndex := make(map[string]int, len(engine.order))
+	for idx, id := range engine.order {
+		prevIndex[id] = idx
+	}
+	seen := make(map[string]struct{}, len(currentOrder))
+	for idx, id := range currentOrder {
+		node := currentNodes[id]
+		if node == nil {
+			continue
+		}
+		seen[id] = struct{}{}
+		sig := nodeSignature(node)
+		if _, ok := prevIndex[id]; !ok {
+			patches = append(patches, renderPatch{Kind: renderPatchAdd, NodeID: id, Index: idx})
+			continue
+		}
+		if prevSig, ok := engine.fingerprint[id]; !ok || prevSig != sig || node.Dirty {
+			patches = append(patches, renderPatch{Kind: renderPatchUpdate, NodeID: id, Index: idx})
+		}
+	}
+	for _, id := range engine.order {
+		if _, ok := seen[id]; !ok {
+			patches = append(patches, renderPatch{Kind: renderPatchRemove, NodeID: id, Index: -1})
+		}
+	}
+	if !sameOrder(engine.order, currentOrder) {
+		patches = append(patches, renderPatch{Kind: renderPatchReorder, Index: 0})
+	}
+	return patches
+}
+
+func (engine *uiRenderEngine) forcePatches(tree *uiStateTree) []renderPatch {
+	if tree == nil {
+		return nil
+	}
+	patches := make([]renderPatch, 0, len(tree.nodes)+1)
+	for idx, node := range tree.nodes {
+		if node == nil {
+			continue
+		}
+		patches = append(patches, renderPatch{Kind: renderPatchUpdate, NodeID: node.ID, Index: idx})
+	}
+	patches = append(patches, renderPatch{Kind: renderPatchReorder, Index: 0})
+	return patches
+}
+
+func (engine *uiRenderEngine) applyPatches(tree *uiStateTree, patches []renderPatch) {
+	if tree == nil {
+		return
+	}
+	nodeIndex := make(map[string]*uiNode, len(tree.nodes))
+	newOrder := make([]string, 0, len(tree.nodes))
+	for _, node := range tree.nodes {
+		if node == nil {
+			continue
+		}
+		nodeIndex[node.ID] = node
+		newOrder = append(newOrder, node.ID)
+	}
+	needsReorder := false
+	for _, patch := range patches {
+		switch patch.Kind {
+		case renderPatchRemove:
+			delete(engine.cache, patch.NodeID)
+			delete(engine.fingerprint, patch.NodeID)
+		case renderPatchAdd, renderPatchUpdate:
+			node := nodeIndex[patch.NodeID]
+			if node == nil {
+				continue
+			}
+			engine.cache[patch.NodeID] = engine.renderNode(node)
+			engine.fingerprint[patch.NodeID] = nodeSignature(node)
+			node.Dirty = false
+		case renderPatchReorder:
+			needsReorder = true
+		}
+	}
+	if needsReorder {
+		engine.order = newOrder
+	}
+}
+
+func (engine *uiRenderEngine) buildOutput() string {
+	if len(engine.order) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(engine.order))
+	for _, id := range engine.order {
+		parts = append(parts, engine.cache[id])
+	}
+	return strings.Join(parts, "\n")
+}
+
+func nodeSignature(node *uiNode) string {
+	if node == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d|%s|%s|%t|%s", node.Type, node.Status, node.Content, node.Expanded, node.ToolCallID)
+}
+
+func sameOrder(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for idx := range left {
+		if left[idx] != right[idx] {
+			return false
+		}
+	}
+	return true
 }
 
 func (engine *uiRenderEngine) renderNode(node *uiNode) string {
@@ -805,6 +976,7 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	}
 
 	if strings.Contains(eventType, "reasoning") {
+		thinkingID := buildThinkingID(eventType, eventData)
 		if strings.Contains(eventType, "delta") {
 			text := asStringFromMap(eventData, "text")
 			if text == "" {
@@ -814,18 +986,18 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 				return nil
 			}
 			return []runtimeEvent{
-				{Type: runtimeEventThinkingStart},
-				{Type: runtimeEventThinkingDelta, Text: text},
+				{Type: runtimeEventThinkingStart, ThinkingID: thinkingID},
+				{Type: runtimeEventThinkingDelta, ThinkingID: thinkingID, Text: text},
 			}
 		}
 		if strings.Contains(eventType, "done") {
 			text := asStringFromMap(eventData, "text")
 			events := make([]runtimeEvent, 0, 3)
-			events = append(events, runtimeEvent{Type: runtimeEventThinkingStart})
+			events = append(events, runtimeEvent{Type: runtimeEventThinkingStart, ThinkingID: thinkingID})
 			if text != "" {
-				events = append(events, runtimeEvent{Type: runtimeEventThinkingDelta, Text: text})
+				events = append(events, runtimeEvent{Type: runtimeEventThinkingDelta, ThinkingID: thinkingID, Text: text})
 			}
-			events = append(events, runtimeEvent{Type: runtimeEventThinkingEnd})
+			events = append(events, runtimeEvent{Type: runtimeEventThinkingEnd, ThinkingID: thinkingID})
 			return events
 		}
 	}
@@ -873,4 +1045,38 @@ func asStringFromMap(data map[string]any, key string) string {
 		return strings.TrimSpace(value)
 	}
 	return ""
+}
+
+func buildThinkingID(eventType string, eventData map[string]any) string {
+	eventType = strings.ToLower(strings.TrimSpace(eventType))
+	itemID := asStringFromMap(eventData, "item_id")
+	if itemID == "" {
+		itemID = asStringFromMap(eventData, "id")
+	}
+	outputIndex := asIntFromMap(eventData, "output_index")
+	contentIndex := asIntFromMap(eventData, "content_index")
+	if itemID != "" {
+		return fmt.Sprintf("thinking:%s:%d:%d", itemID, outputIndex, contentIndex)
+	}
+	return fmt.Sprintf("thinking:%s:%d:%d", eventType, outputIndex, contentIndex)
+}
+
+func asIntFromMap(data map[string]any, key string) int {
+	if data == nil {
+		return 0
+	}
+	switch value := data[key].(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case float32:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
 }
