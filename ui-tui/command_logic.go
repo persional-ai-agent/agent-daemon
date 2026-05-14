@@ -963,11 +963,11 @@ func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
 		return def, nil
 	}
 	if len(parts) > 2 {
-		return 0, fmt.Errorf("usage: %s [n]", prefix)
+		return 0, fmt.Errorf("用法: %s [n]", prefix)
 	}
 	v, err := strconv.Atoi(parts[1])
 	if err != nil || v <= 0 {
-		return 0, fmt.Errorf("usage: %s [n]  (n must be a positive integer)", prefix)
+		return 0, fmt.Errorf("用法: %s [n]（n 必须是正整数）", prefix)
 	}
 	return v, nil
 }
@@ -976,7 +976,7 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	parts := strings.Fields(strings.TrimSpace(input))
 	limit = 1
 	if len(parts) > 4 {
-		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	if len(parts) == 1 {
 		return limit, "", 0, nil
@@ -984,7 +984,7 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	pos := 1
 	if v, convErr := strconv.Atoi(parts[pos]); convErr == nil {
 		if v <= 0 {
-			return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+			return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
 		}
 		limit = v
 		pos++
@@ -994,15 +994,15 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	}
 	action = strings.ToLower(strings.TrimSpace(parts[pos]))
 	if action != "approve" && action != "deny" && action != "a" && action != "d" {
-		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	pos++
 	if pos >= len(parts) {
-		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	actionIndex, err = strconv.Atoi(parts[pos])
 	if err != nil || actionIndex <= 0 {
-		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
 	}
 	return limit, action, actionIndex, nil
 }
@@ -1016,36 +1016,36 @@ func parseSessionsArgs(input string) (limit int, pick int, err error) {
 	}
 	if len(parts) == 2 {
 		if strings.EqualFold(parts[1], "pick") {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		v, convErr := strconv.Atoi(parts[1])
 		if convErr != nil || v <= 0 {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		return v, 0, nil
 	}
 	if len(parts) == 3 {
 		if !strings.EqualFold(parts[1], "pick") {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		idx, convErr := strconv.Atoi(parts[2])
 		if convErr != nil || idx <= 0 {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		return limit, idx, nil
 	}
 	if len(parts) == 4 {
 		v, convErr := strconv.Atoi(parts[1])
 		if convErr != nil || v <= 0 || !strings.EqualFold(parts[2], "pick") {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		idx, idxErr := strconv.Atoi(parts[3])
 		if idxErr != nil || idx <= 0 {
-			return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 		}
 		return v, idx, nil
 	}
-	return 0, 0, fmt.Errorf("usage: /sessions [limit] [pick <index>]")
+	return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
 }
 
 func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pick int, err error) {
@@ -1054,7 +1054,7 @@ func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pic
 	offset = 0
 	limit = 20
 	pick = 0
-	usageErr := fmt.Errorf("usage: /show [session] [offset>=0] [limit>0] [pick <index>]")
+	usageErr := fmt.Errorf("用法: /show [session] [offset>=0] [limit>0] [pick <index>]")
 	if len(parts) == 1 {
 		return sid, offset, limit, pick, nil
 	}
@@ -1102,9 +1102,9 @@ func parseStatsArgs(input, defaultSession string) (string, error) {
 	if len(parts) == 2 {
 		sid := strings.TrimSpace(parts[1])
 		if sid == "" {
-			return "", fmt.Errorf("usage: /stats [session]")
+			return "", fmt.Errorf("用法: /stats [session]")
 		}
 		return sid, nil
 	}
-	return "", fmt.Errorf("usage: /stats [session]")
+	return "", fmt.Errorf("用法: /stats [session]")
 }
