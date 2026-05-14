@@ -12,7 +12,7 @@ all:
 	@echo 'build done!'
 
 clean:
-	@rm -f ./agent-daemon
+	@rm -f ./agent-daemon ./agent-cli
 
 test:
 	go test ./...

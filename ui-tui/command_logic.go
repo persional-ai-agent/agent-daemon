@@ -74,7 +74,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			idx, pErr := strconv.Atoi(parts[1])
 			if pErr != nil || idx <= 0 || idx > len(items) {
-				return lines, fmt.Errorf("usage: /actions <index> (1..%d)", len(items)), false
+				return lines, fmt.Errorf("用法: /actions <index> (1..%d)", len(items)), false
 			}
 			next, ok := actionCommandByIndex(s, idx)
 			if !ok {
@@ -107,7 +107,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if target == "auto" {
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("usage: /panel auto on|off"), false
+					return lines, fmt.Errorf("用法: /panel auto on|off"), false
 				}
 				switch strings.ToLower(strings.TrimSpace(parts[2])) {
 				case "on":
@@ -115,7 +115,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				case "off":
 					s.panelAutoRefresh = false
 				default:
-					return lines, fmt.Errorf("usage: /panel auto on|off"), false
+					return lines, fmt.Errorf("用法: /panel auto on|off"), false
 				}
 				_ = s.saveRuntimeState()
 				emit(fmt.Sprintf("panel auto refresh: %v", s.panelAutoRefresh))
@@ -124,7 +124,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if target == "interval" {
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("usage: /panel interval <sec>"), false
+					return lines, fmt.Errorf("用法: /panel interval <sec>"), false
 				}
 				sec, cErr := strconv.Atoi(parts[2])
 				if cErr != nil || sec < 1 || sec > 300 {
@@ -155,7 +155,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 					}
 				}
 				if !valid {
-					return lines, fmt.Errorf("usage: /panel [overview|dashboard|sessions|tools|approvals|gateway|diag|next|prev]"), false
+					return lines, fmt.Errorf("用法: /panel [overview|dashboard|sessions|tools|approvals|gateway|diag|next|prev]"), false
 				}
 				s.fullscreenPanel = target
 			}
@@ -177,7 +177,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/view "):
 			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/view ")))
 			if mode != "human" && mode != "json" {
-				return lines, fmt.Errorf("usage: /view human|json"), false
+				return lines, fmt.Errorf("用法: /view human|json"), false
 			}
 			s.viewMode = mode
 			emit("view mode: " + mode)
@@ -226,10 +226,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/diag":
 			emitData(s.diagnosticsSnapshot())
 			s.setStatus(true, "ok", "diagnostics shown")
-		case strings.HasPrefix(current, "/diag export "):
-			path := strings.TrimSpace(strings.TrimPrefix(current, "/diag export "))
+		case current == "/diag export" || strings.HasPrefix(current, "/diag export "):
+			path := strings.TrimSpace(strings.TrimPrefix(current, "/diag export"))
 			if path == "" {
-				return lines, fmt.Errorf("usage: /diag export <file>"), false
+				return lines, fmt.Errorf("用法: /diag export <file>"), false
 			}
 			if dErr := s.exportDiagnostics(path); dErr != nil {
 				s.setErrStatus(dErr)
@@ -259,7 +259,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/reconnect timeout "):
 			mode := strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout "))
 			if mode != "wait" && mode != "reconnect" && mode != "cancel" {
-				return lines, fmt.Errorf("usage: /reconnect timeout wait|reconnect|cancel"), false
+				return lines, fmt.Errorf("用法: /reconnect timeout wait|reconnect|cancel"), false
 			}
 			s.timeoutAction = mode
 			emit("reconnect timeout action: " + mode)

@@ -385,6 +385,18 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	if err == nil || err.Error() != "用法: /bookmark add <name> | /bookmark list | /bookmark use <name>" {
 		t.Fatalf("unexpected /bookmark error: %v", err)
 	}
+	_, err, _ = handleTUICommand(s, "/view bad", nil, nil)
+	if err == nil || err.Error() != "用法: /view human|json" {
+		t.Fatalf("unexpected /view error: %v", err)
+	}
+	_, err, _ = handleTUICommand(s, "/diag export", nil, nil)
+	if err == nil || err.Error() != "用法: /diag export <file>" {
+		t.Fatalf("unexpected /diag export error: %v", err)
+	}
+	_, err, _ = handleTUICommand(s, "/reconnect timeout bad", nil, nil)
+	if err == nil || err.Error() != "用法: /reconnect timeout wait|reconnect|cancel" {
+		t.Fatalf("unexpected /reconnect timeout error: %v", err)
+	}
 	_, err, _ = handleTUICommand(s, "/workbench", nil, nil)
 	if err == nil || err.Error() != "用法: /workbench save|list|load|delete ..." {
 		t.Fatalf("unexpected /workbench error: %v", err)
