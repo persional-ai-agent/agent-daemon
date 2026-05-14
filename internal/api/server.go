@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/gateway/matrix/webhook", s.handleGatewayMatrixWebhook)
+	mux.HandleFunc("/v1/gateway/feishu/webhook", s.handleGatewayFeishuWebhook)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
 	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/homeassistant/webhook", s.handleGatewayHomeAssistantWebhook)
@@ -192,6 +193,22 @@ func (s *Server) handleGatewayMatrixWebhook(w http.ResponseWriter, r *http.Reque
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "matrix webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayFeishuWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("feishu")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "feishu gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "feishu webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

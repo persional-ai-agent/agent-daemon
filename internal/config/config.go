@@ -65,6 +65,9 @@ type Config struct {
 	MatrixAccessToken       string
 	MatrixInboundSecret     string
 	MatrixAllowed           string
+	FeishuWebhookURL        string
+	FeishuInboundSecret     string
+	FeishuAllowed           string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -341,6 +344,9 @@ func loadFromINIValues(iv iniValues) Config {
 		MatrixAccessToken:       iniStr(iv, "gateway.matrix", "access_token", "AGENT_MATRIX_ACCESS_TOKEN", ""),
 		MatrixInboundSecret:     iniStr(iv, "gateway.matrix", "inbound_secret", "AGENT_MATRIX_INBOUND_SECRET", ""),
 		MatrixAllowed:           iniStr(iv, "gateway.matrix", "allowed_users", "AGENT_MATRIX_ALLOWED_USERS", ""),
+		FeishuWebhookURL:        iniStr(iv, "gateway.feishu", "webhook_url", "AGENT_FEISHU_WEBHOOK_URL", ""),
+		FeishuInboundSecret:     iniStr(iv, "gateway.feishu", "inbound_secret", "AGENT_FEISHU_INBOUND_SECRET", ""),
+		FeishuAllowed:           iniStr(iv, "gateway.feishu", "allowed_users", "AGENT_FEISHU_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),
