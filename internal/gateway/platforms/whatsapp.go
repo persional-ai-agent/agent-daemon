@@ -16,13 +16,14 @@ import (
 type WhatsAppAdapter struct {
 	accessToken   string
 	phoneNumberID string
+	verifyToken   string
 	baseURL       string
 	apiVersion    string
 	httpClient    *http.Client
 	handler       gateway.MessageHandler
 }
 
-func NewWhatsAppAdapter(accessToken, phoneNumberID string) (*WhatsAppAdapter, error) {
+func NewWhatsAppAdapter(accessToken, phoneNumberID, verifyToken string) (*WhatsAppAdapter, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	phoneNumberID = strings.TrimSpace(phoneNumberID)
 	if accessToken == "" {
@@ -34,6 +35,7 @@ func NewWhatsAppAdapter(accessToken, phoneNumberID string) (*WhatsAppAdapter, er
 	return &WhatsAppAdapter{
 		accessToken:   accessToken,
 		phoneNumberID: phoneNumberID,
+		verifyToken:   strings.TrimSpace(verifyToken),
 		baseURL:       "https://graph.facebook.com",
 		apiVersion:    "v21.0",
 		httpClient:    http.DefaultClient,
@@ -120,4 +122,88 @@ func (w *WhatsAppAdapter) SendTyping(_ context.Context, _ string) error { return
 
 func (w *WhatsAppAdapter) OnMessage(_ context.Context, handler gateway.MessageHandler) {
 	w.handler = handler
+}
+
+func (w *WhatsAppAdapter) HandleWebhook(resp http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		mode := strings.TrimSpace(req.URL.Query().Get("hub.mode"))
+		verifyToken := strings.TrimSpace(req.URL.Query().Get("hub.verify_token"))
+		challenge := strings.TrimSpace(req.URL.Query().Get("hub.challenge"))
+		if mode != "subscribe" || challenge == "" || strings.TrimSpace(w.verifyToken) == "" || verifyToken != strings.TrimSpace(w.verifyToken) {
+			http.Error(resp, "forbidden", http.StatusForbidden)
+			return
+		}
+		resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		resp.WriteHeader(http.StatusOK)
+		_, _ = resp.Write([]byte(challenge))
+		return
+	case http.MethodPost:
+		// continue below
+	default:
+		http.Error(resp, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	defer req.Body.Close()
+	bs, err := io.ReadAll(io.LimitReader(req.Body, 2<<20))
+	if err != nil {
+		http.Error(resp, "bad request", http.StatusBadRequest)
+		return
+	}
+	var payload whatsAppWebhookPayload
+	if err := json.Unmarshal(bs, &payload); err != nil {
+		http.Error(resp, "bad request", http.StatusBadRequest)
+		return
+	}
+	if w.handler != nil {
+		for _, entry := range payload.Entry {
+			for _, change := range entry.Changes {
+				for _, msg := range change.Value.Messages {
+					text := strings.TrimSpace(msg.Text.Body)
+					if text == "" {
+						continue
+					}
+					userID := strings.TrimSpace(msg.From)
+					if userID == "" {
+						continue
+					}
+					replyTo := strings.TrimSpace(msg.Context.ID)
+					w.handler(req.Context(), gateway.MessageEvent{
+						Text:      text,
+						MessageID: strings.TrimSpace(msg.ID),
+						ChatID:    userID,
+						ChatType:  "dm",
+						UserID:    userID,
+						UserName:  userID,
+						ReplyToID: replyTo,
+						IsCommand: strings.HasPrefix(text, "/"),
+					})
+				}
+			}
+		}
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.WriteHeader(http.StatusOK)
+	_, _ = resp.Write([]byte(`{"ok":true}`))
+}
+
+type whatsAppWebhookPayload struct {
+	Entry []struct {
+		Changes []struct {
+			Value struct {
+				Messages []struct {
+					From string `json:"from"`
+					ID   string `json:"id"`
+					Type string `json:"type"`
+					Text struct {
+						Body string `json:"body"`
+					} `json:"text"`
+					Context struct {
+						ID string `json:"id"`
+					} `json:"context"`
+				} `json:"messages"`
+			} `json:"value"`
+		} `json:"changes"`
+	} `json:"entry"`
 }

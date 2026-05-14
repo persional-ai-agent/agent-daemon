@@ -931,6 +931,7 @@ func runSetup(cfg config.Config, args []string) {
 	gatewayAppToken := fs.String("gateway-app-token", "", "slack app token")
 	gatewayAccessToken := fs.String("gateway-access-token", "", "whatsapp access token")
 	gatewayPhoneNumberID := fs.String("gateway-phone-number-id", "", "whatsapp phone number id")
+	gatewayVerifyToken := fs.String("gateway-verify-token", "", "whatsapp verify token (for webhook challenge)")
 	gatewayAppID := fs.String("gateway-app-id", "", "yuanbao app id")
 	gatewayAppSecret := fs.String("gateway-app-secret", "", "yuanbao app secret")
 	gatewayAllowedUsers := fs.String("gateway-allowed-users", "", "comma-separated allowed users")
@@ -970,6 +971,7 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*gatewayAppToken),
 		strings.TrimSpace(*gatewayAccessToken),
 		strings.TrimSpace(*gatewayPhoneNumberID),
+		strings.TrimSpace(*gatewayVerifyToken),
 		strings.TrimSpace(*gatewayAppID),
 		strings.TrimSpace(*gatewayAppSecret),
 		strings.TrimSpace(*gatewayAllowedUsers),
@@ -3600,6 +3602,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewayAppToken := ""
 	gatewayAccessToken := ""
 	gatewayPhoneNumberID := ""
+	gatewayVerifyToken := ""
 	gatewayAppID := ""
 	gatewayAppSecret := ""
 	gatewayAllowedUsers := ""
@@ -3615,6 +3618,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	case "whatsapp":
 		gatewayAccessToken = promptInput(reader, "whatsapp access token", "")
 		gatewayPhoneNumberID = promptInput(reader, "whatsapp phone number id", "")
+		gatewayVerifyToken = promptInput(reader, "whatsapp verify token (optional, for webhook challenge)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "yuanbao":
 		gatewayToken = promptInput(reader, "yuanbao token (optional)", "")
@@ -3638,6 +3642,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewayAppToken,
 		gatewayAccessToken,
 		gatewayPhoneNumberID,
+		gatewayVerifyToken,
 		gatewayAppID,
 		gatewayAppSecret,
 		gatewayAllowedUsers,
@@ -3669,7 +3674,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3693,7 +3698,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -5867,6 +5872,7 @@ func runGatewaySetup(args []string) {
 	appToken := fs.String("app-token", "", "slack app token")
 	accessToken := fs.String("access-token", "", "whatsapp access token")
 	phoneNumberID := fs.String("phone-number-id", "", "whatsapp phone number id")
+	verifyToken := fs.String("verify-token", "", "whatsapp verify token (for webhook challenge)")
 	appID := fs.String("app-id", "", "yuanbao app id")
 	appSecret := fs.String("app-secret", "", "yuanbao app secret")
 	allowedUsers := fs.String("allowed-users", "", "comma-separated allowed users")
@@ -5888,6 +5894,7 @@ func runGatewaySetup(args []string) {
 		strings.TrimSpace(*appToken),
 		strings.TrimSpace(*accessToken),
 		strings.TrimSpace(*phoneNumberID),
+		strings.TrimSpace(*verifyToken),
 		strings.TrimSpace(*appID),
 		strings.TrimSpace(*appSecret),
 		strings.TrimSpace(*allowedUsers),
@@ -5909,7 +5916,7 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToken, phoneNumberID, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
@@ -5953,6 +5960,10 @@ func setupGatewayConfig(path, platformKey, token, botToken, appToken, accessToke
 		values["gateway.whatsapp.access_token"] = accessToken
 		values["gateway.whatsapp.phone_number_id"] = phoneNumberID
 		written = append(written, "gateway.whatsapp.access_token", "gateway.whatsapp.phone_number_id")
+		if verifyToken != "" {
+			values["gateway.whatsapp.verify_token"] = verifyToken
+			written = append(written, "gateway.whatsapp.verify_token")
+		}
 		if allowedUsers != "" {
 			values["gateway.whatsapp.allowed_users"] = allowedUsers
 			written = append(written, "gateway.whatsapp.allowed_users")
@@ -6993,7 +7004,7 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		}
 	}
 	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" && strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
-		wa, err := platforms.NewWhatsAppAdapter(cfg.WhatsAppAccessToken, cfg.WhatsAppPhoneNumberID)
+		wa, err := platforms.NewWhatsAppAdapter(cfg.WhatsAppAccessToken, cfg.WhatsAppPhoneNumberID, cfg.WhatsAppVerifyToken)
 		if err != nil {
 			log.Printf("whatsapp adapter: %v", err)
 		} else {

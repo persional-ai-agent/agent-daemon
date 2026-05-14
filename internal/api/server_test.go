@@ -15,6 +15,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/platform"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -97,6 +98,23 @@ type stubSessionStoreWithHistory struct {
 	msgs []core.Message
 }
 
+type stubWebhookAdapter struct {
+	name string
+}
+
+func (s *stubWebhookAdapter) Name() string                     { return s.name }
+func (s *stubWebhookAdapter) Connect(context.Context) error    { return nil }
+func (s *stubWebhookAdapter) Disconnect(context.Context) error { return nil }
+func (s *stubWebhookAdapter) Send(context.Context, string, string, string) (platform.SendResult, error) {
+	return platform.SendResult{Success: true}, nil
+}
+func (s *stubWebhookAdapter) EditMessage(context.Context, string, string, string) error { return nil }
+func (s *stubWebhookAdapter) SendTyping(context.Context, string) error                  { return nil }
+func (s *stubWebhookAdapter) OnMessage(context.Context, platform.MessageHandler)        {}
+func (s *stubWebhookAdapter) HandleWebhook(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *stubSessionStoreWithHistory) LoadMessages(string, int) ([]core.Message, error) {
 	return append([]core.Message(nil), s.msgs...), nil
 }
@@ -174,6 +192,39 @@ func TestHandleChatStream(t *testing.T) {
 	if !strings.Contains(body, `"session_id":"`) {
 		t.Fatalf("expected response to contain session id, body=%s", body)
 	}
+}
+
+func TestGatewayWhatsAppWebhookEndpoint(t *testing.T) {
+	srv := &Server{
+		Engine: &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     tools.NewRegistry(),
+			SessionStore: &stubSessionStore{},
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		},
+	}
+
+	t.Run("adapter_unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/whatsapp/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("adapter_available", func(t *testing.T) {
+		adapter := &stubWebhookAdapter{name: "whatsapp"}
+		platform.Register(adapter)
+		t.Cleanup(func() { platform.Unregister("whatsapp") })
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/gateway/whatsapp/webhook", bytes.NewBufferString(`{}`))
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
 }
 
 func TestUIEndpoints(t *testing.T) {

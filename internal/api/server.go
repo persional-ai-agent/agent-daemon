@@ -22,6 +22,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/platform"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -97,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/stream", s.handleChatStream)
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
+	mux.HandleFunc("/v1/gateway/whatsapp/webhook", s.handleGatewayWhatsAppWebhook)
 	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
 	mux.HandleFunc("/v1/acp/message", s.handleACPMessage)
 	mux.HandleFunc("/v1/acp/message/stream", s.handleACPMessageStream)
@@ -140,6 +142,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/voice/record", s.handleUIVoiceRecord)
 	mux.HandleFunc("/v1/ui/voice/tts", s.handleUIVoiceTTS)
 	return mux
+}
+
+func (s *Server) handleGatewayWhatsAppWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("whatsapp")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "whatsapp gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "whatsapp webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
 }
 
 func (s *Server) handleACPSessions(w http.ResponseWriter, r *http.Request) {
