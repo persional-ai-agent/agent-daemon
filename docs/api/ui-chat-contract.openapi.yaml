@@ -253,6 +253,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/sessions/compress:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+                keep_last_n:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Compress session messages summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [result]
+                    properties:
+                      result:
+                        type: object
+                        required: [session_id, compressed, before_messages, after_messages, dropped_messages, keep_last_n]
+                        properties:
+                          session_id:
+                            type: string
+                          compressed:
+                            type: boolean
+                          before_messages:
+                            type: integer
+                          after_messages:
+                            type: integer
+                          dropped_messages:
+                            type: integer
+                          keep_last_n:
+                            type: integer
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/config:
     get:
       responses:

@@ -92,6 +92,15 @@ func (s *stubSessionStore) LoadMessages(string, int) ([]core.Message, error) {
 	return nil, nil
 }
 
+type stubSessionStoreWithHistory struct {
+	stubSessionStore
+	msgs []core.Message
+}
+
+func (s *stubSessionStoreWithHistory) LoadMessages(string, int) ([]core.Message, error) {
+	return append([]core.Message(nil), s.msgs...), nil
+}
+
 func (s *stubSessionStore) ListRecentSessions(limit int) ([]map[string]any, error) {
 	if limit <= 0 {
 		limit = 20
@@ -310,6 +319,31 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"resumed":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("session_compress", func(t *testing.T) {
+		localSrv := &Server{
+			Engine: &agent.Engine{
+				Client:   fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+				Registry: reg,
+				SessionStore: &stubSessionStoreWithHistory{msgs: []core.Message{
+					{Role: "user", Content: "u1"},
+					{Role: "assistant", Content: "a1"},
+					{Role: "user", Content: "u2"},
+				}},
+				SystemPrompt: agent.DefaultSystemPrompt(),
+			},
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/sessions/compress", bytes.NewBufferString(`{"session_id":"s1","keep_last_n":2}`))
+		req.Header.Set("Content-Type", "application/json")
+		localSrv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"compressed":true`) || !strings.Contains(rec.Body.String(), `"dropped_messages":1`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

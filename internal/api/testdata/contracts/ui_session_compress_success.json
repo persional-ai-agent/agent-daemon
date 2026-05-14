@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "headers": {
+    "X-Agent-UI-API-Version": "v1",
+    "X-Agent-UI-API-Compat": "2026-05-13"
+  },
+  "body": {
+    "ok": true,
+    "result": {
+      "session_id": "s1",
+      "compressed": true,
+      "before_messages": 0,
+      "after_messages": 0,
+      "dropped_messages": 0,
+      "keep_last_n": 2
+    },
+    "api_version": "v1",
+    "compat": "2026-05-13"
+  }
+}
