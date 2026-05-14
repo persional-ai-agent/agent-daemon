@@ -405,23 +405,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "approval denied")
 			emitData(uiPayload(out, "result"))
 		case strings.HasPrefix(current, "/pending"):
-			parts := strings.Fields(current)
-			limit := 1
-			action := ""
-			actionIndex := 0
-			if len(parts) > 1 {
-				if v, pErr := strconv.Atoi(parts[1]); pErr == nil && v > 0 {
-					limit = v
-					if len(parts) > 3 {
-						action = strings.ToLower(strings.TrimSpace(parts[2]))
-						actionIndex, _ = strconv.Atoi(parts[3])
-					}
-				} else {
-					action = strings.ToLower(strings.TrimSpace(parts[1]))
-					if len(parts) > 2 {
-						actionIndex, _ = strconv.Atoi(parts[2])
-					}
-				}
+			limit, action, actionIndex, pErr := parsePendingArgs(current)
+			if pErr != nil {
+				return lines, pErr, false
 			}
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=200", s.httpBase, url.PathEscape(s.session)), nil)
 			if hErr != nil {
@@ -997,4 +983,39 @@ func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
 		return 0, fmt.Errorf("usage: %s [n]  (n must be a positive integer)", prefix)
 	}
 	return v, nil
+}
+
+func parsePendingArgs(input string) (limit int, action string, actionIndex int, err error) {
+	parts := strings.Fields(strings.TrimSpace(input))
+	limit = 1
+	if len(parts) > 4 {
+		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+	}
+	if len(parts) == 1 {
+		return limit, "", 0, nil
+	}
+	pos := 1
+	if v, convErr := strconv.Atoi(parts[pos]); convErr == nil {
+		if v <= 0 {
+			return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+		}
+		limit = v
+		pos++
+	}
+	if pos >= len(parts) {
+		return limit, "", 0, nil
+	}
+	action = strings.ToLower(strings.TrimSpace(parts[pos]))
+	if action != "approve" && action != "deny" && action != "a" && action != "d" {
+		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+	}
+	pos++
+	if pos >= len(parts) {
+		return limit, action, 0, nil
+	}
+	actionIndex, err = strconv.Atoi(parts[pos])
+	if err != nil || actionIndex <= 0 {
+		return 0, "", 0, fmt.Errorf("usage: /pending [limit] [approve|deny|a|d <index>]")
+	}
+	return limit, action, actionIndex, nil
 }

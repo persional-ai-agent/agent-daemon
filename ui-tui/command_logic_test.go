@@ -44,3 +44,66 @@ func TestParseOptionalPositiveIntArg(t *testing.T) {
 		}
 	})
 }
+
+func TestParsePendingArgs(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		limit, action, idx, err := parsePendingArgs("/pending")
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if limit != 1 || action != "" || idx != 0 {
+			t.Fatalf("got limit=%d action=%q idx=%d", limit, action, idx)
+		}
+	})
+
+	t.Run("limit_only", func(t *testing.T) {
+		limit, action, idx, err := parsePendingArgs("/pending 3")
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if limit != 3 || action != "" || idx != 0 {
+			t.Fatalf("got limit=%d action=%q idx=%d", limit, action, idx)
+		}
+	})
+
+	t.Run("action_only", func(t *testing.T) {
+		limit, action, idx, err := parsePendingArgs("/pending approve 2")
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if limit != 1 || action != "approve" || idx != 2 {
+			t.Fatalf("got limit=%d action=%q idx=%d", limit, action, idx)
+		}
+	})
+
+	t.Run("limit_and_action", func(t *testing.T) {
+		limit, action, idx, err := parsePendingArgs("/pending 5 d 1")
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if limit != 5 || action != "d" || idx != 1 {
+			t.Fatalf("got limit=%d action=%q idx=%d", limit, action, idx)
+		}
+	})
+
+	t.Run("invalid_limit", func(t *testing.T) {
+		_, _, _, err := parsePendingArgs("/pending 0")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid_action", func(t *testing.T) {
+		_, _, _, err := parsePendingArgs("/pending nope")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid_index", func(t *testing.T) {
+		_, _, _, err := parsePendingArgs("/pending approve xx")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
