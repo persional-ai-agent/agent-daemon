@@ -18,46 +18,6 @@
 
 ## 合并内容
 
-### 来源：`0013-discord-plan-merged.md`
-
-# 0013 discord plan merged
-
-## 模块
-
-- `discord`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0017-feishu-plan-merged.md`
-
-# 0017 feishu plan merged
-
-## 模块
-
-- `feishu`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
 ### 来源：`0021-gateway-plan-merged.md`
 
 # 0021 gateway plan merged
@@ -154,43 +114,3 @@
 3. **流式编辑限流 500ms**：避免 Telegram API 编辑频率过高触发限流
 4. **默认拒绝授权**：空 `allowedUsers` = 拒绝所有用户，需要显式配置
 5. **不引入新的外部持久化**：网关会话复用 `store.SessionStore`，不新增存储表
-
-### 来源：`0045-spotify-plan-merged.md`
-
-# 0045 spotify plan merged
-
-## 模块
-
-- `spotify`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0060-yuanbao-plan-merged.md`
-
-# 0060 yuanbao plan merged
-
-## 模块
-
-- `yuanbao`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。

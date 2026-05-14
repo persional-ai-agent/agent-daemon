@@ -17,66 +17,6 @@
 
 ## 合并内容
 
-### 来源：`0018-file-research-merged.md`
-
-# 0018 file research merged
-
-## 模块
-
-- `file`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0023-homeassistant-research-merged.md`
-
-# 0023 homeassistant research merged
-
-## 模块
-
-- `homeassistant`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0034-process-research-merged.md`
-
-# 0034 process research merged
-
-## 模块
-
-- `process`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
 ### 来源：`0049-tool-research-merged.md`
 
 # 0049 tool research merged

@@ -18,46 +18,6 @@
 
 ## 合并内容
 
-### 来源：`0013-discord-research-merged.md`
-
-# 0013 discord research merged
-
-## 模块
-
-- `discord`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0017-feishu-research-merged.md`
-
-# 0017 feishu research merged
-
-## 模块
-
-- `feishu`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
 ### 来源：`0021-gateway-research-merged.md`
 
 # 0021 gateway research merged
@@ -279,43 +239,3 @@ type GatewayConfig struct {
 3. 扩展 `internal/config/` 支持网关配置
 4. 修改 `cmd/agentd/main.go` 的 `serve` 模式，可选启动网关
 5. 不需要新增外部依赖之外的库
-
-### 来源：`0045-spotify-research-merged.md`
-
-# 0045 spotify research merged
-
-## 模块
-
-- `spotify`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0060-yuanbao-research-merged.md`
-
-# 0060 yuanbao research merged
-
-## 模块
-
-- `yuanbao`
-
-## 类型
-
-- `research`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。

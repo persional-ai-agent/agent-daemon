@@ -17,66 +17,6 @@
 
 ## 合并内容
 
-### 来源：`0018-file-plan-merged.md`
-
-# 0018 file plan merged
-
-## 模块
-
-- `file`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0023-homeassistant-plan-merged.md`
-
-# 0023 homeassistant plan merged
-
-## 模块
-
-- `homeassistant`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
-### 来源：`0034-process-plan-merged.md`
-
-# 0034 process plan merged
-
-## 模块
-
-- `process`
-
-## 类型
-
-- `plan`
-
-## 合并来源
-
-- 无
-
-## 合并内容
-
-暂无。
-
 ### 来源：`0049-tool-plan-merged.md`
 
 # 0049 tool plan merged
