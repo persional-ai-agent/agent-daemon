@@ -38,7 +38,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 					},
 					"platform": map[string]any{
 						"type":        "string",
-						"description": "Platform name (signal/telegram/discord/slack/whatsapp/webhook/yuanbao)",
+						"description": "Platform name (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)",
 					},
 					"chat_id": map[string]any{
 						"type":        "string",

@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/chat/ws", s.handleChatWS)
 	mux.HandleFunc("/v1/chat/cancel", s.handleCancel)
 	mux.HandleFunc("/v1/gateway/signal/webhook", s.handleGatewaySignalWebhook)
+	mux.HandleFunc("/v1/gateway/email/webhook", s.handleGatewayEmailWebhook)
 	mux.HandleFunc("/v1/gateway/whatsapp/webhook", s.handleGatewayWhatsAppWebhook)
 	mux.HandleFunc("/v1/gateway/webhook/inbound", s.handleGatewayWebhookInbound)
 	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
@@ -173,6 +174,22 @@ func (s *Server) handleGatewaySignalWebhook(w http.ResponseWriter, r *http.Reque
 	})
 	if !ok {
 		writeAPIError(w, http.StatusNotImplemented, "not_supported", "signal webhook is not supported by adapter")
+		return
+	}
+	handler.HandleWebhook(w, r)
+}
+
+func (s *Server) handleGatewayEmailWebhook(w http.ResponseWriter, r *http.Request) {
+	adapter, ok := platform.Get("email")
+	if !ok {
+		writeAPIError(w, http.StatusServiceUnavailable, "gateway_unavailable", "email gateway adapter not connected")
+		return
+	}
+	handler, ok := adapter.(interface {
+		HandleWebhook(http.ResponseWriter, *http.Request)
+	})
+	if !ok {
+		writeAPIError(w, http.StatusNotImplemented, "not_supported", "email webhook is not supported by adapter")
 		return
 	}
 	handler.HandleWebhook(w, r)

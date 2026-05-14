@@ -50,6 +50,13 @@ type Config struct {
 	SignalAccount           string
 	SignalInboundSecret     string
 	SignalAllowed           string
+	EmailSMTPHost           string
+	EmailSMTPPort           string
+	EmailSMTPUsername       string
+	EmailSMTPPassword       string
+	EmailFromAddress        string
+	EmailInboundSecret      string
+	EmailAllowed            string
 	TelegramToken           string
 	TelegramAllowed         string
 	DiscordToken            string
@@ -311,6 +318,13 @@ func loadFromINIValues(iv iniValues) Config {
 		SignalAccount:           iniStr(iv, "gateway.signal", "account", "AGENT_SIGNAL_ACCOUNT", ""),
 		SignalInboundSecret:     iniStr(iv, "gateway.signal", "inbound_secret", "AGENT_SIGNAL_INBOUND_SECRET", ""),
 		SignalAllowed:           iniStr(iv, "gateway.signal", "allowed_users", "AGENT_SIGNAL_ALLOWED_USERS", ""),
+		EmailSMTPHost:           iniStr(iv, "gateway.email", "smtp_host", "AGENT_EMAIL_SMTP_HOST", ""),
+		EmailSMTPPort:           iniStr(iv, "gateway.email", "smtp_port", "AGENT_EMAIL_SMTP_PORT", "587"),
+		EmailSMTPUsername:       iniStr(iv, "gateway.email", "smtp_username", "AGENT_EMAIL_SMTP_USERNAME", ""),
+		EmailSMTPPassword:       iniStr(iv, "gateway.email", "smtp_password", "AGENT_EMAIL_SMTP_PASSWORD", ""),
+		EmailFromAddress:        iniStr(iv, "gateway.email", "from_address", "AGENT_EMAIL_FROM_ADDRESS", ""),
+		EmailInboundSecret:      iniStr(iv, "gateway.email", "inbound_secret", "AGENT_EMAIL_INBOUND_SECRET", ""),
+		EmailAllowed:            iniStr(iv, "gateway.email", "allowed_users", "AGENT_EMAIL_ALLOWED_USERS", ""),
 		TelegramToken:           iniStr(iv, "gateway.telegram", "bot_token", "AGENT_TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowed:         iniStr(iv, "gateway.telegram", "allowed_users", "AGENT_TELEGRAM_ALLOWED_USERS", ""),
 		DiscordToken:            iniStr(iv, "gateway.discord", "bot_token", "AGENT_DISCORD_BOT_TOKEN", ""),

@@ -925,10 +925,16 @@ func runSetup(cfg config.Config, args []string) {
 	baseURL := fs.String("base-url", "", "provider base URL")
 	apiKey := fs.String("api-key", "", "provider API key")
 	fallback := fs.String("fallback-provider", "", "fallback provider")
-	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (signal/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	gatewayPlatform := fs.String("gateway-platform", "", "optional gateway platform (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	gatewaySignalBaseURL := fs.String("gateway-signal-base-url", "", "signal REST base URL")
 	gatewaySignalAccount := fs.String("gateway-signal-account", "", "signal account number")
 	gatewaySignalSecret := fs.String("gateway-signal-secret", "", "signal inbound secret")
+	gatewayEmailSMTPHost := fs.String("gateway-email-smtp-host", "", "email SMTP host")
+	gatewayEmailSMTPPort := fs.String("gateway-email-smtp-port", "587", "email SMTP port")
+	gatewayEmailSMTPUsername := fs.String("gateway-email-smtp-username", "", "email SMTP username")
+	gatewayEmailSMTPPassword := fs.String("gateway-email-smtp-password", "", "email SMTP password")
+	gatewayEmailFromAddress := fs.String("gateway-email-from", "", "email from address")
+	gatewayEmailSecret := fs.String("gateway-email-secret", "", "email inbound secret")
 	gatewayToken := fs.String("gateway-token", "", "shared gateway token (telegram/discord/yuanbao)")
 	gatewayBotToken := fs.String("gateway-bot-token", "", "slack bot token")
 	gatewayAppToken := fs.String("gateway-app-token", "", "slack app token")
@@ -975,6 +981,12 @@ func runSetup(cfg config.Config, args []string) {
 		strings.TrimSpace(*gatewaySignalBaseURL),
 		strings.TrimSpace(*gatewaySignalAccount),
 		strings.TrimSpace(*gatewaySignalSecret),
+		strings.TrimSpace(*gatewayEmailSMTPHost),
+		strings.TrimSpace(*gatewayEmailSMTPPort),
+		strings.TrimSpace(*gatewayEmailSMTPUsername),
+		strings.TrimSpace(*gatewayEmailSMTPPassword),
+		strings.TrimSpace(*gatewayEmailFromAddress),
+		strings.TrimSpace(*gatewayEmailSecret),
 		strings.TrimSpace(*gatewayToken),
 		strings.TrimSpace(*gatewayBotToken),
 		strings.TrimSpace(*gatewayAppToken),
@@ -3605,7 +3617,7 @@ func runSetupWizard(cfg config.Config, args []string) {
 	if fallback != "" && !isProviderAvailable(cfg, fallback) {
 		log.Fatalf("unsupported fallback provider: %s", fallback)
 	}
-	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/signal/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
+	gatewayPlatform := strings.ToLower(strings.TrimSpace(promptInput(reader, "gateway platform [none/signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao]", "none")))
 	if gatewayPlatform == "none" {
 		gatewayPlatform = ""
 	}
@@ -3613,6 +3625,12 @@ func runSetupWizard(cfg config.Config, args []string) {
 	gatewaySignalBaseURL := ""
 	gatewaySignalAccount := ""
 	gatewaySignalSecret := ""
+	gatewayEmailSMTPHost := ""
+	gatewayEmailSMTPPort := "587"
+	gatewayEmailSMTPUsername := ""
+	gatewayEmailSMTPPassword := ""
+	gatewayEmailFromAddress := ""
+	gatewayEmailSecret := ""
 	gatewayBotToken := ""
 	gatewayAppToken := ""
 	gatewayAccessToken := ""
@@ -3630,6 +3648,14 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewaySignalBaseURL = promptInput(reader, "signal base url", "")
 		gatewaySignalAccount = promptInput(reader, "signal account", "")
 		gatewaySignalSecret = promptInput(reader, "signal inbound secret (optional)", "")
+		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
+	case "email":
+		gatewayEmailSMTPHost = promptInput(reader, "email smtp host", "")
+		gatewayEmailSMTPPort = promptInput(reader, "email smtp port", "587")
+		gatewayEmailSMTPUsername = promptInput(reader, "email smtp username", "")
+		gatewayEmailSMTPPassword = promptInput(reader, "email smtp password", "")
+		gatewayEmailFromAddress = promptInput(reader, "email from address", "")
+		gatewayEmailSecret = promptInput(reader, "email inbound secret (optional)", "")
 		gatewayAllowedUsers = promptInput(reader, "gateway allowed users (optional)", "")
 	case "telegram", "discord":
 		gatewayToken = promptInput(reader, "gateway token", "")
@@ -3668,6 +3694,12 @@ func runSetupWizard(cfg config.Config, args []string) {
 		gatewaySignalBaseURL,
 		gatewaySignalAccount,
 		gatewaySignalSecret,
+		gatewayEmailSMTPHost,
+		gatewayEmailSMTPPort,
+		gatewayEmailSMTPUsername,
+		gatewayEmailSMTPPassword,
+		gatewayEmailFromAddress,
+		gatewayEmailSecret,
 		gatewayToken,
 		gatewayBotToken,
 		gatewayAppToken,
@@ -3708,7 +3740,7 @@ func promptInput(reader *bufio.Reader, label, def string) string {
 	return line
 }
 
-func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
+func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback, gatewayPlatform, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers string) ([]string, string, error) {
 	if err := saveModelSelection(targetPath, provider, modelName, baseURL); err != nil {
 		return nil, "", err
 	}
@@ -3732,7 +3764,7 @@ func applySetupConfig(targetPath, provider, modelName, baseURL, apiKey, fallback
 	}
 	selectedGateway := strings.ToLower(strings.TrimSpace(gatewayPlatform))
 	if selectedGateway != "" {
-		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
+		gatewayWritten, err := setupGatewayConfig(targetPath, selectedGateway, gatewaySignalBaseURL, gatewaySignalAccount, gatewaySignalSecret, gatewayEmailSMTPHost, gatewayEmailSMTPPort, gatewayEmailSMTPUsername, gatewayEmailSMTPPassword, gatewayEmailFromAddress, gatewayEmailSecret, gatewayToken, gatewayBotToken, gatewayAppToken, gatewayAccessToken, gatewayPhoneNumberID, gatewayVerifyToken, gatewayWebhookSecret, gatewayWebhookOutboundURL, gatewayWebhookInboundSecret, gatewayAppID, gatewayAppSecret, gatewayAllowedUsers)
 		if err != nil {
 			return nil, "", err
 		}
@@ -4469,9 +4501,12 @@ func checkGatewayConfig(cfg config.Config) doctorCheck {
 	if !cfg.GatewayEnabled {
 		return doctorCheck{Name: "gateway", Status: "ok", Detail: "disabled"}
 	}
-	configured := make([]string, 0, 7)
+	configured := make([]string, 0, 8)
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		configured = append(configured, "signal")
+	}
+	if strings.TrimSpace(cfg.EmailSMTPHost) != "" && strings.TrimSpace(cfg.EmailSMTPUsername) != "" && strings.TrimSpace(cfg.EmailFromAddress) != "" {
+		configured = append(configured, "email")
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
 		configured = append(configured, "telegram")
@@ -5124,6 +5159,8 @@ func runGatewayForeground(cfg config.Config) {
 		switch platform {
 		case "signal":
 			return cfg.SignalAllowed
+		case "email":
+			return cfg.EmailAllowed
 		case "telegram":
 			return cfg.TelegramAllowed
 		case "discord":
@@ -5853,7 +5890,7 @@ func runGatewayPairs(cfg config.Config, args []string) {
 	case "revoke":
 		fs := flag.NewFlagSet("gateway pairs revoke", flag.ExitOnError)
 		workdir := fs.String("workdir", cfg.Workdir, "agent workdir")
-		platformName := fs.String("platform", "", "platform name (signal/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+		platformName := fs.String("platform", "", "platform name (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 		userID := fs.String("user", "", "user id to revoke")
 		_ = fs.Parse(args[1:])
 		if fs.NArg() != 0 {
@@ -5916,10 +5953,16 @@ func parseGatewayConfigPath(args []string, name string) string {
 func runGatewaySetup(args []string) {
 	fs := flag.NewFlagSet("gateway setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
-	platformName := fs.String("platform", "", "platform name (signal/telegram/discord/slack/whatsapp/webhook/yuanbao)")
+	platformName := fs.String("platform", "", "platform name (signal/email/telegram/discord/slack/whatsapp/webhook/yuanbao)")
 	signalBaseURL := fs.String("signal-base-url", "", "signal REST base URL")
 	signalAccount := fs.String("signal-account", "", "signal account number")
 	signalSecret := fs.String("signal-secret", "", "signal inbound secret")
+	emailSMTPHost := fs.String("email-smtp-host", "", "email SMTP host")
+	emailSMTPPort := fs.String("email-smtp-port", "587", "email SMTP port")
+	emailSMTPUsername := fs.String("email-smtp-username", "", "email SMTP username")
+	emailSMTPPassword := fs.String("email-smtp-password", "", "email SMTP password")
+	emailFrom := fs.String("email-from", "", "email from address")
+	emailSecret := fs.String("email-secret", "", "email inbound secret")
 	token := fs.String("token", "", "shared token field (telegram/discord/yuanbao)")
 	botToken := fs.String("bot-token", "", "slack bot token")
 	appToken := fs.String("app-token", "", "slack app token")
@@ -5935,7 +5978,7 @@ func runGatewaySetup(args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd gateway setup -platform <signal|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+		log.Fatal("usage: agentd gateway setup -platform <signal|email|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	}
 	platformKey := strings.ToLower(strings.TrimSpace(*platformName))
 	if platformKey == "" {
@@ -5948,6 +5991,12 @@ func runGatewaySetup(args []string) {
 		strings.TrimSpace(*signalBaseURL),
 		strings.TrimSpace(*signalAccount),
 		strings.TrimSpace(*signalSecret),
+		strings.TrimSpace(*emailSMTPHost),
+		strings.TrimSpace(*emailSMTPPort),
+		strings.TrimSpace(*emailSMTPUsername),
+		strings.TrimSpace(*emailSMTPPassword),
+		strings.TrimSpace(*emailFrom),
+		strings.TrimSpace(*emailSecret),
 		strings.TrimSpace(*token),
 		strings.TrimSpace(*botToken),
 		strings.TrimSpace(*appToken),
@@ -5978,7 +6027,7 @@ func runGatewaySetup(args []string) {
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
 }
 
-func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
+func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
 	values := map[string]string{
 		"gateway.enabled": "true",
 	}
@@ -5998,6 +6047,27 @@ func setupGatewayConfig(path, platformKey, signalBaseURL, signalAccount, signalS
 		if allowedUsers != "" {
 			values["gateway.signal.allowed_users"] = allowedUsers
 			written = append(written, "gateway.signal.allowed_users")
+		}
+	case "email":
+		if emailSMTPHost == "" || emailSMTPUsername == "" || emailSMTPPassword == "" || emailFromAddress == "" {
+			return nil, fmt.Errorf("email setup requires -email-smtp-host -email-smtp-username -email-smtp-password -email-from")
+		}
+		if emailSMTPPort == "" {
+			emailSMTPPort = "587"
+		}
+		values["gateway.email.smtp_host"] = emailSMTPHost
+		values["gateway.email.smtp_port"] = emailSMTPPort
+		values["gateway.email.smtp_username"] = emailSMTPUsername
+		values["gateway.email.smtp_password"] = emailSMTPPassword
+		values["gateway.email.from_address"] = emailFromAddress
+		written = append(written, "gateway.email.smtp_host", "gateway.email.smtp_port", "gateway.email.smtp_username", "gateway.email.smtp_password", "gateway.email.from_address")
+		if emailInboundSecret != "" {
+			values["gateway.email.inbound_secret"] = emailInboundSecret
+			written = append(written, "gateway.email.inbound_secret")
+		}
+		if allowedUsers != "" {
+			values["gateway.email.allowed_users"] = allowedUsers
+			written = append(written, "gateway.email.allowed_users")
 		}
 	case "telegram":
 		if token == "" {
@@ -6132,7 +6202,7 @@ func printGatewayUsage() {
 	fmt.Fprintln(os.Stderr, "  agentd gateway platforms")
 	fmt.Fprintln(os.Stderr, "  agentd gateway enable [-file path]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway disable [-file path]")
-	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <signal|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd gateway setup -platform <signal|email|telegram|discord|slack|whatsapp|webhook|yuanbao> [platform flags] [-allowed-users ids] [-file path] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs list [-workdir dir] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway pairs revoke -platform <p> -user <id> [-workdir dir]")
 	fmt.Fprintln(os.Stderr, "  agentd gateway hooks spool status [-workdir dir] [-path file] [-all]")
@@ -6515,6 +6585,9 @@ func gatewayTokenFingerprint(cfg config.Config) string {
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" || strings.TrimSpace(cfg.SignalAccount) != "" {
 		parts = append(parts, "signal:"+strings.TrimSpace(cfg.SignalBaseURL)+":"+strings.TrimSpace(cfg.SignalAccount))
 	}
+	if strings.TrimSpace(cfg.EmailSMTPHost) != "" || strings.TrimSpace(cfg.EmailSMTPUsername) != "" || strings.TrimSpace(cfg.EmailFromAddress) != "" {
+		parts = append(parts, "email:"+strings.TrimSpace(cfg.EmailSMTPHost)+":"+strings.TrimSpace(cfg.EmailSMTPUsername)+":"+strings.TrimSpace(cfg.EmailFromAddress))
+	}
 	if strings.TrimSpace(cfg.WhatsAppAccessToken) != "" || strings.TrimSpace(cfg.WhatsAppPhoneNumberID) != "" {
 		parts = append(parts, "whatsapp:"+strings.TrimSpace(cfg.WhatsAppAccessToken)+":"+strings.TrimSpace(cfg.WhatsAppPhoneNumberID))
 	}
@@ -6601,13 +6674,16 @@ func gatewayAdapterNames(adapters []gateway.PlatformAdapter) []string {
 }
 
 func supportedGatewayPlatforms() []string {
-	return []string{"signal", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
+	return []string{"signal", "email", "telegram", "discord", "slack", "whatsapp", "webhook", "yuanbao"}
 }
 
 func configuredGatewayPlatforms(cfg config.Config) []string {
-	out := make([]string, 0, 7)
+	out := make([]string, 0, 8)
 	if strings.TrimSpace(cfg.SignalBaseURL) != "" && strings.TrimSpace(cfg.SignalAccount) != "" {
 		out = append(out, "signal")
+	}
+	if strings.TrimSpace(cfg.EmailSMTPHost) != "" && strings.TrimSpace(cfg.EmailSMTPUsername) != "" && strings.TrimSpace(cfg.EmailFromAddress) != "" {
+		out = append(out, "email")
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
 		out = append(out, "telegram")
@@ -7048,6 +7124,8 @@ func runServe(cfg config.Config) {
 					switch platform {
 					case "signal":
 						return cfg.SignalAllowed
+					case "email":
+						return cfg.EmailAllowed
 					case "telegram":
 						return cfg.TelegramAllowed
 					case "discord":
@@ -7094,6 +7172,15 @@ func buildGatewayAdapters(cfg config.Config) []gateway.PlatformAdapter {
 		} else {
 			adapters = append(adapters, sa)
 			log.Printf("signal adapter configured")
+		}
+	}
+	if strings.TrimSpace(cfg.EmailSMTPHost) != "" && strings.TrimSpace(cfg.EmailSMTPUsername) != "" && strings.TrimSpace(cfg.EmailSMTPPassword) != "" && strings.TrimSpace(cfg.EmailFromAddress) != "" {
+		ea, err := platforms.NewEmailAdapter(cfg.EmailSMTPHost, cfg.EmailSMTPPort, cfg.EmailSMTPUsername, cfg.EmailSMTPPassword, cfg.EmailFromAddress, cfg.EmailInboundSecret)
+		if err != nil {
+			log.Printf("email adapter: %v", err)
+		} else {
+			adapters = append(adapters, ea)
+			log.Printf("email adapter configured")
 		}
 	}
 	if strings.TrimSpace(cfg.TelegramToken) != "" {
