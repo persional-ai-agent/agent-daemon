@@ -101,6 +101,7 @@ func TestAddChatLineTruncateAndCap(t *testing.T) {
 
 func TestActionCommandByIndex(t *testing.T) {
 	s := newState()
+	s.fullscreen = false
 	cmd, ok := actionCommandByIndex(s, 1)
 	if !ok || cmd != "/tools" {
 		t.Fatalf("idx1 cmd=%q ok=%v", cmd, ok)
