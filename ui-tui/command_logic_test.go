@@ -278,3 +278,33 @@ func TestParseStatsArgs(t *testing.T) {
 		t.Fatal("expected error for extra args")
 	}
 }
+
+func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+	cases := []struct {
+		cmd  string
+		want string
+	}{
+		{"/sessions pick", "用法: /sessions [limit] [pick <index>]"},
+		{"/show s1 bad", "用法: /show [session] [offset>=0] [limit>0] [pick <index>]"},
+		{"/stats s1 extra", "用法: /stats [session]"},
+	}
+	for _, tc := range cases {
+		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
+		if err == nil {
+			t.Fatalf("%q expected error", tc.cmd)
+		}
+		if err.Error() != tc.want {
+			t.Fatalf("%q got err=%q want=%q", tc.cmd, err.Error(), tc.want)
+		}
+	}
+}
