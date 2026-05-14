@@ -228,6 +228,51 @@ paths:
                     properties:
                       result:
                         type: object
+  /v1/ui/agents:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: session_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Delegate/subagent activity summary by session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [count, agents]
+                    properties:
+                      count:
+                        type: integer
+                      agents:
+                        type: array
+                        items:
+                          type: object
+                          required: [session_id, delegate_count]
+                          properties:
+                            session_id:
+                              type: string
+                            delegate_count:
+                              type: integer
+                            last_goal:
+                              type: string
+                            last_tool_call_id:
+                              type: string
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/approval/confirm:
     post:
       requestBody:

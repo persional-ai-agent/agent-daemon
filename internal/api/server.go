@@ -96,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
 	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
+	mux.HandleFunc("/v1/ui/agents", s.handleUIAgents)
 	return mux
 }
 
@@ -189,6 +190,13 @@ type recentSessionsStore interface {
 type sessionDetailStore interface {
 	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
 	SessionStats(sessionID string) (map[string]any, error)
+}
+
+type agentListItem struct {
+	SessionID      string `json:"session_id"`
+	DelegateCount  int    `json:"delegate_count"`
+	LastGoal       string `json:"last_goal,omitempty"`
+	LastToolCallID string `json:"last_tool_call_id,omitempty"`
 }
 
 const (
@@ -681,6 +689,77 @@ func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request)
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
 		"result": out,
+	})
+}
+
+func (s *Server) handleUIAgents(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+	ids := make([]string, 0, limit)
+	if sessionID != "" {
+		ids = append(ids, sessionID)
+	} else {
+		lister, ok := s.Engine.SessionStore.(recentSessionsStore)
+		if !ok {
+			writeUIError(w, http.StatusNotImplemented, "not_supported", "session listing not supported")
+			return
+		}
+		rows, err := lister.ListRecentSessions(limit)
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		for _, row := range rows {
+			id, _ := row["session_id"].(string)
+			id = strings.TrimSpace(id)
+			if id != "" {
+				ids = append(ids, id)
+			}
+		}
+	}
+	agents := make([]agentListItem, 0, len(ids))
+	for _, sid := range ids {
+		msgs, err := s.Engine.SessionStore.LoadMessages(sid, 500)
+		if err != nil {
+			continue
+		}
+		item := agentListItem{SessionID: sid}
+		for _, msg := range msgs {
+			for _, tc := range msg.ToolCalls {
+				if strings.TrimSpace(tc.Function.Name) != "delegate_task" {
+					continue
+				}
+				item.DelegateCount++
+				item.LastToolCallID = tc.ID
+				args := tools.ParseJSONArgs(tc.Function.Arguments)
+				goal, _ := args["goal"].(string)
+				goal = strings.TrimSpace(goal)
+				if goal != "" {
+					item.LastGoal = goal
+				}
+			}
+		}
+		if item.DelegateCount > 0 {
+			agents = append(agents, item)
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"count":  len(agents),
+		"agents": agents,
 	})
 }
 
