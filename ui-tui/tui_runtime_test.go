@@ -210,3 +210,33 @@ func TestRuntimeStreamingMarkdownRenderedBeforeDone(t *testing.T) {
 		t.Fatalf("expected markdown rendered during streaming, got raw markdown: %q", out)
 	}
 }
+
+func TestRuntimeNoDuplicateOnCompletedAfterStream(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("dup-check")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "text_delta",
+			"event_data": map[string]any{"text": "hello world"},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "assistant_message",
+		"content": "hello world",
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type":    "completed",
+		"content": "hello world",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	if strings.Count(out, "hello") != 1 {
+		t.Fatalf("expected no duplicate final output, got: %q", out)
+	}
+}

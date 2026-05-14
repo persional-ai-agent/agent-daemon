@@ -396,8 +396,16 @@ func (tree *uiStateTree) finalizeAssistantNode(content string) {
 		}
 		node = tree.addNode(nodeAssistant, "", "streaming")
 	}
+	if strings.TrimSpace(content) != "" && node.Status == "done" && node.Content == content {
+		tree.streamingAssistant = ""
+		return
+	}
 	if strings.TrimSpace(content) != "" {
 		node.Content = content
+	}
+	if node.Status == "done" && strings.TrimSpace(content) == "" {
+		tree.streamingAssistant = ""
+		return
 	}
 	node.Status = "done"
 	node.Dirty = true
@@ -909,9 +917,6 @@ func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	case "model_stream_event":
 		return mapModelStreamEventToRuntimeEvents(evt)
 	case "assistant_message":
-		if text, _ := evt["content"].(string); text != "" {
-			return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: text}}
-		}
 		return nil
 	case "result":
 		if text, _ := evt["final_response"].(string); strings.TrimSpace(text) != "" {
