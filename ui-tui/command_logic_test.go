@@ -575,3 +575,32 @@ func TestWorkbenchCommandCaseInsensitiveSubcommands(t *testing.T) {
 		t.Fatalf("workbench DELETE failed: %v", err)
 	}
 }
+
+func TestWorkflowCommandCaseInsensitiveSubcommands(t *testing.T) {
+	dir := t.TempDir()
+	s := &appState{
+		workflowPath:     filepath.Join(dir, "workflows.json"),
+		historyPath:      filepath.Join(dir, "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+		wsBase:           "ws://127.0.0.1:8200/v1/chat/ws",
+		httpBase:         "http://127.0.0.1:8200",
+	}
+	if _, err, _ := handleTUICommand(s, "/workflow SAVE demo /tools;/panel next", nil, nil); err != nil {
+		t.Fatalf("workflow SAVE failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workflow LIST", nil, nil); err != nil {
+		t.Fatalf("workflow LIST failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workflow RUN demo dry", nil, nil); err != nil {
+		t.Fatalf("workflow RUN failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/workflow DELETE demo", nil, nil); err != nil {
+		t.Fatalf("workflow DELETE failed: %v", err)
+	}
+}
