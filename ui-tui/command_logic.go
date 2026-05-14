@@ -78,7 +78,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			next, ok := actionCommandByIndex(s, idx)
 			if !ok {
-				return lines, fmt.Errorf("invalid action index"), false
+				return lines, fmt.Errorf("无效的动作索引"), false
 			}
 			emit("run action: " + next)
 			queue = append([]string{next}, queue...)
@@ -128,7 +128,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				sec, cErr := strconv.Atoi(parts[2])
 				if cErr != nil || sec < 1 || sec > 300 {
-					return lines, fmt.Errorf("panel interval must be 1..300 seconds"), false
+					return lines, fmt.Errorf("panel 刷新间隔必须在 1..300 秒之间"), false
 				}
 				s.panelRefreshSec = sec
 				_ = s.saveRuntimeState()
@@ -328,10 +328,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				items = items[:n-1]
 			}
 			if len(items) == 0 {
-				return lines, fmt.Errorf("no history available"), false
+				return lines, fmt.Errorf("没有可重放的历史记录"), false
 			}
 			if idx > len(items) {
-				return lines, fmt.Errorf("index out of range, max=%d", len(items)), false
+				return lines, fmt.Errorf("索引越界，最大值=%d", len(items)), false
 			}
 			queue = append([]string{items[idx-1]}, queue...)
 			emit("rerun: " + items[idx-1])
@@ -444,7 +444,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				chosen := items[actionIndex-1]
 				id, _ := chosen["approval_id"].(string)
 				if strings.TrimSpace(id) == "" {
-					return lines, fmt.Errorf("invalid approval id at index %d", actionIndex), false
+					return lines, fmt.Errorf("第 %d 项的 approval_id 无效", actionIndex), false
 				}
 				approve := action == "approve" || action == "a"
 				actionCmd := "/deny "
@@ -734,7 +734,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "sessions listed")
 			if pick > 0 {
 				if pick > len(s.lastSessions) {
-					return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false
+					return lines, fmt.Errorf("索引越界，最大值=%d", len(s.lastSessions)), false
 				}
 				s.session = s.lastSessions[pick-1]
 				s.lastShowSession = s.session
@@ -750,7 +750,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				return lines, pErr, false
 			}
 			if idx > len(s.lastSessions) {
-				return lines, fmt.Errorf("index out of range, max=%d", len(s.lastSessions)), false
+				return lines, fmt.Errorf("索引越界，最大值=%d", len(s.lastSessions)), false
 			}
 			s.session = s.lastSessions[idx-1]
 			s.lastShowSession = s.session
@@ -768,7 +768,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			case "sessions":
 				sid, ok := selectSessionIDFromPanelData(payload, idx)
 				if !ok {
-					return lines, fmt.Errorf("open failed: invalid session index"), false
+					return lines, fmt.Errorf("open 失败：session 索引无效"), false
 				}
 				s.session = sid
 				s.lastShowSession = sid
@@ -779,7 +779,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			case "tools":
 				name, ok := selectToolNameFromPanelData(payload, idx)
 				if !ok {
-					return lines, fmt.Errorf("open failed: invalid tool index"), false
+					return lines, fmt.Errorf("open 失败：tool 索引无效"), false
 				}
 				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
 				if hErr != nil {
@@ -791,7 +791,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			case "approvals":
 				id, ok := selectApprovalIDFromPanelData(payload, idx)
 				if !ok {
-					return lines, fmt.Errorf("open failed: invalid approval index"), false
+					return lines, fmt.Errorf("open 失败：approval 索引无效"), false
 				}
 				emit("selected pending approval: " + id)
 				emit("use /approve " + id + " or /deny " + id)
@@ -804,7 +804,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				s.setStatus(true, "ok", "approval selected")
 			default:
-				return lines, fmt.Errorf("open is available for panels: sessions/tools/approvals"), false
+				return lines, fmt.Errorf("open 仅支持面板: sessions/tools/approvals"), false
 			}
 		case strings.HasPrefix(current, "/show"):
 			sid, offset, limit, pick, pErr := parseShowArgs(current, s.session)
@@ -823,7 +823,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			if msgs, ok := out["messages"].([]any); ok && len(msgs) > 0 {
 				if pick > 0 {
 					if pick > len(msgs) {
-						return lines, fmt.Errorf("message index out of range, max=%d", len(msgs)), false
+						return lines, fmt.Errorf("消息索引越界，最大值=%d", len(msgs)), false
 					}
 					emit(fmt.Sprintf("selected message index: %d", pick))
 				} else {

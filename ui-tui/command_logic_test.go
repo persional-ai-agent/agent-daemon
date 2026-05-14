@@ -149,7 +149,7 @@ func TestHandleTUICommandRerunEmptyHistory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err.Error() != "no history available" {
+	if err.Error() != "没有可重放的历史记录" {
 		t.Fatalf("unexpected err: %v", err)
 	}
 }
@@ -402,7 +402,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		t.Fatalf("unexpected /panel auto error: %v", err)
 	}
 	_, err, _ = handleTUICommand(s, "/panel interval 0", nil, nil)
-	if err == nil || err.Error() != "panel interval must be 1..300 seconds" {
+	if err == nil || err.Error() != "panel 刷新间隔必须在 1..300 秒之间" {
 		t.Fatalf("unexpected /panel interval error: %v", err)
 	}
 	_, err, _ = handleTUICommand(s, "/workbench", nil, nil)
