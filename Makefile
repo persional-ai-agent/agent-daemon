@@ -3,7 +3,13 @@ SHELL := /bin/bash
 .PHONY: all clean test contract-test contract-replay contract-ws-replay contract-coverage contract-diff diag-check contract-check contract-release
 
 all:
-	go build -o agent-daemon cmd/agentd/main.go 
+	@go build -o agent-daemon cmd/agentd/main.go 
+	@go build -o agent-cli ui-tui/main.go \
+				ui-tui/ui_view.go \
+				ui-tui/tui_runtime.go \
+				ui-tui/bubbletea_app.go \
+				ui-tui/command_logic.go 
+	@echo 'build done!'
 
 clean:
 	@rm -f ./agent-daemon

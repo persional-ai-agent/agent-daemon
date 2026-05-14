@@ -1,5 +1,6 @@
 
 agent-daemon
+agent-cli
 .idea/
 .cache/
 .dj-agent/
