@@ -674,8 +674,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emit("saved: " + path)
 			s.setStatus(true, "ok", "json saved")
-		case strings.HasPrefix(current, "/pretty "):
-			mode := strings.TrimSpace(strings.TrimPrefix(current, "/pretty "))
+		case current == "/pretty" || strings.HasPrefix(current, "/pretty "):
+			mode := strings.TrimSpace(strings.TrimPrefix(current, "/pretty"))
 			if mode == "on" {
 				s.pretty = true
 				emit("pretty json: on")
