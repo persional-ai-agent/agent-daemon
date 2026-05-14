@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -412,5 +415,46 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 	_, err, _ = handleTUICommand(s, "/workflow", nil, nil)
 	if err == nil || err.Error() != "用法: /workflow save|list|run|delete ..." {
 		t.Fatalf("unexpected /workflow error: %v", err)
+	}
+}
+
+func TestGatewayCommandCaseInsensitive(t *testing.T) {
+	lastAction := ""
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/ui/gateway/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{"enabled": true}})
+		case "/v1/ui/gateway/action":
+			var in map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			if v, ok := in["action"].(string); ok {
+				lastAction = v
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"ok": true}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	s := &appState{
+		httpBase:         ts.URL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+	if _, err, _ := handleTUICommand(s, "/gateway STATUS", nil, nil); err != nil {
+		t.Fatalf("status command failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/gateway ENABLE", nil, nil); err != nil {
+		t.Fatalf("enable command failed: %v", err)
+	}
+	if lastAction != "enable" {
+		t.Fatalf("lastAction=%q", lastAction)
 	}
 }

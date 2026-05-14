@@ -876,7 +876,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			if len(parts) != 2 {
 				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
 			}
-			if parts[1] == "status" {
+			action := strings.ToLower(strings.TrimSpace(parts[1]))
+			if action == "status" {
 				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
 				if hErr != nil {
 					s.setErrStatus(hErr)
@@ -884,8 +885,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				emitData(uiPayload(out, "status", "result"))
 				s.setStatus(true, "ok", "gateway status loaded")
-			} else if parts[1] == "enable" || parts[1] == "disable" {
-				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": parts[1]})
+			} else if action == "enable" || action == "disable" {
+				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": action})
 				if hErr != nil {
 					s.setErrStatus(hErr)
 					return lines, hErr, false
