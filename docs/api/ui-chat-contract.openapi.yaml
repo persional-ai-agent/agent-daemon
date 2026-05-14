@@ -294,6 +294,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/ui/agents/interrupt:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              properties:
+                session_id:
+                  type: string
+      responses:
+        "200":
+          description: Interrupt active agent session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UISuccessEnvelope"
+                  - type: object
+                    required: [session_id, interrupted, result]
+                    properties:
+                      session_id:
+                        type: string
+                      interrupted:
+                        type: boolean
+                        enum: [true]
+                      result:
+                        type: object
+        "4XX":
+          description: UI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
   /v1/ui/approval/confirm:
     post:
       requestBody:

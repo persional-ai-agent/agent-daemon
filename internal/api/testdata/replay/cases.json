@@ -72,6 +72,17 @@
     "snapshot": "ui_agents_success"
   },
   {
+    "name": "ui_agents_interrupt_not_found",
+    "method": "POST",
+    "path": "/v1/ui/agents/interrupt",
+    "contract_path": "/v1/ui/agents/interrupt",
+    "content_type": "application/json",
+    "body": {
+      "session_id": "missing"
+    },
+    "snapshot": "ui_agents_interrupt_not_found"
+  },
+  {
     "name": "ui_approval_confirm_success",
     "method": "POST",
     "path": "/v1/ui/approval/confirm",

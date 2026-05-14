@@ -97,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
 	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
 	mux.HandleFunc("/v1/ui/agents", s.handleUIAgents)
+	mux.HandleFunc("/v1/ui/agents/interrupt", s.handleUIAgentsInterrupt)
 	return mux
 }
 
@@ -512,6 +513,10 @@ type uiApprovalConfirmRequest struct {
 	Approve    bool   `json:"approve"`
 }
 
+type uiAgentsInterruptRequest struct {
+	SessionID string `json:"session_id"`
+}
+
 var uiSlashCommands = []string{
 	"/help", "/tools", "/tool", "/sessions", "/session", "/show", "/pick", "/open", "/stats",
 	"/gateway", "/config", "/panel", "/refresh", "/fullscreen", "/diag", "/doctor", "/pending",
@@ -760,6 +765,36 @@ func (s *Server) handleUIAgents(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"count":  len(agents),
 		"agents": agents,
+	})
+}
+
+func (s *Server) handleUIAgentsInterrupt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiAgentsInterruptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	if req.SessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	if !s.cancelActiveRun(req.SessionID) {
+		writeUIError(w, http.StatusNotFound, "not_found", "active session not found")
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"session_id": req.SessionID,
+		"interrupted": true,
+		"result": map[string]any{
+			"session_id": req.SessionID,
+			"interrupted": true,
+		},
 	})
 }
 

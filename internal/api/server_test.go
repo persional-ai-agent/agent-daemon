@@ -317,6 +317,34 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("agents_interrupt_not_found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/agents/interrupt", bytes.NewBufferString(`{"session_id":"missing"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("agents_interrupt_success", func(t *testing.T) {
+		srv.mu.Lock()
+		srv.active = map[string]activeRun{
+			"s-int": {token: "tok-1", cancel: func() {}},
+		}
+		srv.mu.Unlock()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/agents/interrupt", bytes.NewBufferString(`{"session_id":"s-int"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"interrupted":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("complete_slash", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/v1/ui/complete/slash", bytes.NewBufferString(`{"text":"/to"}`))

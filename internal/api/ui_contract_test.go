@@ -119,3 +119,19 @@ func TestUIContractErrorEnvelope(t *testing.T) {
 	}
 	assertErrorEnvelope(t, rec, "engine_unavailable")
 }
+
+func TestUIAgentsInterruptErrorEnvelope(t *testing.T) {
+	srv := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/v1/ui/agents/interrupt", bytes.NewBufferString(`{"session_id":"s1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	assertUIContractHeaders(t, rec)
+	out := decodeJSONMap(t, rec)
+	if out["ok"] != false {
+		t.Fatalf("expected ok=false, got %+v", out)
+	}
+}
