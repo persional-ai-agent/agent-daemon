@@ -11,8 +11,8 @@ import (
 )
 
 type turnDoneMsg struct {
-	lines []string
 	err   error
+	quit  bool
 }
 
 type tuiModel struct {
@@ -23,6 +23,7 @@ type tuiModel struct {
 	width      int
 	height     int
 	processing bool
+	turnStream chan tea.Msg
 }
 
 func newTUIModel(state *appState) tuiModel {
@@ -59,16 +60,30 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case turnDoneMsg:
 		m.processing = false
+		m.turnStream = nil
 		if msg.err != nil {
 			m.appendLine(fmt.Sprintf("error: %v", msg.err))
 			m.state.setErrStatus(msg.err)
+		} else if msg.quit {
+			return m, tea.Quit
 		} else {
-			for _, ln := range msg.lines {
-				if strings.TrimSpace(ln) != "" {
-					m.appendLine(ln)
-				}
-			}
 			m.state.setStatus(true, "ok", "turn completed")
+		}
+		return m, nil
+	case turnLineMsg:
+		if strings.TrimSpace(msg.line) != "" {
+			m.appendLine(msg.line)
+		}
+		if m.processing && m.turnStream != nil {
+			return m, waitTurnStreamCmd(m.turnStream)
+		}
+		return m, nil
+	case turnEventMsg:
+		if msg.event != nil {
+			m.state.addEvent(msg.event)
+		}
+		if m.processing && m.turnStream != nil {
+			return m, waitTurnStreamCmd(m.turnStream)
 		}
 		return m, nil
 	case tea.KeyMsg:
@@ -101,9 +116,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if raw == "/quit" || raw == "/exit" {
 				return m, tea.Quit
 			}
+			if raw == "/clear" {
+				m.lines = nil
+				m.syncViewport()
+			}
 			m.appendLine("› " + raw)
 			m.processing = true
-			return m, m.runCommand(raw)
+			m.turnStream = make(chan tea.Msg, 64)
+			return m, tea.Batch(startTurnCmd(m.turnStream, m.state, raw), waitTurnStreamCmd(m.turnStream))
 		}
 	}
 	var cmd tea.Cmd
@@ -124,19 +144,36 @@ func (m tuiModel) View() string {
 	return title + "\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
 }
 
-func (m *tuiModel) runCommand(text string) tea.Cmd {
+type turnLineMsg struct {
+	line string
+}
+
+type turnEventMsg struct {
+	event map[string]any
+}
+
+func startTurnCmd(stream chan tea.Msg, state *appState, text string) tea.Cmd {
 	return func() tea.Msg {
-		lines, err, quit := handleTUICommand(m.state, text, func(evt map[string]any) {
-			m.state.addEvent(evt)
-		})
-		if quit {
-			return tea.QuitMsg{}
+		go func() {
+			defer close(stream)
+			_, err, quit := handleTUICommand(state, text, func(evt map[string]any) {
+				stream <- turnEventMsg{event: evt}
+			}, func(line string) {
+				stream <- turnLineMsg{line: line}
+			})
+			stream <- turnDoneMsg{err: err, quit: quit}
+		}()
+		return nil
+	}
+}
+
+func waitTurnStreamCmd(stream chan tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-stream
+		if !ok {
+			return turnDoneMsg{}
 		}
-		if text == "/clear" {
-			m.lines = nil
-			m.syncViewport()
-		}
-		return turnDoneMsg{lines: lines, err: err}
+		return msg
 	}
 }
 

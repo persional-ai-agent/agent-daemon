@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func handleTUICommand(s *appState, text string, onEvent func(map[string]any)) (lines []string, err error, quit bool) {
+func handleTUICommand(s *appState, text string, onEvent func(map[string]any), onLine func(string)) (lines []string, err error, quit bool) {
 	queue := []string{text}
 	for len(queue) > 0 {
 		current := strings.TrimSpace(queue[0])
@@ -25,7 +25,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any)) (l
 		current = canonicalInput(current)
 		s.appendHistory(current)
 
-		emit := func(msg string) { lines = append(lines, msg) }
+		emit := func(msg string) {
+			lines = append(lines, msg)
+			if onLine != nil {
+				onLine(msg)
+			}
+		}
 		emitData := func(v any) {
 			s.lastJSON = v
 			switch data := v.(type) {
