@@ -604,3 +604,15 @@ func TestWorkflowCommandCaseInsensitiveSubcommands(t *testing.T) {
 		t.Fatalf("workflow DELETE failed: %v", err)
 	}
 }
+
+func TestCanonicalInputGatewayAndConfigAliases(t *testing.T) {
+	if got := canonicalInput("GW status"); got != "GW status" {
+		t.Fatalf("expected non-lowercase alias unchanged, got=%q", got)
+	}
+	if got := canonicalInput("gw status"); got != "/gateway status" {
+		t.Fatalf("gw alias mismatch: %q", got)
+	}
+	if got := canonicalInput("cfg get"); got != "/config get" {
+		t.Fatalf("cfg alias mismatch: %q", got)
+	}
+}
