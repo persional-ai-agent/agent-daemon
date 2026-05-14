@@ -56,3 +56,42 @@ func TestMemorySnapshot(t *testing.T) {
 		t.Fatalf("missing user snapshot: %+v", snapshot)
 	}
 }
+
+func TestMemoryExtractDeduplicatesFacts(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Manage("add", "memory", "We use Go for backend services", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := store.Manage("extract", "memory", "We use Go for backend services. I prefer concise answers. My password is secret.", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	added, _ := res["added"].([]string)
+	skipped, _ := res["skipped"].([]string)
+	if len(added) != 1 || added[0] != "I prefer concise answers" {
+		t.Fatalf("unexpected added facts: %+v", res)
+	}
+	if len(skipped) != 1 || skipped[0] != "We use Go for backend services" {
+		t.Fatalf("unexpected skipped facts: %+v", res)
+	}
+
+	b, err := os.ReadFile(filepath.Join(dir, "MEMORY.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(b)
+	if strings.Count(content, "We use Go for backend services") != 1 {
+		t.Fatalf("duplicate fact was written: %s", content)
+	}
+	if strings.Contains(content, "password") {
+		t.Fatalf("sensitive text should not be persisted: %s", content)
+	}
+	if !strings.Contains(content, "I prefer concise answers") {
+		t.Fatalf("missing extracted preference: %s", content)
+	}
+}

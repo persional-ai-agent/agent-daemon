@@ -76,3 +76,79 @@ func TestCronjobSchemaDocumentsRunsLimitBounds(t *testing.T) {
 		t.Fatalf("unexpected cronjob limit description: %q", desc)
 	}
 }
+
+func TestCronjobCreateAcceptsCronExpression(t *testing.T) {
+	ctx := context.Background()
+	ss, err := store.NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+
+	cs, err := store.NewCronStore(ss.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewCronJobTool(cs)
+	res, err := tool.Call(ctx, map[string]any{
+		"action":          "create",
+		"name":            "weekday",
+		"prompt":          "send report",
+		"schedule":        "*/15 9-17 * * 1-5",
+		"delivery_target": "telegram:123",
+		"deliver_on":      "success",
+		"context_mode":    "chained",
+	}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := res["success"].(bool); !ok {
+		t.Fatalf("expected success response: %+v", res)
+	}
+	job, _ := res["job"].(store.CronJob)
+	if job.ScheduleKind != "cron" || job.ScheduleExpr != "*/15 9-17 * * 1-5" || job.NextRunAt == nil {
+		t.Fatalf("unexpected cron job: %+v", job)
+	}
+	if job.DeliveryTarget != "telegram:123" || job.DeliverOn != "success" {
+		t.Fatalf("unexpected delivery fields: %+v", job)
+	}
+	if job.ContextMode != "chained" {
+		t.Fatalf("unexpected context mode: %+v", job)
+	}
+}
+
+func TestCronjobCreateScriptMode(t *testing.T) {
+	ctx := context.Background()
+	ss, err := store.NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+
+	cs, err := store.NewCronStore(ss.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewCronJobTool(cs)
+	res, err := tool.Call(ctx, map[string]any{
+		"action":         "create",
+		"name":           "script-job",
+		"run_mode":       "script",
+		"script_command": "echo test",
+		"script_cwd":     "/tmp",
+		"script_timeout": 25,
+		"schedule":       "every 5m",
+	}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := res["success"].(bool); !ok {
+		t.Fatalf("expected success response: %+v", res)
+	}
+	job, _ := res["job"].(store.CronJob)
+	if job.RunMode != "script" || job.ScriptCommand != "echo test" || job.ScriptCWD != "/tmp" || job.ScriptTimeout != 25 {
+		t.Fatalf("unexpected script fields: %+v", job)
+	}
+}

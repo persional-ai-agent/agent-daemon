@@ -41,15 +41,51 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 					"job_id": map[string]any{"type": "string", "description": "Cron job id"},
 					"run_id": map[string]any{"type": "string", "description": "Cron run id (for run_get)"},
 					"name":   map[string]any{"type": "string", "description": "Optional job name"},
-					"prompt": map[string]any{"type": "string", "description": "Prompt to run when the job fires"},
+					"prompt": map[string]any{"type": "string", "description": "Prompt to run when the job fires (required for run_mode=agent)"},
+					"run_mode": map[string]any{
+						"type":        "string",
+						"description": "Execution mode (default: agent)",
+						"enum":        []string{"agent", "script"},
+					},
+					"script_command": map[string]any{
+						"type":        "string",
+						"description": "Shell command to execute when run_mode=script",
+					},
+					"script_cwd": map[string]any{
+						"type":        "string",
+						"description": "Optional working directory for run_mode=script; defaults to engine workdir",
+					},
+					"script_timeout": map[string]any{
+						"type":        "integer",
+						"minimum":     1,
+						"description": "Optional timeout seconds for run_mode=script (default 120)",
+					},
 					"schedule": map[string]any{
 						"type":        "string",
-						"description": "Schedule: \"every 30m\", \"30m\" (one-shot), or RFC3339 timestamp like 2026-02-03T14:00:00Z",
+						"description": "Schedule: \"every 30m\", \"30m\" (one-shot), RFC3339 timestamp like 2026-02-03T14:00:00Z, or 5/6-field cron expression like \"*/15 9-17 * * 1-5\"",
 					},
 					"repeat": map[string]any{
 						"type":        "integer",
 						"minimum":     0,
 						"description": "How many times to run (omit for forever). For one-shot schedules, default is 1.",
+					},
+					"delivery_target": map[string]any{
+						"type":        "string",
+						"description": "Optional result delivery target like telegram:123, discord:channel_id, slack:channel_id, or yuanbao:group:123. When set, the scheduler sends the final result after each run.",
+					},
+					"deliver_on": map[string]any{
+						"type":        "string",
+						"description": "When to deliver results (default: always)",
+						"enum":        []string{"always", "success", "failure"},
+					},
+					"context_mode": map[string]any{
+						"type":        "string",
+						"description": "Cron run context mode (default: isolated). Set chained to reuse the job session and load previous run history.",
+						"enum":        []string{"isolated", "chained"},
+					},
+					"chain_context": map[string]any{
+						"type":        "boolean",
+						"description": "Alias for context_mode=chained when true.",
 					},
 					"paused": map[string]any{"type": "boolean", "description": "Pause/resume the job (update only)"},
 					"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "description": "Limit for runs listing (default 50, max 200)."},
@@ -69,8 +105,19 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 	}
 	switch action {
 	case "create":
+		runMode := normalizeCronRunModeForTool(strArg(args, "run_mode"))
 		prompt := strings.TrimSpace(strArg(args, "prompt"))
-		if prompt == "" {
+		scriptCommand := strings.TrimSpace(strArg(args, "script_command"))
+		scriptCWD := strings.TrimSpace(strArg(args, "script_cwd"))
+		scriptTimeout := intArg(args, "script_timeout", 0)
+		if scriptTimeout < 0 {
+			scriptTimeout = 0
+		}
+		if runMode == "script" {
+			if scriptCommand == "" {
+				return map[string]any{"success": false, "error": "script_command required for run_mode=script"}, nil
+			}
+		} else if prompt == "" {
 			return map[string]any{"success": false, "error": "prompt required"}, nil
 		}
 		schedRaw := strings.TrimSpace(strArg(args, "schedule"))
@@ -82,9 +129,6 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		if err != nil {
 			return nil, err
 		}
-		if sched.Kind == "cron" {
-			return nil, fmt.Errorf("cron expressions are stored but not yet executed by agent-daemon scheduler: %q", schedRaw)
-		}
 
 		repeat := intArg(args, "repeat", 0)
 		var repeatPtr *int
@@ -94,6 +138,18 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		if sched.Kind == "once" && repeatPtr == nil {
 			one := 1
 			repeatPtr = &one
+		}
+		deliveryTarget := strings.TrimSpace(strArg(args, "delivery_target"))
+		if deliveryTarget == "" {
+			deliveryTarget = strings.TrimSpace(strArg(args, "target"))
+		}
+		deliverOn, ok := normalizeCronDeliverOn(strArg(args, "deliver_on"))
+		if !ok {
+			return map[string]any{"success": false, "error": "deliver_on must be one of always, success, failure"}, nil
+		}
+		contextMode, ok := normalizeCronContextMode(strArg(args, "context_mode"), boolArg(args, "chain_context", false))
+		if !ok {
+			return map[string]any{"success": false, "error": "context_mode must be one of isolated, chained"}, nil
 		}
 
 		id := uuid.NewString()[:12]
@@ -106,18 +162,31 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		if sched.Kind == "interval" {
 			tm := now.Add(time.Duration(sched.IntervalMins) * time.Minute).UTC()
 			nextRunAt = &tm
+		} else if sched.Kind == "cron" {
+			tm, err := cron.NextRun(sched.Expr, now)
+			if err != nil {
+				return nil, err
+			}
+			nextRunAt = &tm
 		}
 
 		job, err := t.Store.CreateJob(ctx, store.CreateCronJobParams{
-			ID:           id,
-			Name:         name,
-			Prompt:       prompt,
-			ScheduleKind: sched.Kind,
-			ScheduleExpr: sched.Expr,
-			IntervalMins: sched.IntervalMins,
-			RunAt:        sched.RunAt,
-			NextRunAt:    nextRunAt,
-			RepeatTimes:  repeatPtr,
+			ID:             id,
+			Name:           name,
+			Prompt:         prompt,
+			ScheduleKind:   sched.Kind,
+			ScheduleExpr:   sched.Expr,
+			IntervalMins:   sched.IntervalMins,
+			RunAt:          sched.RunAt,
+			NextRunAt:      nextRunAt,
+			RepeatTimes:    repeatPtr,
+			DeliveryTarget: deliveryTarget,
+			DeliverOn:      deliverOn,
+			ContextMode:    contextMode,
+			RunMode:        runMode,
+			ScriptCommand:  scriptCommand,
+			ScriptCWD:      scriptCWD,
+			ScriptTimeout:  scriptTimeout,
 		})
 		if err != nil {
 			return nil, err
@@ -162,6 +231,25 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		if prompt := strings.TrimSpace(strArg(args, "prompt")); prompt != "" {
 			upd.Prompt = &prompt
 		}
+		if _, ok := args["run_mode"]; ok {
+			runMode := normalizeCronRunModeForTool(strArg(args, "run_mode"))
+			upd.RunMode = &runMode
+		}
+		if _, ok := args["script_command"]; ok {
+			v := strings.TrimSpace(strArg(args, "script_command"))
+			upd.ScriptCommand = &v
+		}
+		if _, ok := args["script_cwd"]; ok {
+			v := strings.TrimSpace(strArg(args, "script_cwd"))
+			upd.ScriptCWD = &v
+		}
+		if _, ok := args["script_timeout"]; ok {
+			v := intArg(args, "script_timeout", 0)
+			if v < 0 {
+				v = 0
+			}
+			upd.ScriptTimeout = &v
+		}
 
 		if v, ok := args["paused"]; ok {
 			if b, ok := v.(bool); ok {
@@ -175,14 +263,9 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			if err != nil {
 				return nil, err
 			}
-			if sched.Kind == "cron" {
-				return nil, fmt.Errorf("cron expressions are stored but not yet executed by agent-daemon scheduler: %q", schedRaw)
-			}
 			upd.ScheduleKind = &sched.Kind
-			if sched.Expr != "" {
-				expr := sched.Expr
-				upd.ScheduleExpr = &expr
-			}
+			expr := sched.Expr
+			upd.ScheduleExpr = &expr
 			if sched.Kind == "interval" {
 				mins := sched.IntervalMins
 				upd.IntervalMins = &mins
@@ -196,6 +279,12 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			nextRunAt := sched.RunAt
 			if sched.Kind == "interval" {
 				tm := now.Add(time.Duration(sched.IntervalMins) * time.Minute).UTC()
+				nextRunAt = &tm
+			} else if sched.Kind == "cron" {
+				tm, err := cron.NextRun(sched.Expr, now)
+				if err != nil {
+					return nil, err
+				}
 				nextRunAt = &tm
 			}
 			upd.RunAt = &runAt
@@ -213,6 +302,30 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			}
 			// If existing is once and repeat omitted, keep existing; but here repeat was set explicitly.
 			upd.RepeatTimes = &rptr
+		}
+		if _, ok := args["delivery_target"]; ok {
+			v := strings.TrimSpace(strArg(args, "delivery_target"))
+			upd.DeliveryTarget = &v
+		} else if _, ok := args["target"]; ok {
+			v := strings.TrimSpace(strArg(args, "target"))
+			upd.DeliveryTarget = &v
+		}
+		if _, ok := args["deliver_on"]; ok {
+			deliverOn, valid := normalizeCronDeliverOn(strArg(args, "deliver_on"))
+			if !valid {
+				return map[string]any{"success": false, "error": "deliver_on must be one of always, success, failure"}, nil
+			}
+			upd.DeliverOn = &deliverOn
+		}
+		if _, ok := args["context_mode"]; ok {
+			contextMode, valid := normalizeCronContextMode(strArg(args, "context_mode"), false)
+			if !valid {
+				return map[string]any{"success": false, "error": "context_mode must be one of isolated, chained"}, nil
+			}
+			upd.ContextMode = &contextMode
+		} else if _, ok := args["chain_context"]; ok {
+			contextMode, _ := normalizeCronContextMode("", boolArg(args, "chain_context", false))
+			upd.ContextMode = &contextMode
 		}
 
 		// Default: ensure next_run_at exists for interval jobs if missing.
@@ -290,5 +403,41 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 		return map[string]any{"success": true, "run": run}, nil
 	default:
 		return map[string]any{"success": false, "error": fmt.Sprintf("unknown action: %s", action)}, nil
+	}
+}
+
+func normalizeCronDeliverOn(v string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "always":
+		return "always", true
+	case "success":
+		return "success", true
+	case "failure":
+		return "failure", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeCronContextMode(v string, chain bool) (string, bool) {
+	if chain {
+		return "chained", true
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "isolated":
+		return "isolated", true
+	case "chained", "chain", "stateful":
+		return "chained", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeCronRunModeForTool(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "script":
+		return "script"
+	default:
+		return "agent"
 	}
 }

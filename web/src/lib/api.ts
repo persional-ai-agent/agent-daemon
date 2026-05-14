@@ -13,6 +13,32 @@ export type UIToolsResponse = {
   tools: string[];
 };
 
+export type UISkillsResponse = {
+  count: number;
+  skills: Array<Record<string, unknown>>;
+};
+
+export type UIAgentsResponse = {
+  count: number;
+  agents?: Array<Record<string, unknown>>;
+  active?: Array<Record<string, unknown>>;
+  history?: Array<Record<string, unknown>>;
+};
+
+export type UIPluginDashboardsResponse = {
+  count: number;
+  dashboards: Array<Record<string, unknown>>;
+};
+
+export type UICronAction =
+  | "update"
+  | "pause"
+  | "resume"
+  | "remove"
+  | "trigger"
+  | "runs"
+  | "run_get";
+
 const BASE = (globalThis as any).__AGENT_API_BASE__ || "http://127.0.0.1:8080";
 const WS_BASE = BASE.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://");
 
@@ -389,6 +415,21 @@ export function getUIConfig() {
   return request<Record<string, unknown>>("/v1/ui/config");
 }
 
+export function getUIModel() {
+  return request<Record<string, unknown>>("/v1/ui/model");
+}
+
+export function getUIModelProviders() {
+  return request<Record<string, unknown>>("/v1/ui/model/providers");
+}
+
+export function setUIModel(provider: string, model: string, baseURL?: string) {
+  return request<Record<string, unknown>>("/v1/ui/model/set", {
+    method: "POST",
+    body: JSON.stringify({ provider, model, base_url: baseURL || "" })
+  });
+}
+
 export function getUIGatewayStatus() {
   return request<Record<string, unknown>>("/v1/ui/gateway/status");
 }
@@ -404,5 +445,163 @@ export function postUIGatewayAction(action: "enable" | "disable") {
   return request<Record<string, unknown>>("/v1/ui/gateway/action", {
     method: "POST",
     body: JSON.stringify({ action })
+  });
+}
+
+export function getUIGatewayDiagnostics() {
+  return request<Record<string, unknown>>("/v1/ui/gateway/diagnostics");
+}
+
+export function getUISkills() {
+  return request<UISkillsResponse>("/v1/ui/skills");
+}
+
+export function getUISkillDetail(name: string) {
+  return request<Record<string, unknown>>(`/v1/ui/skills/detail?name=${encodeURIComponent(name)}`);
+}
+
+export function postUISkillManage(payload: {
+  action: "create" | "edit" | "patch" | "delete";
+  name: string;
+  content?: string;
+  old_string?: string;
+  new_string?: string;
+  replace_all?: boolean;
+}) {
+  return request<Record<string, unknown>>("/v1/ui/skills/manage", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function postUISkillsReload() {
+  return request<Record<string, unknown>>("/v1/ui/skills/reload", { method: "POST" });
+}
+
+export function postUISkillsSearch(query: string, repo?: string) {
+  return request<Record<string, unknown>>("/v1/ui/skills/search", {
+    method: "POST",
+    body: JSON.stringify({ query, repo })
+  });
+}
+
+export function postUISkillsSync(payload: {
+  name: string;
+  source: "url" | "github";
+  url?: string;
+  repo?: string;
+  path?: string;
+}) {
+  return request<Record<string, unknown>>("/v1/ui/skills/sync", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getUIAgents(limit = 20, sessionID?: string) {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (sessionID) qs.set("session_id", sessionID);
+  return request<UIAgentsResponse>(`/v1/ui/agents?${qs.toString()}`);
+}
+
+export function getUIAgentsActive(sessionID?: string) {
+  const suffix = sessionID ? `?session_id=${encodeURIComponent(sessionID)}` : "";
+  return request<UIAgentsResponse>(`/v1/ui/agents/active${suffix}`);
+}
+
+export function getUIAgentsHistory(limit = 20) {
+  return request<UIAgentsResponse>(`/v1/ui/agents/history?limit=${limit}`);
+}
+
+export function getUIAgentDetail(sessionID: string) {
+  return request<Record<string, unknown>>(`/v1/ui/agents/detail?session_id=${encodeURIComponent(sessionID)}`);
+}
+
+export function postUIAgentInterrupt(sessionID: string) {
+  return request<Record<string, unknown>>("/v1/ui/agents/interrupt", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionID })
+  });
+}
+
+export function getUIPluginDashboards() {
+  return request<UIPluginDashboardsResponse>("/v1/ui/plugins/dashboards");
+}
+
+export function getUIVoiceStatus() {
+  return request<Record<string, unknown>>("/v1/ui/voice/status");
+}
+
+export function postUIVoiceToggle(action: "on" | "off" | "tts" | "status") {
+  return request<Record<string, unknown>>("/v1/ui/voice/toggle", {
+    method: "POST",
+    body: JSON.stringify({ action })
+  });
+}
+
+export function postUIVoiceRecord(action: "start" | "stop") {
+  return request<Record<string, unknown>>("/v1/ui/voice/record", {
+    method: "POST",
+    body: JSON.stringify({ action })
+  });
+}
+
+export function postUIVoiceTTS(text: string) {
+  return request<Record<string, unknown>>("/v1/ui/voice/tts", {
+    method: "POST",
+    body: JSON.stringify({ text })
+  });
+}
+
+export function getUICronJobs() {
+  return request<Record<string, unknown>>("/v1/ui/cron/jobs");
+}
+
+export function postUICronJob(payload: {
+  name: string;
+  prompt: string;
+  schedule: string;
+  repeat?: number;
+  delivery_target?: string;
+  deliver_on?: string;
+  context_mode?: string;
+  chain_context?: boolean;
+  run_mode?: string;
+  script_command?: string;
+  script_cwd?: string;
+  script_timeout?: number;
+}) {
+  return request<Record<string, unknown>>("/v1/ui/cron/jobs", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getUICronJob(jobID: string) {
+  return request<Record<string, unknown>>(`/v1/ui/cron/jobs/${encodeURIComponent(jobID)}`);
+}
+
+export function postUICronJobAction(payload: {
+  action: UICronAction;
+  job_id?: string;
+  run_id?: string;
+  name?: string;
+  prompt?: string;
+  schedule?: string;
+  repeat?: number;
+  delivery_target?: string;
+  deliver_on?: string;
+  context_mode?: string;
+  chain_context?: boolean;
+  run_mode?: string;
+  script_command?: string;
+  script_cwd?: string;
+  script_timeout?: number;
+  paused?: boolean;
+  limit?: number;
+}) {
+  return request<Record<string, unknown>>("/v1/ui/cron/jobs/action", {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,72 @@ func TestSessionStoreAppendLoadAndSearch(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0]["session_id"] != "s2" {
 		t.Fatalf("unexpected search rows: %+v", rows)
+	}
+}
+
+func TestSessionStoreSearchReturnsSessionSummary(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "My project uses Go and SQLite memory search."}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendMessage("s1", core.Message{Role: "assistant", Content: "I will keep the memory search behavior covered."}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := s.Search("memory", 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected one grouped session result, got %+v", rows)
+	}
+	if rows[0]["session_id"] != "s1" {
+		t.Fatalf("unexpected session: %+v", rows[0])
+	}
+	if summary, _ := rows[0]["summary"].(string); !strings.Contains(summary, "Initial user request") {
+		t.Fatalf("summary missing initial request: %+v", rows[0])
+	}
+	if facts, _ := rows[0]["facts"].([]string); len(facts) == 0 || !strings.Contains(strings.ToLower(facts[0]), "my project uses") {
+		t.Fatalf("facts missing durable project fact: %+v", rows[0])
+	}
+	if highlights, _ := rows[0]["highlights"].([]map[string]any); len(highlights) == 0 {
+		t.Fatalf("missing highlights: %+v", rows[0])
+	}
+}
+
+func TestSessionStoreBlankSearchReturnsRecentSessionSummaries(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "first session"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendMessage("s2", core.Message{Role: "user", Content: "second session"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := s.Search("", 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0]["session_id"] != "s2" || rows[1]["session_id"] != "s1" {
+		t.Fatalf("unexpected recent summaries: %+v", rows)
+	}
+
+	rows, err = s.Search("", 10, "s2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0]["session_id"] != "s1" {
+		t.Fatalf("unexpected excluded summaries: %+v", rows)
 	}
 }
 

@@ -398,3 +398,13 @@
 - `271-summary-ui-tui-workbench-open-action-closure.md`：ui-tui 工作台补齐统一 `/open <index>` 钻取闭环（sessions/tools/approvals）
 - `272-summary-ui-tui-workbench-profiles-bundle.md`：ui-tui 工作台新增 profile 方案（workbench save/list/load/delete）
 - `273-summary-ui-tui-workflow-orchestration-bundle.md`：ui-tui 新增 workflow 编排（save/list/run/delete + 命令队列执行）
+- `274-summary-cli-tui-stateful-command-surface.md`：CLI/TUI 状态化命令面补齐（会话切换、重试/撤销/压缩/导出、工具与状态查看）
+- `275-summary-memory-learning-loop-closure.md`：Memory / 学习闭环补齐（会话摘要召回、记忆抽取去重、主动记忆规则）
+- `276-summary-plugin-ecosystem-closure.md`：插件生态闭环补齐（marketplace、本地安装卸载、签名/文件校验、默认沙箱、多能力 manifest、command/dashboard slot 管理）
+- `277-summary-web-dashboard-functional-pages.md`：Web Dashboard 功能页补齐（Skills/Agents/Plugins/Gateway diagnostics/Voice）
+- `278-summary-web-cron-management.md`：Web Cron 管理面补齐（创建、列表、详情、暂停/恢复、触发、删除、运行记录）
+- `279-summary-web-model-provider-management.md`：Web Model / Provider 管理面补齐（当前模型、provider 列表、模型切换）
+- `280-summary-cron-expression-scheduler.md`：Cron 表达式调度执行（5/6 字段解析、NextRun、create/update/scheduler 打通）
+- `281-summary-cron-result-delivery.md`：Cron 运行结果投递闭环（delivery_target/deliver_on、run 投递状态、Web 创建入口）
+- `282-summary-cron-chained-context.md`：Cron 链式上下文模式（context_mode/chain_context、稳定 cron 会话、历史加载）
+- `283-summary-cron-script-run-mode.md`：Cron 脚本动作模式（run_mode=script、script_command/cwd/timeout、调度执行与 Web 入口）

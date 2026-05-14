@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -31,15 +32,27 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 type testSessionStore struct {
-	msgs []core.Message
+	msgs      []core.Message
+	bySession map[string][]core.Message
 }
 
-func (s *testSessionStore) AppendMessage(_ string, msg core.Message) error {
+func (s *testSessionStore) AppendMessage(sessionID string, msg core.Message) error {
 	s.msgs = append(s.msgs, msg)
+	if s.bySession == nil {
+		s.bySession = map[string][]core.Message{}
+	}
+	s.bySession[sessionID] = append(s.bySession[sessionID], msg)
 	return nil
 }
 
-func (s *testSessionStore) LoadMessages(_ string, _ int) ([]core.Message, error) {
+func (s *testSessionStore) LoadMessages(sessionID string, _ int) ([]core.Message, error) {
+	if s.bySession != nil {
+		if msgs, ok := s.bySession[sessionID]; ok {
+			out := make([]core.Message, len(msgs))
+			copy(out, msgs)
+			return out, nil
+		}
+	}
 	out := make([]core.Message, len(s.msgs))
 	copy(out, s.msgs)
 	return out, nil
@@ -80,9 +93,19 @@ func makeEngineForSlashTests(msgs []core.Message) *agent.Engine {
 	reg.Register(tools.NewSendMessageTool())
 	store := &testSessionStore{msgs: msgs}
 	return &agent.Engine{
-		Registry:    reg,
+		Registry:     reg,
 		SessionStore: store,
 	}
+}
+
+type scriptedClient struct {
+	response string
+	calls    int
+}
+
+func (c *scriptedClient) ChatCompletion(_ context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	c.calls++
+	return core.Message{Role: "assistant", Content: c.response}, nil
 }
 
 func TestHandleSlashCommandClear(t *testing.T) {
@@ -125,6 +148,89 @@ func TestHandleSlashCommandStats(t *testing.T) {
 	}
 	if !handled {
 		t.Fatal("expected handled=true")
+	}
+}
+
+func TestHandleSlashCommandNewAndResume(t *testing.T) {
+	store := &testSessionStore{bySession: map[string][]core.Message{
+		"old": {{Role: "user", Content: "stored"}},
+	}}
+	reg := tools.NewRegistry()
+	eng := &agent.Engine{Registry: reg, SessionStore: store}
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp", History: []core.Message{{Role: "user", Content: "live"}}}
+	handled, err := handleSlashCommandState(context.Background(), "/new next", state, eng)
+	if err != nil || !handled {
+		t.Fatalf("handled=%v err=%v", handled, err)
+	}
+	if state.SessionID != "next" || len(state.History) != 0 {
+		t.Fatalf("new state = %+v", state)
+	}
+	handled, err = handleSlashCommandState(context.Background(), "/resume old", state, eng)
+	if err != nil || !handled {
+		t.Fatalf("handled=%v err=%v", handled, err)
+	}
+	if state.SessionID != "old" || len(state.History) != 1 || state.History[0].Content != "stored" {
+		t.Fatalf("resume state = %+v", state)
+	}
+}
+
+func TestHandleSlashCommandUndoAndCompress(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp", History: []core.Message{
+		{Role: "user", Content: "one"},
+		{Role: "assistant", Content: "two"},
+		{Role: "user", Content: "three"},
+		{Role: "assistant", Content: "four"},
+	}}
+	_, err := handleSlashCommandState(context.Background(), "/undo", state, eng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.History) != 2 || state.History[1].Content != "two" {
+		t.Fatalf("undo history = %+v", state.History)
+	}
+	state.History = []core.Message{
+		{Role: "user", Content: "a"},
+		{Role: "assistant", Content: "b"},
+		{Role: "user", Content: "c"},
+		{Role: "assistant", Content: "d"},
+	}
+	_, err = handleSlashCommandState(context.Background(), "/compress 2", state, eng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.History) != 3 || !strings.Contains(state.History[0].Content, "Context summary") {
+		t.Fatalf("compress history = %+v", state.History)
+	}
+}
+
+func TestHandleSlashCommandToolsShow(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	line := captureStdout(t, func() {
+		_, _ = handleSlashCommandState(context.Background(), "/tools show send_message", &chatState{SessionID: "s1"}, eng)
+	})
+	if !strings.Contains(line, `"send_message"`) {
+		t.Fatalf("expected send_message schema, got %s", line)
+	}
+}
+
+func TestHandleSlashCommandRetry(t *testing.T) {
+	client := &scriptedClient{response: "retried"}
+	eng := makeEngineForSlashTests(nil)
+	eng.Client = client
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp", History: []core.Message{
+		{Role: "user", Content: "try me"},
+		{Role: "assistant", Content: "old"},
+	}}
+	_, err := handleSlashCommandState(context.Background(), "/retry", state, eng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("calls=%d", client.calls)
+	}
+	if got := state.History[len(state.History)-1].Content; got != "retried" {
+		t.Fatalf("last content=%q", got)
 	}
 }
 

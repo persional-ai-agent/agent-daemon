@@ -163,20 +163,21 @@
 核心 Agent daemon 能力已对齐 Hermes 的主干设计。后续可选扩展：
 
 - 配置与 CLI 管理面：已具备最小 `config list|get|set`、`model show|providers|set`、`tools list|show|schemas|enable|disable`、`doctor`、`setup`、`setup wizard`、`bootstrap`、`update`、`gateway status|platforms|enable|disable|setup|run|start|stop|restart`；后续补齐完整安装器级 update 管理面。
-- Toolset 与插件系统：从固定内置工具列表演进为 toolset 解析、可用性检查、插件发现与动态 schema 过滤。
+- Toolset 与插件系统：从固定内置工具列表演进为 toolset 解析、可用性检查、插件发现与动态 schema 过滤；插件侧已支持 JSON/YAML manifest、本地/marketplace 安装卸载、签名与文件校验、默认进程沙箱、tool/provider 运行时注册、command 执行与 dashboard slot API。
 - Gateway 完整体验：继续补更多平台的原生 slash UI / 审批按钮流、delivery、更完整 token lock 策略，再扩展更多平台；当前 Telegram 已有最小命令菜单/审批按钮/manifest 导出，Discord 已有最小 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出，Slack 已有最小审批按钮、通用 slash 命令入口与 manifest 导出，Yuanbao 已有最小审批快捷回复与 manifest 导出。
 - 执行环境：在 `internal/tools/process.go` 之外抽象本地、Docker、SSH、Modal、Daytona、Singularity、Vercel Sandbox 等后端。
-- ACP 与自动化：按需新增 ACP adapter、cron scheduler、平台投递和任务状态存储。
+- ACP 与自动化：按需新增 ACP adapter 与 cron 脚本动作。
 
 ## Frontend / TUI 技术现状（Phase 1）
 
 - `web/` 子工程已建立（Vite + React + TypeScript），作为 dashboard 基座：
-  - `src/lib/api.ts` 已封装 `/v1/chat` 与 `/v1/chat/cancel`。
-  - `src/App.tsx` 已提供 `chat/sessions/tools/gateway/config` 五页入口，chat 页打通后端请求。
-  - 其余页面先提供产品骨架，后续继续补齐数据加载与交互。
+  - `src/lib/api.ts` 已封装 chat、sessions、tools、skills、agents、cron、models、plugins、gateway、voice、config 管理接口。
+  - `src/App.tsx` 已提供 `chat/sessions/tools/skills/agents/cron/models/plugins/gateway/voice/config` 十一页入口，chat 页打通同步与 WS/SSE 流式请求，管理页已接入现有 `/v1/ui/*` 功能面。
+  - 后续继续补齐 provider/auth、profiles、日志与 analytics 等 Hermes dashboard 能力。
 - `internal/cli/chat.go` 已新增 slash 命令分发层，用于“类 TUI”交互：
-  - `/help`、`/session`、`/tools`、`/history [n]`、`/reload`、`/clear`、`/tui`、`/quit`。
-  - 目标是在完整 TUI 框架落地前，先提供稳定的终端产品面。
+  - 会话控制：`/new`、`/reset`、`/resume <session_id>`、`/retry`、`/undo`、`/compress [tail]`、`/save [path]`。
+  - 查看与管理：`/status`、`/history [n]`、`/sessions [n]`、`/show [sid] [offset] [limit]`、`/stats [session_id]`、`/tools [list|show|schemas]`、`/toolsets [list|show|resolve]`、`/todo`、`/memory [memory|user]`、`/model`、`/reload`、`/clear`、`/tui`、`/quit`。
+  - `internal/cli/tui.go` 的 lite TUI 已扩展事件轨迹，覆盖 user/turn/model/tool/MCP/delegate/context/completed/error 等事件。
 
 ## Hermes 功能对齐矩阵
 
@@ -187,15 +188,15 @@
 | Tool registry | `tools/registry.py`、`model_tools.py`、`toolsets.py` | `internal/tools/registry.go`、`builtin.go`、`toolsets.go` | 部分对齐 | 已补最小 toolsets 解析与 registry 过滤；后续补 availability check、动态 schema patch 与插件发现 |
 | Built-in tools | `tools/*`（Hermes tools-reference：68 tools） | 已对齐 68 工具名 + toolsets 名称兼容；部分工具为轻量实现/占位（browser/vision/tts 等） | 部分对齐 | 继续把占位逐步升级为“能力级”实现（真实浏览器、真实 TTS/vision/image backend 等） |
 | Terminal environments | `tools/environments/*` | `internal/tools/process.go`（`local/docker/podman/singularity/ssh/daytona/vercel/modal`） | 核心对齐 | 后续可抽象统一 Environment 接口并补后台任务跨后端语义 |
-| Session storage | `hermes_state.py`、`gateway/session.py` | `internal/store/session_store.go` | 部分对齐 | 如需高质量检索，补 FTS5 与摘要层 |
-| Memory | `agent/memory_manager.py`、`plugins/memory/*` | `internal/memory/store.go` | 最小覆盖 | 先定义 memory provider 接口，再接外部插件 |
+| Session storage | `hermes_state.py`、`gateway/session.py` | `internal/store/session_store.go` | 核心对齐 | 已补 FTS5/LIKE 检索、按会话聚合摘要、关键词/事实/高亮召回；后续只需继续提升 LLM 摘要质量 |
+| Memory | `agent/memory_manager.py`、`plugins/memory/*` | `internal/memory/store.go` | 核心对齐 | 已补 Markdown 记忆读写、抽取去重沉淀与提示词主动记忆规则；后续接外部 memory provider 插件 |
 | Context compression | `agent/context_compressor.py`、context engine plugins | `internal/agent/compressor.go` | 核心对齐 | 后续可加可替换 context engine |
 | MCP | `tools/mcp_tool.py` | `internal/tools/mcp.go` | 核心对齐 | 继续补更完整的服务器能力与错误分类 |
 | Skills | `agent/skill_*`、`tools/skills_*`、Skills Hub | `skill_list`（含别名 `skills_list`）、`skill_view`、`skill_manage`、`skill_search` | 核心对齐 | 补多源 Hub API、版本/来源元数据、冲突策略 |
 | CLI/TUI | `cli.py`、`hermes_cli/*`、`ui-tui/` | `internal/cli/chat.go`、`cmd/agentd`、`internal/config/manage.go` | 部分对齐 | 已补最小 config/model/tools 查看与启停/doctor/`setup`/`setup wizard`/`bootstrap`/`version`/`update bundle(build/inspect/manifest/plan/verify/unpack/apply/backups/status/doctor/prune/snapshot/snapshots/snapshots-prune/snapshots-doctor/snapshots-status/snapshots-restore-plan/snapshots-restore/snapshots-delete/rollback-plan/rollback)/changelog/doctor/status/check/release/apply/install/uninstall`/gateway 开关与 `gateway setup/run/start/stop/restart/install/uninstall`，且 update 安装脚本面已覆盖 `status/check/release/apply`；后续补完整安装器级 update 流，再评估 TUI |
 | HTTP/WebSocket | `gateway/platforms/api_server.py`、`web/` | `internal/api` | API 核心对齐 | 若需要管理后台，再单独设计 Web UI |
 | Gateway | `gateway/run.py`、`gateway/platforms/*`、`tools/send_message_tool.py` | `internal/gateway` + Telegram/Discord/Slack/Yuanbao + `send_message` | 部分对齐 | 已补 HOME_CHANNEL 默认目标、Yuanbao 最小 inbound、Telegram/Discord/Slack 本地文件投递（MEDIA: / media_path）+ Yuanbao best-effort 媒体投递（COS 上传）+ 最小配对/slash command/队列中断/hooks 运维 + 最小 `gateway run/start/stop/restart/install/uninstall/manifest` 管理面 + 同 workdir 单实例锁 + 基于平台凭证指纹的跨工作区 token lock + 文本状态/审批命令 `/status`/`/pending`/`/approvals`/`/grant`/`/revoke`/`/approve`/`/deny` + Telegram 最小原生命令菜单/审批按钮/manifest 导出 + Discord 最小原生 slash 命令（含 `grant` / `revoke`）/审批按钮/命令清单导出 + Slack 最小原生审批按钮、通用 slash 命令入口与 manifest 导出 + Yuanbao 最小审批快捷回复/manifest 导出；后续补更多平台原生 slash UI、更完整 token lock 与更多平台 |
-| Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 已有 JSON manifest 发现、校验、启停（`plugins.disabled`）与 CLI 管理（`plugins list/show/validate/enable/disable`）；支持 `type=tool` 运行时工具注册 + `type=provider` 模型提供方插件注册 | 部分对齐 | 后续补插件签名校验、沙箱隔离、版本兼容与安装发布流程 |
+| Plugin system | `hermes_cli/plugins.py`、`plugins/*` | 支持 JSON/YAML manifest 与 Hermes 风格 `plugin.yaml` 元数据发现；支持单能力 `type=tool/provider` 与多能力 plugin manifest（tools/providers/commands/dashboard）；支持 `plugins list/show/commands/dashboards/validate/verify/install/uninstall/exec/marketplace/enable/disable`；支持 Ed25519 manifest 签名、插件文件 sha256 校验、默认沙箱化环境、tool/provider 运行时注册、command 本地执行、`/v1/ui/plugins/dashboards` dashboard slot API | 核心对齐 | 后续补远程 marketplace 下载、依赖自动安装、版本兼容协商与前端 dashboard slot 真实挂载 |
 | ACP/IDE | `acp_adapter/` | 已有最小 ACP API 适配层（`/v1/acp/sessions`、`/v1/acp/message`、`/v1/acp/message/stream`、`/v1/acp/cancel`）复用现有 engine | 部分对齐 | 后续补 ACP 完整协议能力（更细事件、鉴权、能力声明） |
-| Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 当前先覆盖 interval/one-shot 作业存储与调度；后续补 cron expr 计算、平台投递与链式上下文 |
+| Cron | `cron/`、`tools/cronjob_tools.py` | `internal/cron`、`cronjob` tool | 部分对齐 | 已覆盖 interval/one-shot/RFC3339 时间戳/5 或 6 字段 cron 表达式的作业存储、调度、运行结果 Gateway 投递与可选链式上下文；后续补脚本动作 |
 | Research/RL/trajectory | `batch_runner.py`、`environments/`、`trajectory_compressor.py` | 已有最小闭环：`agentd research run/compress/stats` + `internal/research`（JSONL 轨迹与压缩） | 部分对齐 | 继续补环境基准、策略评估与训练流水线能力 |

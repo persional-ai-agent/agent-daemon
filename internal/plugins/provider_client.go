@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -15,12 +14,12 @@ import (
 )
 
 type providerCommandClient struct {
-	name    string
-	model   string
-	command string
-	args    []string
-	env     map[string]string
-	timeout time.Duration
+	name     string
+	model    string
+	command  string
+	args     []string
+	timeout  time.Duration
+	manifest Manifest
 }
 
 func (c *providerCommandClient) ChatCompletion(ctx context.Context, messages []core.Message, tools []core.ToolSchema) (core.Message, error) {
@@ -38,13 +37,8 @@ func (c *providerCommandClient) ChatCompletion(ctx context.Context, messages []c
 	}
 	cmd := exec.CommandContext(callCtx, c.command, c.args...)
 	cmd.Stdin = strings.NewReader(string(in))
-	cmd.Env = os.Environ()
-	for k, v := range c.env {
-		key := strings.TrimSpace(k)
-		if key == "" {
-			continue
-		}
-		cmd.Env = append(cmd.Env, key+"="+v)
+	if err := prepareCommand(cmd, c.manifest, c.command, ""); err != nil {
+		return core.Message{}, err
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -89,7 +83,7 @@ func (c *providerCommandClient) ChatCompletion(ctx context.Context, messages []c
 
 func FindProviderManifest(providerName string, manifests []Manifest) (Manifest, bool) {
 	key := strings.ToLower(strings.TrimSpace(providerName))
-	for _, m := range manifests {
+	for _, m := range ExpandRuntimeManifests(manifests) {
 		if !m.IsEnabled() || !strings.EqualFold(strings.TrimSpace(m.Type), "provider") {
 			continue
 		}
@@ -122,19 +116,19 @@ func NewProviderClient(providerName, selectedModel string, manifests []Manifest)
 		modelName = strings.TrimSpace(spec.Model)
 	}
 	return &providerCommandClient{
-		name:    strings.TrimSpace(m.Name),
-		model:   modelName,
-		command: cmdPath,
-		args:    append([]string{}, spec.Args...),
-		env:     m.Env,
-		timeout: timeout,
+		name:     strings.TrimSpace(m.Name),
+		model:    modelName,
+		command:  cmdPath,
+		args:     append([]string{}, spec.Args...),
+		timeout:  timeout,
+		manifest: m,
 	}, true, nil
 }
 
 func ProviderNames(manifests []Manifest) []string {
 	names := make([]string, 0, len(manifests))
 	seen := map[string]bool{}
-	for _, m := range manifests {
+	for _, m := range ExpandRuntimeManifests(manifests) {
 		if !m.IsEnabled() || !strings.EqualFold(strings.TrimSpace(m.Type), "provider") {
 			continue
 		}

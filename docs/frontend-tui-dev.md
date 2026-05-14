@@ -20,9 +20,33 @@
 - `GET /v1/ui/sessions/{session_id}`
 - `GET /v1/ui/config`
 - `POST /v1/ui/config/set`
+- `GET /v1/ui/model`
+- `GET /v1/ui/model/providers`
+- `POST /v1/ui/model/set`
 - `GET /v1/ui/gateway/status`
+- `GET /v1/ui/gateway/diagnostics`
 - `POST /v1/ui/gateway/action`
 - `POST /v1/ui/approval/confirm`
+- `GET /v1/ui/agents`
+- `GET /v1/ui/agents/active`
+- `GET /v1/ui/agents/detail`
+- `POST /v1/ui/agents/interrupt`
+- `GET /v1/ui/agents/history`
+- `GET /v1/ui/skills`
+- `GET /v1/ui/skills/detail`
+- `POST /v1/ui/skills/manage`
+- `POST /v1/ui/skills/reload`
+- `POST /v1/ui/skills/search`
+- `POST /v1/ui/skills/sync`
+- `GET /v1/ui/cron/jobs`
+- `POST /v1/ui/cron/jobs`（支持 `delivery_target` / `deliver_on` / `context_mode`）
+- `GET /v1/ui/cron/jobs/{job_id}`
+- `POST /v1/ui/cron/jobs/action`（`update` 支持 `delivery_target` / `deliver_on` / `context_mode`）
+- `GET /v1/ui/plugins/dashboards`
+- `GET /v1/ui/voice/status`
+- `POST /v1/ui/voice/toggle`
+- `POST /v1/ui/voice/record`
+- `POST /v1/ui/voice/tts`
 
 `/v1/ui/*` 响应契约（冻结）：
 
@@ -37,9 +61,19 @@
 `internal/api.Server` 通过回调注入管理面能力：
 
 - `ConfigSnapshotFn`
+- `ModelInfoFn`
+- `ModelProvidersFn`
+- `ModelSetFn`
 - `GatewayStatusFn`
 - `ConfigUpdateFn`
 - `GatewayActionFn`
+- `PluginDashboardsFn`
+- `SkillListFn`
+- `SkillsReloadFn`
+- `VoiceStatusFn`
+- `VoiceToggleFn`
+- `VoiceRecordFn`
+- `VoiceTTSFn`
 
 这些回调在 `cmd/agentd/main.go` 的 `runServe` 内绑定，避免 API 包直接依赖 CLI 逻辑。
 
@@ -47,8 +81,8 @@
 
 - 文件：`internal/cli/chat.go`
 - 模式：单循环读取输入 + slash 命令分发 + `Engine.Run` 对话执行
-- slash 命令扩展：集中在 `handleSlashCommand`
-- 增强入口：`agentd tui` -> `internal/cli/tui.go`，通过 `EventSink` 输出实时事件轨迹（turn/tool/completed/error）
+- slash 命令扩展：集中在 `handleSlashCommandState`，用 `chatState` 持有当前 `session_id`、system prompt 与进程内上下文
+- 增强入口：`agentd tui` -> `internal/cli/tui.go`，通过 `EventSink` 输出实时事件轨迹（user/turn/model/tool/MCP/delegate/context/completed/error）
 - `agentd tui` 增加模式参数：`-mode auto|standalone|lite`
   - `auto`（默认）：优先拉起独立 `ui-tui` 进程；不可用时回退到内置 lite
   - `standalone`：仅独立 `ui-tui`

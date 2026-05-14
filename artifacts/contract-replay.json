@@ -21,6 +21,26 @@
       "pass": true
     },
     {
+      "name": "ui_session_branch_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_session_resume_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_session_compress_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_session_replay_success",
+      "status": 200,
+      "pass": true
+    },
+    {
       "name": "ui_config_success",
       "status": 200,
       "pass": true
@@ -36,13 +56,103 @@
       "pass": true
     },
     {
+      "name": "ui_gateway_diagnostics_success",
+      "status": 200,
+      "pass": true
+    },
+    {
       "name": "ui_gateway_action_success",
       "status": 200,
       "pass": true
     },
     {
+      "name": "ui_agents_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_agents_active_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_agents_detail_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_agents_history_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skills_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skills_reload_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skills_search_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skills_sync_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skill_detail_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_skill_manage_patch_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_voice_status_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_voice_toggle_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_voice_record_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_voice_tts_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_agents_interrupt_not_found",
+      "status": 404,
+      "pass": true
+    },
+    {
       "name": "ui_approval_confirm_success",
       "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_complete_slash_success",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "ui_complete_path_invalid",
+      "status": 400,
       "pass": true
     },
     {

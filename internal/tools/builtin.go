@@ -1198,7 +1198,9 @@ func (b *BuiltinTools) memory(_ context.Context, args map[string]any, tc ToolCon
 	if res == nil {
 		res = map[string]any{}
 	}
-	res["success"] = true
+	if _, ok := res["success"]; !ok {
+		res["success"] = true
+	}
 	return res, nil
 }
 
@@ -1220,7 +1222,11 @@ func (b *BuiltinTools) sessionSearch(_ context.Context, args map[string]any, tc 
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"success": true, "query": query, "results": rows, "exclude_session_id": exclude}, nil
+	mode := "search"
+	if strings.TrimSpace(query) == "" {
+		mode = "recent"
+	}
+	return map[string]any{"success": true, "query": query, "mode": mode, "count": len(rows), "results": rows, "exclude_session_id": exclude}, nil
 }
 
 func (b *BuiltinTools) webFetch(ctx context.Context, args map[string]any, _ ToolContext) (map[string]any, error) {
@@ -1978,13 +1984,13 @@ func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}
 }
 func memoryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove"}, "description": "Memory operation action."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}, "oneOf": []any{
-		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"add", "delete", "remove"}}}, "required": []string{"content"}},
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove", "extract"}, "description": "Memory operation action. Use extract to distill durable facts/preferences from conversation text and skip duplicates."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove/extract; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}, "oneOf": []any{
+		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"add", "delete", "remove", "extract"}}}, "required": []string{"content"}},
 		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"replace", "update"}}}, "required": []string{"content", "old_text"}},
 	}}
 }
 func sessionSearchParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum sessions to return (default 5)."}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean", "description": "Include current session in results (default false)."}}, "required": []string{"query"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string", "description": "Optional search text. When omitted or empty, returns recent session summaries."}, "limit": map[string]any{"type": "integer", "minimum": 1, "description": "Maximum sessions to return (default 5)."}, "exclude_session_id": map[string]any{"type": "string"}, "include_current_session": map[string]any{"type": "boolean", "description": "Include current session in results (default false)."}}}
 }
 func webFetchParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"url": map[string]any{"type": "string"}}, "required": []string{"url"}}

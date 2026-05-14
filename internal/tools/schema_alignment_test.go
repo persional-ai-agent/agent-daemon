@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"regexp"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -106,7 +106,7 @@ func TestMemorySchemaActionTargetEnums(t *testing.T) {
 	target, _ := props["target"].(map[string]any)
 	actionEnum, _ := action["enum"].([]string)
 	targetEnum, _ := target["enum"].([]string)
-	if !reflect.DeepEqual(actionEnum, []string{"add", "replace", "update", "delete", "remove"}) {
+	if !reflect.DeepEqual(actionEnum, []string{"add", "replace", "update", "delete", "remove", "extract"}) {
 		t.Fatalf("memory.action enum=%v", actionEnum)
 	}
 	if !reflect.DeepEqual(targetEnum, []string{"memory", "memory.md", "user", "user.md"}) {
@@ -115,6 +115,18 @@ func TestMemorySchemaActionTargetEnums(t *testing.T) {
 	oneOf, _ := memoryParams()["oneOf"].([]any)
 	if len(oneOf) != 2 {
 		t.Fatalf("memory.oneOf len=%d, want 2", len(oneOf))
+	}
+}
+
+func TestSessionSearchSchemaAllowsBlankQuery(t *testing.T) {
+	schema := sessionSearchParams()
+	if _, ok := schema["required"]; ok {
+		t.Fatalf("session_search should allow blank query for recent summaries: %+v", schema)
+	}
+	props, _ := schema["properties"].(map[string]any)
+	query, _ := props["query"].(map[string]any)
+	if desc, _ := query["description"].(string); !strings.Contains(desc, "recent session summaries") {
+		t.Fatalf("query description=%q", desc)
 	}
 }
 

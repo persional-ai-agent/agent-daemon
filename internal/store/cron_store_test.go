@@ -22,18 +22,27 @@ func TestCronStoreCreateListGet(t *testing.T) {
 
 	next := time.Now().UTC().Add(5 * time.Minute)
 	job, err := cs.CreateJob(ctx, CreateCronJobParams{
-		ID:           "job123",
-		Name:         "test",
-		Prompt:       "hello",
-		ScheduleKind: "interval",
-		IntervalMins: 10,
-		NextRunAt:    &next,
+		ID:             "job123",
+		Name:           "test",
+		Prompt:         "hello",
+		ScheduleKind:   "interval",
+		IntervalMins:   10,
+		NextRunAt:      &next,
+		DeliveryTarget: "telegram:123",
+		DeliverOn:      "success",
+		ContextMode:    "chained",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if job.ID != "job123" {
 		t.Fatalf("id=%q", job.ID)
+	}
+	if job.DeliveryTarget != "telegram:123" || job.DeliverOn != "success" {
+		t.Fatalf("delivery fields not preserved: %+v", job)
+	}
+	if job.ContextMode != "chained" {
+		t.Fatalf("context mode not preserved: %+v", job)
 	}
 
 	jobs, err := cs.ListJobs(ctx)
@@ -50,6 +59,44 @@ func TestCronStoreCreateListGet(t *testing.T) {
 	}
 	if !ok || got.ID != "job123" {
 		t.Fatalf("ok=%v id=%q", ok, got.ID)
+	}
+	if got.DeliveryTarget != "telegram:123" || got.DeliverOn != "success" {
+		t.Fatalf("stored delivery fields not preserved: %+v", got)
+	}
+	if got.ContextMode != "chained" {
+		t.Fatalf("stored context mode not preserved: %+v", got)
+	}
+}
+
+func TestCronStoreCreateScriptRunMode(t *testing.T) {
+	ctx := context.Background()
+	ss, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+
+	cs, err := NewCronStore(ss.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := time.Now().UTC().Add(2 * time.Minute)
+	job, err := cs.CreateJob(ctx, CreateCronJobParams{
+		ID:            "job-script",
+		Name:          "script",
+		ScheduleKind:  "interval",
+		IntervalMins:  5,
+		NextRunAt:     &next,
+		RunMode:       "script",
+		ScriptCommand: "echo hi",
+		ScriptCWD:     "/tmp",
+		ScriptTimeout: 30,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.RunMode != "script" || job.ScriptCommand != "echo hi" || job.ScriptCWD != "/tmp" || job.ScriptTimeout != 30 {
+		t.Fatalf("script fields not preserved: %+v", job)
 	}
 }
 
@@ -128,6 +175,9 @@ func TestCronStoreListRunsAndGetRun(t *testing.T) {
 	if err := cs.FinishRun(ctx, "run1", "completed", "ok", nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := cs.SetRunDelivery(ctx, "run1", "telegram:123", "sent", "m1", ""); err != nil {
+		t.Fatal(err)
+	}
 
 	runs, err := cs.ListRuns(ctx, "job123", 10)
 	if err != nil {
@@ -136,6 +186,9 @@ func TestCronStoreListRunsAndGetRun(t *testing.T) {
 	if len(runs) != 1 || runs[0].ID != "run1" {
 		t.Fatalf("runs=%v", runs)
 	}
+	if runs[0].DeliveryStatus != "sent" || runs[0].DeliveryMessageID != "m1" {
+		t.Fatalf("delivery fields missing from list: %+v", runs[0])
+	}
 
 	got, ok, err := cs.GetRun(ctx, "run1")
 	if err != nil {
@@ -143,5 +196,8 @@ func TestCronStoreListRunsAndGetRun(t *testing.T) {
 	}
 	if !ok || got.JobID != "job123" {
 		t.Fatalf("ok=%v got=%v", ok, got)
+	}
+	if got.DeliveryTarget != "telegram:123" || got.DeliveryStatus != "sent" || got.DeliveryMessageID != "m1" {
+		t.Fatalf("delivery fields missing from get: %+v", got)
 	}
 }

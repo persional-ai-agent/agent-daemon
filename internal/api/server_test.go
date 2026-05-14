@@ -207,6 +207,25 @@ func TestUIEndpoints(t *testing.T) {
 			return map[string]any{"success": true, "action": args["action"], "source": args["source"], "name": args["name"]}, nil
 		},
 	})
+	reg.Register(apiTestTool{
+		name: "cronjob",
+		call: func(_ context.Context, args map[string]any, _ tools.ToolContext) (map[string]any, error) {
+			switch args["action"] {
+			case "list":
+				return map[string]any{"success": true, "count": 1, "jobs": []map[string]any{{"id": "job-1", "name": "daily"}}}, nil
+			case "create":
+				return map[string]any{"success": true, "job": map[string]any{"id": "job-2", "name": args["name"], "prompt": args["prompt"], "schedule": args["schedule"]}}, nil
+			case "get":
+				return map[string]any{"success": true, "job": map[string]any{"id": args["job_id"], "name": "daily"}}, nil
+			case "pause", "resume", "trigger", "remove":
+				return map[string]any{"success": true, "job_id": args["job_id"], "action": args["action"]}, nil
+			case "runs":
+				return map[string]any{"success": true, "job_id": args["job_id"], "count": 1, "runs": []map[string]any{{"id": "run-1", "job_id": args["job_id"], "status": "completed"}}}, nil
+			default:
+				return map[string]any{"success": false, "error": "unknown action"}, nil
+			}
+		},
+	})
 	srv := &Server{
 		Engine: &agent.Engine{
 			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
@@ -219,6 +238,15 @@ func TestUIEndpoints(t *testing.T) {
 		},
 		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
 			return map[string]any{"success": true, "key": key, "value": value}, nil
+		},
+		ModelInfoFn: func() map[string]any {
+			return map[string]any{"provider": "openai", "model": "gpt-test", "base_url": "https://api.example/v1"}
+		},
+		ModelProvidersFn: func() []string {
+			return []string{"anthropic", "codex", "openai"}
+		},
+		ModelSetFn: func(provider, modelName, baseURL string) (map[string]any, error) {
+			return map[string]any{"success": true, "provider": provider, "model": modelName, "base_url": baseURL}, nil
 		},
 		GatewayStatusFn: func() map[string]any {
 			return map[string]any{"enabled": true, "running": false}
@@ -726,6 +754,98 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})
+
+	t.Run("model_info_providers_set", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/model", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"provider":"openai"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodGet, "/v1/ui/model/providers", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"anthropic"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/model/set", bytes.NewBufferString(`{"provider":"anthropic","model":"claude-test","base_url":"https://anthropic.example/v1"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"provider":"anthropic"`) || !strings.Contains(rec.Body.String(), `"claude-test"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("cron_jobs_list", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/cron/jobs", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"job-1"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("cron_jobs_create_and_action", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/cron/jobs", bytes.NewBufferString(`{"name":"weekly","prompt":"report","schedule":"every 30m","repeat":2}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"job-2"`) || !strings.Contains(rec.Body.String(), `"weekly"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/cron/jobs/action", bytes.NewBufferString(`{"action":"pause","job_id":"job-2"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"pause"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("cron_job_detail_and_runs", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/cron/jobs/job-1", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"job-1"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/cron/jobs/action", bytes.NewBufferString(`{"action":"runs","job_id":"job-1","limit":5}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"run-1"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
 }
 
 func TestHandleChatIncludesSummary(t *testing.T) {
@@ -1128,5 +1248,22 @@ func TestHandleChatStreamMaxIterationsStructuredData(t *testing.T) {
 		if !strings.Contains(body, part) {
 			t.Fatalf("expected stream body to contain %q, body=%s", part, body)
 		}
+	}
+}
+
+func TestUIPluginDashboardsEndpoint(t *testing.T) {
+	srv := &Server{
+		PluginDashboardsFn: func() ([]map[string]any, error) {
+			return []map[string]any{{"plugin": "demo", "name": "demo", "label": "Demo"}}, nil
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/ui/plugins/dashboards", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"label":"Demo"`) {
+		t.Fatalf("unexpected body: %s", rec.Body.String())
 	}
 }

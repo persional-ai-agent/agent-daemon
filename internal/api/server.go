@@ -28,22 +28,26 @@ import (
 type Server struct {
 	Engine *agent.Engine
 	// Optional UI helpers for dashboard pages.
-	ConfigSnapshotFn func() map[string]any
-	GatewayStatusFn  func() map[string]any
+	ConfigSnapshotFn     func() map[string]any
+	GatewayStatusFn      func() map[string]any
 	GatewayDiagnosticsFn func() map[string]any
-	ConfigUpdateFn   func(key, value string) (map[string]any, error)
-	GatewayActionFn  func(action string) (map[string]any, error)
-	SkillListFn      func() ([]map[string]any, error)
-	SkillsReloadFn   func() (map[string]any, error)
-	VoiceStatusFn    func() (map[string]any, error)
-	VoiceToggleFn    func(action string) (map[string]any, error)
-	VoiceRecordFn    func(action string) (map[string]any, error)
-	VoiceTTSFn       func(text string) (map[string]any, error)
-	mu               sync.Mutex
-	active           map[string]activeRun
-	voiceEnabled     bool
-	voiceRecording   bool
-	voiceTTSEnabled  bool
+	ModelInfoFn          func() map[string]any
+	ModelProvidersFn     func() []string
+	ModelSetFn           func(provider, model, baseURL string) (map[string]any, error)
+	PluginDashboardsFn   func() ([]map[string]any, error)
+	ConfigUpdateFn       func(key, value string) (map[string]any, error)
+	GatewayActionFn      func(action string) (map[string]any, error)
+	SkillListFn          func() ([]map[string]any, error)
+	SkillsReloadFn       func() (map[string]any, error)
+	VoiceStatusFn        func() (map[string]any, error)
+	VoiceToggleFn        func(action string) (map[string]any, error)
+	VoiceRecordFn        func(action string) (map[string]any, error)
+	VoiceTTSFn           func(text string) (map[string]any, error)
+	mu                   sync.Mutex
+	active               map[string]activeRun
+	voiceEnabled         bool
+	voiceRecording       bool
+	voiceTTSEnabled      bool
 }
 
 type chatRequest struct {
@@ -107,9 +111,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions/replay", s.handleUISessionReplay)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
+	mux.HandleFunc("/v1/ui/model", s.handleUIModel)
+	mux.HandleFunc("/v1/ui/model/providers", s.handleUIModelProviders)
+	mux.HandleFunc("/v1/ui/model/set", s.handleUIModelSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	mux.HandleFunc("/v1/ui/gateway/diagnostics", s.handleUIGatewayDiagnostics)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
+	mux.HandleFunc("/v1/ui/plugins/dashboards", s.handleUIPluginDashboards)
+	mux.HandleFunc("/v1/ui/cron/jobs/action", s.handleUICronJobAction)
+	mux.HandleFunc("/v1/ui/cron/jobs/", s.handleUICronJobDetail)
+	mux.HandleFunc("/v1/ui/cron/jobs", s.handleUICronJobs)
 	mux.HandleFunc("/v1/ui/approval/confirm", s.handleUIApprovalConfirm)
 	mux.HandleFunc("/v1/ui/complete/slash", s.handleUICompleteSlash)
 	mux.HandleFunc("/v1/ui/complete/path", s.handleUICompletePath)
@@ -310,10 +321,10 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 
 func runtimeErrorPayload(sessionID, code, message string) map[string]any {
 	return map[string]any{
-		"session_id":  sessionID,
-		"status":      "error",
-		"error_code":  code,
-		"error":       message,
+		"session_id": sessionID,
+		"status":     "error",
+		"error_code": code,
+		"error":      message,
 		"error_detail": map[string]any{
 			"code":    code,
 			"message": message,
@@ -564,6 +575,74 @@ func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleUIModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.ModelInfoFn == nil {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "model info unavailable")
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"model": s.ModelInfoFn(),
+	})
+}
+
+func (s *Server) handleUIModelProviders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.ModelProvidersFn == nil {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "model providers unavailable")
+		return
+	}
+	providers := s.ModelProvidersFn()
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"count":     len(providers),
+		"providers": providers,
+	})
+}
+
+func (s *Server) handleUIModelSet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.ModelSetFn == nil {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "model update unavailable")
+		return
+	}
+	var req uiModelSetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.Provider = strings.ToLower(strings.TrimSpace(req.Provider))
+	req.Model = strings.TrimSpace(req.Model)
+	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	if req.Provider == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "provider required")
+		return
+	}
+	if req.Model == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "model required")
+		return
+	}
+	result, err := s.ModelSetFn(req.Provider, req.Model, req.BaseURL)
+	if err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"result": result,
+	})
+}
+
 func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
 	if s.Engine == nil || s.Engine.SessionStore == nil {
 		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
@@ -792,17 +871,206 @@ func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Reque
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok": true,
 		"diagnostics": map[string]any{
-			"uptime_sec":             uptimeSec,
-			"active_run_count":       len(active),
-			"active_session_ids":     sessionIDs,
+			"uptime_sec":              uptimeSec,
+			"active_run_count":        len(active),
+			"active_session_ids":      sessionIDs,
 			"status_endpoint_enabled": s.GatewayStatusFn != nil,
 			"action_endpoint_enabled": s.GatewayActionFn != nil,
 		},
 	})
 }
 
+func (s *Server) handleUIPluginDashboards(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.PluginDashboardsFn == nil {
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok":         true,
+			"dashboards": []any{},
+			"count":      0,
+		})
+		return
+	}
+	items, err := s.PluginDashboardsFn()
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"dashboards": items,
+		"count":      len(items),
+	})
+}
+
+func (s *Server) handleUICronJobs(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		out, ok := s.dispatchUICron(w, r, map[string]any{"action": "list"})
+		if !ok {
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+	case http.MethodPost:
+		var req uiCronJobRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+			return
+		}
+		args := map[string]any{
+			"action":          "create",
+			"name":            strings.TrimSpace(req.Name),
+			"prompt":          strings.TrimSpace(req.Prompt),
+			"schedule":        strings.TrimSpace(req.Schedule),
+			"delivery_target": strings.TrimSpace(req.DeliveryTarget),
+			"deliver_on":      strings.TrimSpace(req.DeliverOn),
+			"context_mode":    strings.TrimSpace(req.ContextMode),
+			"run_mode":        strings.TrimSpace(req.RunMode),
+			"script_command":  strings.TrimSpace(req.ScriptCommand),
+			"script_cwd":      strings.TrimSpace(req.ScriptCWD),
+		}
+		if req.ScriptTimeout > 0 {
+			args["script_timeout"] = req.ScriptTimeout
+		}
+		if req.ChainContext != nil {
+			args["chain_context"] = *req.ChainContext
+		}
+		if req.Repeat != nil {
+			args["repeat"] = *req.Repeat
+		}
+		out, ok := s.dispatchUICron(w, r, args)
+		if !ok {
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+	default:
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+	}
+}
+
+func (s *Server) handleUICronJobDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	jobID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/ui/cron/jobs/"))
+	if jobID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "job_id required")
+		return
+	}
+	out, ok := s.dispatchUICron(w, r, map[string]any{"action": "get", "job_id": jobID})
+	if !ok {
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+}
+
+func (s *Server) handleUICronJobAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiCronJobActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "action required")
+		return
+	}
+	args := map[string]any{"action": action}
+	if v := strings.TrimSpace(req.JobID); v != "" {
+		args["job_id"] = v
+	}
+	if v := strings.TrimSpace(req.RunID); v != "" {
+		args["run_id"] = v
+	}
+	if v := strings.TrimSpace(req.Name); v != "" {
+		args["name"] = v
+	}
+	if v := strings.TrimSpace(req.Prompt); v != "" {
+		args["prompt"] = v
+	}
+	if v := strings.TrimSpace(req.Schedule); v != "" {
+		args["schedule"] = v
+	}
+	if v := strings.TrimSpace(req.DeliveryTarget); v != "" {
+		args["delivery_target"] = v
+	}
+	if v := strings.TrimSpace(req.DeliverOn); v != "" {
+		args["deliver_on"] = v
+	}
+	if v := strings.TrimSpace(req.ContextMode); v != "" {
+		args["context_mode"] = v
+	}
+	if v := strings.TrimSpace(req.RunMode); v != "" {
+		args["run_mode"] = v
+	}
+	if v := strings.TrimSpace(req.ScriptCommand); v != "" {
+		args["script_command"] = v
+	}
+	if v := strings.TrimSpace(req.ScriptCWD); v != "" {
+		args["script_cwd"] = v
+	}
+	if req.ScriptTimeout > 0 {
+		args["script_timeout"] = req.ScriptTimeout
+	}
+	if req.ChainContext != nil {
+		args["chain_context"] = *req.ChainContext
+	}
+	if req.Repeat != nil {
+		args["repeat"] = *req.Repeat
+	}
+	if req.Paused != nil {
+		args["paused"] = *req.Paused
+	}
+	if req.Limit > 0 {
+		args["limit"] = req.Limit
+	}
+	out, ok := s.dispatchUICron(w, r, args)
+	if !ok {
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+}
+
+func (s *Server) dispatchUICron(w http.ResponseWriter, r *http.Request, args map[string]any) (map[string]any, bool) {
+	if s.Engine == nil || s.Engine.Registry == nil {
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
+		return nil, false
+	}
+	raw := s.Engine.Registry.Dispatch(r.Context(), "cronjob", args, tools.ToolContext{
+		SessionStore:   s.Engine.SearchStore,
+		MemoryStore:    s.Engine.MemoryStore,
+		TodoStore:      s.Engine.TodoStore,
+		ApprovalStore:  s.Engine.ApprovalStore,
+		DelegateRunner: s.Engine,
+		Workdir:        s.Engine.Workdir,
+	})
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return nil, false
+	}
+	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
+		writeUIError(w, http.StatusBadRequest, "tool_error", e)
+		return nil, false
+	}
+	return out, true
+}
+
 type uiGatewayActionRequest struct {
 	Action string `json:"action"`
+}
+
+type uiModelSetRequest struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	BaseURL  string `json:"base_url,omitempty"`
 }
 
 type uiCompleteSlashRequest struct {
@@ -817,6 +1085,41 @@ type uiApprovalConfirmRequest struct {
 	SessionID  string `json:"session_id"`
 	ApprovalID string `json:"approval_id"`
 	Approve    bool   `json:"approve"`
+}
+
+type uiCronJobRequest struct {
+	Name           string `json:"name,omitempty"`
+	Prompt         string `json:"prompt,omitempty"`
+	Schedule       string `json:"schedule,omitempty"`
+	Repeat         *int   `json:"repeat,omitempty"`
+	DeliveryTarget string `json:"delivery_target,omitempty"`
+	DeliverOn      string `json:"deliver_on,omitempty"`
+	ContextMode    string `json:"context_mode,omitempty"`
+	ChainContext   *bool  `json:"chain_context,omitempty"`
+	RunMode        string `json:"run_mode,omitempty"`
+	ScriptCommand  string `json:"script_command,omitempty"`
+	ScriptCWD      string `json:"script_cwd,omitempty"`
+	ScriptTimeout  int    `json:"script_timeout,omitempty"`
+}
+
+type uiCronJobActionRequest struct {
+	Action         string `json:"action"`
+	JobID          string `json:"job_id,omitempty"`
+	RunID          string `json:"run_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Prompt         string `json:"prompt,omitempty"`
+	Schedule       string `json:"schedule,omitempty"`
+	Repeat         *int   `json:"repeat,omitempty"`
+	DeliveryTarget string `json:"delivery_target,omitempty"`
+	DeliverOn      string `json:"deliver_on,omitempty"`
+	ContextMode    string `json:"context_mode,omitempty"`
+	ChainContext   *bool  `json:"chain_context,omitempty"`
+	RunMode        string `json:"run_mode,omitempty"`
+	ScriptCommand  string `json:"script_command,omitempty"`
+	ScriptCWD      string `json:"script_cwd,omitempty"`
+	ScriptTimeout  int    `json:"script_timeout,omitempty"`
+	Paused         *bool  `json:"paused,omitempty"`
+	Limit          int    `json:"limit,omitempty"`
 }
 
 type uiAgentsInterruptRequest struct {
@@ -1234,11 +1537,11 @@ func (s *Server) handleUIAgentsInterrupt(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":         true,
-		"session_id": req.SessionID,
+		"ok":          true,
+		"session_id":  req.SessionID,
 		"interrupted": true,
 		"result": map[string]any{
-			"session_id": req.SessionID,
+			"session_id":  req.SessionID,
 			"interrupted": true,
 		},
 	})

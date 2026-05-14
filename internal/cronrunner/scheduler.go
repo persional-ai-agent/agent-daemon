@@ -5,13 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
+	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/cron"
+	"github.com/dingjingmaster/agent-daemon/internal/platform"
 	"github.com/dingjingmaster/agent-daemon/internal/store"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 type Scheduler struct {
@@ -95,7 +101,7 @@ func (s *Scheduler) runJob(ctx context.Context, job store.CronJob) {
 	}
 
 	runID := uuid.NewString()
-	sessionID := fmt.Sprintf("cron:%s:%s", job.ID, runID)
+	sessionID := cronRunSessionID(job, runID)
 	run := store.CronRun{
 		ID:        runID,
 		JobID:     job.ID,
@@ -109,15 +115,61 @@ func (s *Scheduler) runJob(ctx context.Context, job store.CronJob) {
 	}
 
 	eng := *s.Engine
+	out, runErr := s.executeJob(ctx, job, sessionID, &eng)
+	if err := s.Store.FinishRun(ctx, runID, "completed", out, runErr); err != nil {
+		log.Printf("[cron] finish run failed: job=%s run=%s err=%v", job.ID, runID, err)
+	}
+	target, status, messageID, deliveryErr := deliverRunResult(ctx, job, runID, out, runErr, s.Engine.Workdir)
+	if status != "" {
+		if err := s.Store.SetRunDelivery(ctx, runID, target, status, messageID, deliveryErr); err != nil {
+			log.Printf("[cron] delivery status update failed: job=%s run=%s err=%v", job.ID, runID, err)
+		}
+	}
+}
+
+func (s *Scheduler) executeJob(ctx context.Context, job store.CronJob, sessionID string, eng *agent.Engine) (string, error) {
+	if normalizeRunMode(job.RunMode) == "script" {
+		cwd := strings.TrimSpace(job.ScriptCWD)
+		if cwd == "" && s.Engine != nil {
+			cwd = strings.TrimSpace(s.Engine.Workdir)
+		}
+		timeout := job.ScriptTimeout
+		if timeout <= 0 {
+			timeout = 120
+		}
+		out, code, err := tools.RunForeground(ctx, job.ScriptCommand, cwd, timeout)
+		if err != nil {
+			return fmt.Sprintf("exit_code=%d\n%s", code, strings.TrimSpace(out)), err
+		}
+		return fmt.Sprintf("exit_code=%d\n%s", code, strings.TrimSpace(out)), nil
+	}
 	eng.TodoStore = nil
-	res, err := eng.Run(ctx, sessionID, job.Prompt, agent.DefaultSystemPrompt(), nil)
+	history := loadCronRunHistory(s.Engine, job, sessionID)
+	res, runErr := eng.Run(ctx, sessionID, job.Prompt, agent.DefaultSystemPrompt(), history)
 	out := ""
 	if res != nil {
 		out = res.FinalResponse
 	}
-	if err := s.Store.FinishRun(ctx, runID, "completed", out, err); err != nil {
-		log.Printf("[cron] finish run failed: job=%s run=%s err=%v", job.ID, runID, err)
+	return out, runErr
+}
+
+func cronRunSessionID(job store.CronJob, runID string) string {
+	if strings.EqualFold(strings.TrimSpace(job.ContextMode), "chained") {
+		return fmt.Sprintf("cron:%s", job.ID)
 	}
+	return fmt.Sprintf("cron:%s:%s", job.ID, runID)
+}
+
+func loadCronRunHistory(eng *agent.Engine, job store.CronJob, sessionID string) []core.Message {
+	if !strings.EqualFold(strings.TrimSpace(job.ContextMode), "chained") || eng == nil || eng.SessionStore == nil {
+		return nil
+	}
+	history, err := eng.SessionStore.LoadMessages(sessionID, 500)
+	if err != nil {
+		log.Printf("[cron] load chained context failed: job=%s session=%s err=%v", job.ID, sessionID, err)
+		return nil
+	}
+	return history
 }
 
 func computeNext(job store.CronJob, now time.Time) (*time.Time, bool) {
@@ -131,9 +183,158 @@ func computeNext(job store.CronJob, now time.Time) (*time.Time, bool) {
 	case "once":
 		return nil, true
 	case "cron":
-		return nil, true
+		if job.ScheduleExpr == "" {
+			return nil, true
+		}
+		t, err := cron.NextRun(job.ScheduleExpr, now)
+		if err != nil {
+			log.Printf("[cron] invalid cron expression: job=%s expr=%q err=%v", job.ID, job.ScheduleExpr, err)
+			return nil, true
+		}
+		return &t, false
 	default:
 		return nil, true
 	}
 }
 
+func deliverRunResult(ctx context.Context, job store.CronJob, runID, output string, runErr error, workdir string) (target, status, messageID, deliveryErr string) {
+	target = strings.TrimSpace(job.DeliveryTarget)
+	if target == "" {
+		return "", "", "", ""
+	}
+	deliverOn := strings.ToLower(strings.TrimSpace(job.DeliverOn))
+	if deliverOn == "" {
+		deliverOn = "always"
+	}
+	success := runErr == nil
+	switch deliverOn {
+	case "success":
+		if !success {
+			return target, "skipped", "", ""
+		}
+	case "failure":
+		if success {
+			return target, "skipped", "", ""
+		}
+	case "always":
+	default:
+		deliverOn = "always"
+	}
+
+	platformName, chatID, ok := parseDeliveryTarget(target)
+	if !ok {
+		return target, "failed", "", "invalid delivery_target (expected platform:chat_id)"
+	}
+	a, ok := platform.Get(platformName)
+	if !ok {
+		return target, "failed", "", "platform adapter not connected: " + platformName
+	}
+
+	body := buildDeliveryMessage(job, runID, output, runErr)
+	if mediaPath, ok := cronMediaPath(output, workdir); ok {
+		ms, ok := a.(platform.MediaSender)
+		if !ok {
+			return target, "failed", "", "platform adapter does not support media delivery: " + platformName
+		}
+		res, err := ms.SendMedia(ctx, chatID, mediaPath, cronDeliveryHeader(job, runID, runErr), "")
+		if err != nil {
+			return target, "failed", "", err.Error()
+		}
+		if !res.Success && strings.TrimSpace(res.Error) != "" {
+			return target, "failed", "", res.Error
+		}
+		return target, "sent", res.MessageID, ""
+	}
+	res, err := a.Send(ctx, chatID, body, "")
+	if err != nil {
+		return target, "failed", "", err.Error()
+	}
+	if !res.Success && strings.TrimSpace(res.Error) != "" {
+		return target, "failed", "", res.Error
+	}
+	return target, "sent", res.MessageID, ""
+}
+
+func parseDeliveryTarget(target string) (platformName, chatID string, ok bool) {
+	parts := strings.SplitN(strings.TrimSpace(target), ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	platformName = strings.ToLower(strings.TrimSpace(parts[0]))
+	chatID = strings.TrimSpace(parts[1])
+	return platformName, chatID, platformName != "" && chatID != ""
+}
+
+func buildDeliveryMessage(job store.CronJob, runID, output string, runErr error) string {
+	body := strings.TrimSpace(output)
+	if body == "" && runErr != nil {
+		body = runErr.Error()
+	}
+	if body == "" {
+		body = "(no output)"
+	}
+	msg := cronDeliveryHeader(job, runID, runErr) + "\n\n" + body
+	return truncateDeliveryMessage(msg, 3900)
+}
+
+func cronDeliveryHeader(job store.CronJob, runID string, runErr error) string {
+	status := "completed"
+	if runErr != nil {
+		status = "failed"
+	}
+	name := strings.TrimSpace(job.Name)
+	if name == "" {
+		name = job.ID
+	}
+	return fmt.Sprintf("Cron job %s %s\njob_id=%s run_id=%s", name, status, job.ID, runID)
+}
+
+func truncateDeliveryMessage(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	if limit <= 3 {
+		return s[:limit]
+	}
+	return s[:limit-3] + "..."
+}
+
+func cronMediaPath(output, workdir string) (string, bool) {
+	msg := strings.TrimSpace(output)
+	if !strings.HasPrefix(strings.ToUpper(msg), "MEDIA:") {
+		return "", false
+	}
+	path := strings.TrimSpace(msg[len("MEDIA:"):])
+	if path == "" {
+		return "", false
+	}
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) {
+		return "", false
+	}
+	if strings.HasPrefix(clean, "/tmp/") || clean == "/tmp" {
+		return clean, true
+	}
+	if strings.TrimSpace(workdir) == "" {
+		return "", false
+	}
+	wd, err := filepath.Abs(workdir)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(wd, clean)
+	if err != nil {
+		return "", false
+	}
+	if rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..") {
+		return clean, true
+	}
+	return "", false
+}
+
+func normalizeRunMode(v string) string {
+	if strings.EqualFold(strings.TrimSpace(v), "script") {
+		return "script"
+	}
+	return "agent"
+}

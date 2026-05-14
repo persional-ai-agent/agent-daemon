@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	_ "modernc.org/sqlite"
@@ -97,6 +99,17 @@ expires_at TEXT NOT NULL,
 created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider);
+
+CREATE TABLE IF NOT EXISTS session_summaries (
+session_id TEXT PRIMARY KEY,
+summary TEXT NOT NULL DEFAULT '',
+keywords_json TEXT NOT NULL DEFAULT '[]',
+facts_json TEXT NOT NULL DEFAULT '[]',
+message_count INTEGER NOT NULL DEFAULT 0,
+last_message_id INTEGER NOT NULL DEFAULT 0,
+updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_updated_at ON session_summaries(updated_at);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		// FTS5 might be unavailable; fall back to the core tables only.
@@ -134,6 +147,17 @@ expires_at TEXT NOT NULL,
 created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_tokens_provider ON oauth_tokens(provider);
+
+CREATE TABLE IF NOT EXISTS session_summaries (
+session_id TEXT PRIMARY KEY,
+summary TEXT NOT NULL DEFAULT '',
+keywords_json TEXT NOT NULL DEFAULT '[]',
+facts_json TEXT NOT NULL DEFAULT '[]',
+message_count INTEGER NOT NULL DEFAULT 0,
+last_message_id INTEGER NOT NULL DEFAULT 0,
+updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_updated_at ON session_summaries(updated_at);
 `
 		_, coreErr := s.db.Exec(coreSchema)
 		if coreErr != nil {
@@ -270,6 +294,10 @@ func (s *SessionStore) Search(query string, limit int, sessionID string) ([]map[
 	if limit <= 0 {
 		limit = 5
 	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return s.recentSessionSummaries(limit, sessionID)
+	}
 	if s.hasFTS() {
 		return s.searchFTS(query, limit, sessionID)
 	}
@@ -283,13 +311,21 @@ func (s *SessionStore) hasFTS() bool {
 }
 
 func (s *SessionStore) searchFTS(query string, limit int, sessionID string) ([]map[string]any, error) {
-	baseSQL := `SELECT session_id, role, content, created_at FROM messages_fts WHERE messages_fts MATCH ?`
-	args := []any{query}
+	matchQuery := buildFTSQuery(query)
+	if matchQuery == "" {
+		return s.searchLike(query, limit, sessionID)
+	}
+	baseSQL := `
+SELECT m.session_id, COUNT(*) AS match_count, MAX(m.id) AS last_id, MAX(m.created_at) AS last_seen
+FROM messages m
+JOIN messages_fts ON messages_fts.rowid = m.id
+WHERE messages_fts MATCH ?`
+	args := []any{matchQuery}
 	if strings.TrimSpace(sessionID) != "" {
-		baseSQL += ` AND session_id <> ?`
+		baseSQL += ` AND m.session_id <> ?`
 		args = append(args, sessionID)
 	}
-	baseSQL += ` ORDER BY rowid DESC LIMIT ?`
+	baseSQL += ` GROUP BY m.session_id ORDER BY match_count DESC, last_id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.db.Query(baseSQL, args...)
@@ -297,50 +333,238 @@ func (s *SessionStore) searchFTS(query string, limit int, sessionID string) ([]m
 		// If the build doesn't support MATCH, fall back.
 		return s.searchLike(query, limit, sessionID)
 	}
-	defer rows.Close()
-	return scanSearchRows(rows)
+	return s.scanSessionSearchRows(rows, query)
 }
 
 func (s *SessionStore) searchLike(query string, limit int, sessionID string) ([]map[string]any, error) {
 	like := "%" + query + "%"
-	baseSQL := `SELECT session_id, role, content, created_at FROM messages WHERE content LIKE ?`
+	baseSQL := `
+SELECT session_id, COUNT(*) AS match_count, MAX(id) AS last_id, MAX(created_at) AS last_seen
+FROM messages
+WHERE content LIKE ?`
 	args := []any{like}
 	if strings.TrimSpace(sessionID) != "" {
 		baseSQL += ` AND session_id <> ?`
 		args = append(args, sessionID)
 	}
-	baseSQL += ` ORDER BY id DESC LIMIT ?`
+	baseSQL += ` GROUP BY session_id ORDER BY match_count DESC, last_id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.db.Query(baseSQL, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search query failed: %w", err)
 	}
-	defer rows.Close()
-	return scanSearchRows(rows)
+	return s.scanSessionSearchRows(rows, query)
 }
 
-func scanSearchRows(rows *sql.Rows) ([]map[string]any, error) {
-	results := make([]map[string]any, 0)
+func (s *SessionStore) recentSessionSummaries(limit int, excludeSessionID string) ([]map[string]any, error) {
+	baseSQL := `
+SELECT session_id, COUNT(*) AS match_count, MAX(id) AS last_id, MAX(created_at) AS last_seen
+FROM messages`
+	args := []any{}
+	if strings.TrimSpace(excludeSessionID) != "" {
+		baseSQL += ` WHERE session_id <> ?`
+		args = append(args, excludeSessionID)
+	}
+	baseSQL += ` GROUP BY session_id ORDER BY last_id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.Query(baseSQL, args...)
+	if err != nil {
+		return nil, err
+	}
+	return s.scanSessionSearchRows(rows, "")
+}
+
+func (s *SessionStore) scanSessionSearchRows(rows *sql.Rows, query string) ([]map[string]any, error) {
+	type searchGroup struct {
+		sessionID  string
+		lastSeen   string
+		matchCount int64
+		lastID     int64
+	}
+	groups := make([]searchGroup, 0)
 	for rows.Next() {
-		var sid, role, content, createdAt string
-		if err := rows.Scan(&sid, &role, &content, &createdAt); err != nil {
+		var g searchGroup
+		if err := rows.Scan(&g.sessionID, &g.matchCount, &g.lastID, &g.lastSeen); err != nil {
 			return nil, err
 		}
-		snippet := strings.TrimSpace(content)
-		if len([]rune(snippet)) > 180 {
-			r := []rune(snippet)
-			snippet = string(r[:180]) + "..."
+		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	results := make([]map[string]any, 0)
+	for _, g := range groups {
+		summary, err := s.ensureSessionSummary(g.sessionID, g.lastID)
+		if err != nil {
+			return nil, err
 		}
-		results = append(results, map[string]any{
-			"session_id": sid,
+		highlights, _ := s.sessionHighlights(g.sessionID, query, 3)
+		result := map[string]any{
+			"session_id":    g.sessionID,
+			"summary":       summary.Summary,
+			"keywords":      summary.Keywords,
+			"facts":         summary.Facts,
+			"message_count": summary.MessageCount,
+			"match_count":   g.matchCount,
+			"last_seen":     g.lastSeen,
+			"highlights":    highlights,
+		}
+		// Backward-compatible row-level fields for older callers.
+		if len(highlights) > 0 {
+			result["role"] = highlights[0]["role"]
+			result["content"] = highlights[0]["content"]
+			result["created_at"] = highlights[0]["created_at"]
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+type SessionSummary struct {
+	SessionID     string
+	Summary       string
+	Keywords      []string
+	Facts         []string
+	MessageCount  int64
+	LastMessageID int64
+	UpdatedAt     string
+}
+
+type sessionMessageRecord struct {
+	id        int64
+	role      string
+	content   string
+	createdAt string
+}
+
+func (s *SessionStore) ensureSessionSummary(sessionID string, lastMessageID int64) (SessionSummary, error) {
+	var cached SessionSummary
+	var keywordsJSON, factsJSON string
+	err := s.db.QueryRow(`SELECT session_id, summary, keywords_json, facts_json, message_count, last_message_id, updated_at FROM session_summaries WHERE session_id = ?`, sessionID).
+		Scan(&cached.SessionID, &cached.Summary, &keywordsJSON, &factsJSON, &cached.MessageCount, &cached.LastMessageID, &cached.UpdatedAt)
+	if err == nil && cached.LastMessageID >= lastMessageID {
+		_ = json.Unmarshal([]byte(keywordsJSON), &cached.Keywords)
+		_ = json.Unmarshal([]byte(factsJSON), &cached.Facts)
+		return cached, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return SessionSummary{}, err
+	}
+	summary, err := s.BuildSessionSummary(sessionID)
+	if err != nil {
+		return SessionSummary{}, err
+	}
+	return summary, s.SaveSessionSummary(summary)
+}
+
+func (s *SessionStore) BuildSessionSummary(sessionID string) (SessionSummary, error) {
+	rows, err := s.db.Query(`SELECT id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY id ASC`, sessionID)
+	if err != nil {
+		return SessionSummary{}, err
+	}
+	defer rows.Close()
+
+	records := make([]sessionMessageRecord, 0)
+	allText := strings.Builder{}
+	for rows.Next() {
+		var r sessionMessageRecord
+		if err := rows.Scan(&r.id, &r.role, &r.content, &r.createdAt); err != nil {
+			return SessionSummary{}, err
+		}
+		records = append(records, r)
+		if strings.TrimSpace(r.content) != "" {
+			allText.WriteString(" ")
+			allText.WriteString(r.content)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return SessionSummary{}, err
+	}
+	if len(records) == 0 {
+		return SessionSummary{SessionID: sessionID, Summary: "(empty session)", UpdatedAt: time.Now().Format(time.RFC3339)}, nil
+	}
+	firstUser := firstContentByRole(records, "user")
+	lastUser := lastContentByRole(records, "user")
+	lastAssistant := lastContentByRole(records, "assistant")
+	parts := []string{fmt.Sprintf("Conversation with %d messages.", len(records))}
+	if firstUser != "" {
+		parts = append(parts, "Initial user request: "+trimRunes(oneLine(firstUser), 220))
+	}
+	if lastUser != "" && lastUser != firstUser {
+		parts = append(parts, "Latest user request: "+trimRunes(oneLine(lastUser), 220))
+	}
+	if lastAssistant != "" {
+		parts = append(parts, "Latest assistant response: "+trimRunes(oneLine(lastAssistant), 260))
+	}
+	text := allText.String()
+	last := records[len(records)-1]
+	return SessionSummary{
+		SessionID:     sessionID,
+		Summary:       strings.Join(parts, " "),
+		Keywords:      extractKeywords(text, 12),
+		Facts:         extractFactLines(text, 8),
+		MessageCount:  int64(len(records)),
+		LastMessageID: last.id,
+		UpdatedAt:     time.Now().Format(time.RFC3339),
+	}, nil
+}
+
+func (s *SessionStore) SaveSessionSummary(summary SessionSummary) error {
+	keywordsJSON, _ := json.Marshal(summary.Keywords)
+	factsJSON, _ := json.Marshal(summary.Facts)
+	if strings.TrimSpace(summary.UpdatedAt) == "" {
+		summary.UpdatedAt = time.Now().Format(time.RFC3339)
+	}
+	_, err := s.db.Exec(`INSERT INTO session_summaries(session_id, summary, keywords_json, facts_json, message_count, last_message_id, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(session_id) DO UPDATE SET summary=excluded.summary, keywords_json=excluded.keywords_json, facts_json=excluded.facts_json, message_count=excluded.message_count, last_message_id=excluded.last_message_id, updated_at=excluded.updated_at`,
+		summary.SessionID, summary.Summary, string(keywordsJSON), string(factsJSON), summary.MessageCount, summary.LastMessageID, summary.UpdatedAt)
+	return err
+}
+
+func (s *SessionStore) sessionHighlights(sessionID, query string, limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+	query = strings.TrimSpace(query)
+	args := []any{sessionID}
+	sqlText := `SELECT role, content, created_at FROM messages WHERE session_id = ?`
+	if query != "" {
+		sqlText += ` AND content LIKE ?`
+		args = append(args, "%"+query+"%")
+	}
+	sqlText += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.Query(sqlText, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]map[string]any, 0)
+	for rows.Next() {
+		var role, content, createdAt string
+		if err := rows.Scan(&role, &content, &createdAt); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{
 			"role":       role,
 			"content":    content,
-			"summary":    snippet,
+			"snippet":    trimRunes(oneLine(content), 240),
 			"created_at": createdAt,
 		})
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) > 0 || query == "" {
+		return out, nil
+	}
+	return s.sessionHighlights(sessionID, "", limit)
 }
 
 type ApprovalRecord struct {
@@ -447,4 +671,161 @@ func (s *SessionStore) LoadOAuthToken(provider string) (accessToken, refreshToke
 func (s *SessionStore) DeleteOAuthToken(provider string) error {
 	_, err := s.db.Exec(`DELETE FROM oauth_tokens WHERE provider = ?`, provider)
 	return err
+}
+
+func buildFTSQuery(query string) string {
+	tokens := tokenizeSearch(query)
+	if len(tokens) == 0 {
+		return ""
+	}
+	if len(tokens) == 1 {
+		return quoteFTSToken(tokens[0])
+	}
+	quoted := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		quoted = append(quoted, quoteFTSToken(token))
+	}
+	return strings.Join(quoted, " OR ")
+}
+
+func quoteFTSToken(token string) string {
+	token = strings.ReplaceAll(token, `"`, `""`)
+	return `"` + token + `"`
+}
+
+func tokenizeSearch(s string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' || r == '-' || r == '.')
+	})
+	out := make([]string, 0, len(fields))
+	seen := map[string]struct{}{}
+	for _, f := range fields {
+		f = strings.Trim(f, "._-")
+		if len([]rune(f)) < 2 {
+			continue
+		}
+		if _, skip := searchStopwords[f]; skip {
+			continue
+		}
+		if _, ok := seen[f]; ok {
+			continue
+		}
+		seen[f] = struct{}{}
+		out = append(out, f)
+	}
+	return out
+}
+
+var searchStopwords = map[string]struct{}{
+	"the": {}, "and": {}, "for": {}, "with": {}, "that": {}, "this": {}, "from": {}, "have": {}, "what": {}, "when": {}, "where": {}, "about": {}, "into": {}, "your": {}, "you": {}, "are": {}, "was": {}, "were": {}, "has": {}, "had": {},
+	"一个": {}, "这个": {}, "那个": {}, "以及": {}, "然后": {}, "如果": {}, "我们": {}, "你们": {},
+}
+
+func firstContentByRole(records []sessionMessageRecord, role string) string {
+	for _, r := range records {
+		if r.role == role && strings.TrimSpace(r.content) != "" {
+			return r.content
+		}
+	}
+	return ""
+}
+
+func lastContentByRole(records []sessionMessageRecord, role string) string {
+	for i := len(records) - 1; i >= 0; i-- {
+		if records[i].role == role && strings.TrimSpace(records[i].content) != "" {
+			return records[i].content
+		}
+	}
+	return ""
+}
+
+func extractKeywords(text string, limit int) []string {
+	tokens := tokenizeSearch(text)
+	counts := map[string]int{}
+	for _, token := range tokens {
+		counts[token]++
+	}
+	type kv struct {
+		key string
+		n   int
+	}
+	items := make([]kv, 0, len(counts))
+	for key, n := range counts {
+		items = append(items, kv{key: key, n: n})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].n == items[j].n {
+			return items[i].key < items[j].key
+		}
+		return items[i].n > items[j].n
+	})
+	if limit <= 0 || limit > len(items) {
+		limit = len(items)
+	}
+	out := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, items[i].key)
+	}
+	return out
+}
+
+func extractFactLines(text string, limit int) []string {
+	sentences := splitSentences(text)
+	out := make([]string, 0, limit)
+	seen := map[string]struct{}{}
+	for _, sentence := range sentences {
+		lower := strings.ToLower(sentence)
+		if !looksLikeMemoryFact(lower) {
+			continue
+		}
+		fact := trimRunes(oneLine(sentence), 220)
+		if fact == "" {
+			continue
+		}
+		key := strings.ToLower(fact)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, fact)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func splitSentences(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
+		return r == '\n' || r == '.' || r == '!' || r == '?' || r == '。' || r == '！' || r == '？' || r == ';' || r == '；'
+	})
+}
+
+func looksLikeMemoryFact(lower string) bool {
+	patterns := []string{
+		"i prefer", "i like", "i want", "my name", "my project", "we use", "we need", "project uses", "user prefers", "user likes",
+		"我喜欢", "我希望", "我需要", "我的", "我们使用", "项目使用", "用户偏好", "用户喜欢",
+	}
+	for _, p := range patterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func trimRunes(s string, limit int) string {
+	s = strings.TrimSpace(s)
+	if limit <= 0 {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	return string(r[:limit]) + "..."
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

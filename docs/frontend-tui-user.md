@@ -23,7 +23,13 @@ npm run dev
 - `chat`：支持普通请求与流式请求（SSE），可查看事件时间线。
 - `sessions`：会话列表 + 详情分页查看。
 - `tools`：工具列表 + schema 详情查看（支持筛选）。
-- `gateway`：查看网关状态，可启用/禁用并刷新。
+- `skills`：技能列表、详情编辑、新建、删除、搜索、同步与 reload。
+- `agents`：delegate 会话、活动运行、历史记录、详情查询与中断。
+- `cron`：创建定时任务，可设置结果投递目标与链式上下文模式，查看任务列表/详情，暂停、恢复、触发、删除任务，并查看运行记录。
+- `models`：查看当前 provider/model/base_url、可用 provider，并写入新的模型选择。
+- `plugins`：查看插件 dashboard slot 声明。
+- `gateway`：查看网关状态与诊断信息，可启用/禁用并刷新。
+- `voice`：查看语音状态，执行 voice/TTS/recording 控制。
 - `config`：查看配置快照，可写入单个 `section.key=value`。
 
 ## 2. CLI 类 TUI
@@ -59,15 +65,17 @@ go run .
 
 常用命令：
 
-- `/help`：命令列表
-- `/tools`：工具清单
-- `/sessions [n]`：最近会话
-- `/stats [session_id]`：会话统计
-- `/show [sid] [offset] [limit]`：消息分页查看
-- `/history [n]`：当前上下文预览
-- `/reload`：从存储重载上下文
-- `/clear`：清空当前进程内上下文
-- `/quit`：退出
+- `/help`、`/commands`：命令列表
+- `/status`、`/session`：当前会话状态
+- `/new [session_id]`、`/reset [session_id]`：新建/重置并切换会话
+- `/resume <session_id>`：加载并切换到已有会话
+- `/retry`、`/undo`、`/compress [tail]`：重试、撤销、压缩当前上下文
+- `/save [path]`：导出当前上下文为 JSON
+- `/tools [list|show|schemas]`：工具清单、单工具 schema、全部 schema
+- `/toolsets [list|show|resolve]`：工具集查看与解析
+- `/sessions [n]`、`/stats [session_id]`、`/show [sid] [offset] [limit]`：会话列表、统计、分页查看
+- `/history [n]`、`/todo`、`/memory [memory|user]`、`/model`：当前上下文、todo、记忆与模型状态
+- `/reload`、`/clear`、`/tui`、`/quit`：重载、清空、TUI 状态和退出
 
 `ui-tui` 额外命令（管理面）：
 

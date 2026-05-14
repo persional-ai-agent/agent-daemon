@@ -3912,6 +3912,18 @@ func runPlugins(cfg config.Config, args []string) {
 			log.Fatal(err)
 		}
 		printJSON(items)
+	case "commands":
+		items, err := loadConfiguredPlugins(cfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(plugins.CommandInfos(items))
+	case "dashboards", "dashboard":
+		items, err := loadConfiguredPlugins(cfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(plugins.DashboardInfos(items))
 	case "show":
 		if len(args) != 2 {
 			log.Fatal("usage: agentd plugins show name")
@@ -3939,6 +3951,21 @@ func runPlugins(cfg config.Config, args []string) {
 			}
 		}
 		fmt.Printf("ok (%d manifests)\n", len(items))
+	case "verify":
+		reports, err := plugins.VerifyDirs(plugins.DefaultDirs(cfg.Workdir))
+		if err != nil {
+			log.Fatal(err)
+		}
+		ok := true
+		for _, report := range reports {
+			if !report.Valid {
+				ok = false
+			}
+		}
+		printJSON(map[string]any{"ok": ok, "reports": reports, "count": len(reports)})
+		if !ok {
+			os.Exit(1)
+		}
 	case "disable":
 		path, name := parsePluginToggleArgs(args[1:], "plugins disable")
 		disabled, err := readDisabledPluginsConfig(path)
@@ -3961,8 +3988,138 @@ func runPlugins(cfg config.Config, args []string) {
 			log.Fatal(err)
 		}
 		fmt.Printf("enabled plugin %s in %s\n", name, config.ConfigFilePath(path))
+	case "install":
+		runPluginInstall(cfg, args[1:])
+	case "uninstall", "remove":
+		runPluginUninstall(cfg, args[1:])
+	case "exec", "run":
+		runPluginCommand(cfg, args[1:])
+	case "marketplace":
+		runPluginMarketplace(cfg, args[1:])
 	default:
 		printPluginsUsage()
+	}
+}
+
+func runPluginInstall(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("plugins install", flag.ExitOnError)
+	dest := fs.String("dest", "", "plugin destination directory")
+	jsonOut := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		log.Fatal("usage: agentd plugins install [-dest dir] [-json] path")
+	}
+	destDir := strings.TrimSpace(*dest)
+	if destDir == "" {
+		dirs := plugins.DefaultDirs(cfg.Workdir)
+		if len(dirs) == 0 {
+			log.Fatal("no plugin destination configured")
+		}
+		destDir = dirs[0]
+	}
+	manifest, installedPath, err := plugins.InstallLocal(fs.Arg(0), destDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res := map[string]any{"success": true, "plugin": manifest, "path": installedPath}
+	if *jsonOut {
+		printJSON(res)
+		return
+	}
+	fmt.Printf("installed plugin %s to %s\n", manifest.Name, installedPath)
+}
+
+func runPluginUninstall(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("plugins uninstall", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		log.Fatal("usage: agentd plugins uninstall [-json] name")
+	}
+	items, err := plugins.LoadFromDirs(plugins.DefaultDirs(cfg.Workdir))
+	if err != nil {
+		log.Fatal(err)
+	}
+	removed, err := plugins.UninstallLocal(items, fs.Arg(0), plugins.DefaultDirs(cfg.Workdir))
+	if err != nil {
+		log.Fatal(err)
+	}
+	res := map[string]any{"success": true, "removed": removed}
+	if *jsonOut {
+		printJSON(res)
+		return
+	}
+	fmt.Printf("uninstalled plugin %s from %s\n", fs.Arg(0), removed)
+}
+
+func runPluginCommand(cfg config.Config, args []string) {
+	fs := flag.NewFlagSet("plugins exec", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "output JSON")
+	_ = fs.Parse(args)
+	if fs.NArg() < 1 {
+		log.Fatal("usage: agentd plugins exec [-json] command [args...]")
+	}
+	items, err := loadConfiguredPlugins(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res, err := plugins.RunCommand(context.Background(), items, fs.Arg(0), fs.Args()[1:], cfg.Workdir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *jsonOut {
+		printJSON(res)
+		return
+	}
+	printJSON(res)
+}
+
+func runPluginMarketplace(cfg config.Config, args []string) {
+	if len(args) == 0 {
+		log.Fatal("usage: agentd plugins marketplace <list|install> -file index.json [name]")
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("plugins marketplace list", flag.ExitOnError)
+		indexPath := fs.String("file", "", "marketplace index path")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*indexPath) == "" {
+			log.Fatal("usage: agentd plugins marketplace list -file index.json")
+		}
+		idx, err := plugins.LoadMarketplace(*indexPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(idx)
+	case "install":
+		fs := flag.NewFlagSet("plugins marketplace install", flag.ExitOnError)
+		indexPath := fs.String("file", "", "marketplace index path")
+		dest := fs.String("dest", "", "plugin destination directory")
+		jsonOut := fs.Bool("json", false, "output JSON")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*indexPath) == "" || fs.NArg() != 1 {
+			log.Fatal("usage: agentd plugins marketplace install -file index.json [-dest dir] [-json] name")
+		}
+		destDir := strings.TrimSpace(*dest)
+		if destDir == "" {
+			dirs := plugins.DefaultDirs(cfg.Workdir)
+			if len(dirs) == 0 {
+				log.Fatal("no plugin destination configured")
+			}
+			destDir = dirs[0]
+		}
+		manifest, installedPath, err := plugins.InstallFromMarketplace(*indexPath, fs.Arg(0), destDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+		res := map[string]any{"success": true, "plugin": manifest, "path": installedPath}
+		if *jsonOut {
+			printJSON(res)
+			return
+		}
+		fmt.Printf("installed marketplace plugin %s to %s\n", manifest.Name, installedPath)
+	default:
+		log.Fatal("usage: agentd plugins marketplace <list|install> -file index.json [name]")
 	}
 }
 
@@ -3987,7 +4144,15 @@ func printPluginsUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  agentd plugins list")
 	fmt.Fprintln(os.Stderr, "  agentd plugins show name")
+	fmt.Fprintln(os.Stderr, "  agentd plugins commands")
+	fmt.Fprintln(os.Stderr, "  agentd plugins dashboards")
 	fmt.Fprintln(os.Stderr, "  agentd plugins validate")
+	fmt.Fprintln(os.Stderr, "  agentd plugins verify")
+	fmt.Fprintln(os.Stderr, "  agentd plugins install [-dest dir] [-json] path")
+	fmt.Fprintln(os.Stderr, "  agentd plugins uninstall [-json] name")
+	fmt.Fprintln(os.Stderr, "  agentd plugins exec [-json] command [args...]")
+	fmt.Fprintln(os.Stderr, "  agentd plugins marketplace list -file index.json")
+	fmt.Fprintln(os.Stderr, "  agentd plugins marketplace install -file index.json [-dest dir] [-json] name")
 	fmt.Fprintln(os.Stderr, "  agentd plugins disable [-file path] name")
 	fmt.Fprintln(os.Stderr, "  agentd plugins enable [-file path] name")
 }
@@ -6560,6 +6725,64 @@ func runServe(cfg config.Config) {
 				"model_use_streaming": cfg.ModelUseStreaming,
 			}
 		},
+		ModelInfoFn: func() map[string]any {
+			provider := strings.ToLower(strings.TrimSpace(cfg.ModelProvider))
+			if provider == "" {
+				provider = "openai"
+			}
+			modelName, baseURL := currentModelConfig(cfg, provider)
+			return map[string]any{
+				"provider":          provider,
+				"model":             modelName,
+				"base_url":          baseURL,
+				"fallback_provider": cfg.ModelFallbackProvider,
+				"use_streaming":     cfg.ModelUseStreaming,
+				"race_enabled":      cfg.ModelRaceEnabled,
+				"cascade":           cfg.ModelCascade,
+				"cost_aware":        cfg.ModelCostAware,
+			}
+		},
+		ModelProvidersFn: func() []string {
+			return availableModelProviders(cfg)
+		},
+		ModelSetFn: func(provider, modelName, baseURL string) (map[string]any, error) {
+			provider = strings.ToLower(strings.TrimSpace(provider))
+			modelName = strings.TrimSpace(modelName)
+			baseURL = strings.TrimSpace(baseURL)
+			if !isProviderAvailable(cfg, provider) {
+				return nil, fmt.Errorf("unsupported provider: %s", provider)
+			}
+			path := config.ConfigFilePath("")
+			if err := saveModelSelection(path, provider, modelName, baseURL); err != nil {
+				return nil, err
+			}
+			cfg.ModelProvider = provider
+			switch provider {
+			case "anthropic":
+				cfg.AnthropicModel = modelName
+				if baseURL != "" {
+					cfg.AnthropicBaseURL = baseURL
+				}
+			case "codex":
+				cfg.CodexModel = modelName
+				if baseURL != "" {
+					cfg.CodexBaseURL = baseURL
+				}
+			default:
+				cfg.ModelName = modelName
+				if baseURL != "" {
+					cfg.ModelBaseURL = baseURL
+				}
+			}
+			currentModel, currentBaseURL := currentModelConfig(cfg, provider)
+			return map[string]any{
+				"success":  true,
+				"provider": provider,
+				"model":    currentModel,
+				"base_url": currentBaseURL,
+				"path":     path,
+			}, nil
+		},
 		GatewayStatusFn: func() map[string]any {
 			status := gatewayStatus(cfg)
 			return map[string]any{
@@ -6573,6 +6796,17 @@ func runServe(cfg config.Config) {
 				"token_locked":         status.TokenLocked,
 				"installed":            status.Installed,
 			}
+		},
+		PluginDashboardsFn: func() ([]map[string]any, error) {
+			items, err := loadConfiguredPlugins(cfg)
+			if err != nil {
+				return nil, err
+			}
+			dashboards := plugins.DashboardInfos(items)
+			out := make([]map[string]any, 0, len(dashboards))
+			bs, _ := json.Marshal(dashboards)
+			_ = json.Unmarshal(bs, &out)
+			return out, nil
 		},
 		ConfigUpdateFn: func(key, value string) (map[string]any, error) {
 			path := config.ConfigFilePath("")

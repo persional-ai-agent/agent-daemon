@@ -105,10 +105,54 @@ pre {
   gap: 12px;
 }
 
+.split.wide {
+  grid-template-columns: 280px 1fr;
+}
+
 .split > div {
   display: grid;
   align-content: start;
   gap: 8px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.grid3 > div {
+  border: 1px solid var(--line);
+  padding: 10px;
+  background: #fff;
+}
+
+.grid3 h3 {
+  margin: 0 0 8px;
+}
+
+.editor {
+  min-height: 360px;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.row input,
+.row select {
+  flex: 1 1 180px;
+  margin: 0;
+}
+
+.row button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .split,
+  .split.wide,
+  .grid3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .conn-state {

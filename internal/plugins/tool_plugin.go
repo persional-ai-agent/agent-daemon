@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,6 @@ type RuntimeToolPlugin struct {
 	schema   core.ToolSchema
 	command  string
 	args     []string
-	env      map[string]string
 	timeout  time.Duration
 }
 
@@ -39,6 +37,9 @@ func BuildToolPlugin(m Manifest) (*RuntimeToolPlugin, error) {
 	if v, ok := spec.Schema["description"].(string); ok && strings.TrimSpace(schema.Function.Description) == "" {
 		schema.Function.Description = strings.TrimSpace(v)
 	}
+	if strings.TrimSpace(spec.Description) != "" {
+		schema.Function.Description = strings.TrimSpace(spec.Description)
+	}
 	if schema.Function.Description == "" {
 		schema.Function.Description = "plugin tool: " + strings.TrimSpace(m.Name)
 	}
@@ -55,7 +56,6 @@ func BuildToolPlugin(m Manifest) (*RuntimeToolPlugin, error) {
 		schema:   schema,
 		command:  cmdPath,
 		args:     append([]string{}, spec.Args...),
-		env:      m.Env,
 		timeout:  timeout,
 	}, nil
 }
@@ -97,16 +97,8 @@ func (p *RuntimeToolPlugin) Call(ctx context.Context, args map[string]any, tc to
 	}
 	cmd := exec.CommandContext(callCtx, p.command, p.args...)
 	cmd.Stdin = strings.NewReader(string(in))
-	if strings.TrimSpace(tc.Workdir) != "" {
-		cmd.Dir = strings.TrimSpace(tc.Workdir)
-	}
-	cmd.Env = os.Environ()
-	for k, v := range p.env {
-		key := strings.TrimSpace(k)
-		if key == "" {
-			continue
-		}
-		cmd.Env = append(cmd.Env, key+"="+v)
+	if err := prepareCommand(cmd, p.manifest, p.command, tc.Workdir); err != nil {
+		return nil, err
 	}
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
@@ -132,7 +124,7 @@ func truncatePluginOutput(s string) string {
 
 func RegisterToolPlugins(registry *tools.Registry, manifests []Manifest) (int, error) {
 	count := 0
-	for _, m := range manifests {
+	for _, m := range ExpandRuntimeManifests(manifests) {
 		if !m.IsEnabled() || !strings.EqualFold(strings.TrimSpace(m.Type), "tool") {
 			continue
 		}

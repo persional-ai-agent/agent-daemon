@@ -30,3 +30,49 @@ func TestParseScheduleOnceDuration(t *testing.T) {
 	}
 }
 
+func TestParseScheduleCronExpression(t *testing.T) {
+	now := time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)
+	s, err := ParseSchedule(now, "*/15 9-17 * * 1-5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Kind != "cron" || s.Expr != "*/15 9-17 * * 1-5" {
+		t.Fatalf("got kind=%s expr=%q", s.Kind, s.Expr)
+	}
+}
+
+func TestNextRunCronFiveField(t *testing.T) {
+	after := time.Date(2026, 5, 11, 9, 7, 30, 0, time.UTC)
+	next, err := NextRun("*/15 9-17 * * 1-5", after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 5, 11, 9, 15, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("next=%s want=%s", next.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+func TestNextRunCronSixField(t *testing.T) {
+	after := time.Date(2026, 5, 11, 9, 0, 4, 0, time.UTC)
+	next, err := NextRun("*/10 * * * * *", after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 5, 11, 9, 0, 10, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("next=%s want=%s", next.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+func TestNextRunCronSundayAlias(t *testing.T) {
+	after := time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC) // Monday
+	next, err := NextRun("0 8 * * 7", after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 5, 17, 8, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("next=%s want=%s", next.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
