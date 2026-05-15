@@ -204,6 +204,29 @@ func TestHandleSlashCommandUsageAndPersonality(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandSetHomeAndTargets(t *testing.T) {
+	workdir := t.TempDir()
+	eng := makeEngineForSlashTests(nil)
+	eng.Workdir = workdir
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	if handled, err := handleSlashCommandState(context.Background(), "/sethome telegram:100", state, eng); err != nil || !handled {
+		t.Fatalf("sethome handled=%v err=%v", handled, err)
+	}
+	if v := os.Getenv("TELEGRAM_HOME_CHANNEL"); v != "100" {
+		t.Fatalf("env TELEGRAM_HOME_CHANNEL=%q want=100", v)
+	}
+	if err := tools.UpsertChannelDirectory(workdir, tools.ChannelDirectoryEntry{
+		Platform: "telegram",
+		ChatID:   "100",
+		UserID:   "u1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/targets telegram", state, eng); err != nil || !handled {
+		t.Fatalf("targets handled=%v err=%v", handled, err)
+	}
+}
+
 func TestHandleSlashCommandNewAndResume(t *testing.T) {
 	store := &testSessionStore{bySession: map[string][]core.Message{
 		"old": {{Role: "user", Content: "stored"}},

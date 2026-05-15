@@ -368,6 +368,65 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		printCLIEnvelope(true, map[string]any{"path": saved, "messages": len(state.History)}, "", "")
 		return true, nil
+	case "/sethome":
+		if len(fields) == 1 || len(fields) > 3 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+			return true, nil
+		}
+		p := ""
+		cid := ""
+		if len(fields) == 2 {
+			tp, tcid, err := clitools.ParseDeliveryTarget(strings.TrimSpace(fields[1]))
+			if err != nil || strings.TrimSpace(tcid) == "" {
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+				return true, nil
+			}
+			p, cid = tp, tcid
+		} else {
+			p = strings.ToLower(strings.TrimSpace(fields[1]))
+			cid = strings.TrimSpace(fields[2])
+			if p == "" || cid == "" {
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+				return true, nil
+			}
+		}
+		env := clitools.HomeTargetEnvVar(p)
+		_ = os.Setenv(env, cid)
+		_ = clitools.SetHomeTarget(eng.Workdir, p, cid)
+		printCLIEnvelope(true, map[string]any{"platform": p, "chat_id": cid, "home_target": p + ":" + cid, "env": env}, "", "")
+		return true, nil
+	case "/targets":
+		filter := ""
+		if len(fields) > 2 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /targets [platform]")
+			return true, nil
+		}
+		if len(fields) == 2 {
+			filter = strings.ToLower(strings.TrimSpace(fields[1]))
+		}
+		rows, err := clitools.ListChannelDirectory(eng.Workdir)
+		if err != nil {
+			return true, err
+		}
+		out := make([]map[string]any, 0, len(rows))
+		for _, row := range rows {
+			if filter != "" && row.Platform != filter {
+				continue
+			}
+			out = append(out, map[string]any{
+				"platform":     row.Platform,
+				"chat_id":      row.ChatID,
+				"target":       row.Platform + ":" + row.ChatID,
+				"chat_type":    row.ChatType,
+				"user_id":      row.UserID,
+				"user_name":    row.UserName,
+				"global_id":    row.GlobalID,
+				"home_target":  row.HomeTarget,
+				"last_seen_at": row.LastSeenAt,
+			})
+		}
+		printCLIEnvelope(true, map[string]any{"count": len(out), "platform": filter, "targets": out}, "", "")
+		return true, nil
 	case "/todo":
 		if eng.TodoStore == nil {
 			printCLIEnvelope(false, nil, "not_available", "todo store unavailable")

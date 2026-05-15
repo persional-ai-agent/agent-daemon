@@ -100,6 +100,8 @@ func CLIHelpLines() []string {
 		"/undo                         从当前上下文撤销上一轮",
 		"/compress [tail]              压缩当前上下文，保留最近 tail 条",
 		"/save [path]                  导出当前上下文为 JSON",
+		"/sethome <p> <id>|<p:id>      设置平台默认 home target",
+		"/targets [platform]           列出已知可投递目标",
 		"/history [n]                  预览最近 n 条上下文消息",
 		"/sessions [n]                 列出最近 n 个会话",
 		"/show [sid] [offset] [limit]  分页查看会话消息",
