@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -129,6 +130,10 @@ type gatewayCommand struct {
 
 type gatewaySessionCompactor interface {
 	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
+}
+
+type gatewaySessionStatsStore interface {
+	SessionStats(sessionID string) (map[string]any, error)
 }
 
 func parseGatewayCommand(platformName, text string) gatewayCommand {
@@ -379,6 +384,28 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			reply := renderGatewayHistory(msgs, limit)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/history", "session_id": active})
+			return
+		case "/stats":
+			target := w.currentSessionID()
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /stats [session_id]", event.MessageID, map[string]any{"slash": "/stats"})
+				return
+			}
+			if len(parsed.args) == 1 && strings.TrimSpace(parsed.args[0]) != "" {
+				target = strings.TrimSpace(parsed.args[0])
+			}
+			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
+			if !ok || statsStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Stats not supported by session store._", event.MessageID, map[string]any{"slash": "/stats"})
+				return
+			}
+			stats, err := statsStore.SessionStats(target)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Stats failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/stats"})
+				return
+			}
+			reply := renderGatewayStats(target, stats)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/stats", "session_id": target})
 			return
 		case "/cancel":
 			w.mu.Lock()
@@ -957,6 +984,23 @@ func renderGatewayHistory(history []core.Message, limit int) string {
 			content = content[:120] + "..."
 		}
 		lines = append(lines, itoa(i+1)+". ["+msg.Role+"] "+content)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderGatewayStats(sessionID string, stats map[string]any) string {
+	if len(stats) == 0 {
+		return "Stats are empty."
+	}
+	keys := make([]string, 0, len(stats))
+	for k := range stats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	lines := make([]string, 0, len(keys)+1)
+	lines = append(lines, "Session stats: "+sessionID)
+	for _, k := range keys {
+		lines = append(lines, k+": "+fmt.Sprintf("%v", stats[k]))
 	}
 	return strings.Join(lines, "\n")
 }

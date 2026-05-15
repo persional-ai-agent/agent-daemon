@@ -65,6 +65,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/HISTORY 5"); got != "/history 5" {
 		t.Fatalf("slash command should normalize history, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/STATS s-1"); got != "/stats s-1" {
+		t.Fatalf("slash command should normalize stats, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/RESUME sess-1"); got != "/resume sess-1" {
 		t.Fatalf("slash command should normalize resume, got=%q", got)
 	}
@@ -233,5 +236,22 @@ func TestRenderGatewayHistory(t *testing.T) {
 	}
 	if !strings.Contains(got, "2. [assistant] a1") || !strings.Contains(got, "3. [user] u2") {
 		t.Fatalf("unexpected history output: %q", got)
+	}
+}
+
+func TestRenderGatewayStats(t *testing.T) {
+	stats := map[string]any{
+		"session_id":    "s1",
+		"message_count": 12,
+	}
+	got := renderGatewayStats("s1", stats)
+	if !strings.Contains(got, "Session stats: s1") {
+		t.Fatalf("missing header: %q", got)
+	}
+	if !strings.Contains(got, "message_count: 12") {
+		t.Fatalf("missing message_count: %q", got)
+	}
+	if !strings.Contains(got, "session_id: s1") {
+		t.Fatalf("missing session_id: %q", got)
 	}
 }
