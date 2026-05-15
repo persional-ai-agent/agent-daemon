@@ -417,10 +417,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
-			helpText := "Commands: /pair <code>, /unpair, /cancel, /queue, /status, /pending, /approvals, /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>, /approve <id>, /deny <id>, /help"
-			if w.adapter.Name() == "yuanbao" {
-				helpText += "\nQuick reply aliases: 状态, 待审批, 审批, 批准, 拒绝, 帮助"
-			}
+			helpText := GatewayHelpText(w.adapter.Name() == "yuanbao")
 			_, _ = w.sendText(ctx, event.ChatID, helpText, event.MessageID, map[string]any{"slash": "/help"})
 			return
 		}

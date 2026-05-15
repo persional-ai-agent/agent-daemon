@@ -30,6 +30,10 @@ var gatewayCommandAliasToCanonical = map[string]string{
 	"h":        "help",
 }
 
+var gatewayHelpCommandOrder = []string{
+	"pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help",
+}
+
 func IsBuiltInGatewayCommand(name string) bool {
 	_, ok := builtInGatewayCommandSet[strings.ToLower(strings.TrimSpace(name))]
 	return ok
@@ -56,4 +60,36 @@ func BuiltInGatewaySlashCommands() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func GatewayHelpText(yuanbao bool) string {
+	parts := make([]string, 0, len(gatewayHelpCommandOrder))
+	for _, name := range gatewayHelpCommandOrder {
+		if !IsBuiltInGatewayCommand(name) {
+			continue
+		}
+		parts = append(parts, gatewayHelpCommandEntry(name))
+	}
+	text := "Commands: " + strings.Join(parts, ", ")
+	if yuanbao {
+		text += "\nQuick reply aliases: 状态, 待审批, 审批, 批准, 拒绝, 帮助"
+	}
+	return text
+}
+
+func gatewayHelpCommandEntry(name string) string {
+	switch name {
+	case "pair":
+		return "/pair <code>"
+	case "grant":
+		return "/grant [ttl]"
+	case "revoke":
+		return "/revoke"
+	case "approve":
+		return "/approve <id>"
+	case "deny":
+		return "/deny <id>"
+	default:
+		return "/" + name
+	}
 }

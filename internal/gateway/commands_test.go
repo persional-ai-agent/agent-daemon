@@ -1,6 +1,9 @@
 package gateway
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestIsBuiltInGatewayCommandCaseInsensitive(t *testing.T) {
 	if !IsBuiltInGatewayCommand("APPROVE") {
@@ -48,5 +51,24 @@ func TestResolveGatewayCommandAliases(t *testing.T) {
 	}
 	if got, ok := ResolveGatewayCommand("unknown"); ok || got != "" {
 		t.Fatalf("resolve unknown got=(%q,%v)", got, ok)
+	}
+}
+
+func TestGatewayHelpTextIncludesBuiltIns(t *testing.T) {
+	help := GatewayHelpText(false)
+	if !strings.HasPrefix(help, "Commands: ") {
+		t.Fatalf("unexpected help prefix: %q", help)
+	}
+	for _, name := range BuiltInGatewaySlashCommands() {
+		if !strings.Contains(help, name) {
+			t.Fatalf("help missing command %s: %q", name, help)
+		}
+	}
+}
+
+func TestGatewayHelpTextYuanbaoAddsQuickReplies(t *testing.T) {
+	help := GatewayHelpText(true)
+	if !strings.Contains(help, "Quick reply aliases:") {
+		t.Fatalf("expected quick reply aliases in help: %q", help)
 	}
 }
