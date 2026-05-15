@@ -468,3 +468,20 @@ func RenderGatewaySessionResolveText(resolved GatewaySessionResolveResult) strin
 		"\nglobal_source=" + resolved.GlobalSource +
 		"\ncontinuity_mode=" + resolved.ContinuityMode
 }
+
+func BuildGatewayIdentityPayload(platform, userID, globalID string, updated, deleted bool) map[string]any {
+	payload := map[string]any{
+		"platform": strings.TrimSpace(platform),
+		"user_id":  strings.TrimSpace(userID),
+	}
+	if strings.TrimSpace(globalID) != "" {
+		payload["global_id"] = strings.TrimSpace(globalID)
+	}
+	if updated {
+		payload["updated"] = true
+	}
+	if deleted {
+		payload["deleted"] = true
+	}
+	return payload
+}

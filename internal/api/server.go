@@ -1324,12 +1324,8 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"platform":  ref.Platform,
-				"user_id":   ref.UserID,
-				"global_id": globalID,
-			},
+			"ok":     true,
+			"result": tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, globalID, false, false),
 		})
 		return
 	case http.MethodPost:
@@ -1348,13 +1344,8 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"platform":  setArgs.Platform,
-				"user_id":   setArgs.UserID,
-				"global_id": setArgs.GlobalID,
-				"updated":   true,
-			},
+			"ok":     true,
+			"result": tools.BuildGatewayIdentityPayload(setArgs.Platform, setArgs.UserID, setArgs.GlobalID, true, false),
 		})
 		return
 	case http.MethodDelete:
@@ -1373,12 +1364,8 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"platform": ref.Platform,
-				"user_id":  ref.UserID,
-				"deleted":  true,
-			},
+			"ok":     true,
+			"result": tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, "", false, true),
 		})
 		return
 	default:

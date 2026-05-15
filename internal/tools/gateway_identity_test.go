@@ -176,3 +176,17 @@ func TestGatewayWhoamiAndResolveHelpers(t *testing.T) {
 		t.Fatalf("unexpected resolve text: %q", rt)
 	}
 }
+
+func TestBuildGatewayIdentityPayload(t *testing.T) {
+	got := BuildGatewayIdentityPayload("telegram", "u1", "gid-1", true, false)
+	if got["platform"] != "telegram" || got["user_id"] != "u1" || got["global_id"] != "gid-1" || got["updated"] != true {
+		t.Fatalf("unexpected identity payload: %+v", got)
+	}
+	got = BuildGatewayIdentityPayload("telegram", "u1", "", false, true)
+	if got["deleted"] != true {
+		t.Fatalf("expected deleted flag: %+v", got)
+	}
+	if _, ok := got["global_id"]; ok {
+		t.Fatalf("unexpected global_id for delete payload: %+v", got)
+	}
+}

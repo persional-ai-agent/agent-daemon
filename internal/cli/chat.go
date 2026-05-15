@@ -461,7 +461,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err := clitools.UpsertGatewayIdentity(eng.Workdir, setArgs.Platform, setArgs.UserID, setArgs.GlobalID); err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"platform": setArgs.Platform, "user_id": setArgs.UserID, "global_id": setArgs.GlobalID, "updated": true}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewayIdentityPayload(setArgs.Platform, setArgs.UserID, setArgs.GlobalID, true, false), "", "")
 		return true, nil
 	case "/unsetid":
 		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
@@ -472,7 +472,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err := clitools.DeleteGatewayIdentity(eng.Workdir, ref.Platform, ref.UserID); err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"platform": ref.Platform, "user_id": ref.UserID, "deleted": true}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, "", false, true), "", "")
 		return true, nil
 	case "/todo":
 		if eng.TodoStore == nil {
