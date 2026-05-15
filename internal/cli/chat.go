@@ -410,6 +410,77 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		printCLIEnvelope(true, map[string]any{"count": len(out), "platform": filter, "targets": out}, "", "")
 		return true, nil
+	case "/continuity":
+		if len(fields) > 2 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /continuity [off|user_id|user_name]")
+			return true, nil
+		}
+		if len(fields) == 1 {
+			mode, err := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
+			if err != nil {
+				return true, err
+			}
+			printCLIEnvelope(true, map[string]any{"continuity_mode": continuityModeFromRaw(mode)}, "", "")
+			return true, nil
+		}
+		mode := continuityModeFromRaw(fields[1])
+		if err := clitools.SetGatewaySetting(eng.Workdir, "continuity_mode", mode); err != nil {
+			return true, err
+		}
+		printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")
+		return true, nil
+	case "/whoami":
+		if len(fields) != 3 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /whoami <platform> <user_id>")
+			return true, nil
+		}
+		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
+		userID := strings.TrimSpace(fields[2])
+		globalID, err := resolveGatewayIdentity(eng.Workdir, platformName, userID)
+		if err != nil {
+			return true, err
+		}
+		mode, _ := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
+		printCLIEnvelope(true, map[string]any{
+			"platform":        platformName,
+			"user_id":         userID,
+			"global_id":       globalID,
+			"continuity_mode": continuityModeFromRaw(mode),
+		}, "", "")
+		return true, nil
+	case "/setid":
+		if len(fields) != 4 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
+			return true, nil
+		}
+		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
+		userID := strings.TrimSpace(fields[2])
+		globalID := strings.TrimSpace(fields[3])
+		if platformName == "" || userID == "" || globalID == "" {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
+			return true, nil
+		}
+		if err := upsertGatewayIdentity(eng.Workdir, platformName, userID, globalID); err != nil {
+			return true, err
+		}
+		printCLIEnvelope(true, map[string]any{"platform": platformName, "user_id": userID, "global_id": globalID, "updated": true}, "", "")
+		return true, nil
+	case "/unsetid":
+		if len(fields) != 3 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /unsetid <platform> <user_id>")
+			return true, nil
+		}
+		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
+		userID := strings.TrimSpace(fields[2])
+		if platformName == "" || userID == "" {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /unsetid <platform> <user_id>")
+			return true, nil
+		}
+		if err := deleteGatewayIdentity(eng.Workdir, platformName, userID); err != nil {
+			return true, err
+		}
+		printCLIEnvelope(true, map[string]any{"platform": platformName, "user_id": userID, "deleted": true}, "", "")
+		return true, nil
 	case "/todo":
 		if eng.TodoStore == nil {
 			printCLIEnvelope(false, nil, "not_available", "todo store unavailable")
@@ -668,6 +739,104 @@ func compactHistory(history []core.Message, tail int) ([]core.Message, map[strin
 	next = append(next, core.Message{Role: "assistant", Content: "[Context summary created by /compress]\n" + summary})
 	next = append(next, core.CloneMessages(recent)...)
 	return next, map[string]any{"compacted": true, "before": len(history), "after": len(next), "summarized_messages": len(head), "tail_messages": tail}
+}
+
+type cliGatewayIdentityRecord struct {
+	Platform string `json:"platform"`
+	UserID   string `json:"user_id"`
+	GlobalID string `json:"global_id"`
+}
+
+func continuityModeFromRaw(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "user_id", "id":
+		return "user_id"
+	case "user_name", "name":
+		return "user_name"
+	case "off":
+		return "off"
+	default:
+		return "off"
+	}
+}
+
+func gatewayIdentityMapPath(workdir string) string {
+	return filepath.Join(strings.TrimSpace(workdir), ".agent-daemon", "gateway_identity_map.json")
+}
+
+func loadGatewayIdentityMap(workdir string) ([]cliGatewayIdentityRecord, error) {
+	path := gatewayIdentityMapPath(workdir)
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []cliGatewayIdentityRecord{}, nil
+		}
+		return nil, err
+	}
+	rows := []cliGatewayIdentityRecord{}
+	if err := json.Unmarshal(bs, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func saveGatewayIdentityMap(workdir string, rows []cliGatewayIdentityRecord) error {
+	path := gatewayIdentityMapPath(workdir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	bs, err := json.MarshalIndent(rows, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, bs, 0o644)
+}
+
+func resolveGatewayIdentity(workdir, platformName, userID string) (string, error) {
+	rows, err := loadGatewayIdentityMap(workdir)
+	if err != nil {
+		return "", err
+	}
+	for _, row := range rows {
+		if row.Platform == platformName && row.UserID == userID {
+			return strings.TrimSpace(row.GlobalID), nil
+		}
+	}
+	return "", nil
+}
+
+func upsertGatewayIdentity(workdir, platformName, userID, globalID string) error {
+	rows, err := loadGatewayIdentityMap(workdir)
+	if err != nil {
+		return err
+	}
+	found := false
+	for i := range rows {
+		if rows[i].Platform == platformName && rows[i].UserID == userID {
+			rows[i].GlobalID = globalID
+			found = true
+			break
+		}
+	}
+	if !found {
+		rows = append(rows, cliGatewayIdentityRecord{Platform: platformName, UserID: userID, GlobalID: globalID})
+	}
+	return saveGatewayIdentityMap(workdir, rows)
+}
+
+func deleteGatewayIdentity(workdir, platformName, userID string) error {
+	rows, err := loadGatewayIdentityMap(workdir)
+	if err != nil {
+		return err
+	}
+	next := make([]cliGatewayIdentityRecord, 0, len(rows))
+	for _, row := range rows {
+		if row.Platform == platformName && row.UserID == userID {
+			continue
+		}
+		next = append(next, row)
+	}
+	return saveGatewayIdentityMap(workdir, next)
 }
 
 func summarizeForCLI(messages []core.Message, budget int) string {

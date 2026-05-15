@@ -238,6 +238,47 @@ func TestHandleSlashCommandSetHomeAndTargets(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandContinuityAndIdentity(t *testing.T) {
+	workdir := t.TempDir()
+	eng := makeEngineForSlashTests(nil)
+	eng.Workdir = workdir
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+
+	if handled, err := handleSlashCommandState(context.Background(), "/continuity user_name", state, eng); err != nil || !handled {
+		t.Fatalf("continuity set handled=%v err=%v", handled, err)
+	}
+	mode, err := tools.GetGatewaySetting(workdir, "continuity_mode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != "user_name" {
+		t.Fatalf("continuity_mode=%q", mode)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/setid telegram u1 gid-1", state, eng); err != nil || !handled {
+		t.Fatalf("setid handled=%v err=%v", handled, err)
+	}
+	globalID, err := resolveGatewayIdentity(workdir, "telegram", "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if globalID != "gid-1" {
+		t.Fatalf("globalID=%q", globalID)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/whoami telegram u1", state, eng); err != nil || !handled {
+		t.Fatalf("whoami handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/unsetid telegram u1", state, eng); err != nil || !handled {
+		t.Fatalf("unsetid handled=%v err=%v", handled, err)
+	}
+	globalID, err = resolveGatewayIdentity(workdir, "telegram", "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if globalID != "" {
+		t.Fatalf("expected empty globalID after unset, got %q", globalID)
+	}
+}
+
 func TestHandleSlashCommandNewAndResume(t *testing.T) {
 	store := &testSessionStore{bySession: map[string][]core.Message{
 		"old": {{Role: "user", Content: "stored"}},
