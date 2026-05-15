@@ -136,6 +136,10 @@ type gatewaySessionStatsStore interface {
 	SessionStats(sessionID string) (map[string]any, error)
 }
 
+type gatewaySessionDetailStore interface {
+	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
+}
+
 func parseGatewayCommand(platformName, text string) gatewayCommand {
 	raw := normalizeGatewayCommand(platformName, strings.TrimSpace(text))
 	parts := strings.Fields(raw)
@@ -384,6 +388,46 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			reply := renderGatewayHistory(msgs, limit)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/history", "session_id": active})
+			return
+		case "/show":
+			target := w.currentSessionID()
+			offset := 0
+			limit := 20
+			if len(parsed.args) > 3 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
+				return
+			}
+			if len(parsed.args) >= 1 {
+				target = strings.TrimSpace(parsed.args[0])
+			}
+			if len(parsed.args) >= 2 {
+				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[1]))
+				if err != nil || v < 0 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
+					return
+				}
+				offset = v
+			}
+			if len(parsed.args) == 3 {
+				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[2]))
+				if err != nil || v <= 0 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
+					return
+				}
+				limit = v
+			}
+			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
+			if !ok || detailStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Show not supported by session store._", event.MessageID, map[string]any{"slash": "/show"})
+				return
+			}
+			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Show failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/show"})
+				return
+			}
+			reply := renderGatewayShow(target, offset, limit, msgs)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/show", "session_id": target, "offset": offset, "limit": limit})
 			return
 		case "/stats":
 			target := w.currentSessionID()
@@ -1001,6 +1045,28 @@ func renderGatewayStats(sessionID string, stats map[string]any) string {
 	lines = append(lines, "Session stats: "+sessionID)
 	for _, k := range keys {
 		lines = append(lines, k+": "+fmt.Sprintf("%v", stats[k]))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderGatewayShow(sessionID string, offset, limit int, msgs []core.Message) string {
+	lines := []string{
+		"Session messages: " + sessionID,
+		"offset=" + itoa(offset) + " limit=" + itoa(limit) + " count=" + itoa(len(msgs)),
+	}
+	if len(msgs) == 0 {
+		lines = append(lines, "(empty)")
+		return strings.Join(lines, "\n")
+	}
+	for i, msg := range msgs {
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			content = "(empty)"
+		}
+		if len(content) > 120 {
+			content = content[:120] + "..."
+		}
+		lines = append(lines, itoa(offset+i+1)+". ["+msg.Role+"] "+content)
 	}
 	return strings.Join(lines, "\n")
 }
