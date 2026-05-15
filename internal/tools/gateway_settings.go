@@ -137,6 +137,15 @@ func UpdateGatewayModelPreference(workdir string, spec GatewayModelSpec) error {
 	return nil
 }
 
+func UpdateGatewayModelBaseURL(workdir, baseURL string) error {
+	baseURL = strings.TrimSpace(baseURL)
+	if err := SetGatewaySetting(workdir, "model_base_url", baseURL); err != nil {
+		return err
+	}
+	_ = os.Setenv(GatewayModelBaseURLEnvVar, baseURL)
+	return nil
+}
+
 func DisplayGatewayModelPreference(pref GatewayModelPreference) GatewayModelPreference {
 	out := GatewayModelPreference{
 		Provider: strings.TrimSpace(pref.Provider),

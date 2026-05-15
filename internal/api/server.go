@@ -936,21 +936,26 @@ func (s *Server) handleUIModelSet(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
-	req.Provider = strings.ToLower(strings.TrimSpace(req.Provider))
-	req.Model = strings.TrimSpace(req.Model)
+	spec, parseErr := tools.ParseGatewayModelSpecArgs([]string{req.Provider, req.Model})
+	if parseErr != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "provider/model required")
+		return
+	}
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
-	if req.Provider == "" {
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "provider required")
-		return
-	}
-	if req.Model == "" {
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "model required")
-		return
-	}
-	result, err := s.ModelSetFn(req.Provider, req.Model, req.BaseURL)
+	result, err := s.ModelSetFn(spec.Provider, spec.Model, req.BaseURL)
 	if err != nil {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
+	}
+	if err := tools.UpdateGatewayModelPreference(s.engineWorkdir(), spec); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	if req.BaseURL != "" {
+		if err := tools.UpdateGatewayModelBaseURL(s.engineWorkdir(), req.BaseURL); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,

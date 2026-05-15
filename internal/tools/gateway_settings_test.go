@@ -89,3 +89,17 @@ func TestUpdateGatewayContinuityMode(t *testing.T) {
 		t.Fatalf("stored=%q want=user_name", got)
 	}
 }
+
+func TestUpdateGatewayModelBaseURL(t *testing.T) {
+	workdir := t.TempDir()
+	if err := UpdateGatewayModelBaseURL(workdir, "https://api.example/v1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := GetGatewaySetting(workdir, "model_base_url")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://api.example/v1" {
+		t.Fatalf("base_url=%q", got)
+	}
+}
