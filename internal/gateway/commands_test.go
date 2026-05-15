@@ -96,3 +96,32 @@ func TestGatewayCommandAliasesIntegrity(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayCommandUsage(t *testing.T) {
+	if got := GatewayCommandUsage("approve"); got != "/approve <id>" {
+		t.Fatalf("unexpected approve usage: %q", got)
+	}
+	if got := GatewayCommandUsage("status"); got != "/status" {
+		t.Fatalf("unexpected status usage: %q", got)
+	}
+}
+
+func TestGatewayApprovalSlashCommands(t *testing.T) {
+	got := GatewayApprovalSlashCommands()
+	want := map[string]bool{
+		"/approve": true, "/deny": true, "/pending": true, "/approvals": true,
+		"/grant": true, "/revoke": true, "/status": true, "/help": true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("approval command count mismatch: got=%d want=%d list=%v", len(got), len(want), got)
+	}
+	for _, item := range got {
+		if !want[item] {
+			t.Fatalf("unexpected approval command: %s", item)
+		}
+		delete(want, item)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing approval commands: %+v", want)
+	}
+}

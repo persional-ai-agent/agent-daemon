@@ -26,6 +26,17 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "help", Aliases: []string{"h"}},
 }
 
+var gatewayApprovalCommandSet = map[string]struct{}{
+	"approve":   {},
+	"deny":      {},
+	"pending":   {},
+	"approvals": {},
+	"grant":     {},
+	"revoke":    {},
+	"status":    {},
+	"help":      {},
+}
+
 var (
 	builtInGatewayCommandSet  map[string]struct{}
 	gatewayAliasToCanonical   map[string]string
@@ -99,6 +110,20 @@ func GatewayCommandAliases() map[string]string {
 	out := make(map[string]string, len(gatewayAliasToCanonical))
 	for k, v := range gatewayAliasToCanonical {
 		out[k] = v
+	}
+	return out
+}
+
+func GatewayCommandUsage(name string) string {
+	return gatewayHelpCommandEntry(name)
+}
+
+func GatewayApprovalSlashCommands() []string {
+	out := make([]string, 0, len(gatewayApprovalCommandSet))
+	for _, name := range gatewayHelpCommandOrder {
+		if _, ok := gatewayApprovalCommandSet[name]; ok {
+			out = append(out, "/"+name)
+		}
 	}
 	return out
 }

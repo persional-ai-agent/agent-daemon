@@ -80,7 +80,7 @@ func TestTelegramDiscordApprovalCommandsConsistency(t *testing.T) {
 	for _, c := range DiscordApplicationCommands() {
 		discord["/"+c.Name] = true
 	}
-	must := []string{"/approve", "/deny", "/pending", "/approvals", "/grant", "/revoke", "/status", "/help"}
+	must := gateway.GatewayApprovalSlashCommands()
 	for _, name := range must {
 		if !telegram[name] {
 			t.Fatalf("telegram missing command: %s", name)

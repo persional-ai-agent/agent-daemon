@@ -371,7 +371,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			approve := parsed.head == "/approve"
 			approvalID := w.resolveApprovalID(parsed.args)
 			if approvalID == "" {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /approve <approval_id> or /deny <approval_id>", event.MessageID, map[string]any{"slash": parsed.head})
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: "+GatewayCommandUsage("approve")+" or "+GatewayCommandUsage("deny"), event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
 			reply := w.confirmApproval(ctx, approvalID, approve)
@@ -976,7 +976,7 @@ func parseApprovalManageCommand(cmd string) (map[string]any, string) {
 		args["ttl_seconds"] = ttl
 		return args, ""
 	}
-	return nil, "Usage: /grant [ttl], /grant pattern <name> [ttl], /revoke, or /revoke pattern <name>"
+	return nil, "Usage: " + GatewayCommandUsage("grant") + ", " + GatewayCommandUsage("revoke")
 }
 
 func (w *sessionWorker) approvalToolContext() tools.ToolContext {
