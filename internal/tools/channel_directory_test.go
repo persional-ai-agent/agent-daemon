@@ -35,3 +35,27 @@ func TestChannelDirectoryUpsertAndList(t *testing.T) {
 		t.Fatalf("unexpected merged row: %+v", rows[0])
 	}
 }
+
+func TestClearChannelDirectoryGlobalID(t *testing.T) {
+	workdir := t.TempDir()
+	if err := UpsertChannelDirectory(workdir, ChannelDirectoryEntry{
+		Platform: "telegram",
+		ChatID:   "100",
+		GlobalID: "g1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearChannelDirectoryGlobalID(workdir, "telegram", "100"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := ListChannelDirectory(workdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows=%d want=1", len(rows))
+	}
+	if rows[0].GlobalID != "" {
+		t.Fatalf("global id should be cleared: %+v", rows[0])
+	}
+}

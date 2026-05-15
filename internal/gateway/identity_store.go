@@ -70,6 +70,28 @@ func (s *identityStore) resolve(platform, userID string) (string, error) {
 	return "", nil
 }
 
+func (s *identityStore) unbind(platform, userID string) error {
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	userID = strings.TrimSpace(userID)
+	if platform == "" || userID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	next := make([]identityRecord, 0, len(rows))
+	for _, r := range rows {
+		if r.Platform == platform && r.UserID == userID {
+			continue
+		}
+		next = append(next, r)
+	}
+	return s.saveLocked(next)
+}
+
 func (s *identityStore) loadLocked() ([]identityRecord, error) {
 	bs, err := os.ReadFile(s.path)
 	if err != nil {

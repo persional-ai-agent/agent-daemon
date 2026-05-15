@@ -105,6 +105,36 @@ func UpsertChannelDirectory(workdir string, entry ChannelDirectoryEntry) error {
 	return os.WriteFile(channelDirectoryPath(workdir), out, 0o644)
 }
 
+func ClearChannelDirectoryGlobalID(workdir, platform, chatID string) error {
+	channelDirectoryMu.Lock()
+	defer channelDirectoryMu.Unlock()
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	chatID = strings.TrimSpace(chatID)
+	if platform == "" || chatID == "" {
+		return nil
+	}
+	items, err := listChannelDirectoryLocked(workdir)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		if items[i].Platform == platform && items[i].ChatID == chatID {
+			items[i].GlobalID = ""
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].LastSeenAt > items[j].LastSeenAt
+	})
+	if err := os.MkdirAll(filepath.Dir(channelDirectoryPath(workdir)), 0o755); err != nil {
+		return err
+	}
+	out, err := json.MarshalIndent(items, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(channelDirectoryPath(workdir), out, 0o644)
+}
+
 func nonEmpty(v, fallback string) string {
 	if strings.TrimSpace(v) == "" {
 		return fallback

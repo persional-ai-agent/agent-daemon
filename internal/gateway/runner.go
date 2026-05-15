@@ -458,6 +458,22 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			})
 			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, map[string]any{"slash": "/setid", "global_id": globalID, "session_id": targetSession})
 			return
+		case "/unsetid":
+			if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /unsetid", event.MessageID, map[string]any{"slash": "/unsetid"})
+				return
+			}
+			if w.runner == nil || w.runner.identityStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Identity store unavailable._", event.MessageID, map[string]any{"slash": "/unsetid"})
+				return
+			}
+			if err := w.runner.identityStore.unbind(w.adapter.Name(), event.UserID); err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Unsetid failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/unsetid"})
+				return
+			}
+			_ = tools.ClearChannelDirectoryGlobalID(w.engine.Workdir, w.adapter.Name(), event.ChatID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Identity unbound for user: "+escapeMarkdown(event.UserID)+"_", event.MessageID, map[string]any{"slash": "/unsetid", "user_id": event.UserID})
+			return
 		case "/history":
 			limit := 10
 			if len(parsed.args) > 1 {
