@@ -589,6 +589,31 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.setLastUserInput(latestUserInputFromMessages(nextMsgs))
 			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
 			return
+		case "/clear":
+			if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /clear", event.MessageID, map[string]any{"slash": "/clear"})
+				return
+			}
+			prev := w.currentSessionID()
+			next := uuid.NewString()
+			w.setActiveSessionID(next)
+			w.clearLastUserInput()
+			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
+			return
+		case "/reload":
+			if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /reload", event.MessageID, map[string]any{"slash": "/reload"})
+				return
+			}
+			active := w.currentSessionID()
+			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Reload failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/reload"})
+				return
+			}
+			w.setLastUserInput(latestUserInputFromMessages(msgs))
+			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, map[string]any{"slash": "/reload", "session_id": active, "messages": len(msgs)})
+			return
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -1306,6 +1331,12 @@ func (w *sessionWorker) getLastUserInput() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return strings.TrimSpace(w.lastUserInput)
+}
+
+func (w *sessionWorker) clearLastUserInput() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastUserInput = ""
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {

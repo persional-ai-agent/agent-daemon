@@ -20,7 +20,7 @@ func TestIsBuiltInGatewayCommandCaseInsensitive(t *testing.T) {
 func TestBuiltInGatewaySlashCommandsContainsCoreSet(t *testing.T) {
 	list := BuiltInGatewaySlashCommands()
 	want := map[string]bool{
-		"/pair": true, "/unpair": true, "/session": true, "/history": true, "/show": true, "/sessions": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/cancel": true, "/compress": true, "/queue": true,
+		"/pair": true, "/unpair": true, "/session": true, "/history": true, "/show": true, "/sessions": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/clear": true, "/reload": true, "/cancel": true, "/compress": true, "/queue": true,
 		"/status": true, "/pending": true, "/approvals": true, "/grant": true,
 		"/revoke": true, "/approve": true, "/deny": true, "/help": true,
 	}
@@ -192,7 +192,7 @@ func TestGatewayCommandRequiresAuthorization(t *testing.T) {
 		t.Fatal("expected non-empty auth-required command set")
 	}
 	want := map[string]bool{
-		"/session": true, "/history": true, "/show": true, "/sessions": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/cancel": true, "/compress": true, "/queue": true, "/status": true, "/approve": true, "/deny": true,
+		"/session": true, "/history": true, "/show": true, "/sessions": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/clear": true, "/reload": true, "/cancel": true, "/compress": true, "/queue": true, "/status": true, "/approve": true, "/deny": true,
 		"/approvals": true, "/pending": true, "/grant": true, "/revoke": true,
 	}
 	if len(authRequired) != len(want) {
