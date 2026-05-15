@@ -1075,7 +1075,31 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/status":
 			reply := w.gatewayStatusText()
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/status"})
+			meta := map[string]any{"slash": "/status"}
+			for k, v := range tools.BuildGatewayStatusPayload(tools.GatewayStatusSnapshot{
+				Platform:      w.adapter.Name(),
+				RouteSession:  w.key,
+				ActiveSession: w.currentSessionID(),
+				QueueLen:      len(w.queue),
+				Paired:        w.runner != nil && w.runner.isPaired(w.adapter.Name(), w.getLastUserID()),
+				ContinuityMode: func() string {
+					if w.runner != nil {
+						return w.runner.continuityMode()
+					}
+					return "off"
+				}(),
+				MappedSession: func() string {
+					if w.runner != nil {
+						return w.runner.resolveMappedSessionID(w.adapter.Name(), w.getLastUserID(), "")
+					}
+					return ""
+				}(),
+				Running:        w.isRunning(),
+				LastApprovalID: w.resolveApprovalID(nil),
+			}) {
+				meta[k] = v
+			}
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/approve", "/deny":
 			approve := parsed.head == "/approve"
@@ -1902,37 +1926,33 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 func (w *sessionWorker) gatewayStatusText() string {
 	activeSessionID := w.currentSessionID()
 	lastUserID := w.getLastUserID()
-	lines := []string{
-		"platform: " + w.adapter.Name(),
-		"route_session: " + w.key,
-		"active_session: " + activeSessionID,
-		"queue: " + itoa(len(w.queue)),
+	snapshot := tools.GatewayStatusSnapshot{
+		Platform:      w.adapter.Name(),
+		RouteSession:  w.key,
+		ActiveSession: activeSessionID,
+		QueueLen:      len(w.queue),
+		Running:       w.isRunning(),
 	}
 	if w.runner != nil {
 		paired := w.runner.isPaired(w.adapter.Name(), lastUserID)
-		if paired {
-			lines = append(lines, "paired: yes")
-		} else {
-			lines = append(lines, "paired: no")
-		}
+		snapshot.Paired = paired
 		mode := w.runner.continuityMode()
-		lines = append(lines, "continuity_mode: "+mode)
+		snapshot.ContinuityMode = mode
 		if mapped := w.runner.resolveMappedSessionID(w.adapter.Name(), lastUserID, ""); strings.TrimSpace(mapped) != "" {
-			lines = append(lines, "mapped_session: "+mapped)
+			snapshot.MappedSession = mapped
 		}
 	}
 	if statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore); ok && statsStore != nil {
 		if stats, err := statsStore.SessionStats(activeSessionID); err == nil {
 			if n, ok := stats["message_count"]; ok {
-				lines = append(lines, "message_count: "+fmt.Sprintf("%v", n))
+				snapshot.MessageCount = n
 			}
 		}
 	}
-	lines = append(lines, "running: "+map[bool]string{true: "yes", false: "no"}[w.isRunning()])
 	if last := w.resolveApprovalID(nil); strings.TrimSpace(last) != "" {
-		lines = append(lines, "last_approval_id: "+last)
+		snapshot.LastApprovalID = last
 	}
-	return strings.Join(lines, "\n")
+	return tools.RenderGatewayStatusText(snapshot)
 }
 
 func (w *sessionWorker) pendingApprovalStatus() string {

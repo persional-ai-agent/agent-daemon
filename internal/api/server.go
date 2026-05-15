@@ -1420,20 +1420,10 @@ func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Reque
 	for sid := range active {
 		sessionIDs = append(sessionIDs, sid)
 	}
-	sort.Strings(sessionIDs)
 	uptimeSec := int64(time.Since(apiProcessStartedAt).Seconds())
-	if uptimeSec < 0 {
-		uptimeSec = 0
-	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"diagnostics": map[string]any{
-			"uptime_sec":              uptimeSec,
-			"active_run_count":        len(active),
-			"active_session_ids":      sessionIDs,
-			"status_endpoint_enabled": s.GatewayStatusFn != nil,
-			"action_endpoint_enabled": s.GatewayActionFn != nil,
-		},
+		"ok":          true,
+		"diagnostics": tools.BuildGatewayDiagnosticsFallback(sessionIDs, uptimeSec, s.GatewayStatusFn != nil, s.GatewayActionFn != nil),
 	})
 }
 
