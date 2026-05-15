@@ -355,7 +355,8 @@ func (s *appState) setStatus(ok bool, code, detail string) {
 
 func canonicalInput(text string) string {
 	text = strings.TrimSpace(text)
-	switch text {
+	lower := strings.ToLower(text)
+	switch lower {
 	case ":q", "quit":
 		return "/quit"
 	case "ls":
@@ -377,20 +378,20 @@ func canonicalInput(text string) string {
 	case "h":
 		return "/help"
 	}
-	if strings.HasPrefix(text, "show ") && !strings.HasPrefix(text, "/show ") {
-		return "/show " + strings.TrimSpace(strings.TrimPrefix(text, "show "))
+	if strings.HasPrefix(lower, "show ") && !strings.HasPrefix(lower, "/show ") {
+		return "/show " + strings.TrimSpace(text[len("show "):])
 	}
-	if strings.HasPrefix(text, "sessions ") && !strings.HasPrefix(text, "/sessions ") {
-		return "/sessions " + strings.TrimSpace(strings.TrimPrefix(text, "sessions "))
+	if strings.HasPrefix(lower, "sessions ") && !strings.HasPrefix(lower, "/sessions ") {
+		return "/sessions " + strings.TrimSpace(text[len("sessions "):])
 	}
-	if strings.HasPrefix(text, "tool ") && !strings.HasPrefix(text, "/tool ") {
-		return "/tool " + strings.TrimSpace(strings.TrimPrefix(text, "tool "))
+	if strings.HasPrefix(lower, "tool ") && !strings.HasPrefix(lower, "/tool ") {
+		return "/tool " + strings.TrimSpace(text[len("tool "):])
 	}
-	if strings.HasPrefix(text, "gw ") && !strings.HasPrefix(text, "/gateway ") {
-		return "/gateway " + strings.TrimSpace(strings.TrimPrefix(text, "gw "))
+	if strings.HasPrefix(lower, "gw ") && !strings.HasPrefix(lower, "/gateway ") {
+		return "/gateway " + strings.TrimSpace(text[len("gw "):])
 	}
-	if strings.HasPrefix(text, "cfg ") && !strings.HasPrefix(text, "/config ") {
-		return "/config " + strings.TrimSpace(strings.TrimPrefix(text, "cfg "))
+	if strings.HasPrefix(lower, "cfg ") && !strings.HasPrefix(lower, "/config ") {
+		return "/config " + strings.TrimSpace(text[len("cfg "):])
 	}
 	return text
 }

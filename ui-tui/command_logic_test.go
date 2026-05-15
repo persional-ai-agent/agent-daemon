@@ -627,12 +627,24 @@ func TestWorkflowCommandCaseInsensitiveSubcommands(t *testing.T) {
 	}
 }
 
-func TestCanonicalInputGatewayAndConfigAliases(t *testing.T) {
-	if got := canonicalInput("GW status"); got != "GW status" {
-		t.Fatalf("expected non-lowercase alias unchanged, got=%q", got)
+func TestCanonicalInputAliasesCaseInsensitive(t *testing.T) {
+	if got := canonicalInput("SHOW sid-1"); got != "/show sid-1" {
+		t.Fatalf("SHOW alias mismatch: %q", got)
+	}
+	if got := canonicalInput("SESSIONS 5"); got != "/sessions 5" {
+		t.Fatalf("SESSIONS alias mismatch: %q", got)
+	}
+	if got := canonicalInput("TOOL apply_patch"); got != "/tool apply_patch" {
+		t.Fatalf("TOOL alias mismatch: %q", got)
+	}
+	if got := canonicalInput("GW status"); got != "/gateway status" {
+		t.Fatalf("GW alias mismatch: %q", got)
 	}
 	if got := canonicalInput("gw status"); got != "/gateway status" {
 		t.Fatalf("gw alias mismatch: %q", got)
+	}
+	if got := canonicalInput("CFG get"); got != "/config get" {
+		t.Fatalf("CFG alias mismatch: %q", got)
 	}
 	if got := canonicalInput("cfg get"); got != "/config get" {
 		t.Fatalf("cfg alias mismatch: %q", got)
