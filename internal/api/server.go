@@ -1410,10 +1410,7 @@ func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if s.GatewayDiagnosticsFn != nil {
-		diag := s.GatewayDiagnosticsFn()
-		if s.GatewayStatusFn != nil {
-			_ = tools.NormalizeGatewayStatusMap(s.GatewayStatusFn())
-		}
+		diag := tools.NormalizeGatewayDiagnosticsMap(s.GatewayDiagnosticsFn())
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok":          true,
 			"diagnostics": diag,
@@ -1426,9 +1423,12 @@ func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Reque
 		sessionIDs = append(sessionIDs, sid)
 	}
 	uptimeSec := int64(time.Since(apiProcessStartedAt).Seconds())
+	diag := tools.NormalizeGatewayDiagnosticsMap(
+		tools.BuildGatewayDiagnosticsFallback(sessionIDs, uptimeSec, s.GatewayStatusFn != nil, s.GatewayActionFn != nil),
+	)
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":          true,
-		"diagnostics": tools.BuildGatewayDiagnosticsFallback(sessionIDs, uptimeSec, s.GatewayStatusFn != nil, s.GatewayActionFn != nil),
+		"diagnostics": diag,
 	})
 }
 

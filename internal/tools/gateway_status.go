@@ -147,3 +147,17 @@ func BuildGatewayDiagnosticsFallback(activeSessionIDs []string, uptimeSec int64,
 		"action_endpoint_enabled": actionEnabled,
 	}
 }
+
+func NormalizeGatewayDiagnosticsMap(raw map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range raw {
+		out[k] = v
+	}
+	if statusRaw, ok := out["status"].(map[string]any); ok {
+		out["status"] = NormalizeGatewayStatusMap(statusRaw)
+	}
+	if statusRaw, ok := out["status_snapshot"].(map[string]any); ok {
+		out["status_snapshot"] = NormalizeGatewayStatusMap(statusRaw)
+	}
+	return out
+}

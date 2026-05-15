@@ -80,3 +80,20 @@ func TestNormalizeGatewayStatusMap(t *testing.T) {
 		t.Fatalf("expected normalized snapshot fields merged: %+v", got)
 	}
 }
+
+func TestNormalizeGatewayDiagnosticsMap(t *testing.T) {
+	raw := map[string]any{
+		"uptime_sec": 10,
+		"status": map[string]any{
+			"platform": "telegram",
+		},
+	}
+	got := NormalizeGatewayDiagnosticsMap(raw)
+	status, _ := got["status"].(map[string]any)
+	if status["platform"] != "telegram" {
+		t.Fatalf("unexpected diagnostics status: %+v", got)
+	}
+	if _, ok := status["active_session"]; !ok {
+		t.Fatalf("expected normalized status fields in diagnostics: %+v", status)
+	}
+}
