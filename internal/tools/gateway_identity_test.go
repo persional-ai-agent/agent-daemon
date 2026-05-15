@@ -47,3 +47,31 @@ func TestGatewayIdentityAndResolveSession(t *testing.T) {
 		t.Fatalf("unexpected auto resolve: %+v", resolved)
 	}
 }
+
+func TestParseGatewayResolveArgs(t *testing.T) {
+	got, err := ParseGatewayResolveArgs([]string{"Telegram", "group", "1001", "u1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Platform != "telegram" || got.ChatType != "group" || got.ChatID != "1001" || got.UserID != "u1" || got.UserName != "" {
+		t.Fatalf("unexpected parsed args: %+v", got)
+	}
+	got, err = ParseGatewayResolveArgs([]string{"telegram", "group", "1001", "u1", "Alice"})
+	if err != nil || got.UserName != "Alice" {
+		t.Fatalf("unexpected parsed args with username: %+v err=%v", got, err)
+	}
+	if _, err := ParseGatewayResolveArgs([]string{"telegram", "group", "1001"}); err == nil {
+		t.Fatal("expected invalid args error")
+	}
+}
+
+func TestParseGatewayResolveArgsWithDefaults(t *testing.T) {
+	def := GatewayResolveArgs{Platform: "discord", ChatType: "dm", ChatID: "c1", UserID: "u9", UserName: "Bob"}
+	got, err := ParseGatewayResolveArgsWithDefaults(nil, def)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Platform != "discord" || got.ChatType != "dm" || got.ChatID != "c1" || got.UserID != "u9" || got.UserName != "Bob" {
+		t.Fatalf("unexpected defaults parse result: %+v", got)
+	}
+}

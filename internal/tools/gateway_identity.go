@@ -29,6 +29,14 @@ type GatewaySessionResolveResult struct {
 	ContinuityMode  string `json:"continuity_mode"`
 }
 
+type GatewayResolveArgs struct {
+	Platform string
+	ChatType string
+	ChatID   string
+	UserID   string
+	UserName string
+}
+
 var gatewayIdentityMu sync.Mutex
 
 func NormalizeContinuityMode(raw string) string {
@@ -210,4 +218,38 @@ func ResolveGatewaySessionMapping(workdir, platformName, chatType, chatID, userI
 		GlobalSource:    globalSource,
 		ContinuityMode:  mode,
 	}, nil
+}
+
+func ParseGatewayResolveArgs(args []string) (GatewayResolveArgs, error) {
+	if len(args) != 4 && len(args) != 5 {
+		return GatewayResolveArgs{}, fmt.Errorf("invalid resolve args")
+	}
+	out := GatewayResolveArgs{
+		Platform: strings.ToLower(strings.TrimSpace(args[0])),
+		ChatType: strings.TrimSpace(args[1]),
+		ChatID:   strings.TrimSpace(args[2]),
+		UserID:   strings.TrimSpace(args[3]),
+	}
+	if len(args) == 5 {
+		out.UserName = strings.TrimSpace(args[4])
+	}
+	if out.Platform == "" || out.ChatType == "" || out.ChatID == "" || out.UserID == "" {
+		return GatewayResolveArgs{}, fmt.Errorf("invalid resolve args")
+	}
+	return out, nil
+}
+
+func ParseGatewayResolveArgsWithDefaults(args []string, defaults GatewayResolveArgs) (GatewayResolveArgs, error) {
+	if len(args) == 0 {
+		if strings.TrimSpace(defaults.Platform) == "" || strings.TrimSpace(defaults.ChatType) == "" || strings.TrimSpace(defaults.ChatID) == "" || strings.TrimSpace(defaults.UserID) == "" {
+			return GatewayResolveArgs{}, fmt.Errorf("invalid resolve args")
+		}
+		defaults.Platform = strings.ToLower(strings.TrimSpace(defaults.Platform))
+		defaults.ChatType = strings.TrimSpace(defaults.ChatType)
+		defaults.ChatID = strings.TrimSpace(defaults.ChatID)
+		defaults.UserID = strings.TrimSpace(defaults.UserID)
+		defaults.UserName = strings.TrimSpace(defaults.UserName)
+		return defaults, nil
+	}
+	return ParseGatewayResolveArgs(args)
 }

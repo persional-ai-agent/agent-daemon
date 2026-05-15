@@ -437,23 +437,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}, "", "")
 		return true, nil
 	case "/resolve":
-		if len(fields) != 5 && len(fields) != 6 {
+		resolvedArgs, parseErr := clitools.ParseGatewayResolveArgs(fields[1:])
+		if parseErr != nil {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]")
 			return true, nil
 		}
-		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
-		chatType := strings.TrimSpace(fields[2])
-		chatID := strings.TrimSpace(fields[3])
-		userID := strings.TrimSpace(fields[4])
-		userName := ""
-		if len(fields) == 6 {
-			userName = strings.TrimSpace(fields[5])
-		}
-		if platformName == "" || chatType == "" || chatID == "" || userID == "" {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]")
-			return true, nil
-		}
-		resolved, err := clitools.ResolveGatewaySessionMapping(eng.Workdir, platformName, chatType, chatID, userID, userName)
+		resolved, err := clitools.ResolveGatewaySessionMapping(eng.Workdir, resolvedArgs.Platform, resolvedArgs.ChatType, resolvedArgs.ChatID, resolvedArgs.UserID, resolvedArgs.UserName)
 		if err != nil {
 			return true, err
 		}

@@ -1174,23 +1174,13 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "identity removed")
 		case current == "/resolve" || strings.HasPrefix(current, "/resolve "):
 			parts := strings.Fields(current)
-			if len(parts) != 5 && len(parts) != 6 {
+			resolvedArgs, pErr := tools.ParseGatewayResolveArgs(parts[1:])
+			if pErr != nil {
 				return lines, fmt.Errorf("用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
 			}
-			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
-			chatType := strings.TrimSpace(parts[2])
-			chatID := strings.TrimSpace(parts[3])
-			userID := strings.TrimSpace(parts[4])
-			userName := ""
-			if len(parts) == 6 {
-				userName = strings.TrimSpace(parts[5])
-			}
-			if platformName == "" || chatType == "" || chatID == "" || userID == "" {
-				return lines, fmt.Errorf("用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
-			}
-			apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(platformName), url.QueryEscape(chatType), url.QueryEscape(chatID), url.QueryEscape(userID))
-			if userName != "" {
-				apiPath += "&user_name=" + url.QueryEscape(userName)
+			apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(resolvedArgs.Platform), url.QueryEscape(resolvedArgs.ChatType), url.QueryEscape(resolvedArgs.ChatID), url.QueryEscape(resolvedArgs.UserID))
+			if resolvedArgs.UserName != "" {
+				apiPath += "&user_name=" + url.QueryEscape(resolvedArgs.UserName)
 			}
 			out, hErr := httpJSON(http.MethodGet, apiPath, nil)
 			if hErr != nil {
@@ -1228,23 +1218,13 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emitData(uiPayload(out, "result"))
 				s.setStatus(true, "ok", "gateway action applied")
 			} else if action == "resolve" {
-				if len(parts) != 6 && len(parts) != 7 {
+				resolvedArgs, pErr := tools.ParseGatewayResolveArgs(parts[2:])
+				if pErr != nil {
 					return lines, fmt.Errorf("用法: /gateway resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
 				}
-				platformName := strings.ToLower(strings.TrimSpace(parts[2]))
-				chatType := strings.TrimSpace(parts[3])
-				chatID := strings.TrimSpace(parts[4])
-				userID := strings.TrimSpace(parts[5])
-				userName := ""
-				if len(parts) == 7 {
-					userName = strings.TrimSpace(parts[6])
-				}
-				if platformName == "" || chatType == "" || chatID == "" || userID == "" {
-					return lines, fmt.Errorf("用法: /gateway resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
-				}
-				apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(platformName), url.QueryEscape(chatType), url.QueryEscape(chatID), url.QueryEscape(userID))
-				if userName != "" {
-					apiPath += "&user_name=" + url.QueryEscape(userName)
+				apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(resolvedArgs.Platform), url.QueryEscape(resolvedArgs.ChatType), url.QueryEscape(resolvedArgs.ChatID), url.QueryEscape(resolvedArgs.UserID))
+				if resolvedArgs.UserName != "" {
+					apiPath += "&user_name=" + url.QueryEscape(resolvedArgs.UserName)
 				}
 				out, hErr := httpJSON(http.MethodGet, apiPath, nil)
 				if hErr != nil {

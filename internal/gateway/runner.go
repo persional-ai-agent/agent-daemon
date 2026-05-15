@@ -489,29 +489,18 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
 			return
 		case "/resolve":
-			resolvePlatform := w.adapter.Name()
-			resolveChatType := event.ChatType
-			resolveChatID := event.ChatID
-			resolveUserID := event.UserID
-			resolveUserName := event.UserName
-			if len(parsed.args) != 0 && len(parsed.args) != 4 && len(parsed.args) != 5 {
+			resolveArgs, parseErr := tools.ParseGatewayResolveArgsWithDefaults(parsed.args, tools.GatewayResolveArgs{
+				Platform: w.adapter.Name(),
+				ChatType: event.ChatType,
+				ChatID:   event.ChatID,
+				UserID:   event.UserID,
+				UserName: event.UserName,
+			})
+			if parseErr != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
 				return
 			}
-			if len(parsed.args) == 4 || len(parsed.args) == 5 {
-				resolvePlatform = strings.ToLower(strings.TrimSpace(parsed.args[0]))
-				resolveChatType = strings.TrimSpace(parsed.args[1])
-				resolveChatID = strings.TrimSpace(parsed.args[2])
-				resolveUserID = strings.TrimSpace(parsed.args[3])
-				if len(parsed.args) == 5 {
-					resolveUserName = strings.TrimSpace(parsed.args[4])
-				}
-			}
-			if strings.TrimSpace(resolvePlatform) == "" || strings.TrimSpace(resolveChatID) == "" || strings.TrimSpace(resolveUserID) == "" {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
-				return
-			}
-			resolved, err := tools.ResolveGatewaySessionMapping(w.engine.Workdir, resolvePlatform, resolveChatType, resolveChatID, resolveUserID, resolveUserName)
+			resolved, err := tools.ResolveGatewaySessionMapping(w.engine.Workdir, resolveArgs.Platform, resolveArgs.ChatType, resolveArgs.ChatID, resolveArgs.UserID, resolveArgs.UserName)
 			if err != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Resolve failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resolve"})
 				return
@@ -522,11 +511,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			routeSession := resolved.RouteSession
 			mappedSession := resolved.MappedSession
 			resolvedSession := resolved.ResolvedSession
-			reply := "platform=" + resolvePlatform +
-				"\nchat_type=" + resolveChatType +
-				"\nchat_id=" + resolveChatID +
-				"\nuser_id=" + resolveUserID +
-				"\nuser_name=" + resolveUserName +
+			reply := "platform=" + resolveArgs.Platform +
+				"\nchat_type=" + resolveArgs.ChatType +
+				"\nchat_id=" + resolveArgs.ChatID +
+				"\nuser_id=" + resolveArgs.UserID +
+				"\nuser_name=" + resolveArgs.UserName +
 				"\nroute_session=" + routeSession +
 				"\nmapped_session=" + mappedSession +
 				"\nresolved_session=" + resolvedSession +
@@ -535,10 +524,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				"\ncontinuity_mode=" + mode
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{
 				"slash":            "/resolve",
-				"platform":         resolvePlatform,
-				"chat_type":        resolveChatType,
-				"chat_id":          resolveChatID,
-				"user_id":          resolveUserID,
+				"platform":         resolveArgs.Platform,
+				"chat_type":        resolveArgs.ChatType,
+				"chat_id":          resolveArgs.ChatID,
+				"user_id":          resolveArgs.UserID,
 				"route_session":    routeSession,
 				"mapped_session":   mappedSession,
 				"resolved_session": resolvedSession,
