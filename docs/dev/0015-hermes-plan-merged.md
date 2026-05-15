@@ -152,6 +152,7 @@
 - 已新增 `ExtractGatewayStatusSnapshot` 标准化提取函数并补测试；当前保持 API 对外契约不变，为后续状态字段进一步对齐提供统一转换入口。
 - 已新增 `NormalizeGatewayStatusMap` 并接入 API gateway status 读取路径；在保持现有契约不变前提下，统一内部状态标准化入口。
 - 已新增 `NormalizeGatewayDiagnosticsMap` 并接入 API gateway diagnostics 两条分支（自定义/fallback），统一内部诊断结构标准化入口且不改变外部契约。
+- 已将 gateway status/diagnostics 标准化逻辑沉淀到 `internal/tools/gateway_status.go`（snapshot 提取 + status/diagnostics 归一），后续多入口字段对齐可直接复用。
 
 范围：
 
