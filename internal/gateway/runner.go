@@ -725,6 +725,23 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				map[string]any{"slash": "/sethome", "platform": homePlatform, "chat_id": homeChatID, "env": envKey},
 			)
 			return
+		case "/targets":
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /targets [platform]", event.MessageID, map[string]any{"slash": "/targets"})
+				return
+			}
+			filter := ""
+			if len(parsed.args) == 1 {
+				filter = strings.ToLower(strings.TrimSpace(parsed.args[0]))
+			}
+			items, err := tools.ListChannelDirectory(w.engine.Workdir)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Targets failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/targets"})
+				return
+			}
+			reply := renderGatewayTargets(items, filter)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/targets", "platform": filter})
+			return
 		case "/skills":
 			root := filepath.Join(w.engine.Workdir, "skills")
 			if len(parsed.args) == 0 {
@@ -1509,6 +1526,39 @@ func renderGatewaySkillView(root, name string) (string, error) {
 		lines = append(lines, "...(truncated)")
 	}
 	return "Skill: " + name + "\n" + strings.Join(lines, "\n"), nil
+}
+
+func renderGatewayTargets(items []tools.ChannelDirectoryEntry, platformFilter string) string {
+	filter := strings.ToLower(strings.TrimSpace(platformFilter))
+	lines := make([]string, 0, len(items)+2)
+	title := "Known targets"
+	if filter != "" {
+		title += " (" + filter + ")"
+	}
+	lines = append(lines, title+":")
+	count := 0
+	for _, it := range items {
+		if filter != "" && it.Platform != filter {
+			continue
+		}
+		count++
+		line := it.Platform + ":" + it.ChatID
+		if strings.TrimSpace(it.HomeTarget) != "" {
+			line += " [home=" + it.HomeTarget + "]"
+		}
+		if strings.TrimSpace(it.UserID) != "" {
+			line += " user=" + it.UserID
+		}
+		lines = append(lines, line)
+		if count >= 20 {
+			lines = append(lines, "...(truncated)")
+			break
+		}
+	}
+	if count == 0 {
+		lines = append(lines, "(empty)")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func renderGatewayToolSchema(schema core.ToolSchema) string {

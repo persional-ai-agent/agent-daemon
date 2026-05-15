@@ -11,6 +11,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 type gatewayStatusStoreStub struct{}
@@ -160,6 +161,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/MODEL"); got != "/model" {
 		t.Fatalf("slash command should normalize model, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/TARGETS telegram"); got != "/targets telegram" {
+		t.Fatalf("slash command should normalize targets, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/COMPRESS 30"); got != "/compress 30" {
 		t.Fatalf("slash command should normalize compress, got=%q", got)
 	}
@@ -271,6 +275,19 @@ func TestCompactGatewayHistoryTailDefaults(t *testing.T) {
 	}
 	if got[0].Content != "10" || got[19].Content != "29" {
 		t.Fatalf("unexpected compact tail window: first=%q last=%q", got[0].Content, got[19].Content)
+	}
+}
+
+func TestRenderGatewayTargets(t *testing.T) {
+	text := renderGatewayTargets([]tools.ChannelDirectoryEntry{
+		{Platform: "telegram", ChatID: "100", HomeTarget: "100", UserID: "u1"},
+		{Platform: "discord", ChatID: "c1"},
+	}, "telegram")
+	if !strings.Contains(text, "telegram:100") {
+		t.Fatalf("missing target row: %q", text)
+	}
+	if strings.Contains(text, "discord:c1") {
+		t.Fatalf("filter should hide discord row: %q", text)
 	}
 }
 
