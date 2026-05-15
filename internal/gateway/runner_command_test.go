@@ -62,6 +62,12 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/RECOVER context"); got != "/recover context" {
 		t.Fatalf("slash command should normalize recover, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/RETRY"); got != "/retry" {
+		t.Fatalf("slash command should normalize retry, got=%q", got)
+	}
+	if got := normalizeGatewayCommand("slack", "/UNDO"); got != "/undo" {
+		t.Fatalf("slash command should normalize undo, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/COMPRESS 30"); got != "/compress 30" {
 		t.Fatalf("slash command should normalize compress, got=%q", got)
 	}
@@ -173,5 +179,35 @@ func TestCompactGatewayHistoryTailDefaults(t *testing.T) {
 	}
 	if got[0].Content != "10" || got[19].Content != "29" {
 		t.Fatalf("unexpected compact tail window: first=%q last=%q", got[0].Content, got[19].Content)
+	}
+}
+
+func TestLatestUserInputFromMessages(t *testing.T) {
+	history := []core.Message{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", Content: "ok"},
+		{Role: "user", Content: "/status"},
+		{Role: "assistant", Content: "done"},
+		{Role: "user", Content: " retry this "},
+	}
+	got := latestUserInputFromMessages(history)
+	if got != "retry this" {
+		t.Fatalf("unexpected latest user input: %q", got)
+	}
+}
+
+func TestRemoveLastTurnFromMessages(t *testing.T) {
+	history := []core.Message{
+		{Role: "user", Content: "u1"},
+		{Role: "assistant", Content: "a1"},
+		{Role: "user", Content: "u2"},
+		{Role: "assistant", Content: "a2"},
+	}
+	next, removed := removeLastTurnFromMessages(history)
+	if removed != 2 {
+		t.Fatalf("unexpected removed count: %d", removed)
+	}
+	if len(next) != 2 || next[0].Content != "u1" || next[1].Content != "a1" {
+		t.Fatalf("unexpected remaining messages: %+v", next)
 	}
 }

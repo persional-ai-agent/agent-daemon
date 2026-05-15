@@ -391,6 +391,50 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Recover replay queue is full; please resend manually._", event.MessageID, map[string]any{"slash": "/recover"})
 			}
 			return
+		case "/retry":
+			lastInput := w.getLastUserInput()
+			if strings.TrimSpace(lastInput) == "" {
+				active := w.currentSessionID()
+				if msgs, err := w.engine.SessionStore.LoadMessages(active, 500); err == nil {
+					lastInput = latestUserInputFromMessages(msgs)
+				}
+			}
+			if strings.TrimSpace(lastInput) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "_No recent user input to replay._", event.MessageID, map[string]any{"slash": "/retry"})
+				return
+			}
+			_, _ = w.sendText(ctx, event.ChatID, "_Replaying latest input..._", event.MessageID, map[string]any{"slash": "/retry"})
+			replay := event
+			replay.Text = lastInput
+			select {
+			case w.queue <- replay:
+			default:
+				_, _ = w.sendText(ctx, event.ChatID, "_Retry queue is full; please resend manually._", event.MessageID, map[string]any{"slash": "/retry"})
+			}
+			return
+		case "/undo":
+			active := w.currentSessionID()
+			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Undo failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/undo"})
+				return
+			}
+			nextMsgs, removed := removeLastTurnFromMessages(msgs)
+			if removed == 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "_No turn to undo._", event.MessageID, map[string]any{"slash": "/undo"})
+				return
+			}
+			nextSession := uuid.NewString()
+			for _, m := range nextMsgs {
+				if err := w.engine.SessionStore.AppendMessage(nextSession, m); err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Undo failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/undo"})
+					return
+				}
+			}
+			w.setActiveSessionID(nextSession)
+			w.setLastUserInput(latestUserInputFromMessages(nextMsgs))
+			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
+			return
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -807,6 +851,35 @@ func compactGatewayHistory(history []core.Message, tail int) []core.Message {
 		return core.CloneMessages(history)
 	}
 	return core.CloneMessages(history[len(history)-tail:])
+}
+
+func latestUserInputFromMessages(history []core.Message) string {
+	for i := len(history) - 1; i >= 0; i-- {
+		m := history[i]
+		if m.Role != "user" {
+			continue
+		}
+		text := strings.TrimSpace(m.Content)
+		if text == "" || strings.HasPrefix(text, "/") {
+			continue
+		}
+		return text
+	}
+	return ""
+}
+
+func removeLastTurnFromMessages(history []core.Message) ([]core.Message, int) {
+	idx := -1
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role == "user" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return core.CloneMessages(history), 0
+	}
+	return core.CloneMessages(history[:idx]), len(history) - idx
 }
 
 func withTail(parts []string) string {
