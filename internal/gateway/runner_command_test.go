@@ -62,6 +62,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/SESSION s-1"); got != "/session s-1" {
 		t.Fatalf("slash command should normalize session, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/HISTORY 5"); got != "/history 5" {
+		t.Fatalf("slash command should normalize history, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/RESUME sess-1"); got != "/resume sess-1" {
 		t.Fatalf("slash command should normalize resume, got=%q", got)
 	}
@@ -215,5 +218,20 @@ func TestRemoveLastTurnFromMessages(t *testing.T) {
 	}
 	if len(next) != 2 || next[0].Content != "u1" || next[1].Content != "a1" {
 		t.Fatalf("unexpected remaining messages: %+v", next)
+	}
+}
+
+func TestRenderGatewayHistory(t *testing.T) {
+	history := []core.Message{
+		{Role: "user", Content: "u1"},
+		{Role: "assistant", Content: "a1"},
+		{Role: "user", Content: "u2"},
+	}
+	got := renderGatewayHistory(history, 2)
+	if !strings.Contains(got, "Recent history:") {
+		t.Fatalf("missing header: %q", got)
+	}
+	if !strings.Contains(got, "2. [assistant] a1") || !strings.Contains(got, "3. [user] u2") {
+		t.Fatalf("unexpected history output: %q", got)
 	}
 }

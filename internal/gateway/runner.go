@@ -357,6 +357,29 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.setActiveSessionID(target)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
 			return
+		case "/history":
+			limit := 10
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /history [n]", event.MessageID, map[string]any{"slash": "/history"})
+				return
+			}
+			if len(parsed.args) == 1 {
+				n, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
+				if err != nil || n <= 0 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /history [n]", event.MessageID, map[string]any{"slash": "/history"})
+					return
+				}
+				limit = n
+			}
+			active := w.currentSessionID()
+			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_History failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/history"})
+				return
+			}
+			reply := renderGatewayHistory(msgs, limit)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/history", "session_id": active})
+			return
 		case "/cancel":
 			w.mu.Lock()
 			cancel := w.cancelCurrent
@@ -909,6 +932,33 @@ func removeLastTurnFromMessages(history []core.Message) ([]core.Message, int) {
 		return core.CloneMessages(history), 0
 	}
 	return core.CloneMessages(history[:idx]), len(history) - idx
+}
+
+func renderGatewayHistory(history []core.Message, limit int) string {
+	if len(history) == 0 {
+		return "History is empty."
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > len(history) {
+		limit = len(history)
+	}
+	start := len(history) - limit
+	lines := make([]string, 0, limit+1)
+	lines = append(lines, "Recent history:")
+	for i := start; i < len(history); i++ {
+		msg := history[i]
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			content = "(empty)"
+		}
+		if len(content) > 120 {
+			content = content[:120] + "..."
+		}
+		lines = append(lines, itoa(i+1)+". ["+msg.Role+"] "+content)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func withTail(parts []string) string {
