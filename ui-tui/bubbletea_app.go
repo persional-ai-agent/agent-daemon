@@ -27,6 +27,9 @@ type tuiModel struct {
 	state      *appState
 	inputValue string
 	cursorPos  int
+	draftInput string
+	history    []string
+	historyPos int
 	compBase   string
 	compItems  []string
 	compIndex  int
@@ -159,6 +162,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.processing {
 				return m, nil
 			}
+			if msg.String() == "up" {
+				m.historyPrev()
+			} else {
+				m.historyNext()
+			}
+			m.resetCompletion()
+			return m, nil
 		case "enter":
 			if m.processing {
 				return m, nil
@@ -167,8 +177,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if raw == "" {
 				return m, nil
 			}
+			m.commitInputHistory(raw)
 			m.inputValue = ""
 			m.cursorPos = 0
+			m.draftInput = ""
+			m.historyPos = len(m.history)
 			m.resetCompletion()
 			if raw == "/quit" || raw == "/exit" {
 				return m, tea.Quit
@@ -232,8 +245,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if raw == "" {
 				return m, nil
 			}
+			m.commitInputHistory(raw)
 			m.inputValue = ""
 			m.cursorPos = 0
+			m.draftInput = ""
+			m.historyPos = len(m.history)
 			m.resetCompletion()
 			m.runtime.startTurn(raw)
 			m.processing = true
@@ -333,6 +349,50 @@ func (m *tuiModel) insertAtCursor(s string) {
 	merged = append(merged, right...)
 	m.inputValue = string(merged)
 	m.cursorPos += len(insert)
+}
+
+func (m *tuiModel) commitInputHistory(raw string) {
+	if raw == "" {
+		return
+	}
+	if n := len(m.history); n > 0 && m.history[n-1] == raw {
+		return
+	}
+	m.history = append(m.history, raw)
+	if len(m.history) > 200 {
+		m.history = append([]string(nil), m.history[len(m.history)-200:]...)
+	}
+}
+
+func (m *tuiModel) historyPrev() {
+	if len(m.history) == 0 {
+		return
+	}
+	if m.historyPos >= len(m.history) {
+		m.draftInput = m.inputValue
+	}
+	if m.historyPos > 0 {
+		m.historyPos--
+	}
+	m.inputValue = m.history[m.historyPos]
+	m.cursorPos = len([]rune(m.inputValue))
+}
+
+func (m *tuiModel) historyNext() {
+	if len(m.history) == 0 {
+		return
+	}
+	if m.historyPos < len(m.history) {
+		m.historyPos++
+	}
+	if m.historyPos >= len(m.history) {
+		m.historyPos = len(m.history)
+		m.inputValue = m.draftInput
+		m.cursorPos = len([]rune(m.inputValue))
+		return
+	}
+	m.inputValue = m.history[m.historyPos]
+	m.cursorPos = len([]rune(m.inputValue))
 }
 
 type turnLineMsg struct {

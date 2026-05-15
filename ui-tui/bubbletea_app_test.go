@@ -86,3 +86,52 @@ func TestRenderInputWithCursor(t *testing.T) {
 		t.Fatalf("unexpected prefix: %q", out)
 	}
 }
+
+func TestInputHistoryUpDownWithDraftRestore(t *testing.T) {
+	s := newState()
+	m := newTUIModel(s, true)
+	m.history = []string{"/status", "/approvals", "hello world"}
+	m.historyPos = len(m.history)
+	m.inputValue = "/pen"
+	m.cursorPos = len([]rune(m.inputValue))
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	next := updated.(tuiModel)
+	if next.inputValue != "hello world" {
+		t.Fatalf("expected latest history, got %q", next.inputValue)
+	}
+
+	updated, _ = next.Update(tea.KeyMsg{Type: tea.KeyUp})
+	next = updated.(tuiModel)
+	if next.inputValue != "/approvals" {
+		t.Fatalf("expected previous history, got %q", next.inputValue)
+	}
+
+	updated, _ = next.Update(tea.KeyMsg{Type: tea.KeyDown})
+	next = updated.(tuiModel)
+	if next.inputValue != "hello world" {
+		t.Fatalf("expected forward history, got %q", next.inputValue)
+	}
+
+	updated, _ = next.Update(tea.KeyMsg{Type: tea.KeyDown})
+	next = updated.(tuiModel)
+	if next.inputValue != "/pen" {
+		t.Fatalf("expected draft restored, got %q", next.inputValue)
+	}
+}
+
+func TestCommitInputHistoryDedupAndCap(t *testing.T) {
+	s := newState()
+	m := newTUIModel(s, true)
+	m.commitInputHistory("/status")
+	m.commitInputHistory("/status")
+	if len(m.history) != 1 {
+		t.Fatalf("expected dedup history size=1, got %d", len(m.history))
+	}
+	for i := 0; i < 250; i++ {
+		m.commitInputHistory("cmd" + string(rune('a'+(i%26))))
+	}
+	if len(m.history) > 200 {
+		t.Fatalf("expected history cap <= 200, got %d", len(m.history))
+	}
+}
