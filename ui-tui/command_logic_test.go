@@ -352,6 +352,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/sethome", "用法: /sethome <platform:chat_id>|<platform> <chat_id>"},
 		{"/resume", "用法: /resume <session_id>"},
 		{"/compress x", "用法: /compress [tail_messages]"},
+		{"/recover", "用法: /recover context"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
@@ -746,6 +747,13 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 				"stats":    map[string]any{"total_messages": 1},
 				"count":    1,
 			})
+		case "/v1/ui/sessions/s2":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":       true,
+				"messages": []map[string]any{{"role": "assistant", "content": "after-undo"}},
+				"stats":    map[string]any{"total_messages": 1},
+				"count":    1,
+			})
 		case "/v1/ui/sessions/undo":
 			undoCalls++
 			_ = json.NewDecoder(r.Body).Decode(&lastBody)
@@ -858,6 +866,13 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 	}
 	if undoCalls != 2 {
 		t.Fatalf("retry should trigger undo, undoCalls=%d", undoCalls)
+	}
+
+	if _, err, _ := handleTUICommand(s, "/reload", nil, nil); err != nil {
+		t.Fatalf("/reload failed: %v", err)
+	}
+	if lastPath != "/v1/ui/sessions/s2?offset=0&limit=500" {
+		t.Fatalf("unexpected reload request path: %s", lastPath)
 	}
 
 	if _, err, _ := handleTUICommand(s, "/skills", nil, nil); err != nil {

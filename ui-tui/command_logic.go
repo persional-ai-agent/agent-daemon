@@ -349,7 +349,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			queue = append([]string{items[idx-1]}, queue...)
 			emit("rerun: " + items[idx-1])
 			s.setStatus(true, "ok", "rerun selected")
-		case strings.EqualFold(current, "/recover context"):
+		case current == "/recover" || strings.HasPrefix(strings.ToLower(current), "/recover "):
+			if !strings.EqualFold(strings.TrimSpace(current), "/recover context") {
+				return lines, fmt.Errorf("用法: /recover context"), false
+			}
 			lastUserMsg := latestUserMessageFromChatLog(s.chatLog)
 			if strings.TrimSpace(lastUserMsg) == "" {
 				return lines, fmt.Errorf("没有可重试的最近用户消息"), false
@@ -663,6 +666,18 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			_ = s.saveRuntimeState()
 			emit("session switched: " + s.session)
 			s.setStatus(true, "ok", "new session created")
+		case current == "/reload":
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=500", s.httpBase, url.PathEscape(s.session)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			count := 0
+			if msgs, ok := out["messages"].([]any); ok {
+				count = len(msgs)
+			}
+			emitData(map[string]any{"session_id": s.session, "loaded_messages": count, "messages": out["messages"]})
+			s.setStatus(true, "ok", "session reloaded")
 		case current == "/resume" || strings.HasPrefix(current, "/resume "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {

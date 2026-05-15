@@ -13,6 +13,7 @@ func TUIHelpEntries() []HelpEntry {
 		{"/new [id]", "create and switch to new session"},
 		{"/reset [id]", "reset current context into a new session"},
 		{"/resume <id>", "resume and switch to existing session"},
+		{"/reload", "reload current session messages from store"},
 		{"/api", "show websocket endpoint"},
 		{"/api <ws-url>", "switch websocket endpoint"},
 		{"/http", "show http api base"},
@@ -93,7 +94,7 @@ func TUIHelpEntries() []HelpEntry {
 
 func TUIRootCommands() []string {
 	return []string{
-		"/help", "/session", "/new", "/reset", "/resume", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
+		"/help", "/session", "/new", "/reset", "/resume", "/reload", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
 		"/stats", "/usage", "/undo", "/retry", "/compress", "/targets", "/sethome", "/skills", "/model", "/personality", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
 		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
 		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
