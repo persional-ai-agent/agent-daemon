@@ -39,6 +39,10 @@ func TestSendMessageListAndSend(t *testing.T) {
 	if _, ok := res["targets"]; !ok {
 		t.Fatalf("missing targets in list response: %v", res)
 	}
+	targets, _ := res["targets"].([]map[string]any)
+	if len(targets) == 0 || targets[0]["target"] == "" {
+		t.Fatalf("target canonical field missing in list response: %+v", targets)
+	}
 
 	res, err = tool.Call(context.Background(), map[string]any{
 		"action":  "send",
@@ -203,5 +207,31 @@ func TestSendMessageSupportsMultiSegmentTarget(t *testing.T) {
 	}
 	if got, _ := res["chat_id"].(string); got != "group:123" {
 		t.Fatalf("chat_id=%q want=group:123", got)
+	}
+}
+
+func TestSendMessageListFilterByPlatform(t *testing.T) {
+	platform.Register(fakeAdapter{name: "telegram"})
+	platform.Register(fakeAdapter{name: "slack"})
+	t.Cleanup(func() {
+		platform.Unregister("telegram")
+		platform.Unregister("slack")
+	})
+	res, err := NewSendMessageTool().Call(context.Background(), map[string]any{
+		"action":   "list",
+		"platform": "slack",
+	}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	platforms, _ := res["platforms"].([]string)
+	if len(platforms) != 1 || platforms[0] != "slack" {
+		t.Fatalf("platform filter mismatch: %+v", platforms)
+	}
+	targets, _ := res["targets"].([]map[string]any)
+	for _, it := range targets {
+		if it["platform"] != "slack" {
+			t.Fatalf("unexpected target platform in filtered list: %+v", it)
+		}
 	}
 }
