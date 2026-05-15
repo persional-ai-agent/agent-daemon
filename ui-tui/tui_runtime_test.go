@@ -239,8 +239,32 @@ func TestRuntimeNoDuplicateOnCompletedAfterStream(t *testing.T) {
 	if !changed {
 		t.Fatal("expected changed render")
 	}
-	if strings.Count(out, "hello") != 1 {
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if strings.Count(cleaned, "hello") != 1 {
 		t.Fatalf("expected no duplicate final output, got: %q", out)
+	}
+}
+
+func TestRuntimeAssistantMessageWithoutCompletedContent(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("no-result-content")
+	rt.publishTurnEvent(map[string]any{
+		"type":    "assistant_message",
+		"content": "hello from assistant message",
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type": "completed",
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if !strings.Contains(cleaned, "hello from assistant") || !strings.Contains(cleaned, "message") {
+		t.Fatalf("expected assistant content rendered, got: %q", out)
 	}
 }
 

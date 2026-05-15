@@ -1101,6 +1101,9 @@ func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	case "model_stream_event":
 		return mapModelStreamEventToRuntimeEvents(evt)
 	case "assistant_message":
+		if text, _ := evt["content"].(string); strings.TrimSpace(text) != "" {
+			return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: normalizeStreamText(text)}}
+		}
 		return nil
 	case "result":
 		if text, _ := evt["final_response"].(string); strings.TrimSpace(text) != "" {
