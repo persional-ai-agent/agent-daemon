@@ -290,7 +290,7 @@ func TestHandleSlashCommandContinuityAndIdentity(t *testing.T) {
 	if handled, err := handleSlashCommandState(context.Background(), "/setid telegram u1 gid-1", state, eng); err != nil || !handled {
 		t.Fatalf("setid handled=%v err=%v", handled, err)
 	}
-	globalID, err := resolveGatewayIdentity(workdir, "telegram", "u1")
+	globalID, err := tools.ResolveGatewayIdentity(workdir, "telegram", "u1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestHandleSlashCommandContinuityAndIdentity(t *testing.T) {
 	if handled, err := handleSlashCommandState(context.Background(), "/unsetid telegram u1", state, eng); err != nil || !handled {
 		t.Fatalf("unsetid handled=%v err=%v", handled, err)
 	}
-	globalID, err = resolveGatewayIdentity(workdir, "telegram", "u1")
+	globalID, err = tools.ResolveGatewayIdentity(workdir, "telegram", "u1")
 	if err != nil {
 		t.Fatal(err)
 	}

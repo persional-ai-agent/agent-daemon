@@ -22,7 +22,6 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
-	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -1245,57 +1244,6 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func continuityModeFromRaw(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "user_id", "id":
-		return "user_id"
-	case "user_name", "name":
-		return "user_name"
-	case "off":
-		return "off"
-	default:
-		return "off"
-	}
-}
-
-func gatewayIdentityMapPath(workdir string) string {
-	return filepath.Join(strings.TrimSpace(workdir), ".agent-daemon", "gateway_identity_map.json")
-}
-
-type gatewayIdentityRecord struct {
-	Platform string `json:"platform"`
-	UserID   string `json:"user_id"`
-	GlobalID string `json:"global_id"`
-}
-
-func loadGatewayIdentityMap(workdir string) ([]gatewayIdentityRecord, error) {
-	path := gatewayIdentityMapPath(workdir)
-	bs, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []gatewayIdentityRecord{}, nil
-		}
-		return nil, err
-	}
-	rows := []gatewayIdentityRecord{}
-	if err := json.Unmarshal(bs, &rows); err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func saveGatewayIdentityMap(workdir string, rows []gatewayIdentityRecord) error {
-	path := gatewayIdentityMapPath(workdir)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	bs, err := json.MarshalIndent(rows, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, bs, 0o644)
-}
-
 func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1304,7 +1252,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		mode = continuityModeFromRaw(mode)
+		mode = tools.NormalizeContinuityMode(mode)
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
 			"result": map[string]any{
@@ -1318,7 +1266,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 			return
 		}
-		mode := continuityModeFromRaw(req.Mode)
+		mode := tools.NormalizeContinuityMode(req.Mode)
 		if err := tools.SetGatewaySetting(s.engineWorkdir(), "continuity_mode", mode); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
@@ -1341,17 +1289,10 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 	case http.MethodGet:
 		platformName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
 		userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
-		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
+		globalID, err := tools.ResolveGatewayIdentity(s.engineWorkdir(), platformName, userID)
 		if err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
-		}
-		globalID := ""
-		for _, row := range rows {
-			if platformName == row.Platform && userID == row.UserID {
-				globalID = strings.TrimSpace(row.GlobalID)
-				break
-			}
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
@@ -1375,23 +1316,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id/global_id required")
 			return
 		}
-		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
-		if err != nil {
-			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
-			return
-		}
-		found := false
-		for i := range rows {
-			if rows[i].Platform == platformName && rows[i].UserID == userID {
-				rows[i].GlobalID = globalID
-				found = true
-				break
-			}
-		}
-		if !found {
-			rows = append(rows, gatewayIdentityRecord{Platform: platformName, UserID: userID, GlobalID: globalID})
-		}
-		if err := saveGatewayIdentityMap(s.engineWorkdir(), rows); err != nil {
+		if err := tools.UpsertGatewayIdentity(s.engineWorkdir(), platformName, userID, globalID); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
@@ -1417,19 +1342,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
 			return
 		}
-		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
-		if err != nil {
-			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
-			return
-		}
-		next := make([]gatewayIdentityRecord, 0, len(rows))
-		for _, row := range rows {
-			if row.Platform == platformName && row.UserID == userID {
-				continue
-			}
-			next = append(next, row)
-		}
-		if err := saveGatewayIdentityMap(s.engineWorkdir(), next); err != nil {
+		if err := tools.DeleteGatewayIdentity(s.engineWorkdir(), platformName, userID); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
@@ -1448,25 +1361,6 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func autoGlobalIdentity(mode, userID, userName string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "user_id":
-		if strings.TrimSpace(userID) == "" {
-			return ""
-		}
-		return "uid:" + strings.TrimSpace(userID)
-	case "user_name":
-		n := strings.ToLower(strings.TrimSpace(userName))
-		n = strings.ReplaceAll(n, " ", "_")
-		if n == "" {
-			return ""
-		}
-		return "uname:" + n
-	default:
-		return ""
-	}
-}
-
 func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -1481,53 +1375,25 @@ func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Re
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_id required")
 		return
 	}
-	routeSession := gateway.BuildSessionKey(platformName, chatType, chatID)
-	mode, err := tools.GetGatewaySetting(s.engineWorkdir(), "continuity_mode")
+	resolved, err := tools.ResolveGatewaySessionMapping(s.engineWorkdir(), platformName, chatType, chatID, userID, userName)
 	if err != nil {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
-	}
-	mode = continuityModeFromRaw(mode)
-	rows, err := loadGatewayIdentityMap(s.engineWorkdir())
-	if err != nil {
-		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
-		return
-	}
-	globalID := ""
-	globalSource := "none"
-	for _, row := range rows {
-		if row.Platform == platformName && row.UserID == userID {
-			globalID = strings.TrimSpace(row.GlobalID)
-			globalSource = "mapped"
-			break
-		}
-	}
-	if strings.TrimSpace(globalID) == "" {
-		if autoID := autoGlobalIdentity(mode, userID, userName); strings.TrimSpace(autoID) != "" {
-			globalID = autoID
-			globalSource = "auto"
-		}
-	}
-	mappedSession := ""
-	resolvedSession := routeSession
-	if strings.TrimSpace(globalID) != "" {
-		mappedSession = gateway.BuildSessionKey("global", "user", globalID)
-		resolvedSession = mappedSession
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok": true,
 		"result": map[string]any{
-			"platform":         platformName,
-			"chat_type":        chatType,
-			"chat_id":          chatID,
-			"user_id":          userID,
-			"user_name":        userName,
-			"route_session":    routeSession,
-			"mapped_session":   mappedSession,
-			"resolved_session": resolvedSession,
-			"global_id":        globalID,
-			"global_source":    globalSource,
-			"continuity_mode":  mode,
+			"platform":         resolved.Platform,
+			"chat_type":        resolved.ChatType,
+			"chat_id":          resolved.ChatID,
+			"user_id":          resolved.UserID,
+			"user_name":        resolved.UserName,
+			"route_session":    resolved.RouteSession,
+			"mapped_session":   resolved.MappedSession,
+			"resolved_session": resolved.ResolvedSession,
+			"global_id":        resolved.GlobalID,
+			"global_source":    resolved.GlobalSource,
+			"continuity_mode":  resolved.ContinuityMode,
 		},
 	})
 }
