@@ -207,10 +207,28 @@ func TestHandleSlashCommandUndoAndCompress(t *testing.T) {
 func TestHandleSlashCommandToolsShow(t *testing.T) {
 	eng := makeEngineForSlashTests(nil)
 	line := captureStdout(t, func() {
-		_, _ = handleSlashCommandState(context.Background(), "/tools show send_message", &chatState{SessionID: "s1"}, eng)
+		_, _ = handleSlashCommandState(context.Background(), "/TOOLS SHOW send_message", &chatState{SessionID: "s1"}, eng)
 	})
 	if !strings.Contains(line, `"send_message"`) {
 		t.Fatalf("expected send_message schema, got %s", line)
+	}
+}
+
+func TestHandleSlashCommandCaseInsensitiveRootCommands(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+
+	if handled, err := handleSlashCommandState(context.Background(), "/SESSION", state, eng); err != nil || !handled {
+		t.Fatalf("session handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/NEW next", state, eng); err != nil || !handled {
+		t.Fatalf("new handled=%v err=%v", handled, err)
+	}
+	if state.SessionID != "next" {
+		t.Fatalf("sessionID=%q", state.SessionID)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/MODEL", state, eng); err != nil || !handled {
+		t.Fatalf("model handled=%v err=%v", handled, err)
 	}
 }
 

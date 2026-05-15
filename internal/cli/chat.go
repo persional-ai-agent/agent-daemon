@@ -89,7 +89,7 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 		if line == "" {
 			continue
 		}
-		if line == "/exit" || line == "/quit" {
+		if strings.EqualFold(line, "/exit") || strings.EqualFold(line, "/quit") {
 			return nil
 		}
 		if strings.HasPrefix(line, "/") {
@@ -126,7 +126,8 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	if len(fields) == 0 {
 		return true, nil
 	}
-	switch fields[0] {
+	cmd := strings.ToLower(strings.TrimSpace(fields[0]))
+	switch cmd {
 	case "/help", "/commands":
 		printSlashHelp()
 		return true, nil
