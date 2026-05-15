@@ -1251,9 +1251,10 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusNotImplemented, "not_supported", "gateway status unavailable")
 		return
 	}
+	raw := s.GatewayStatusFn()
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
-		"status": s.GatewayStatusFn(),
+		"status": raw,
 	})
 }
 
@@ -1409,9 +1410,10 @@ func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if s.GatewayDiagnosticsFn != nil {
+		diag := s.GatewayDiagnosticsFn()
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok":          true,
-			"diagnostics": s.GatewayDiagnosticsFn(),
+			"diagnostics": diag,
 		})
 		return
 	}

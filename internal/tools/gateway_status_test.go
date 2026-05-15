@@ -41,3 +41,22 @@ func TestGatewayDiagnosticsFallback(t *testing.T) {
 		t.Fatalf("unexpected ids: %+v", diag["active_session_ids"])
 	}
 }
+
+func TestExtractGatewayStatusSnapshot(t *testing.T) {
+	src := map[string]any{
+		"platform":         "telegram",
+		"route_session":    "r1",
+		"active_session":   "a1",
+		"queue":            float64(3),
+		"paired":           true,
+		"continuity_mode":  "user_id",
+		"mapped_session":   "m1",
+		"message_count":    9,
+		"running":          true,
+		"last_approval_id": "ap-1",
+	}
+	got := ExtractGatewayStatusSnapshot(src)
+	if got.Platform != "telegram" || got.QueueLen != 3 || got.ContinuityMode != "user_id" || got.LastApprovalID != "ap-1" {
+		t.Fatalf("unexpected snapshot: %+v", got)
+	}
+}

@@ -19,6 +19,46 @@ type GatewayStatusSnapshot struct {
 	LastApprovalID string
 }
 
+func ExtractGatewayStatusSnapshot(status map[string]any) GatewayStatusSnapshot {
+	out := GatewayStatusSnapshot{}
+	if status == nil {
+		return out
+	}
+	if v, ok := status["platform"].(string); ok {
+		out.Platform = strings.TrimSpace(v)
+	}
+	if v, ok := status["route_session"].(string); ok {
+		out.RouteSession = strings.TrimSpace(v)
+	}
+	if v, ok := status["active_session"].(string); ok {
+		out.ActiveSession = strings.TrimSpace(v)
+	}
+	if v, ok := status["queue"].(int); ok {
+		out.QueueLen = v
+	} else if vf, ok := status["queue"].(float64); ok {
+		out.QueueLen = int(vf)
+	}
+	if v, ok := status["paired"].(bool); ok {
+		out.Paired = v
+	}
+	if v, ok := status["continuity_mode"].(string); ok {
+		out.ContinuityMode = strings.TrimSpace(v)
+	}
+	if v, ok := status["mapped_session"].(string); ok {
+		out.MappedSession = strings.TrimSpace(v)
+	}
+	if v, ok := status["message_count"]; ok {
+		out.MessageCount = v
+	}
+	if v, ok := status["running"].(bool); ok {
+		out.Running = v
+	}
+	if v, ok := status["last_approval_id"].(string); ok {
+		out.LastApprovalID = strings.TrimSpace(v)
+	}
+	return out
+}
+
 func BuildGatewayStatusPayload(s GatewayStatusSnapshot) map[string]any {
 	out := map[string]any{
 		"platform":        s.Platform,
