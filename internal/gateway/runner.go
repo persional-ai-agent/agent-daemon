@@ -112,6 +112,7 @@ type sessionWorker struct {
 
 	mu                  sync.Mutex
 	activeSessionID     string
+	lastUserInput       string
 	cancelCurrent       context.CancelFunc
 	running             bool
 	lastApprovalID      string
@@ -368,6 +369,28 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.setActiveSessionID(next)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
 			return
+		case "/recover":
+			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /recover context", event.MessageID, map[string]any{"slash": "/recover"})
+				return
+			}
+			lastInput := w.getLastUserInput()
+			if strings.TrimSpace(lastInput) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "_No recent user input to replay._", event.MessageID, map[string]any{"slash": "/recover"})
+				return
+			}
+			prev := w.currentSessionID()
+			next := uuid.NewString()
+			w.setActiveSessionID(next)
+			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
+			replay := event
+			replay.Text = lastInput
+			select {
+			case w.queue <- replay:
+			default:
+				_, _ = w.sendText(ctx, event.ChatID, "_Recover replay queue is full; please resend manually._", event.MessageID, map[string]any{"slash": "/recover"})
+			}
+			return
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -451,6 +474,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		_, _ = w.sendText(ctx, event.ChatID, "_Access denied._", event.MessageID, map[string]any{"auth": "denied"})
 		return
 	}
+	w.setLastUserInput(event.Text)
 
 	sessionKey := w.currentSessionID()
 
@@ -952,6 +976,22 @@ func (w *sessionWorker) setActiveSessionID(sessionID string) {
 		sessionID = w.key
 	}
 	w.activeSessionID = sessionID
+}
+
+func (w *sessionWorker) setLastUserInput(text string) {
+	text = strings.TrimSpace(text)
+	if text == "" || strings.HasPrefix(text, "/") {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastUserInput = text
+}
+
+func (w *sessionWorker) getLastUserInput() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.TrimSpace(w.lastUserInput)
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {

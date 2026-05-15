@@ -59,6 +59,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/RESET"); got != "/reset" {
 		t.Fatalf("slash command should normalize reset, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/RECOVER context"); got != "/recover context" {
+		t.Fatalf("slash command should normalize recover, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/COMPRESS 30"); got != "/compress 30" {
 		t.Fatalf("slash command should normalize compress, got=%q", got)
 	}
