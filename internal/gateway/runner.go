@@ -113,17 +113,21 @@ type sessionWorker struct {
 
 	mu                  sync.Mutex
 	activeSessionID     string
-	lastUserInput       string
 	lastUserID          string
-	lastShowSessionID   string
-	lastShowOffset      int
-	lastShowLimit       int
-	lastSessionIDs      []string
+	lastUserInputByUser map[string]string
+	lastShowByUser      map[string]showCursorState
+	lastSessionIDsByUser map[string][]string
 	cancelCurrent       context.CancelFunc
 	running             bool
 	lastApprovalID      string
 	lastApprovalCommand string
 	lastApprovalReason  string
+}
+
+type showCursorState struct {
+	sessionID string
+	offset    int
+	limit     int
 }
 
 type gatewayCommand struct {
@@ -287,6 +291,9 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 			runner:          r,
 			queue:           make(chan MessageEvent, 32),
 			activeSessionID: sessionKey,
+			lastUserInputByUser: map[string]string{},
+			lastShowByUser:      map[string]showCursorState{},
+			lastSessionIDsByUser: map[string][]string{},
 		}
 		r.sessions[sessionKey] = w
 		go w.run(ctx)
@@ -373,7 +380,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			target := strings.TrimSpace(parsed.args[0])
 			prev := w.currentSessionID()
-			w.activateSession(target)
+			w.activateSession(target, event.UserID)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
 			return
 		case "/history":
@@ -415,7 +422,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Show failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/show"})
 				return
 			}
-			w.setShowCursor(target, offset, limit)
+			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/show", "session_id": target, "offset": offset, "limit": limit})
 			return
@@ -424,7 +431,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /next or /prev", event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
-			target, offset, limit := w.showCursor()
+			target, offset, limit := w.showCursor(event.UserID)
 			if strings.TrimSpace(target) == "" {
 				target = w.currentSessionID()
 				offset = 0
@@ -448,7 +455,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_"+strings.TrimPrefix(parsed.head, "/")+" failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
-			w.setShowCursor(target, offset, limit)
+			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "session_id": target, "offset": offset, "limit": limit})
 			return
@@ -483,7 +490,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					ids = append(ids, strings.TrimSpace(sid))
 				}
 			}
-			w.setLastSessionIDs(ids)
+			w.setLastSessionIDs(event.UserID, ids)
 			reply := renderGatewaySessions(w.currentSessionID(), items)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/sessions", "count": len(items), "limit": limit})
 			return
@@ -497,7 +504,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /pick <index>", event.MessageID, map[string]any{"slash": "/pick"})
 				return
 			}
-			list := w.getLastSessionIDs()
+			list := w.getLastSessionIDs(event.UserID)
 			if len(list) == 0 {
 				_, _ = w.sendText(ctx, event.ChatID, "_No /sessions list available. Run /sessions first._", event.MessageID, map[string]any{"slash": "/pick"})
 				return
@@ -508,7 +515,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			target := list[idx-1]
 			prev := w.currentSessionID()
-			w.activateSession(target)
+			w.activateSession(target, event.UserID)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/pick", "session_id": target, "index": idx})
 			return
 		case "/stats":
@@ -557,7 +564,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					next = uuid.NewString()
 				}
 				prev := w.currentSessionID()
-				w.activateSession(next)
+				w.activateSession(next, event.UserID)
 				_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
 				return
 		case "/resume":
@@ -571,7 +578,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				prev := w.currentSessionID()
-				w.activateSession(target)
+				w.activateSession(target, event.UserID)
 				_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
 				return
 		case "/recover":
@@ -579,14 +586,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /recover context", event.MessageID, map[string]any{"slash": "/recover"})
 				return
 			}
-			lastInput := w.getLastUserInput()
+			lastInput := w.getLastUserInput(event.UserID)
 			if strings.TrimSpace(lastInput) == "" {
 				_, _ = w.sendText(ctx, event.ChatID, "_No recent user input to replay._", event.MessageID, map[string]any{"slash": "/recover"})
 				return
 				}
 				prev := w.currentSessionID()
 				next := uuid.NewString()
-				w.activateSession(next)
+				w.activateSession(next, event.UserID)
 				_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
 			replay := event
 			replay.Text = lastInput
@@ -597,7 +604,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			return
 		case "/retry":
-			lastInput := w.getLastUserInput()
+			lastInput := w.getLastUserInput(event.UserID)
 			if strings.TrimSpace(lastInput) == "" {
 				active := w.currentSessionID()
 				if msgs, err := w.engine.SessionStore.LoadMessages(active, 500); err == nil {
@@ -636,7 +643,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				}
-				w.activateSession(nextSession)
+				w.activateSession(nextSession, event.UserID)
 				_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
 				return
 		case "/clear":
@@ -646,7 +653,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				}
 				prev := w.currentSessionID()
 				next := uuid.NewString()
-				w.activateSession(next)
+				w.activateSession(next, event.UserID)
 				_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
 				return
 		case "/reload":
@@ -660,7 +667,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Reload failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/reload"})
 				return
 			}
-			w.setLastUserInput(latestUserInputFromMessages(msgs))
+			w.setLastUserInput(event.UserID, latestUserInputFromMessages(msgs))
 			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, map[string]any{"slash": "/reload", "session_id": active, "messages": len(msgs)})
 			return
 		case "/save":
@@ -768,7 +775,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		_, _ = w.sendText(ctx, event.ChatID, "_Access denied._", event.MessageID, map[string]any{"auth": "denied"})
 		return
 	}
-	w.setLastUserInput(event.Text)
+	w.setLastUserInput(event.UserID, event.Text)
 
 	sessionKey := w.currentSessionID()
 
@@ -1486,36 +1493,44 @@ func (w *sessionWorker) setActiveSessionID(sessionID string) {
 	w.activeSessionID = sessionID
 }
 
-func (w *sessionWorker) activateSession(sessionID string) {
+func (w *sessionWorker) activateSession(sessionID, userID string) {
 	w.setActiveSessionID(sessionID)
 	active := w.currentSessionID()
-	w.setShowCursor(active, 0, 20)
+	w.setShowCursor(userID, active, 0, 20)
 	if w.engine == nil || w.engine.SessionStore == nil {
-		w.clearLastUserInput()
+		w.clearLastUserInput(userID)
 		return
 	}
 	msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
 	if err != nil {
-		w.clearLastUserInput()
+		w.clearLastUserInput(userID)
 		return
 	}
-	w.setLastUserInput(latestUserInputFromMessages(msgs))
+	w.setLastUserInput(userID, latestUserInputFromMessages(msgs))
 }
 
-func (w *sessionWorker) setLastUserInput(text string) {
+func (w *sessionWorker) setLastUserInput(userID, text string) {
+	userID = strings.TrimSpace(userID)
 	text = strings.TrimSpace(text)
-	if text == "" || strings.HasPrefix(text, "/") {
+	if userID == "" || text == "" || strings.HasPrefix(text, "/") {
 		return
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.lastUserInput = text
+	if w.lastUserInputByUser == nil {
+		w.lastUserInputByUser = map[string]string{}
+	}
+	w.lastUserInputByUser[userID] = text
 }
 
-func (w *sessionWorker) getLastUserInput() string {
+func (w *sessionWorker) getLastUserInput(userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return ""
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return strings.TrimSpace(w.lastUserInput)
+	return strings.TrimSpace(w.lastUserInputByUser[userID])
 }
 
 func (w *sessionWorker) setLastUserID(userID string) {
@@ -1530,36 +1545,64 @@ func (w *sessionWorker) getLastUserID() string {
 	return strings.TrimSpace(w.lastUserID)
 }
 
-func (w *sessionWorker) clearLastUserInput() {
+func (w *sessionWorker) clearLastUserInput(userID string) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.lastUserInput = ""
+	delete(w.lastUserInputByUser, userID)
 }
 
-func (w *sessionWorker) setShowCursor(sessionID string, offset, limit int) {
+func (w *sessionWorker) setShowCursor(userID, sessionID string, offset, limit int) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.lastShowSessionID = strings.TrimSpace(sessionID)
-	w.lastShowOffset = offset
-	w.lastShowLimit = limit
+	if w.lastShowByUser == nil {
+		w.lastShowByUser = map[string]showCursorState{}
+	}
+	w.lastShowByUser[userID] = showCursorState{sessionID: strings.TrimSpace(sessionID), offset: offset, limit: limit}
 }
 
-func (w *sessionWorker) showCursor() (sessionID string, offset, limit int) {
+func (w *sessionWorker) showCursor(userID string) (sessionID string, offset, limit int) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", 0, 0
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return strings.TrimSpace(w.lastShowSessionID), w.lastShowOffset, w.lastShowLimit
+	c, ok := w.lastShowByUser[userID]
+	if !ok {
+		return "", 0, 0
+	}
+	return strings.TrimSpace(c.sessionID), c.offset, c.limit
 }
 
-func (w *sessionWorker) setLastSessionIDs(ids []string) {
+func (w *sessionWorker) setLastSessionIDs(userID string, ids []string) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.lastSessionIDs = append([]string(nil), ids...)
+	if w.lastSessionIDsByUser == nil {
+		w.lastSessionIDsByUser = map[string][]string{}
+	}
+	w.lastSessionIDsByUser[userID] = append([]string(nil), ids...)
 }
 
-func (w *sessionWorker) getLastSessionIDs() []string {
+func (w *sessionWorker) getLastSessionIDs(userID string) []string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return append([]string(nil), w.lastSessionIDs...)
+	return append([]string(nil), w.lastSessionIDsByUser[userID]...)
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {

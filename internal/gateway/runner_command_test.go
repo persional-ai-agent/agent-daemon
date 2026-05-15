@@ -395,13 +395,13 @@ func TestRenderGatewaySessions(t *testing.T) {
 
 func TestSetAndGetLastSessionIDs(t *testing.T) {
 	w := &sessionWorker{}
-	w.setLastSessionIDs([]string{"s1", "s2"})
-	got := w.getLastSessionIDs()
+	w.setLastSessionIDs("u1", []string{"s1", "s2"})
+	got := w.getLastSessionIDs("u1")
 	if len(got) != 2 || got[0] != "s1" || got[1] != "s2" {
 		t.Fatalf("unexpected cached session ids: %+v", got)
 	}
 	got[0] = "changed"
-	again := w.getLastSessionIDs()
+	again := w.getLastSessionIDs("u1")
 	if again[0] != "s1" {
 		t.Fatalf("expected copy semantics, got %+v", again)
 	}
@@ -447,15 +447,15 @@ func TestActivateSessionSyncsCursorAndLastUserInput(t *testing.T) {
 			},
 		},
 	}
-	w.activateSession("s2")
+	w.activateSession("s2", "u1")
 	if got := w.currentSessionID(); got != "s2" {
 		t.Fatalf("active session mismatch: %q", got)
 	}
-	sid, offset, limit := w.showCursor()
+	sid, offset, limit := w.showCursor("u1")
 	if sid != "s2" || offset != 0 || limit != 20 {
 		t.Fatalf("show cursor mismatch: sid=%q offset=%d limit=%d", sid, offset, limit)
 	}
-	if got := w.getLastUserInput(); got != "latest input" {
+	if got := w.getLastUserInput("u1"); got != "latest input" {
 		t.Fatalf("last user input mismatch: %q", got)
 	}
 }
