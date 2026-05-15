@@ -1041,8 +1041,12 @@ func (engine *uiRenderEngine) renderMetaLine(raw string) string {
 func (engine *uiRenderEngine) renderMarkdown(content string) (string, error) {
 	width := engine.effectiveWidth()
 	if engine.markdown == nil || engine.mdWidth != width {
+		style := "dark"
+		if !lipgloss.HasDarkBackground() {
+			style = "light"
+		}
 		renderer, err := glamour.NewTermRenderer(
-			glamour.WithStandardStyle("dark"),
+			glamour.WithStandardStyle(style),
 			glamour.WithWordWrap(width),
 			glamour.WithPreservedNewLines(),
 		)

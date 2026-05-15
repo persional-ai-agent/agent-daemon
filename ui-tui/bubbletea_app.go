@@ -263,7 +263,6 @@ func runBubbleTeaUI(s *appState, noDoctor bool) error {
 	termenv.SetDefaultOutput(termenv.NewOutput(os.Stdout, termenv.WithProfile(termenv.TrueColor), termenv.WithTTY(true)))
 	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(os.Stdout, termenv.WithProfile(termenv.TrueColor), termenv.WithTTY(true)))
 	lipgloss.SetColorProfile(termenv.TrueColor)
-	lipgloss.SetHasDarkBackground(true)
 	model := newTUIModel(s, noDoctor)
 	program := tea.NewProgram(model)
 	_, err := program.Run()

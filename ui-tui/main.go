@@ -1424,6 +1424,11 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			seenPayload[key] = struct{}{}
 			if line := printEvent(evt, false); strings.TrimSpace(line) != "" {
 				s.addChatLine(line)
+				// Ensure assistant-visible fallback line exists even if styled rendering is unreadable.
+				if evtType == "result" && strings.HasPrefix(line, "result: ") {
+					assistantLine := "assistant: " + strings.TrimSpace(strings.TrimPrefix(line, "result: "))
+					s.addChatLine(assistantLine)
+				}
 			}
 			if onEvent != nil {
 				onEvent(evt)
