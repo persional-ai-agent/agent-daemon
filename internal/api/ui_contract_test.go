@@ -128,6 +128,7 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "gateway_identity_set", method: http.MethodPost, path: "/v1/ui/gateway/identity", body: `{"platform":"telegram","user_id":"u1","global_id":"gid-1"}`},
 		{name: "gateway_identity_get", method: http.MethodGet, path: "/v1/ui/gateway/identity?platform=telegram&user_id=u1"},
 		{name: "gateway_identity_delete", method: http.MethodDelete, path: "/v1/ui/gateway/identity", body: `{"platform":"telegram","user_id":"u1"}`},
+		{name: "gateway_session_resolve", method: http.MethodGet, path: "/v1/ui/gateway/session/resolve?platform=telegram&chat_type=group&chat_id=1001&user_id=u1&user_name=Alice"},
 		{name: "gateway_diagnostics", method: http.MethodGet, path: "/v1/ui/gateway/diagnostics"},
 		{name: "targets", method: http.MethodGet, path: "/v1/ui/targets?platform=telegram"},
 		{name: "targets_home", method: http.MethodPost, path: "/v1/ui/targets/home", body: `{"target":"telegram:1001"}`},

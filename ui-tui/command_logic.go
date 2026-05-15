@@ -1184,11 +1184,14 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "identity removed")
 		case current == "/gateway" || strings.HasPrefix(current, "/gateway "):
 			parts := strings.Fields(current)
-			if len(parts) != 2 {
-				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
+			if len(parts) < 2 {
+				return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
 			}
 			action := strings.ToLower(strings.TrimSpace(parts[1]))
 			if action == "status" {
+				if len(parts) != 2 {
+					return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				}
 				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
 				if hErr != nil {
 					s.setErrStatus(hErr)
@@ -1197,6 +1200,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emitData(uiPayload(out, "status", "result"))
 				s.setStatus(true, "ok", "gateway status loaded")
 			} else if action == "enable" || action == "disable" {
+				if len(parts) != 2 {
+					return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				}
 				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": action})
 				if hErr != nil {
 					s.setErrStatus(hErr)
@@ -1204,8 +1210,34 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				emitData(uiPayload(out, "result"))
 				s.setStatus(true, "ok", "gateway action applied")
+			} else if action == "resolve" {
+				if len(parts) != 6 && len(parts) != 7 {
+					return lines, fmt.Errorf("用法: /gateway resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				}
+				platformName := strings.ToLower(strings.TrimSpace(parts[2]))
+				chatType := strings.TrimSpace(parts[3])
+				chatID := strings.TrimSpace(parts[4])
+				userID := strings.TrimSpace(parts[5])
+				userName := ""
+				if len(parts) == 7 {
+					userName = strings.TrimSpace(parts[6])
+				}
+				if platformName == "" || chatType == "" || chatID == "" || userID == "" {
+					return lines, fmt.Errorf("用法: /gateway resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				}
+				apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(platformName), url.QueryEscape(chatType), url.QueryEscape(chatID), url.QueryEscape(userID))
+				if userName != "" {
+					apiPath += "&user_name=" + url.QueryEscape(userName)
+				}
+				out, hErr := httpJSON(http.MethodGet, apiPath, nil)
+				if hErr != nil {
+					s.setErrStatus(hErr)
+					return lines, hErr, false
+				}
+				emitData(uiPayload(out, "result"))
+				s.setStatus(true, "ok", "gateway session resolved")
 			} else {
-				return lines, fmt.Errorf("用法: /gateway status|enable|disable"), false
+				return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
 			}
 		case strings.HasPrefix(current, "/config"):
 			parts := strings.Fields(current)

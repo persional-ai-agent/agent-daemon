@@ -389,7 +389,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		t.Fatalf("unexpected /pick error: %v", err)
 	}
 	_, err, _ = handleTUICommand(s, "/gateway", nil, nil)
-	if err == nil || err.Error() != "用法: /gateway status|enable|disable" {
+	if err == nil || err.Error() != "用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]" {
 		t.Fatalf("unexpected /gateway error: %v", err)
 	}
 	_, err, _ = handleTUICommand(s, "/config", nil, nil)
@@ -484,6 +484,43 @@ func TestGatewayCommandCaseInsensitive(t *testing.T) {
 	}
 	if lastAction != "enable" {
 		t.Fatalf("lastAction=%q", lastAction)
+	}
+}
+
+func TestGatewayResolveCommand(t *testing.T) {
+	lastPath := ""
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastPath = r.URL.String()
+		switch r.URL.Path {
+		case "/v1/ui/gateway/session/resolve":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+				"result": map[string]any{
+					"route_session":    "telegram:group:1001",
+					"resolved_session": "global:user:uid:u1",
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+	s := &appState{
+		httpBase:         ts.URL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+	if _, err, _ := handleTUICommand(s, "/gateway resolve telegram group 1001 u1 Alice", nil, nil); err != nil {
+		t.Fatalf("gateway resolve failed: %v", err)
+	}
+	if !strings.HasPrefix(lastPath, "/v1/ui/gateway/session/resolve?platform=telegram") {
+		t.Fatalf("unexpected resolve path: %s", lastPath)
 	}
 }
 

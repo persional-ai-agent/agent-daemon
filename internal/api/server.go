@@ -22,6 +22,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -132,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	mux.HandleFunc("/v1/ui/gateway/continuity", s.handleUIGatewayContinuity)
 	mux.HandleFunc("/v1/ui/gateway/identity", s.handleUIGatewayIdentity)
+	mux.HandleFunc("/v1/ui/gateway/session/resolve", s.handleUIGatewaySessionResolve)
 	mux.HandleFunc("/v1/ui/gateway/diagnostics", s.handleUIGatewayDiagnostics)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	mux.HandleFunc("/v1/ui/targets", s.handleUITargets)
@@ -1444,6 +1446,90 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func autoGlobalIdentity(mode, userID, userName string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "user_id":
+		if strings.TrimSpace(userID) == "" {
+			return ""
+		}
+		return "uid:" + strings.TrimSpace(userID)
+	case "user_name":
+		n := strings.ToLower(strings.TrimSpace(userName))
+		n = strings.ReplaceAll(n, " ", "_")
+		if n == "" {
+			return ""
+		}
+		return "uname:" + n
+	default:
+		return ""
+	}
+}
+
+func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	platformName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
+	chatType := strings.TrimSpace(r.URL.Query().Get("chat_type"))
+	chatID := strings.TrimSpace(r.URL.Query().Get("chat_id"))
+	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	userName := strings.TrimSpace(r.URL.Query().Get("user_name"))
+	if platformName == "" || chatID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_id required")
+		return
+	}
+	routeSession := gateway.BuildSessionKey(platformName, chatType, chatID)
+	mode, err := tools.GetGatewaySetting(s.engineWorkdir(), "continuity_mode")
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	mode = continuityModeFromRaw(mode)
+	rows, err := loadGatewayIdentityMap(s.engineWorkdir())
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	globalID := ""
+	globalSource := "none"
+	for _, row := range rows {
+		if row.Platform == platformName && row.UserID == userID {
+			globalID = strings.TrimSpace(row.GlobalID)
+			globalSource = "mapped"
+			break
+		}
+	}
+	if strings.TrimSpace(globalID) == "" {
+		if autoID := autoGlobalIdentity(mode, userID, userName); strings.TrimSpace(autoID) != "" {
+			globalID = autoID
+			globalSource = "auto"
+		}
+	}
+	mappedSession := ""
+	resolvedSession := routeSession
+	if strings.TrimSpace(globalID) != "" {
+		mappedSession = gateway.BuildSessionKey("global", "user", globalID)
+		resolvedSession = mappedSession
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"platform":         platformName,
+			"chat_type":        chatType,
+			"chat_id":          chatID,
+			"user_id":          userID,
+			"user_name":        userName,
+			"route_session":    routeSession,
+			"mapped_session":   mappedSession,
+			"resolved_session": resolvedSession,
+			"global_id":        globalID,
+			"global_source":    globalSource,
+			"continuity_mode":  mode,
+		},
+	})
 }
 
 func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Request) {

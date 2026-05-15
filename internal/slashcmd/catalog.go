@@ -42,6 +42,7 @@ func TUIHelpEntries() []HelpEntry {
 		{"/gateway status", "show gateway status"},
 		{"/gateway enable", "enable gateway"},
 		{"/gateway disable", "disable gateway"},
+		{"/gateway resolve <p> <t> <cid> <uid> [uname]", "resolve gateway session mapping"},
 		{"/config get", "show config snapshot"},
 		{"/config set k v", "set config key/value"},
 		{"/config tui", "show effective [ui-tui] config and source"},
