@@ -68,3 +68,20 @@ func TestGatewayUserInputWithMedia(t *testing.T) {
 		t.Fatalf("missing %q in %q", want, got)
 	}
 }
+
+func TestParseGatewayCommand(t *testing.T) {
+	got := parseGatewayCommand("slack", "APPROVE ap-1")
+	if !got.isSlash || got.head != "/approve" || len(got.args) != 1 || got.args[0] != "ap-1" {
+		t.Fatalf("unexpected parsed command: %+v", got)
+	}
+
+	got = parseGatewayCommand("yuanbao", "批准 ap-2")
+	if !got.isSlash || got.head != "/approve" || len(got.args) != 1 || got.args[0] != "ap-2" {
+		t.Fatalf("unexpected yuanbao parsed command: %+v", got)
+	}
+
+	got = parseGatewayCommand("slack", "custom text")
+	if got.isSlash || got.head != "custom" || len(got.args) != 1 || got.args[0] != "text" {
+		t.Fatalf("unexpected plain parsed command: %+v", got)
+	}
+}

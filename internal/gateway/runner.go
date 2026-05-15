@@ -118,6 +118,32 @@ type sessionWorker struct {
 	lastApprovalReason  string
 }
 
+type gatewayCommand struct {
+	raw     string
+	head    string
+	args    []string
+	isSlash bool
+}
+
+func parseGatewayCommand(platformName, text string) gatewayCommand {
+	raw := normalizeGatewayCommand(platformName, strings.TrimSpace(text))
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
+		return gatewayCommand{raw: raw}
+	}
+	head := strings.ToLower(strings.TrimSpace(parts[0]))
+	args := make([]string, 0, len(parts)-1)
+	if len(parts) > 1 {
+		args = append(args, parts[1:]...)
+	}
+	return gatewayCommand{
+		raw:     raw,
+		head:    head,
+		args:    args,
+		isSlash: strings.HasPrefix(head, "/"),
+	}
+}
+
 func deliveryHooksEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_DELIVERY")), "true")
 }
@@ -276,18 +302,17 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	authorized := CheckAuthorization(allowed, event.UserID)
 
 	// Minimal slash commands for Hermes parity.
-	cmd := normalizeGatewayCommand(w.adapter.Name(), strings.TrimSpace(event.Text))
-	if strings.HasPrefix(cmd, "/") {
-		switch strings.ToLower(strings.Fields(cmd)[0]) {
+	parsed := parseGatewayCommand(w.adapter.Name(), event.Text)
+	if parsed.isSlash {
+		switch parsed.head {
 		case "/pair":
 			if w.runner == nil {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Pairing unavailable._", event.MessageID)
 				return
 			}
 			code := ""
-			parts := strings.Fields(cmd)
-			if len(parts) >= 2 {
-				code = strings.TrimSpace(parts[1])
+			if len(parsed.args) >= 1 {
+				code = strings.TrimSpace(parsed.args[0])
 			}
 			if w.runner.tryPair(w.adapter.Name(), event.UserID, code) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Paired successfully._", event.MessageID)
@@ -306,7 +331,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Not paired._", event.MessageID)
 			}
 			return
-		case "/cancel", "/stop":
+		case "/cancel":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
@@ -343,22 +368,22 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
-			approve := strings.EqualFold(strings.Fields(cmd)[0], "/approve")
-			approvalID := w.resolveApprovalID(cmd)
+			approve := parsed.head == "/approve"
+			approvalID := w.resolveApprovalID(parsed.args)
 			if approvalID == "" {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /approve <approval_id> or /deny <approval_id>", event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /approve <approval_id> or /deny <approval_id>", event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
 			reply := w.confirmApproval(ctx, approvalID, approve)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0], "approval_id": approvalID})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "approval_id": approvalID})
 			return
-		case "/approvals", "/approval":
+		case "/approvals":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
 			reply := w.approvalStatus(ctx)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": strings.Fields(cmd)[0]})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head})
 			return
 		case "/pending":
 			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
@@ -370,7 +395,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				reply += "\nquick_reply: 批准 / 拒绝"
 			}
 			meta := map[string]any{"slash": "/pending"}
-			if approvalID := w.resolveApprovalID(""); strings.TrimSpace(approvalID) != "" {
+			if approvalID := w.resolveApprovalID(nil); strings.TrimSpace(approvalID) != "" {
 				meta["approval_id"] = approvalID
 			}
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
@@ -380,7 +405,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
-			reply := w.grantApproval(ctx, cmd)
+			reply := w.grantApproval(ctx, parsed.raw)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/grant"})
 			return
 		case "/revoke":
@@ -388,7 +413,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
-			reply := w.revokeApproval(ctx, cmd)
+			reply := w.revokeApproval(ctx, parsed.raw)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
@@ -744,10 +769,9 @@ func (w *sessionWorker) setPendingApproval(id, command, reason string) {
 	w.lastApprovalReason = strings.TrimSpace(reason)
 }
 
-func (w *sessionWorker) resolveApprovalID(cmd string) string {
-	parts := strings.Fields(strings.TrimSpace(cmd))
-	if len(parts) >= 2 && strings.TrimSpace(parts[1]) != "" {
-		return strings.TrimSpace(parts[1])
+func (w *sessionWorker) resolveApprovalID(args []string) string {
+	if len(args) >= 1 && strings.TrimSpace(args[0]) != "" {
+		return strings.TrimSpace(args[0])
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -849,7 +873,7 @@ func (w *sessionWorker) gatewayStatusText() string {
 		}
 	}
 	lines = append(lines, "running: "+map[bool]string{true: "yes", false: "no"}[w.isRunning()])
-	if last := w.resolveApprovalID(""); strings.TrimSpace(last) != "" {
+	if last := w.resolveApprovalID(nil); strings.TrimSpace(last) != "" {
 		lines = append(lines, "last_approval_id: "+last)
 	}
 	return strings.Join(lines, "\n")
