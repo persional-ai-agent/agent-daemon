@@ -125,3 +125,34 @@ func TestGatewayApprovalSlashCommands(t *testing.T) {
 		t.Fatalf("missing approval commands: %+v", want)
 	}
 }
+
+func TestResolveYuanbaoQuickReplyCommand(t *testing.T) {
+	cases := map[string]string{
+		"批准":  "/approve",
+		"同意":  "/approve",
+		"通过":  "/approve",
+		"拒绝":  "/deny",
+		"驳回":  "/deny",
+		"状态":  "/status",
+		"待审批": "/pending",
+		"审批":  "/approvals",
+		"帮助":  "/help",
+	}
+	for in, want := range cases {
+		got, ok := ResolveYuanbaoQuickReplyCommand(in)
+		if !ok || got != want {
+			t.Fatalf("ResolveYuanbaoQuickReplyCommand(%q)=(%q,%v) want=(%q,true)", in, got, ok, want)
+		}
+	}
+	if got, ok := ResolveYuanbaoQuickReplyCommand("未知"); ok || got != "" {
+		t.Fatalf("unexpected unknown quick-reply mapping: (%q,%v)", got, ok)
+	}
+}
+
+func TestYuanbaoQuickReplyAliasesText(t *testing.T) {
+	got := YuanbaoQuickReplyAliasesText()
+	want := "状态, 待审批, 审批, 批准, 拒绝, 帮助"
+	if got != want {
+		t.Fatalf("quick reply aliases text mismatch: got=%q want=%q", got, want)
+	}
+}

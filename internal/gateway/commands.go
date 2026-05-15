@@ -37,6 +37,18 @@ var gatewayApprovalCommandSet = map[string]struct{}{
 	"help":      {},
 }
 
+var yuanbaoQuickReplyAliasToCanonical = map[string]string{
+	"批准": "/approve",
+	"同意": "/approve",
+	"通过": "/approve",
+	"拒绝": "/deny",
+	"驳回": "/deny",
+	"状态": "/status",
+	"待审批": "/pending",
+	"审批": "/approvals",
+	"帮助": "/help",
+}
+
 var (
 	builtInGatewayCommandSet  map[string]struct{}
 	gatewayAliasToCanonical   map[string]string
@@ -128,6 +140,20 @@ func GatewayApprovalSlashCommands() []string {
 	return out
 }
 
+func ResolveYuanbaoQuickReplyCommand(head string) (slash string, ok bool) {
+	head = strings.TrimSpace(head)
+	if head == "" {
+		return "", false
+	}
+	slash, ok = yuanbaoQuickReplyAliasToCanonical[head]
+	return slash, ok
+}
+
+func YuanbaoQuickReplyAliasesText() string {
+	order := []string{"状态", "待审批", "审批", "批准", "拒绝", "帮助"}
+	return strings.Join(order, ", ")
+}
+
 func GatewayHelpText(yuanbao bool) string {
 	parts := make([]string, 0, len(gatewayHelpCommandOrder))
 	for _, name := range gatewayHelpCommandOrder {
@@ -135,7 +161,7 @@ func GatewayHelpText(yuanbao bool) string {
 	}
 	text := "Commands: " + strings.Join(parts, ", ")
 	if yuanbao {
-		text += "\nQuick reply aliases: 状态, 待审批, 审批, 批准, 拒绝, 帮助"
+		text += "\nQuick reply aliases: " + YuanbaoQuickReplyAliasesText()
 	}
 	return text
 }

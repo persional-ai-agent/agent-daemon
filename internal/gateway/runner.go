@@ -733,22 +733,10 @@ func normalizeGatewayCommand(platformName, text string) string {
 	if !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {
 		return cmd
 	}
-	switch strings.TrimSpace(parts[0]) {
-	case "批准", "同意", "通过":
-		return "/approve" + withTail(parts)
-	case "拒绝", "驳回":
-		return "/deny" + withTail(parts)
-	case "状态":
-		return "/status"
-	case "待审批":
-		return "/pending"
-	case "审批":
-		return "/approvals"
-	case "帮助":
-		return "/help"
-	default:
-		return cmd
+	if slash, ok := ResolveYuanbaoQuickReplyCommand(parts[0]); ok {
+		return slash + withTail(parts)
 	}
+	return cmd
 }
 
 func withTail(parts []string) string {
