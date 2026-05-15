@@ -232,6 +232,7 @@ func (a *YuanbaoAdapter) handlePush(botID string, msg yuanbao.ConnMsg) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
+	text = normalizeInboundSlashText(text)
 	a.onMessage(context.Background(), platform.MessageEvent{
 		Text:      text,
 		MessageID: push.MsgID,

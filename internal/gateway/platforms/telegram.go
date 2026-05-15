@@ -57,7 +57,7 @@ func (t *TelegramAdapter) Connect(ctx context.Context) error {
 						chatType = "group"
 					}
 					event := gateway.MessageEvent{
-						Text:      strings.TrimSpace(cb.Data),
+						Text:      normalizeInboundSlashText(cb.Data),
 						MessageID: fmt.Sprintf("%d", cb.Message.MessageID),
 						ChatID:    chatID,
 						ChatType:  chatType,
@@ -80,8 +80,9 @@ func (t *TelegramAdapter) Connect(ctx context.Context) error {
 				if msg.Chat.IsGroup() || msg.Chat.IsSuperGroup() {
 					chatType = "group"
 				}
+				text := renderTelegramInboundText(msg)
 				event := gateway.MessageEvent{
-					Text:      msg.Text,
+					Text:      normalizeInboundSlashText(text),
 					MessageID: fmt.Sprintf("%d", msg.MessageID),
 					ChatID:    chatID,
 					ChatType:  chatType,
@@ -212,6 +213,26 @@ func (t *TelegramAdapter) SendMedia(_ context.Context, chatID, path, caption, re
 	_ = sent
 	// Not all Chattable responses include MessageID in a consistent way; keep empty.
 	return platform.SendResult{Success: true}, nil
+}
+
+func renderTelegramInboundText(msg *tgbotapi.Message) string {
+	if msg == nil {
+		return ""
+	}
+	text := msg.Text
+	if !msg.IsCommand() {
+		return text
+	}
+	cmd := strings.TrimSpace(msg.Command())
+	args := strings.TrimSpace(msg.CommandArguments())
+	if cmd == "" {
+		return text
+	}
+	text = "/" + cmd
+	if args != "" {
+		text += " " + args
+	}
+	return text
 }
 
 func parseChatID(s string) (int64, error) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 )
 
@@ -52,4 +54,17 @@ func TestTelegramAdapterOnMessage(t *testing.T) {
 		t.Error("handler should not be nil after OnMessage")
 	}
 	_ = called
+}
+
+func TestRenderTelegramInboundTextCommandWithMention(t *testing.T) {
+	msg := &tgbotapi.Message{
+		Text: "/Approval@agent_bot AP-7",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: len("/Approval@agent_bot")},
+		},
+	}
+	got := normalizeInboundSlashText(renderTelegramInboundText(msg))
+	if got != "/approvals AP-7" {
+		t.Fatalf("normalized telegram command mismatch: got=%q want=%q", got, "/approvals AP-7")
+	}
 }
