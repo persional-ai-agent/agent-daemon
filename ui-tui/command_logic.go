@@ -11,6 +11,7 @@ import (
 	"time"
 
 	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -346,6 +347,18 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			queue = append([]string{items[idx-1]}, queue...)
 			emit("rerun: " + items[idx-1])
 			s.setStatus(true, "ok", "rerun selected")
+		case strings.EqualFold(current, "/recover context"):
+			lastUserMsg := latestUserMessageFromChatLog(s.chatLog)
+			if strings.TrimSpace(lastUserMsg) == "" {
+				return lines, fmt.Errorf("没有可重试的最近用户消息"), false
+			}
+			prevSession := s.session
+			s.session = uuid.NewString()
+			s.lastShowSession = s.session
+			_ = s.saveRuntimeState()
+			emit(fmt.Sprintf("context recovered: new session %s (prev %s)", s.session, prevSession))
+			queue = append([]string{lastUserMsg}, queue...)
+			s.setStatus(true, "ok", "context recovery queued")
 		case strings.HasPrefix(current, "/events"):
 			if strings.HasPrefix(strings.ToLower(current), "/events save ") {
 				path, format, since, until, pErr := parseEventSaveArgs(current)
@@ -985,12 +998,50 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if runErr := s.sendTurn(current, wrapped); runErr != nil {
 				s.setErrStatus(runErr)
+				if isContextLimitError(runErr) {
+					emit("上下文超限：当前会话历史过长。")
+					emit("建议：输入 /recover context 自动创建新会话并重试最近一条消息。")
+					emit("或手动执行：/new 后重新发送。")
+				}
 				return lines, runErr, false
 			}
 			s.setStatus(true, "ok", "chat turn finished")
 		}
 	}
 	return lines, nil, false
+}
+
+func latestUserMessageFromChatLog(chatLog []string) string {
+	for i := len(chatLog) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(chatLog[i])
+		if strings.HasPrefix(line, "user: ") {
+			msg := strings.TrimSpace(strings.TrimPrefix(line, "user: "))
+			if msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+func isContextLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if msg == "" {
+		return false
+	}
+	if strings.Contains(msg, "exceed_context_size_error") {
+		return true
+	}
+	if strings.Contains(msg, "exceeds the available context size") {
+		return true
+	}
+	if strings.Contains(msg, "context size") && strings.Contains(msg, "exceed") {
+		return true
+	}
+	return false
 }
 
 func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {

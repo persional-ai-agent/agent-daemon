@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -785,5 +786,22 @@ func TestCanonicalInputAliasesCaseInsensitive(t *testing.T) {
 	}
 	if got := canonicalInput("cfg get"); got != "/config get" {
 		t.Fatalf("cfg alias mismatch: %q", got)
+	}
+}
+
+func TestIsContextLimitError(t *testing.T) {
+	cases := []struct {
+		errText string
+		want    bool
+	}{
+		{"openai api error (400): {\"error\":{\"type\":\"exceed_context_size_error\"}}", true},
+		{"request (32985 tokens) exceeds the available context size (32768 tokens)", true},
+		{"network timeout", false},
+	}
+	for _, tc := range cases {
+		got := isContextLimitError(fmt.Errorf("%s", tc.errText))
+		if got != tc.want {
+			t.Fatalf("err=%q got=%v want=%v", tc.errText, got, tc.want)
+		}
 	}
 }

@@ -72,6 +72,7 @@ func helpLines() []string {
 		"/reconnect on|off     enable/disable auto reconnect",
 		"/reconnect now        probe websocket endpoint immediately",
 		"/reconnect timeout wait|reconnect|cancel",
+		"/recover context      new session and retry last user message",
 		"/diag                 show realtime diagnostics",
 		"/diag export <file>   export diagnostics bundle",
 		"/fullscreen           show fullscreen mode status",
