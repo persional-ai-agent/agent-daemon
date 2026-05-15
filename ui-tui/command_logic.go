@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -997,6 +998,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 			}
 			if runErr := s.sendTurn(current, wrapped); runErr != nil {
+				if errors.Is(runErr, errTurnCancelled) {
+					emit("turn cancelled")
+					s.setStatus(true, "cancelled", "turn cancelled")
+					return lines, nil, false
+				}
 				s.setErrStatus(runErr)
 				if isContextLimitError(runErr) {
 					emit("上下文超限：当前会话历史过长。")

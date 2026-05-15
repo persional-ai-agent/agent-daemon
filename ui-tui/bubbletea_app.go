@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -77,9 +78,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.processing = false
 		m.turnStream = nil
 		m.runtime.endTurn()
-		if msg.err != nil {
+		if msg.err != nil && !errors.Is(msg.err, errTurnCancelled) {
 			m.runtime.addError(fmt.Sprintf("error: %v", msg.err))
 			m.state.setErrStatus(msg.err)
+		} else if errors.Is(msg.err, errTurnCancelled) {
+			m.runtime.addSystemText("turn cancelled")
+			m.state.setStatus(true, "cancelled", "turn cancelled")
 		} else if msg.quit {
 			return m, tea.Quit
 		} else {
@@ -125,6 +129,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			if m.processing {
+				m.state.requestTurnCancel()
+				m.runtime.addSystemText("cancelling current turn...")
+				m.syncViewport(false)
+				return m, nil
+			}
 			return m, tea.Quit
 		case "ctrl+t":
 			expanded := m.runtime.toggleThinkingExpanded()

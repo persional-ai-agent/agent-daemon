@@ -127,7 +127,12 @@ type appState struct {
 	debugWSLogPath   string
 	debugWSLogFile   *os.File
 	debugMu          sync.Mutex
+	turnMu           sync.Mutex
+	turnConn         *websocket.Conn
+	turnCancelReq    bool
 }
+
+var errTurnCancelled = errors.New("turn cancelled by user")
 
 const (
 	defaultHistoryMaxLines = 2000
@@ -499,6 +504,44 @@ func (s *appState) debugLogf(kind, format string, args ...any) {
 	}
 	msg := fmt.Sprintf(format, args...)
 	_, _ = s.debugWSLogFile.WriteString(fmt.Sprintf("%s\t%s\t%s\n", time.Now().Format(time.RFC3339Nano), kind, strings.ReplaceAll(msg, "\n", "\\n")))
+}
+
+func (s *appState) beginTurnTracking() {
+	s.turnMu.Lock()
+	s.turnCancelReq = false
+	s.turnConn = nil
+	s.turnMu.Unlock()
+}
+
+func (s *appState) setTurnConn(conn *websocket.Conn) {
+	s.turnMu.Lock()
+	s.turnConn = conn
+	s.turnMu.Unlock()
+}
+
+func (s *appState) clearTurnConn() {
+	s.turnMu.Lock()
+	s.turnConn = nil
+	s.turnMu.Unlock()
+}
+
+func (s *appState) turnCancelRequested() bool {
+	s.turnMu.Lock()
+	defer s.turnMu.Unlock()
+	return s.turnCancelReq
+}
+
+func (s *appState) requestTurnCancel() {
+	s.turnMu.Lock()
+	s.turnCancelReq = true
+	conn := s.turnConn
+	s.turnConn = nil
+	s.turnMu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
+	_, _ = httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
+	s.debugLogf("cancel", "user requested turn cancel")
 }
 
 func (s *appState) maybeAutoRefreshPanel() {
@@ -1345,6 +1388,8 @@ func (s *appState) addEvent(evt map[string]any) {
 }
 
 func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error {
+	s.beginTurnTracking()
+	defer s.clearTurnConn()
 	u, err := url.Parse(s.wsBase)
 	if err != nil {
 		return err
@@ -1365,6 +1410,9 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 	}
 	reconnectReason := ""
 	for attempt := 0; attempt <= maxReconnect; attempt++ {
+		if s.turnCancelRequested() {
+			return errTurnCancelled
+		}
 		s.debugLogf("turn", "start attempt=%d turn=%s reconnect_max=%d msg_len=%d", attempt, turnID, maxReconnect, len(message))
 		if attempt > 0 {
 			dedupeEnabled = true
@@ -1386,6 +1434,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			time.Sleep(800 * time.Millisecond)
 			continue
 		}
+		s.setTurnConn(conn)
 		req := map[string]any{
 			"session_id": s.session,
 			"message":    message,
@@ -1395,6 +1444,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 		if err := conn.WriteJSON(req); err != nil {
 			reconnectReason = err.Error()
 			_ = conn.Close()
+			s.clearTurnConn()
 			if attempt >= maxReconnect {
 				s.reconnectState = "failed"
 				return err
@@ -1408,11 +1458,21 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 		}
 		forceReconnect := false
 		for {
+			if s.turnCancelRequested() {
+				_ = conn.Close()
+				s.clearTurnConn()
+				return errTurnCancelled
+			}
 			if s.wsReadTimeout > 0 {
 				_ = conn.SetReadDeadline(time.Now().Add(s.wsReadTimeout))
 			}
 			_, payload, err := conn.ReadMessage()
 			if err != nil {
+				if s.turnCancelRequested() {
+					_ = conn.Close()
+					s.clearTurnConn()
+					return errTurnCancelled
+				}
 				var netErr net.Error
 				if errors.As(err, &netErr) && netErr.Timeout() {
 					fmt.Printf("[ws-timeout] %s 内未收到事件，等待服务端响应中\n", s.wsReadTimeout.String())
@@ -1423,6 +1483,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 							fmt.Printf("[ws-timeout] timeout action=wait, continue waiting\n")
 						case "reconnect":
 							_ = conn.Close()
+							s.clearTurnConn()
 							fmt.Printf("[ws-timeout] timeout action=reconnect, forcing reconnect\n")
 							s.reconnectState = "degraded"
 							reconnectReason = "read timeout"
@@ -1430,11 +1491,13 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 							forceReconnect = true
 						case "cancel":
 							_ = conn.Close()
+							s.clearTurnConn()
 							_, _ = httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
 							s.reconnectState = "failed"
 							return fmt.Errorf("turn timeout exceeded and cancelled: %s", s.wsTurnTimeout.String())
 						default:
 							_ = conn.Close()
+							s.clearTurnConn()
 							s.reconnectState = "failed"
 							return fmt.Errorf("turn timeout exceeded: %s", s.wsTurnTimeout.String())
 						}
@@ -1445,6 +1508,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 					continue
 				}
 				_ = conn.Close()
+				s.clearTurnConn()
 				reconnectReason = err.Error()
 				if s.wsTurnTimeout > 0 && time.Since(startedAt) > s.wsTurnTimeout {
 					s.reconnectState = "failed"
@@ -1495,6 +1559,10 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			if evtType == "result" || evtType == "completed" || evtType == "error" || evtType == "cancelled" || evtType == "max_iterations_reached" {
 				s.debugLogf("terminal", "type=%s reconnect_state=%s", evtType, s.reconnectState)
 				_ = conn.Close()
+				s.clearTurnConn()
+				if evtType == "cancelled" {
+					return errTurnCancelled
+				}
 				if evtType == "result" || evtType == "completed" {
 					if s.reconnectState != "resumed" && s.reconnectState != "degraded" {
 						s.reconnectState = "connecting"
