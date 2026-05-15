@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestDiscordAdapterName(t *testing.T) {
@@ -40,5 +41,74 @@ func TestTruncateDiscord(t *testing.T) {
 	}
 	if s[len(s)-3:] != "..." {
 		t.Errorf("should end with ...: %q", s[len(s)-3:])
+	}
+}
+
+func TestRenderDiscordSlashCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		data discordgo.ApplicationCommandInteractionData
+		want string
+	}{
+		{
+			name: "pair with code",
+			data: discordgo.ApplicationCommandInteractionData{
+				Name: "pair",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{Name: "code", Value: "abc123"},
+				},
+			},
+			want: "/pair abc123",
+		},
+		{
+			name: "approve with id",
+			data: discordgo.ApplicationCommandInteractionData{
+				Name: "approve",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{Name: "id", Value: "ap-1"},
+				},
+			},
+			want: "/approve ap-1",
+		},
+		{
+			name: "grant pattern with ttl",
+			data: discordgo.ApplicationCommandInteractionData{
+				Name: "grant",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{Name: "pattern", Value: "tool_*"},
+					{Name: "ttl", Value: float64(3600)},
+				},
+			},
+			want: "/grant pattern tool_* 3600",
+		},
+		{
+			name: "revoke pattern",
+			data: discordgo.ApplicationCommandInteractionData{
+				Name: "revoke",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{Name: "pattern", Value: "tool_*"},
+				},
+			},
+			want: "/revoke pattern tool_*",
+		},
+		{
+			name: "simple built-in",
+			data: discordgo.ApplicationCommandInteractionData{Name: "status"},
+			want: "/status",
+		},
+		{
+			name: "unknown command",
+			data: discordgo.ApplicationCommandInteractionData{Name: "unknown"},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderDiscordSlashCommand(tt.data)
+			if got != tt.want {
+				t.Fatalf("renderDiscordSlashCommand got=%q want=%q", got, tt.want)
+			}
+		})
 	}
 }

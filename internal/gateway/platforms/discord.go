@@ -269,51 +269,63 @@ func DiscordApplicationCommands() []*discordgo.ApplicationCommand {
 }
 
 func renderDiscordSlashCommand(data discordgo.ApplicationCommandInteractionData) string {
-	name := "/" + strings.TrimSpace(data.Name)
-	switch name {
-	case "/pair":
-		if opt := data.GetOption("code"); opt != nil {
-			if value, ok := opt.Value.(string); ok && strings.TrimSpace(value) != "" {
-				return name + " " + strings.TrimSpace(value)
-			}
+	canonical, ok := gateway.ResolveGatewayCommand(strings.TrimSpace(data.Name))
+	if !ok {
+		return ""
+	}
+	name := "/" + canonical
+	switch canonical {
+	case "pair":
+		if code := discordOptionString(data, "code"); code != "" {
+			return name + " " + code
 		}
 		return name
-	case "/approve", "/deny":
-		if opt := data.GetOption("id"); opt != nil {
-			if value, ok := opt.Value.(string); ok && strings.TrimSpace(value) != "" {
-				return name + " " + strings.TrimSpace(value)
-			}
+	case "approve", "deny":
+		if id := discordOptionString(data, "id"); id != "" {
+			return name + " " + id
 		}
 		return name
-	case "/grant":
+	case "grant":
 		return renderDiscordGrantRevoke(name, data)
-	case "/revoke":
+	case "revoke":
 		return renderDiscordGrantRevoke(name, data)
-	case "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/help":
+	default:
 		return name
+	}
+}
+
+func discordOptionString(data discordgo.ApplicationCommandInteractionData, key string) string {
+	opt := data.GetOption(key)
+	if opt == nil {
+		return ""
+	}
+	value, ok := opt.Value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func discordOptionIntString(data discordgo.ApplicationCommandInteractionData, key string) string {
+	opt := data.GetOption(key)
+	if opt == nil || opt.Value == nil {
+		return ""
+	}
+	switch value := opt.Value.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", value)
+	case int64:
+		return fmt.Sprintf("%d", value)
+	case int:
+		return fmt.Sprintf("%d", value)
 	default:
 		return ""
 	}
 }
 
 func renderDiscordGrantRevoke(name string, data discordgo.ApplicationCommandInteractionData) string {
-	pattern := ""
-	if opt := data.GetOption("pattern"); opt != nil {
-		if value, ok := opt.Value.(string); ok {
-			pattern = strings.TrimSpace(value)
-		}
-	}
-	ttl := ""
-	if opt := data.GetOption("ttl"); opt != nil && opt.Value != nil {
-		switch value := opt.Value.(type) {
-		case float64:
-			ttl = fmt.Sprintf("%.0f", value)
-		case int64:
-			ttl = fmt.Sprintf("%d", value)
-		case int:
-			ttl = fmt.Sprintf("%d", value)
-		}
-	}
+	pattern := discordOptionString(data, "pattern")
+	ttl := discordOptionIntString(data, "ttl")
 	if strings.TrimSpace(pattern) != "" {
 		if strings.TrimSpace(ttl) != "" && name == "/grant" {
 			return name + " pattern " + pattern + " " + ttl
