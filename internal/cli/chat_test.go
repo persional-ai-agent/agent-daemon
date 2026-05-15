@@ -215,6 +215,39 @@ func TestHandleSlashCommandCancelAndStop(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandModelSetAndShow(t *testing.T) {
+	workdir := t.TempDir()
+	eng := makeEngineForSlashTests(nil)
+	eng.Workdir = workdir
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+
+	if handled, err := handleSlashCommandState(context.Background(), "/model openai:gpt-5-mini", state, eng); err != nil || !handled {
+		t.Fatalf("model set handled=%v err=%v", handled, err)
+	}
+	provider, err := tools.GetGatewaySetting(workdir, "model_provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelName, err := tools.GetGatewaySetting(workdir, "model_name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "openai" || modelName != "gpt-5-mini" {
+		t.Fatalf("unexpected model preference provider=%q model=%q", provider, modelName)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/model codex gpt-5-codex", state, eng); err != nil || !handled {
+		t.Fatalf("model set pair handled=%v err=%v", handled, err)
+	}
+	provider, _ = tools.GetGatewaySetting(workdir, "model_provider")
+	modelName, _ = tools.GetGatewaySetting(workdir, "model_name")
+	if provider != "codex" || modelName != "gpt-5-codex" {
+		t.Fatalf("unexpected model preference provider=%q model=%q", provider, modelName)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/model", state, eng); err != nil || !handled {
+		t.Fatalf("model show handled=%v err=%v", handled, err)
+	}
+}
+
 func TestHandleSlashCommandSetHomeAndTargets(t *testing.T) {
 	workdir := t.TempDir()
 	eng := makeEngineForSlashTests(nil)

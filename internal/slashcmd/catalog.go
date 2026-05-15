@@ -133,7 +133,7 @@ func CLIHelpLines() []string {
 		"/toolsets [list|show|resolve] 查看工具集",
 		"/todo                         查看当前会话 todo",
 		"/memory [memory|user]         查看持久记忆",
-		"/model                        显示当前模型客户端",
+		"/model [provider:model|provider model]  显示或设置模型偏好",
 		"/personality [show|reset|...] 查看或设置会话 system prompt",
 		"/cancel | /stop               取消当前任务（若支持）",
 		"/reload                       从存储重载当前会话",

@@ -506,7 +506,54 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(true, map[string]any{"memory": snapshot}, "", "")
 		return true, nil
 	case "/model":
-		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "note": "用 agentd model show/set 查看或持久切换模型。"}, "", "")
+		if len(fields) > 3 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
+			return true, nil
+		}
+		provider, _ := clitools.GetGatewaySetting(eng.Workdir, "model_provider")
+		modelName, _ := clitools.GetGatewaySetting(eng.Workdir, "model_name")
+		baseURL, _ := clitools.GetGatewaySetting(eng.Workdir, "model_base_url")
+		if strings.TrimSpace(provider) == "" {
+			provider = strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
+		}
+		if strings.TrimSpace(modelName) == "" {
+			modelName = strings.TrimSpace(os.Getenv("AGENT_MODEL"))
+		}
+		if strings.TrimSpace(baseURL) == "" {
+			baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
+		}
+		if len(fields) > 1 {
+			nextProvider, nextModel, ok := parseCLIModelSpec(fields[1:])
+			if !ok {
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
+				return true, nil
+			}
+			if err := clitools.SetGatewaySetting(eng.Workdir, "model_provider", nextProvider); err != nil {
+				return true, err
+			}
+			if err := clitools.SetGatewaySetting(eng.Workdir, "model_name", nextModel); err != nil {
+				return true, err
+			}
+			_ = os.Setenv("AGENT_MODEL_PROVIDER", nextProvider)
+			_ = os.Setenv("AGENT_MODEL", nextModel)
+			printCLIEnvelope(true, map[string]any{
+				"updated":  true,
+				"provider": nextProvider,
+				"model":    nextModel,
+				"note":     "model preference updated; takes effect for newly started daemon/model client",
+			}, "", "")
+			return true, nil
+		}
+		if provider == "" {
+			provider = "openai"
+		}
+		if modelName == "" {
+			modelName = "(default)"
+		}
+		if baseURL == "" {
+			baseURL = "(default)"
+		}
+		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "provider": provider, "model": modelName, "base_url": baseURL}, "", "")
 		return true, nil
 	case "/personality":
 		if len(fields) == 1 || strings.EqualFold(strings.TrimSpace(fields[1]), "show") {
@@ -758,6 +805,31 @@ func continuityModeFromRaw(raw string) string {
 	default:
 		return "off"
 	}
+}
+
+func parseCLIModelSpec(args []string) (provider, modelName string, ok bool) {
+	if len(args) == 1 {
+		spec := strings.TrimSpace(args[0])
+		parts := strings.SplitN(spec, ":", 2)
+		if len(parts) != 2 {
+			return "", "", false
+		}
+		provider = strings.ToLower(strings.TrimSpace(parts[0]))
+		modelName = strings.TrimSpace(parts[1])
+		if provider == "" || modelName == "" {
+			return "", "", false
+		}
+		return provider, modelName, true
+	}
+	if len(args) == 2 {
+		provider = strings.ToLower(strings.TrimSpace(args[0]))
+		modelName = strings.TrimSpace(args[1])
+		if provider == "" || modelName == "" {
+			return "", "", false
+		}
+		return provider, modelName, true
+	}
+	return "", "", false
 }
 
 func gatewayIdentityMapPath(workdir string) string {
