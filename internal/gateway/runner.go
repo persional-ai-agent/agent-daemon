@@ -329,14 +329,14 @@ func (r *Runner) resolveMappedSessionID(platformName, userID, userName string) s
 	if err == nil && strings.TrimSpace(globalID) != "" {
 		return BuildSessionKey("global", "user", globalID)
 	}
-	if auto := autoGlobalIdentity(continuityMode(), userID, userName); strings.TrimSpace(auto) != "" {
+	if auto := autoGlobalIdentity(r.continuityMode(), userID, userName); strings.TrimSpace(auto) != "" {
 		return BuildSessionKey("global", "user", auto)
 	}
 	return ""
 }
 
-func continuityMode() string {
-	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
+func continuityModeFromRaw(raw string) string {
+	mode := strings.ToLower(strings.TrimSpace(raw))
 	switch mode {
 	case "user_id", "userid", "id":
 		return "user_id"
@@ -345,6 +345,25 @@ func continuityMode() string {
 	default:
 		return "off"
 	}
+}
+
+func continuityMode() string {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
+	return continuityModeFromRaw(mode)
+}
+
+func (r *Runner) continuityMode() string {
+	mode := continuityMode()
+	if mode != "off" {
+		return mode
+	}
+	if r == nil || r.engine == nil {
+		return "off"
+	}
+	if v, err := tools.GetGatewaySetting(r.engine.Workdir, "continuity_mode"); err == nil {
+		return continuityModeFromRaw(v)
+	}
+	return "off"
 }
 
 func autoGlobalIdentity(mode, userID, userName string) string {
@@ -456,7 +475,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					globalID = strings.TrimSpace(v)
 				}
 			}
-			mode := continuityMode()
+			mode := "off"
+			if w.runner != nil {
+				mode = w.runner.continuityMode()
+			}
 			autoID := autoGlobalIdentity(mode, event.UserID, event.UserName)
 			reply := "platform=" + w.adapter.Name() + "\nuser_id=" + event.UserID + "\nuser_name=" + event.UserName + "\nactive_session=" + w.currentSessionID()
 			if globalID != "" {
@@ -469,6 +491,26 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				reply += "\nauto_global_id=" + autoID
 			}
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
+			return
+		case "/continuity":
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
+				return
+			}
+			if len(parsed.args) == 0 {
+				mode := "off"
+				if w.runner != nil {
+					mode = w.runner.continuityMode()
+				}
+				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
+				return
+			}
+			mode := continuityModeFromRaw(parsed.args[0])
+			_ = os.Setenv("AGENT_GATEWAY_CONTINUITY", mode)
+			if w.runner != nil && w.runner.engine != nil {
+				_ = tools.SetGatewaySetting(w.runner.engine.Workdir, "continuity_mode", mode)
+			}
+			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
 			return
 		case "/setid":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {

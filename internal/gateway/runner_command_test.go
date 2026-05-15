@@ -170,6 +170,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/WHOAMI"); got != "/whoami" {
 		t.Fatalf("slash command should normalize whoami, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/CONTINUITY user_name"); got != "/continuity user_name" {
+		t.Fatalf("slash command should normalize continuity, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/SETID user-1"); got != "/setid user-1" {
 		t.Fatalf("slash command should normalize setid, got=%q", got)
 	}
@@ -322,6 +325,18 @@ func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
 	want := BuildSessionKey("global", "user", "uid:u9")
 	if got != want {
 		t.Fatalf("auto continuity mapping mismatch: got=%q want=%q", got, want)
+	}
+}
+
+func TestContinuityModeFromRaw(t *testing.T) {
+	if got := continuityModeFromRaw("name"); got != "user_name" {
+		t.Fatalf("name alias mismatch: %q", got)
+	}
+	if got := continuityModeFromRaw("id"); got != "user_id" {
+		t.Fatalf("id alias mismatch: %q", got)
+	}
+	if got := continuityModeFromRaw("xxx"); got != "off" {
+		t.Fatalf("unknown alias should be off: %q", got)
 	}
 }
 
