@@ -165,3 +165,43 @@ func TestSendMessageSchemaDocumentsDefaultAction(t *testing.T) {
 		t.Fatalf("send_message action description=%q, want default hint", desc)
 	}
 }
+
+func TestParseDeliveryTarget(t *testing.T) {
+	p, c, err := ParseDeliveryTarget("telegram")
+	if err != nil || p != "telegram" || c != "" {
+		t.Fatalf("telegram parse failed: p=%q c=%q err=%v", p, c, err)
+	}
+	p, c, err = ParseDeliveryTarget("telegram:123")
+	if err != nil || p != "telegram" || c != "123" {
+		t.Fatalf("telegram:123 parse failed: p=%q c=%q err=%v", p, c, err)
+	}
+	p, c, err = ParseDeliveryTarget("yuanbao:group:123")
+	if err != nil || p != "yuanbao" || c != "group:123" {
+		t.Fatalf("yuanbao grouped parse failed: p=%q c=%q err=%v", p, c, err)
+	}
+	if _, _, err = ParseDeliveryTarget(":123"); err == nil {
+		t.Fatal("expected error for missing platform")
+	}
+	if _, _, err = ParseDeliveryTarget("telegram:"); err == nil {
+		t.Fatal("expected error for missing chat id")
+	}
+}
+
+func TestSendMessageSupportsMultiSegmentTarget(t *testing.T) {
+	platform.Register(fakeAdapter{name: "yuanbao"})
+	t.Cleanup(func() { platform.Unregister("yuanbao") })
+	res, err := NewSendMessageTool().Call(context.Background(), map[string]any{
+		"action":  "send",
+		"target":  "yuanbao:group:123",
+		"message": "hi",
+	}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := res["platform"].(string); got != "yuanbao" {
+		t.Fatalf("platform=%q want=yuanbao", got)
+	}
+	if got, _ := res["chat_id"].(string); got != "group:123" {
+		t.Fatalf("chat_id=%q want=group:123", got)
+	}
+}

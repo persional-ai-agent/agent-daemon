@@ -33,7 +33,7 @@ func (t *SendMessageTool) Schema() core.ToolSchema {
 					},
 					"target": map[string]any{
 						"type":        "string",
-						"description": "Hermes-style target string like 'telegram:123', 'discord:channel_id', or 'slack:channel_id'. If set, overrides platform/chat_id.",
+						"description": "Hermes-style target like 'telegram', 'telegram:123', 'discord:channel_id', or 'yuanbao:group:123'. If set, overrides platform/chat_id.",
 					},
 					"platform": map[string]any{
 						"type":        "string",
@@ -108,12 +108,15 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 		p := strings.ToLower(strings.TrimSpace(strArg(args, "platform")))
 		chatID := strings.TrimSpace(strArg(args, "chat_id"))
 		if target := strings.TrimSpace(strArg(args, "target")); target != "" {
-			parts := strings.SplitN(target, ":", 2)
-			if len(parts) == 1 {
-				p = strings.ToLower(strings.TrimSpace(parts[0]))
-			} else if len(parts) == 2 {
-				p = strings.ToLower(strings.TrimSpace(parts[0]))
-				chatID = strings.TrimSpace(parts[1])
+			tp, tcid, err := ParseDeliveryTarget(target)
+			if err != nil {
+				return nil, err
+			}
+			if tp != "" {
+				p = tp
+			}
+			if tcid != "" {
+				chatID = tcid
 			}
 		}
 		if p == "" && strings.TrimSpace(tc.GatewayPlatform) != "" {
@@ -178,6 +181,29 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+func ParseDeliveryTarget(target string) (platformName, chatID string, err error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", "", errors.New("target required")
+	}
+	parts := strings.Split(target, ":")
+	if len(parts) == 0 {
+		return "", "", fmt.Errorf("invalid target %q", target)
+	}
+	platformName = strings.ToLower(strings.TrimSpace(parts[0]))
+	if platformName == "" {
+		return "", "", fmt.Errorf("invalid target %q (missing platform)", target)
+	}
+	if len(parts) == 1 {
+		return platformName, "", nil
+	}
+	chatID = strings.TrimSpace(strings.Join(parts[1:], ":"))
+	if chatID == "" {
+		return "", "", fmt.Errorf("invalid target %q (missing chat_id)", target)
+	}
+	return platformName, chatID, nil
 }
 
 func homeTargetEnvVar(platform string) string {

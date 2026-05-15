@@ -35,7 +35,7 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "clear", Description: "clear active session context by switching to a new session"},
 	{Name: "reload", Description: "reload active session message count from store"},
 	{Name: "save", Description: "export active session messages to json", HelpUsage: "/save [path]"},
-	{Name: "sethome", Description: "set platform home target for send_message", HelpUsage: "/sethome <platform> <chat_id>"},
+	{Name: "sethome", Description: "set platform home target for send_message", HelpUsage: "/sethome <platform> <chat_id> | /sethome <platform:chat_id>"},
 	{Name: "targets", Description: "list known gateway delivery targets", HelpUsage: "/targets [platform]"},
 	{Name: "model", Description: "show current runtime model info"},
 	{Name: "skills", Description: "list local skills or show a skill", HelpUsage: "/skills [name]"},
