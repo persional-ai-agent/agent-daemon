@@ -70,15 +70,21 @@ func TestParseStartupFlags(t *testing.T) {
 	defer func() { _ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", old) }()
 
 	_ = os.Unsetenv("AGENT_UI_TUI_FULLSCREEN")
-	noDoctor, fullscreen, fullscreenSet := parseStartupFlags([]string{"--no-doctor", "--fullscreen"})
+	noDoctor, fullscreen, fullscreenSet, debugLogPath := parseStartupFlags([]string{"--no-doctor", "--fullscreen"})
 	if !noDoctor || !fullscreen || !fullscreenSet {
 		t.Fatalf("unexpected flags: noDoctor=%v fullscreen=%v fullscreenSet=%v", noDoctor, fullscreen, fullscreenSet)
 	}
+	if debugLogPath != "" {
+		t.Fatalf("unexpected debug log path: %q", debugLogPath)
+	}
 
 	_ = os.Setenv("AGENT_UI_TUI_FULLSCREEN", "1")
-	noDoctor, fullscreen, fullscreenSet = parseStartupFlags(nil)
+	noDoctor, fullscreen, fullscreenSet, debugLogPath = parseStartupFlags(nil)
 	if noDoctor || !fullscreen || !fullscreenSet {
 		t.Fatalf("unexpected env parse: noDoctor=%v fullscreen=%v fullscreenSet=%v", noDoctor, fullscreen, fullscreenSet)
+	}
+	if debugLogPath != "" {
+		t.Fatalf("unexpected debug log path from env parse: %q", debugLogPath)
 	}
 }
 

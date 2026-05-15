@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"strings"
 	"time"
 
@@ -123,6 +124,9 @@ type appState struct {
 	panelRefreshSec  int
 	lastPanelRefresh time.Time
 	commandQueue     []string
+	debugWSLogPath   string
+	debugWSLogFile   *os.File
+	debugMu          sync.Mutex
 }
 
 const (
@@ -426,14 +430,24 @@ func canonicalInput(text string) string {
 	return text
 }
 
-func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool, fullscreenSet bool) {
-	for _, a := range args {
-		switch strings.TrimSpace(a) {
+func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool, fullscreenSet bool, debugWSLogPath string) {
+	for i := 0; i < len(args); i++ {
+		a := strings.TrimSpace(args[i])
+		switch a {
 		case "--no-doctor":
 			noDoctor = true
 		case "--fullscreen":
 			fullscreen = true
 			fullscreenSet = true
+		case "--debug-ws-log":
+			if i+1 < len(args) {
+				i++
+				debugWSLogPath = strings.TrimSpace(args[i])
+			}
+		default:
+			if strings.HasPrefix(a, "--debug-ws-log=") {
+				debugWSLogPath = strings.TrimSpace(strings.TrimPrefix(a, "--debug-ws-log="))
+			}
 		}
 	}
 	if !fullscreenSet {
@@ -442,7 +456,49 @@ func parseStartupFlags(args []string) (noDoctor bool, fullscreen bool, fullscree
 			fullscreenSet = true
 		}
 	}
-	return noDoctor, fullscreen, fullscreenSet
+	if strings.TrimSpace(debugWSLogPath) == "" {
+		debugWSLogPath = strings.TrimSpace(os.Getenv("AGENT_UI_TUI_DEBUG_WS_LOG"))
+	}
+	return noDoctor, fullscreen, fullscreenSet, debugWSLogPath
+}
+
+func (s *appState) enableDebugWSLog(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	s.debugMu.Lock()
+	s.debugWSLogPath = path
+	s.debugWSLogFile = f
+	s.debugMu.Unlock()
+	s.debugLogf("debug", "ws log enabled path=%s session=%s ws=%s", path, s.session, s.wsBase)
+	return nil
+}
+
+func (s *appState) closeDebugWSLog() {
+	s.debugMu.Lock()
+	f := s.debugWSLogFile
+	s.debugWSLogFile = nil
+	s.debugWSLogPath = ""
+	s.debugMu.Unlock()
+	if f != nil {
+		_ = f.Close()
+	}
+}
+
+func (s *appState) debugLogf(kind, format string, args ...any) {
+	s.debugMu.Lock()
+	defer s.debugMu.Unlock()
+	if s.debugWSLogFile == nil {
+		return
+	}
+	msg := fmt.Sprintf(format, args...)
+	_, _ = s.debugWSLogFile.WriteString(fmt.Sprintf("%s\t%s\t%s\n", time.Now().Format(time.RFC3339Nano), kind, strings.ReplaceAll(msg, "\n", "\\n")))
 }
 
 func (s *appState) maybeAutoRefreshPanel() {
@@ -1309,6 +1365,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 	}
 	reconnectReason := ""
 	for attempt := 0; attempt <= maxReconnect; attempt++ {
+		s.debugLogf("turn", "start attempt=%d turn=%s reconnect_max=%d msg_len=%d", attempt, turnID, maxReconnect, len(message))
 		if attempt > 0 {
 			dedupeEnabled = true
 			s.reconnectState = "degraded"
@@ -1404,6 +1461,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			var evt map[string]any
 			if err := json.Unmarshal(payload, &evt); err != nil {
 				fmt.Printf("[decode-error] %v\n", err)
+				s.debugLogf("decode_error", "err=%v payload=%q", err, string(payload))
 				continue
 			}
 			evtType, _ := evt["type"].(string)
@@ -1422,6 +1480,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				}
 			}
 			seenPayload[key] = struct{}{}
+			s.debugLogf("event", "type=%s payload=%s", evtType, string(payload))
 			if line := printEvent(evt, false); strings.TrimSpace(line) != "" {
 				s.addChatLine(line)
 				// Ensure assistant-visible fallback line exists even if styled rendering is unreadable.
@@ -1434,6 +1493,7 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 				onEvent(evt)
 			}
 			if evtType == "result" || evtType == "completed" || evtType == "error" || evtType == "cancelled" || evtType == "max_iterations_reached" {
+				s.debugLogf("terminal", "type=%s reconnect_state=%s", evtType, s.reconnectState)
 				_ = conn.Close()
 				if evtType == "result" || evtType == "completed" {
 					if s.reconnectState != "resumed" && s.reconnectState != "degraded" {
@@ -1466,7 +1526,12 @@ func main() {
 		_ = os.Setenv("COLORFGBG", "15;0")
 	}
 	s := newState()
-	noDoctor, fullscreen, fullscreenSet := parseStartupFlags(os.Args[1:])
+	noDoctor, fullscreen, fullscreenSet, debugWSLogPath := parseStartupFlags(os.Args[1:])
+	if err := s.enableDebugWSLog(debugWSLogPath); err != nil {
+		fmt.Printf("[tui-error] debug log open failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer s.closeDebugWSLog()
 	if fullscreenSet {
 		s.fullscreen = fullscreen
 	}

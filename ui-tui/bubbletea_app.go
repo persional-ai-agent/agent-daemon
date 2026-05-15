@@ -252,6 +252,7 @@ func startDoctorCmd(state *appState) tea.Cmd {
 
 func (m *tuiModel) syncViewport(force bool) {
 	content, changed := m.runtime.render(force)
+	m.state.debugLogf("render", "force=%t changed=%t processing=%t content_len=%d", force, changed, m.processing, len(content))
 	if !changed {
 		return
 	}
