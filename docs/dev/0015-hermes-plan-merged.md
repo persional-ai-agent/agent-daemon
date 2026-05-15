@@ -150,6 +150,7 @@
 - 已新增 gateway 状态/诊断共享渲染辅助（`internal/tools/gateway_status.go`），并接入 Gateway `/status` 元数据与 API diagnostics fallback，统一关键字段映射。
 - 已将 Gateway `/status` 文本与元数据统一复用单一 `gatewayStatusSnapshot()` 计算路径，消除同命令内部双路径字段差异风险。
 - 已新增 `ExtractGatewayStatusSnapshot` 标准化提取函数并补测试；当前保持 API 对外契约不变，为后续状态字段进一步对齐提供统一转换入口。
+- 已新增 `NormalizeGatewayStatusMap` 并接入 API gateway status 读取路径；在保持现有契约不变前提下，统一内部状态标准化入口。
 
 范围：
 

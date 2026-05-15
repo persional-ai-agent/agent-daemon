@@ -60,3 +60,23 @@ func TestExtractGatewayStatusSnapshot(t *testing.T) {
 		t.Fatalf("unexpected snapshot: %+v", got)
 	}
 }
+
+func TestNormalizeGatewayStatusMap(t *testing.T) {
+	raw := map[string]any{"enabled": true, "running": false}
+	got := NormalizeGatewayStatusMap(raw)
+	if got["enabled"] != true || got["running"] != false {
+		t.Fatalf("unexpected normalized map: %+v", got)
+	}
+	if _, ok := got["platform"]; ok {
+		t.Fatalf("should not inject empty snapshot fields: %+v", got)
+	}
+
+	raw = map[string]any{"platform": "telegram", "route_session": "r1"}
+	got = NormalizeGatewayStatusMap(raw)
+	if got["platform"] != "telegram" || got["route_session"] != "r1" {
+		t.Fatalf("unexpected normalized map with snapshot: %+v", got)
+	}
+	if _, ok := got["active_session"]; !ok {
+		t.Fatalf("expected normalized snapshot fields merged: %+v", got)
+	}
+}

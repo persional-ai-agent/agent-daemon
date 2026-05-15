@@ -19,6 +19,19 @@ type GatewayStatusSnapshot struct {
 	LastApprovalID string
 }
 
+func (s GatewayStatusSnapshot) IsZero() bool {
+	return strings.TrimSpace(s.Platform) == "" &&
+		strings.TrimSpace(s.RouteSession) == "" &&
+		strings.TrimSpace(s.ActiveSession) == "" &&
+		s.QueueLen == 0 &&
+		!s.Paired &&
+		strings.TrimSpace(s.ContinuityMode) == "" &&
+		strings.TrimSpace(s.MappedSession) == "" &&
+		s.MessageCount == nil &&
+		!s.Running &&
+		strings.TrimSpace(s.LastApprovalID) == ""
+}
+
 func ExtractGatewayStatusSnapshot(status map[string]any) GatewayStatusSnapshot {
 	out := GatewayStatusSnapshot{}
 	if status == nil {
@@ -77,6 +90,23 @@ func BuildGatewayStatusPayload(s GatewayStatusSnapshot) map[string]any {
 	}
 	if strings.TrimSpace(s.LastApprovalID) != "" {
 		out["last_approval_id"] = s.LastApprovalID
+	}
+	return out
+}
+
+func NormalizeGatewayStatusMap(raw map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range raw {
+		out[k] = v
+	}
+	snap := ExtractGatewayStatusSnapshot(raw)
+	if snap.IsZero() {
+		return out
+	}
+	for k, v := range BuildGatewayStatusPayload(snap) {
+		if _, exists := out[k]; !exists {
+			out[k] = v
+		}
 	}
 	return out
 }
