@@ -5,33 +5,57 @@ import (
 	"strings"
 )
 
-var builtInGatewayCommandSet = map[string]struct{}{
-	"pair":      {},
-	"unpair":    {},
-	"cancel":    {},
-	"queue":     {},
-	"status":    {},
-	"pending":   {},
-	"approvals": {},
-	"grant":     {},
-	"revoke":    {},
-	"approve":   {},
-	"deny":      {},
-	"help":      {},
+type gatewayCommandSpec struct {
+	Name         string
+	ArgsTemplate string
+	Aliases      []string
 }
 
-var gatewayCommandAliasToCanonical = map[string]string{
-	"approval": "approvals",
-	"pendings": "pending",
-	"abort":    "cancel",
-	"stop":     "cancel",
-	"q":        "queue",
-	"s":        "status",
-	"h":        "help",
+var gatewayCommandCatalog = []gatewayCommandSpec{
+	{Name: "pair", ArgsTemplate: "<code>"},
+	{Name: "unpair"},
+	{Name: "cancel", Aliases: []string{"abort", "stop"}},
+	{Name: "queue", Aliases: []string{"q"}},
+	{Name: "status", Aliases: []string{"s"}},
+	{Name: "pending", Aliases: []string{"pendings"}},
+	{Name: "approvals", Aliases: []string{"approval"}},
+	{Name: "grant", ArgsTemplate: "[ttl]"},
+	{Name: "revoke"},
+	{Name: "approve", ArgsTemplate: "<id>"},
+	{Name: "deny", ArgsTemplate: "<id>"},
+	{Name: "help", Aliases: []string{"h"}},
 }
 
-var gatewayHelpCommandOrder = []string{
-	"pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help",
+var (
+	builtInGatewayCommandSet  map[string]struct{}
+	gatewayAliasToCanonical   map[string]string
+	gatewayCommandSpecByName  map[string]gatewayCommandSpec
+	gatewayHelpCommandOrder   []string
+)
+
+func init() {
+	builtInGatewayCommandSet = make(map[string]struct{}, len(gatewayCommandCatalog))
+	gatewayAliasToCanonical = map[string]string{}
+	gatewayCommandSpecByName = make(map[string]gatewayCommandSpec, len(gatewayCommandCatalog))
+	gatewayHelpCommandOrder = make([]string, 0, len(gatewayCommandCatalog))
+
+	for _, spec := range gatewayCommandCatalog {
+		name := strings.ToLower(strings.TrimSpace(spec.Name))
+		if name == "" {
+			continue
+		}
+		spec.Name = name
+		builtInGatewayCommandSet[name] = struct{}{}
+		gatewayCommandSpecByName[name] = spec
+		gatewayHelpCommandOrder = append(gatewayHelpCommandOrder, name)
+		for _, alias := range spec.Aliases {
+			alias = strings.ToLower(strings.TrimSpace(alias))
+			if alias == "" || alias == name {
+				continue
+			}
+			gatewayAliasToCanonical[alias] = name
+		}
+	}
 }
 
 func IsBuiltInGatewayCommand(name string) bool {
@@ -47,7 +71,7 @@ func ResolveGatewayCommand(name string) (canonical string, ok bool) {
 	if IsBuiltInGatewayCommand(head) {
 		return head, true
 	}
-	if mapped, exists := gatewayCommandAliasToCanonical[head]; exists {
+	if mapped, exists := gatewayAliasToCanonical[head]; exists {
 		return mapped, true
 	}
 	return "", false
@@ -65,9 +89,6 @@ func BuiltInGatewaySlashCommands() []string {
 func GatewayHelpText(yuanbao bool) string {
 	parts := make([]string, 0, len(gatewayHelpCommandOrder))
 	for _, name := range gatewayHelpCommandOrder {
-		if !IsBuiltInGatewayCommand(name) {
-			continue
-		}
 		parts = append(parts, gatewayHelpCommandEntry(name))
 	}
 	text := "Commands: " + strings.Join(parts, ", ")
@@ -78,18 +99,12 @@ func GatewayHelpText(yuanbao bool) string {
 }
 
 func gatewayHelpCommandEntry(name string) string {
-	switch name {
-	case "pair":
-		return "/pair <code>"
-	case "grant":
-		return "/grant [ttl]"
-	case "revoke":
-		return "/revoke"
-	case "approve":
-		return "/approve <id>"
-	case "deny":
-		return "/deny <id>"
-	default:
-		return "/" + name
+	spec, ok := gatewayCommandSpecByName[strings.ToLower(strings.TrimSpace(name))]
+	if !ok {
+		return "/" + strings.ToLower(strings.TrimSpace(name))
 	}
+	if strings.TrimSpace(spec.ArgsTemplate) == "" {
+		return "/" + spec.Name
+	}
+	return "/" + spec.Name + " " + spec.ArgsTemplate
 }
