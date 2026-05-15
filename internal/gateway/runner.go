@@ -442,17 +442,19 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				mode = w.runner.continuityMode()
 			}
 			autoID := tools.AutoGlobalIdentity(mode, event.UserID, event.UserName)
-			reply := "platform=" + w.adapter.Name() + "\nuser_id=" + event.UserID + "\nuser_name=" + event.UserName + "\nactive_session=" + w.currentSessionID()
-			if globalID != "" {
-				reply += "\nglobal_id=" + globalID
-			} else {
-				reply += "\nglobal_id=(not set)"
+			whoami := tools.GatewayWhoamiResult{
+				Platform:       w.adapter.Name(),
+				UserID:         event.UserID,
+				UserName:       event.UserName,
+				ActiveSession:  w.currentSessionID(),
+				GlobalID:       globalID,
+				ContinuityMode: mode,
+				AutoGlobalID:   autoID,
 			}
-			reply += "\ncontinuity_mode=" + mode
-			if autoID != "" {
-				reply += "\nauto_global_id=" + autoID
-			}
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
+			reply := tools.RenderGatewayWhoamiText(whoami)
+			meta := tools.BuildGatewayWhoamiPayload(whoami)
+			meta["slash"] = "/whoami"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/resolve":
 			resolveArgs, parseErr := tools.ParseGatewayResolveArgsWithDefaults(parsed.args, tools.GatewayResolveArgs{
@@ -471,36 +473,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Resolve failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resolve"})
 				return
 			}
-			mode := resolved.ContinuityMode
-			globalID := resolved.GlobalID
-			globalSource := resolved.GlobalSource
-			routeSession := resolved.RouteSession
-			mappedSession := resolved.MappedSession
-			resolvedSession := resolved.ResolvedSession
-			reply := "platform=" + resolveArgs.Platform +
-				"\nchat_type=" + resolveArgs.ChatType +
-				"\nchat_id=" + resolveArgs.ChatID +
-				"\nuser_id=" + resolveArgs.UserID +
-				"\nuser_name=" + resolveArgs.UserName +
-				"\nroute_session=" + routeSession +
-				"\nmapped_session=" + mappedSession +
-				"\nresolved_session=" + resolvedSession +
-				"\nglobal_id=" + globalID +
-				"\nglobal_source=" + globalSource +
-				"\ncontinuity_mode=" + mode
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{
-				"slash":            "/resolve",
-				"platform":         resolveArgs.Platform,
-				"chat_type":        resolveArgs.ChatType,
-				"chat_id":          resolveArgs.ChatID,
-				"user_id":          resolveArgs.UserID,
-				"route_session":    routeSession,
-				"mapped_session":   mappedSession,
-				"resolved_session": resolvedSession,
-				"global_id":        globalID,
-				"global_source":    globalSource,
-				"continuity_mode":  mode,
-			})
+			reply := tools.RenderGatewaySessionResolveText(resolved)
+			meta := tools.BuildGatewaySessionResolvePayload(resolved)
+			meta["slash"] = "/resolve"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/continuity":
 			if len(parsed.args) > 1 {

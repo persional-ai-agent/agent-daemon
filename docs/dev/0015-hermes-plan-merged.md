@@ -145,6 +145,7 @@
 - 已将 `/model` 参数解析统一到 `internal/tools.ParseGatewayModelSpecArgs`，CLI/TUI/Gateway 共用同一 `provider:model` / `provider model` 解析与校验路径。
 - 已统一 model 偏好读取/更新到 `internal/tools.ResolveGatewayModelPreference` 与 `UpdateGatewayModelPreference`，CLI/Gateway 共用同一持久化与环境变量同步逻辑。
 - 已统一 model 偏好默认展示策略到 `internal/tools.DisplayGatewayModelPreference`，并让 `/v1/ui/model` 返回 `model + preference`（保留 ModelInfo 输出并追加统一偏好视图）。
+- 已将 `/whoami` 与 `/resolve` 的响应结构与文本拼装统一到 `internal/tools`（`Build*Payload`/`Render*Text`），CLI/API/Gateway 复用同一结果字段集合。
 
 范围：
 

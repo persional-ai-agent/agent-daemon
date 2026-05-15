@@ -1393,20 +1393,8 @@ func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"platform":         resolved.Platform,
-			"chat_type":        resolved.ChatType,
-			"chat_id":          resolved.ChatID,
-			"user_id":          resolved.UserID,
-			"user_name":        resolved.UserName,
-			"route_session":    resolved.RouteSession,
-			"mapped_session":   resolved.MappedSession,
-			"resolved_session": resolved.ResolvedSession,
-			"global_id":        resolved.GlobalID,
-			"global_source":    resolved.GlobalSource,
-			"continuity_mode":  resolved.ContinuityMode,
-		},
+		"ok":     true,
+		"result": tools.BuildGatewaySessionResolvePayload(resolved),
 	})
 }
 

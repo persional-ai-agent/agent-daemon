@@ -53,6 +53,16 @@ type GatewayModelSpec struct {
 	Model    string
 }
 
+type GatewayWhoamiResult struct {
+	Platform       string `json:"platform"`
+	UserID         string `json:"user_id"`
+	UserName       string `json:"user_name"`
+	ActiveSession  string `json:"active_session"`
+	GlobalID       string `json:"global_id"`
+	ContinuityMode string `json:"continuity_mode"`
+	AutoGlobalID   string `json:"auto_global_id,omitempty"`
+}
+
 var gatewayIdentityMu sync.Mutex
 
 func NormalizeContinuityMode(raw string) string {
@@ -349,4 +359,63 @@ func ParseGatewayModelSpecArgs(args []string) (GatewayModelSpec, error) {
 		return out, nil
 	}
 	return GatewayModelSpec{}, fmt.Errorf("invalid model spec")
+}
+
+func BuildGatewaySessionResolvePayload(resolved GatewaySessionResolveResult) map[string]any {
+	return map[string]any{
+		"platform":         resolved.Platform,
+		"chat_type":        resolved.ChatType,
+		"chat_id":          resolved.ChatID,
+		"user_id":          resolved.UserID,
+		"user_name":        resolved.UserName,
+		"route_session":    resolved.RouteSession,
+		"mapped_session":   resolved.MappedSession,
+		"resolved_session": resolved.ResolvedSession,
+		"global_id":        resolved.GlobalID,
+		"global_source":    resolved.GlobalSource,
+		"continuity_mode":  resolved.ContinuityMode,
+	}
+}
+
+func BuildGatewayWhoamiPayload(result GatewayWhoamiResult) map[string]any {
+	payload := map[string]any{
+		"platform":        result.Platform,
+		"user_id":         result.UserID,
+		"user_name":       result.UserName,
+		"active_session":  result.ActiveSession,
+		"global_id":       result.GlobalID,
+		"continuity_mode": result.ContinuityMode,
+	}
+	if strings.TrimSpace(result.AutoGlobalID) != "" {
+		payload["auto_global_id"] = strings.TrimSpace(result.AutoGlobalID)
+	}
+	return payload
+}
+
+func RenderGatewayWhoamiText(result GatewayWhoamiResult) string {
+	reply := "platform=" + result.Platform + "\nuser_id=" + result.UserID + "\nuser_name=" + result.UserName + "\nactive_session=" + result.ActiveSession
+	if strings.TrimSpace(result.GlobalID) != "" {
+		reply += "\nglobal_id=" + result.GlobalID
+	} else {
+		reply += "\nglobal_id=(not set)"
+	}
+	reply += "\ncontinuity_mode=" + result.ContinuityMode
+	if strings.TrimSpace(result.AutoGlobalID) != "" {
+		reply += "\nauto_global_id=" + result.AutoGlobalID
+	}
+	return reply
+}
+
+func RenderGatewaySessionResolveText(resolved GatewaySessionResolveResult) string {
+	return "platform=" + resolved.Platform +
+		"\nchat_type=" + resolved.ChatType +
+		"\nchat_id=" + resolved.ChatID +
+		"\nuser_id=" + resolved.UserID +
+		"\nuser_name=" + resolved.UserName +
+		"\nroute_session=" + resolved.RouteSession +
+		"\nmapped_session=" + resolved.MappedSession +
+		"\nresolved_session=" + resolved.ResolvedSession +
+		"\nglobal_id=" + resolved.GlobalID +
+		"\nglobal_source=" + resolved.GlobalSource +
+		"\ncontinuity_mode=" + resolved.ContinuityMode
 }

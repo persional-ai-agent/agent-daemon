@@ -432,12 +432,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			return true, err
 		}
 		mode, _ := clitools.ResolveGatewayContinuityMode(eng.Workdir)
-		printCLIEnvelope(true, map[string]any{
-			"platform":        ref.Platform,
-			"user_id":         ref.UserID,
-			"global_id":       globalID,
-			"continuity_mode": mode,
-		}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewayWhoamiPayload(clitools.GatewayWhoamiResult{
+			Platform:       ref.Platform,
+			UserID:         ref.UserID,
+			GlobalID:       globalID,
+			ContinuityMode: mode,
+		}), "", "")
 		return true, nil
 	case "/resolve":
 		resolvedArgs, parseErr := clitools.ParseGatewayResolveArgs(fields[1:])
@@ -449,19 +449,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{
-			"platform":         resolved.Platform,
-			"chat_type":        resolved.ChatType,
-			"chat_id":          resolved.ChatID,
-			"user_id":          resolved.UserID,
-			"user_name":        resolved.UserName,
-			"route_session":    resolved.RouteSession,
-			"mapped_session":   resolved.MappedSession,
-			"resolved_session": resolved.ResolvedSession,
-			"global_id":        resolved.GlobalID,
-			"global_source":    resolved.GlobalSource,
-			"continuity_mode":  resolved.ContinuityMode,
-		}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewaySessionResolvePayload(resolved), "", "")
 		return true, nil
 	case "/setid":
 		setArgs, parseErr := clitools.ParseGatewaySetIdentityArgs(fields[1:])

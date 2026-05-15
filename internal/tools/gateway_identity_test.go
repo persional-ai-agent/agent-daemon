@@ -1,6 +1,9 @@
 package tools
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeContinuityMode(t *testing.T) {
 	if got := NormalizeContinuityMode("id"); got != "user_id" {
@@ -129,5 +132,47 @@ func TestParseGatewayModelSpecArgs(t *testing.T) {
 	}
 	if _, err := ParseGatewayModelSpecArgs([]string{"openai"}); err == nil {
 		t.Fatal("expected invalid one-arg model parse")
+	}
+}
+
+func TestGatewayWhoamiAndResolveHelpers(t *testing.T) {
+	who := GatewayWhoamiResult{
+		Platform:       "telegram",
+		UserID:         "u1",
+		UserName:       "Alice",
+		ActiveSession:  "s1",
+		GlobalID:       "gid-1",
+		ContinuityMode: "user_id",
+		AutoGlobalID:   "uid:u1",
+	}
+	whoPayload := BuildGatewayWhoamiPayload(who)
+	if whoPayload["platform"] != "telegram" || whoPayload["global_id"] != "gid-1" || whoPayload["auto_global_id"] != "uid:u1" {
+		t.Fatalf("unexpected whoami payload: %+v", whoPayload)
+	}
+	text := RenderGatewayWhoamiText(who)
+	if !strings.Contains(text, "platform=telegram") || !strings.Contains(text, "global_id=gid-1") {
+		t.Fatalf("unexpected whoami text: %q", text)
+	}
+
+	res := GatewaySessionResolveResult{
+		Platform:        "telegram",
+		ChatType:        "group",
+		ChatID:          "1001",
+		UserID:          "u1",
+		UserName:        "Alice",
+		RouteSession:    "agent:main:telegram:group:1001",
+		MappedSession:   "agent:main:global:user:gid-1",
+		ResolvedSession: "agent:main:global:user:gid-1",
+		GlobalID:        "gid-1",
+		GlobalSource:    "mapped",
+		ContinuityMode:  "user_id",
+	}
+	payload := BuildGatewaySessionResolvePayload(res)
+	if payload["resolved_session"] != "agent:main:global:user:gid-1" || payload["global_source"] != "mapped" {
+		t.Fatalf("unexpected resolve payload: %+v", payload)
+	}
+	rt := RenderGatewaySessionResolveText(res)
+	if !strings.Contains(rt, "resolved_session=agent:main:global:user:gid-1") {
+		t.Fatalf("unexpected resolve text: %q", rt)
 	}
 }
