@@ -149,3 +149,17 @@ func TestCompactGatewayHistory(t *testing.T) {
 		t.Fatalf("unexpected compacted history: %+v", got)
 	}
 }
+
+func TestCompactGatewayHistoryTailDefaults(t *testing.T) {
+	history := make([]core.Message, 0, 30)
+	for i := 0; i < 30; i++ {
+		history = append(history, core.Message{Role: "user", Content: itoa(i)})
+	}
+	got := compactGatewayHistory(history, 0)
+	if len(got) != 20 {
+		t.Fatalf("expected default compact size=20, got=%d", len(got))
+	}
+	if got[0].Content != "10" || got[19].Content != "29" {
+		t.Fatalf("unexpected compact tail window: first=%q last=%q", got[0].Content, got[19].Content)
+	}
+}

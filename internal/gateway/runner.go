@@ -574,6 +574,13 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		res, runErr = eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
 		if runErr == nil {
 			_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("上下文恢复完成，继续执行。"), event.MessageID, map[string]any{"phase": "context_recovery"})
+		} else if isGatewayContextLimitError(runErr) {
+			_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("压缩后仍超限，正在使用空上下文重试一次..."), event.MessageID, map[string]any{"phase": "context_recovery"})
+			history = nil
+			res, runErr = eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+			if runErr == nil {
+				_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("已使用空上下文恢复并继续执行。"), event.MessageID, map[string]any{"phase": "context_recovery"})
+			}
 		}
 	}
 
