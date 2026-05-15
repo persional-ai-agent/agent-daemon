@@ -1005,19 +1005,38 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				s.setErrStatus(runErr)
 				if isContextLimitError(runErr) {
-					emit("上下文超限：正在自动恢复上下文并重试一次...")
-					prevSession, newSession := autoRecoverContextSession(s)
-					emit(fmt.Sprintf("context recovered: new session %s (prev %s)", newSession, prevSession))
+					emit("上下文超限：先压缩当前会话并自动重试一次...")
+					if dropped, cmpErr := compressSessionForRetry(s, 20); cmpErr != nil {
+						emit("会话压缩失败，改为新会话重试。")
+					} else {
+						emit(fmt.Sprintf("session compressed: dropped=%d keep_last_n=20", dropped))
+					}
 					retryErr := s.sendTurn(current, wrapped)
 					if retryErr == nil {
 						emit("自动重试成功。")
-						s.setStatus(true, "ok", "context recovered and retried")
+						s.setStatus(true, "ok", "context compressed and retried")
 						continue
 					}
 					if errors.Is(retryErr, errTurnCancelled) {
 						emit("turn cancelled")
 						s.setStatus(true, "cancelled", "turn cancelled")
 						return lines, nil, false
+					}
+					if isContextLimitError(retryErr) {
+						emit("压缩后仍超限：切换新会话再自动重试一次...")
+						prevSession, newSession := autoRecoverContextSession(s)
+						emit(fmt.Sprintf("context recovered: new session %s (prev %s)", newSession, prevSession))
+						retryErr = s.sendTurn(current, wrapped)
+						if retryErr == nil {
+							emit("新会话自动重试成功。")
+							s.setStatus(true, "ok", "context recovered and retried")
+							continue
+						}
+						if errors.Is(retryErr, errTurnCancelled) {
+							emit("turn cancelled")
+							s.setStatus(true, "cancelled", "turn cancelled")
+							return lines, nil, false
+						}
 					}
 					s.setErrStatus(retryErr)
 					emit("自动重试失败。")
@@ -1051,6 +1070,19 @@ func autoRecoverContextSession(s *appState) (prevSession, newSession string) {
 	s.lastShowSession = s.session
 	_ = s.saveRuntimeState()
 	return prevSession, s.session
+}
+
+func compressSessionForRetry(s *appState, keepLastN int) (int, error) {
+	out, err := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/sessions/compress", map[string]any{
+		"session_id":  s.session,
+		"keep_last_n": keepLastN,
+	})
+	if err != nil {
+		return 0, err
+	}
+	result, _ := out["result"].(map[string]any)
+	dropped, _ := result["dropped_messages"].(float64)
+	return int(dropped), nil
 }
 
 func isContextLimitError(err error) bool {

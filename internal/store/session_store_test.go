@@ -278,6 +278,33 @@ func TestSessionStoreOAuthTokenSaveLoadAndDelete(t *testing.T) {
 	}
 }
 
+func TestSessionStoreCompactSession(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i := 0; i < 5; i++ {
+		if err := s.AppendMessage("s1", core.Message{Role: "user", Content: "m"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, after, err := s.CompactSession("s1", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before != 5 || after != 2 {
+		t.Fatalf("unexpected compact result: before=%d after=%d", before, after)
+	}
+	msgs, err := s.LoadMessages("s1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages after compact, got %d", len(msgs))
+	}
+}
+
 func TestSessionStoreOAuthTokenLoadMissing(t *testing.T) {
 	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
 	if err != nil {

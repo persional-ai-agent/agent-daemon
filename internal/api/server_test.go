@@ -16,6 +16,7 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 	"github.com/dingjingmaster/agent-daemon/internal/platform"
+	"github.com/dingjingmaster/agent-daemon/internal/store"
 	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -769,15 +770,20 @@ func TestUIEndpoints(t *testing.T) {
 	})
 
 	t.Run("session_compress", func(t *testing.T) {
+		ss, err := store.NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ss.Close()
+		_ = ss.AppendMessage("s1", core.Message{Role: "user", Content: "u1"})
+		_ = ss.AppendMessage("s1", core.Message{Role: "assistant", Content: "a1"})
+		_ = ss.AppendMessage("s1", core.Message{Role: "user", Content: "u2"})
+
 		localSrv := &Server{
 			Engine: &agent.Engine{
 				Client:   fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
 				Registry: reg,
-				SessionStore: &stubSessionStoreWithHistory{msgs: []core.Message{
-					{Role: "user", Content: "u1"},
-					{Role: "assistant", Content: "a1"},
-					{Role: "user", Content: "u2"},
-				}},
+				SessionStore: ss,
 				SystemPrompt: agent.DefaultSystemPrompt(),
 			},
 		}

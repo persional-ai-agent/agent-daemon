@@ -823,3 +823,27 @@ func TestAutoRecoverContextSession(t *testing.T) {
 		t.Fatalf("session state not updated: session=%q last_show=%q next=%q", s.session, s.lastShowSession, next)
 	}
 }
+
+func TestCompressSessionForRetry(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/ui/sessions/compress" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"dropped_messages": 7,
+			},
+		})
+	}))
+	defer ts.Close()
+	s := &appState{httpBase: ts.URL, session: "s1"}
+	dropped, err := compressSessionForRetry(s, 20)
+	if err != nil {
+		t.Fatalf("compressSessionForRetry error: %v", err)
+	}
+	if dropped != 7 {
+		t.Fatalf("unexpected dropped count: %d", dropped)
+	}
+}

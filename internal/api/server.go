@@ -750,6 +750,10 @@ type uiSessionReplayRequest struct {
 	Limit     int    `json:"limit,omitempty"`
 }
 
+type sessionCompressor interface {
+	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
+}
+
 func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -962,6 +966,25 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 	keep := req.KeepLastN
 	if keep <= 0 {
 		keep = 20
+	}
+	if compressor, ok := s.Engine.SessionStore.(sessionCompressor); ok {
+		before, after, err := compressor.CompactSession(req.SessionID, keep)
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"session_id":       req.SessionID,
+				"compressed":       true,
+				"before_messages":  before,
+				"after_messages":   after,
+				"dropped_messages": before - after,
+				"keep_last_n":      keep,
+			},
+		})
+		return
 	}
 	msgs, err := s.Engine.SessionStore.LoadMessages(req.SessionID, 500)
 	if err != nil {

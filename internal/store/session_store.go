@@ -262,6 +262,39 @@ func (s *SessionStore) LoadMessages(sessionID string, limit int) ([]core.Message
 	return out, rows.Err()
 }
 
+// CompactSession keeps only the latest keepLastN messages for a session and deletes older rows.
+func (s *SessionStore) CompactSession(sessionID string, keepLastN int) (before int, after int, err error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return 0, 0, fmt.Errorf("session_id required")
+	}
+	if keepLastN <= 0 {
+		keepLastN = 20
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE session_id = ?`, sessionID).Scan(&before); err != nil {
+		return 0, 0, err
+	}
+	if before <= keepLastN {
+		return before, before, nil
+	}
+	if _, err := s.db.Exec(`
+DELETE FROM messages
+WHERE session_id = ?
+  AND id NOT IN (
+    SELECT id FROM messages
+    WHERE session_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  )`, sessionID, sessionID, keepLastN); err != nil {
+		return 0, 0, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE session_id = ?`, sessionID).Scan(&after); err != nil {
+		return 0, 0, err
+	}
+	_, _ = s.db.Exec(`DELETE FROM session_summaries WHERE session_id = ?`, sessionID)
+	return before, after, nil
+}
+
 func (s *SessionStore) SessionStats(sessionID string) (map[string]any, error) {
 	if strings.TrimSpace(sessionID) == "" {
 		return nil, fmt.Errorf("session_id required")
