@@ -1005,9 +1005,24 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				s.setErrStatus(runErr)
 				if isContextLimitError(runErr) {
-					emit("上下文超限：当前会话历史过长。")
-					emit("建议：输入 /recover context 自动创建新会话并重试最近一条消息。")
-					emit("或手动执行：/new 后重新发送。")
+					emit("上下文超限：正在自动恢复上下文并重试一次...")
+					prevSession, newSession := autoRecoverContextSession(s)
+					emit(fmt.Sprintf("context recovered: new session %s (prev %s)", newSession, prevSession))
+					retryErr := s.sendTurn(current, wrapped)
+					if retryErr == nil {
+						emit("自动重试成功。")
+						s.setStatus(true, "ok", "context recovered and retried")
+						continue
+					}
+					if errors.Is(retryErr, errTurnCancelled) {
+						emit("turn cancelled")
+						s.setStatus(true, "cancelled", "turn cancelled")
+						return lines, nil, false
+					}
+					s.setErrStatus(retryErr)
+					emit("自动重试失败。")
+					emit("建议：手动执行 /recover context 或 /new 后重新发送。")
+					return lines, retryErr, false
 				}
 				return lines, runErr, false
 			}
@@ -1028,6 +1043,14 @@ func latestUserMessageFromChatLog(chatLog []string) string {
 		}
 	}
 	return ""
+}
+
+func autoRecoverContextSession(s *appState) (prevSession, newSession string) {
+	prevSession = s.session
+	s.session = uuid.NewString()
+	s.lastShowSession = s.session
+	_ = s.saveRuntimeState()
+	return prevSession, s.session
 }
 
 func isContextLimitError(err error) bool {

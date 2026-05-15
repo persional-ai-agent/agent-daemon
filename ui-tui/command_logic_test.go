@@ -805,3 +805,21 @@ func TestIsContextLimitError(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoRecoverContextSession(t *testing.T) {
+	s := &appState{
+		session:         "old-session",
+		lastShowSession: "old-session",
+		statePath:       filepath.Join(t.TempDir(), "runtime.json"),
+	}
+	prev, next := autoRecoverContextSession(s)
+	if prev != "old-session" {
+		t.Fatalf("unexpected prev session: %q", prev)
+	}
+	if next == "" || next == prev {
+		t.Fatalf("expected new session id, got %q", next)
+	}
+	if s.session != next || s.lastShowSession != next {
+		t.Fatalf("session state not updated: session=%q last_show=%q next=%q", s.session, s.lastShowSession, next)
+	}
+}
