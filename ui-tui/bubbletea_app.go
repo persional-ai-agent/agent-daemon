@@ -26,6 +26,9 @@ type doctorDoneMsg struct {
 type tuiModel struct {
 	state      *appState
 	inputValue string
+	compBase   string
+	compItems  []string
+	compIndex  int
 	viewport   viewport.Model
 	width      int
 	height     int
@@ -161,6 +164,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			raw := strings.TrimSpace(m.inputValue)
 			m.inputValue = ""
+			m.resetCompletion()
 			if raw == "" {
 				return m, nil
 			}
@@ -186,11 +190,19 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.processing && m.inputValue != "" {
 				runes := []rune(m.inputValue)
 				m.inputValue = string(runes[:len(runes)-1])
+				m.resetCompletion()
 			}
+			return m, nil
+		case "tab":
+			if m.processing {
+				return m, nil
+			}
+			m.applyCompletion()
 			return m, nil
 		}
 		if !m.processing && len(msg.Runes) > 0 {
 			m.inputValue += string(msg.Runes)
+			m.resetCompletion()
 			return m, nil
 		}
 	}
@@ -209,7 +221,36 @@ func (m tuiModel) View() string {
 	if strings.TrimSpace(m.inputValue) == "" {
 		inputLine = "› 输入消息或命令（/help, /quit）"
 	}
+	if len(m.compItems) > 0 && m.compBase != "" {
+		next := m.compItems[m.compIndex%len(m.compItems)]
+		inputLine += "    [Tab补全: " + next + "]"
+	}
 	return title + "\n" + m.viewport.View() + "\n\n" + inputLine + "\n" + footer
+}
+
+func (m *tuiModel) resetCompletion() {
+	m.compBase = ""
+	m.compItems = nil
+	m.compIndex = 0
+}
+
+func (m *tuiModel) applyCompletion() {
+	base := strings.TrimSpace(m.inputValue)
+	if base == "" || !strings.HasPrefix(base, "/") {
+		m.resetCompletion()
+		return
+	}
+	if m.compBase != base || len(m.compItems) == 0 {
+		m.compBase = base
+		m.compItems = slashCompletions(base)
+		m.compIndex = 0
+	}
+	if len(m.compItems) == 0 {
+		m.resetCompletion()
+		return
+	}
+	m.inputValue = m.compItems[m.compIndex%len(m.compItems)]
+	m.compIndex = (m.compIndex + 1) % len(m.compItems)
 }
 
 type turnLineMsg struct {
