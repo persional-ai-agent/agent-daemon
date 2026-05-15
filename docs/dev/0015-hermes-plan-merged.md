@@ -157,6 +157,7 @@
 - 已将 API `/v1/ui/model/set` 切到共享校验与写入路径（`ParseGatewayModelSpecArgs` + `UpdateGatewayModelPreference`），并补 `model_base_url` 统一写入函数。
 - 已统一 `/model` 用法提示文案来源到 `internal/tools`（`GatewayModelUsageEN/ZH`），CLI/Gateway/UI-TUI/API 共用同一 usage 表达，减少提示漂移。
 - 已统一 gateway 常用命令 usage 文案来源（`sethome/continuity/whoami/resolve/setid/unsetid`），CLI/Gateway/UI-TUI 复用 shared helper，降低多入口文案偏差。
+- 已将 API gateway `invalid_argument`（continuity/identity/resolve）错误文案切到 `internal/tools` 统一 helper，减少 API 与其他入口提示语义偏差。
 
 范围：
 

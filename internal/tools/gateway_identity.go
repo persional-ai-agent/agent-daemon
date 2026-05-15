@@ -86,6 +86,22 @@ func GatewayUnsetIDGatewayUsageEN() string {
 	return "Usage: " + GatewayUnsetIDGatewayUsage
 }
 
+func GatewayContinuityInvalidArgumentEN() string {
+	return "mode must be off|user_id|user_name"
+}
+
+func GatewayIdentityRequiredEN() string {
+	return "platform/user_id required"
+}
+
+func GatewaySetIdentityRequiredEN() string {
+	return "platform/user_id/global_id required"
+}
+
+func GatewayResolveRequiredEN() string {
+	return "platform/chat_type/chat_id/user_id required"
+}
+
 type GatewayWhoamiResult struct {
 	Platform       string `json:"platform"`
 	UserID         string `json:"user_id"`

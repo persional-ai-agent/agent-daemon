@@ -1286,7 +1286,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 		}
 		mode, parseErr := tools.ParseGatewayContinuityModeArg([]string{req.Mode})
 		if parseErr != nil {
-			writeUIError(w, http.StatusBadRequest, "invalid_argument", "mode must be off|user_id|user_name")
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewayContinuityInvalidArgumentEN())
 			return
 		}
 		mode, err := tools.UpdateGatewayContinuityMode(s.engineWorkdir(), mode)
@@ -1315,7 +1315,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			r.URL.Query().Get("user_id"),
 		})
 		if parseErr != nil {
-			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewayIdentityRequiredEN())
 			return
 		}
 		globalID, err := tools.ResolveGatewayIdentity(s.engineWorkdir(), ref.Platform, ref.UserID)
@@ -1340,7 +1340,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 		}
 		setArgs, parseErr := tools.ParseGatewaySetIdentityArgs([]string{req.Platform, req.UserID, req.GlobalID})
 		if parseErr != nil {
-			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id/global_id required")
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewaySetIdentityRequiredEN())
 			return
 		}
 		if err := tools.UpsertGatewayIdentity(s.engineWorkdir(), setArgs.Platform, setArgs.UserID, setArgs.GlobalID); err != nil {
@@ -1365,7 +1365,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 		}
 		ref, parseErr := tools.ParseGatewayIdentityRefArgs([]string{req.Platform, req.UserID})
 		if parseErr != nil {
-			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewayIdentityRequiredEN())
 			return
 		}
 		if err := tools.DeleteGatewayIdentity(s.engineWorkdir(), ref.Platform, ref.UserID); err != nil {
@@ -1400,7 +1400,7 @@ func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Re
 		r.URL.Query().Get("user_name"),
 	})
 	if parseErr != nil {
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_type/chat_id/user_id required")
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewayResolveRequiredEN())
 		return
 	}
 	resolved, err := tools.ResolveGatewaySessionMapping(s.engineWorkdir(), resolveArgs.Platform, resolveArgs.ChatType, resolveArgs.ChatID, resolveArgs.UserID, resolveArgs.UserName)
