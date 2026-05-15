@@ -99,10 +99,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runtime.publishLine(msg.line)
 			m.runtime.consumePendingEvents()
 		}
+		m.syncViewport(false)
 		if m.processing && m.turnStream != nil {
 			return m, waitTurnStreamCmd(m.turnStream)
 		}
-		m.syncViewport(false)
 		return m, nil
 	case turnEventMsg:
 		if msg.event != nil {
@@ -110,10 +110,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runtime.consumePendingEvents()
 			m.state.addEvent(msg.event)
 		}
+		m.syncViewport(false)
 		if m.processing && m.turnStream != nil {
 			return m, waitTurnStreamCmd(m.turnStream)
 		}
-		m.syncViewport(false)
 		return m, nil
 	case streamRenderTickMsg:
 		if m.processing {

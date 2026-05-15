@@ -973,6 +973,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			wrapped := func(evt map[string]any) {
 				onEvent(evt)
+				// In Bubble Tea mode, pushing both event and derived line into the same
+				// stream can cause backlog and delayed repaint under high token rate.
+				if onLine != nil {
+					return
+				}
 				line := printEvent(evt, false)
 				if strings.TrimSpace(line) != "" {
 					emit(line)
