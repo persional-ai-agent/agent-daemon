@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -34,6 +35,7 @@ func captureStdout(t *testing.T, fn func()) string {
 type testSessionStore struct {
 	msgs      []core.Message
 	bySession map[string][]core.Message
+	compactN  int
 }
 
 func (s *testSessionStore) AppendMessage(sessionID string, msg core.Message) error {
@@ -88,6 +90,16 @@ func (s *testSessionStore) SessionStats(sessionID string) (map[string]any, error
 	return map[string]any{"session_id": sessionID, "message_count": len(s.msgs)}, nil
 }
 
+func (s *testSessionStore) CompactSession(_ string, keepLastN int) (before int, after int, err error) {
+	s.compactN++
+	before = len(s.msgs)
+	if keepLastN <= 0 || keepLastN >= before {
+		return before, before, nil
+	}
+	after = keepLastN
+	return before, after, nil
+}
+
 func makeEngineForSlashTests(msgs []core.Message) *agent.Engine {
 	reg := tools.NewRegistry()
 	reg.Register(tools.NewSendMessageTool())
@@ -106,6 +118,24 @@ type scriptedClient struct {
 func (c *scriptedClient) ChatCompletion(_ context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
 	c.calls++
 	return core.Message{Role: "assistant", Content: c.response}, nil
+}
+
+type sequenceClient struct {
+	responses []core.Message
+	errors    []error
+	calls     int
+}
+
+func (c *sequenceClient) ChatCompletion(_ context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	idx := c.calls
+	c.calls++
+	if idx < len(c.errors) && c.errors[idx] != nil {
+		return core.Message{}, c.errors[idx]
+	}
+	if idx < len(c.responses) {
+		return c.responses[idx], nil
+	}
+	return core.Message{Role: "assistant", Content: "ok"}, nil
 }
 
 func TestHandleSlashCommandClear(t *testing.T) {
@@ -249,6 +279,61 @@ func TestHandleSlashCommandRetry(t *testing.T) {
 	}
 	if got := state.History[len(state.History)-1].Content; got != "retried" {
 		t.Fatalf("last content=%q", got)
+	}
+}
+
+func TestRunWithContextRecoveryCompressRetry(t *testing.T) {
+	store := &testSessionStore{msgs: []core.Message{{Role: "user", Content: "u1"}, {Role: "assistant", Content: "a1"}}}
+	reg := tools.NewRegistry()
+	client := &sequenceClient{
+		errors: []error{
+			fmt.Errorf("openai api error (400): {\"error\":{\"type\":\"exceed_context_size_error\"}}"),
+			fmt.Errorf("openai api error (400): {\"error\":{\"type\":\"exceed_context_size_error\"}}"),
+			fmt.Errorf("openai api error (400): {\"error\":{\"type\":\"exceed_context_size_error\"}}"),
+			nil,
+		},
+		responses: []core.Message{{}, {}, {}, {Role: "assistant", Content: "ok-after-compress"}},
+	}
+	eng := &agent.Engine{Registry: reg, SessionStore: store, Client: client}
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp", History: []core.Message{{Role: "user", Content: "x"}, {Role: "assistant", Content: "y"}}}
+	res, err := runWithContextRecovery(context.Background(), eng, state, "ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FinalResponse != "ok-after-compress" {
+		t.Fatalf("unexpected final response: %q", res.FinalResponse)
+	}
+	if store.compactN == 0 {
+		t.Fatal("expected compact session to be called")
+	}
+}
+
+func TestRunWithContextRecoveryFallbackToNewSession(t *testing.T) {
+	store := &testSessionStore{msgs: []core.Message{{Role: "user", Content: "u1"}, {Role: "assistant", Content: "a1"}}}
+	reg := tools.NewRegistry()
+	client := &sequenceClient{
+		errors: []error{
+			fmt.Errorf("request exceeds the available context size"),
+			fmt.Errorf("request exceeds the available context size"),
+			fmt.Errorf("request exceeds the available context size"),
+			fmt.Errorf("request exceeds the available context size"),
+			fmt.Errorf("request exceeds the available context size"),
+			fmt.Errorf("request exceeds the available context size"),
+			nil,
+		},
+		responses: []core.Message{{}, {}, {}, {}, {}, {}, {Role: "assistant", Content: "ok-new-session"}},
+	}
+	eng := &agent.Engine{Registry: reg, SessionStore: store, Client: client}
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp", History: []core.Message{{Role: "user", Content: "x"}, {Role: "assistant", Content: "y"}}}
+	res, err := runWithContextRecovery(context.Background(), eng, state, "ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FinalResponse != "ok-new-session" {
+		t.Fatalf("unexpected final response: %q", res.FinalResponse)
+	}
+	if state.SessionID == "s1" {
+		t.Fatal("expected session switched to a new id")
 	}
 }
 

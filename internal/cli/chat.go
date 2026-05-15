@@ -31,6 +31,10 @@ type sessionDetailer interface {
 	SessionStats(sessionID string) (map[string]any, error)
 }
 
+type sessionCompactor interface {
+	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
+}
+
 type chatState struct {
 	SessionID    string
 	SystemPrompt string
@@ -74,7 +78,7 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 	state := &chatState{SessionID: sessionID, SystemPrompt: systemPrompt, History: history}
 
 	if strings.TrimSpace(firstMessage) != "" {
-		res, err := eng.Run(ctx, state.SessionID, firstMessage, state.SystemPrompt, state.History)
+		res, err := runWithContextRecovery(ctx, eng, state, firstMessage)
 		if err != nil {
 			return err
 		}
@@ -114,7 +118,7 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 				continue
 			}
 		}
-		res, err := eng.Run(ctx, state.SessionID, line, state.SystemPrompt, state.History)
+		res, err := runWithContextRecovery(ctx, eng, state, line)
 		if err != nil {
 			return err
 		}
@@ -299,12 +303,25 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		userInput := state.History[idx].Content
 		base := core.CloneMessages(state.History[:idx])
-		res, err := eng.Run(ctx, state.SessionID, userInput, state.SystemPrompt, base)
+		old := state.History
+		state.History = base
+		res, err := runWithContextRecovery(ctx, eng, state, userInput)
 		if err != nil {
+			state.History = old
 			return true, err
 		}
 		state.History = append([]core.Message(nil), res.Messages...)
 		fmt.Println(res.FinalResponse)
+		return true, nil
+	case "/recover":
+		if len(fields) != 2 || strings.ToLower(strings.TrimSpace(fields[1])) != "context" {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /recover context")
+			return true, nil
+		}
+		prev := state.SessionID
+		state.SessionID = uuid.NewString()
+		state.History = nil
+		printCLIEnvelope(true, map[string]any{"recovered": true, "previous_session_id": prev, "session_id": state.SessionID}, "", "")
 		return true, nil
 	case "/compress":
 		tail := 20
@@ -365,6 +382,49 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(false, nil, "unknown_command", fmt.Sprintf("未知命令: %s（输入 /help 查看命令）", fields[0]))
 		return true, nil
 	}
+}
+
+func runWithContextRecovery(ctx context.Context, eng *agent.Engine, state *chatState, userInput string) (*core.RunResult, error) {
+	res, err := eng.Run(ctx, state.SessionID, userInput, state.SystemPrompt, state.History)
+	if err == nil {
+		return res, nil
+	}
+	if !isContextLimitError(err) {
+		return nil, err
+	}
+	fmt.Println("[context] 上下文超限，正在压缩当前会话并重试...")
+	if compactor, ok := eng.SessionStore.(sessionCompactor); ok && compactor != nil {
+		_, _, _ = compactor.CompactSession(state.SessionID, 20)
+	}
+	state.History, _ = compactHistory(state.History, 20)
+	res, err = eng.Run(ctx, state.SessionID, userInput, state.SystemPrompt, state.History)
+	if err == nil {
+		fmt.Println("[context] 重试成功。")
+		return res, nil
+	}
+	if !isContextLimitError(err) {
+		return nil, err
+	}
+	prev := state.SessionID
+	state.SessionID = uuid.NewString()
+	state.History = nil
+	fmt.Printf("[context] 压缩后仍超限，切换新会话重试：%s -> %s\n", prev, state.SessionID)
+	res, err = eng.Run(ctx, state.SessionID, userInput, state.SystemPrompt, state.History)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("[context] 新会话重试成功。")
+	return res, nil
+}
+
+func isContextLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "exceed_context_size_error") ||
+		strings.Contains(msg, "exceeds the available context size") ||
+		(strings.Contains(msg, "context size") && strings.Contains(msg, "exceed"))
 }
 
 func printSlashHelp() {
