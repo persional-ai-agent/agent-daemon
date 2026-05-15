@@ -7,22 +7,22 @@ import (
 
 type gatewayCommandSpec struct {
 	Name         string
-	ArgsTemplate string
+	HelpUsage    string
 	Aliases      []string
 }
 
 var gatewayCommandCatalog = []gatewayCommandSpec{
-	{Name: "pair", ArgsTemplate: "<code>"},
+	{Name: "pair", HelpUsage: "/pair <code>"},
 	{Name: "unpair"},
 	{Name: "cancel", Aliases: []string{"abort", "stop"}},
 	{Name: "queue", Aliases: []string{"q"}},
 	{Name: "status", Aliases: []string{"s"}},
 	{Name: "pending", Aliases: []string{"pendings"}},
 	{Name: "approvals", Aliases: []string{"approval"}},
-	{Name: "grant", ArgsTemplate: "[ttl]"},
-	{Name: "revoke"},
-	{Name: "approve", ArgsTemplate: "<id>"},
-	{Name: "deny", ArgsTemplate: "<id>"},
+	{Name: "grant", HelpUsage: "/grant [ttl], /grant pattern <name> [ttl]"},
+	{Name: "revoke", HelpUsage: "/revoke, /revoke pattern <name>"},
+	{Name: "approve", HelpUsage: "/approve <id>"},
+	{Name: "deny", HelpUsage: "/deny <id>"},
 	{Name: "help", Aliases: []string{"h"}},
 }
 
@@ -103,8 +103,8 @@ func gatewayHelpCommandEntry(name string) string {
 	if !ok {
 		return "/" + strings.ToLower(strings.TrimSpace(name))
 	}
-	if strings.TrimSpace(spec.ArgsTemplate) == "" {
-		return "/" + spec.Name
+	if strings.TrimSpace(spec.HelpUsage) != "" {
+		return strings.TrimSpace(spec.HelpUsage)
 	}
-	return "/" + spec.Name + " " + spec.ArgsTemplate
+	return "/" + spec.Name
 }

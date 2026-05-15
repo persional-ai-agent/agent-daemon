@@ -64,6 +64,12 @@ func TestGatewayHelpTextIncludesBuiltIns(t *testing.T) {
 			t.Fatalf("help missing command %s: %q", name, help)
 		}
 	}
+	if !strings.Contains(help, "/grant pattern <name> [ttl]") {
+		t.Fatalf("help missing grant pattern usage: %q", help)
+	}
+	if !strings.Contains(help, "/revoke pattern <name>") {
+		t.Fatalf("help missing revoke pattern usage: %q", help)
+	}
 }
 
 func TestGatewayHelpTextYuanbaoAddsQuickReplies(t *testing.T) {
