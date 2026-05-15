@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -74,7 +73,7 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 		items := make([]map[string]any, 0, len(names))
 		seen := map[string]bool{}
 		for _, name := range names {
-			home := strings.TrimSpace(os.Getenv(HomeTargetEnvVar(name)))
+			home := ResolveHomeTarget(tc.Workdir, name)
 			items = append(items, map[string]any{
 				"platform":    name,
 				"connected":   true,
@@ -123,7 +122,7 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 			chatID = strings.TrimSpace(tc.GatewayChatID)
 		}
 		if chatID == "" && p != "" {
-			if v := strings.TrimSpace(os.Getenv(HomeTargetEnvVar(p))); v != "" {
+			if v := ResolveHomeTarget(tc.Workdir, p); v != "" {
 				chatID = v
 			}
 		}

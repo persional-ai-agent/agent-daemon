@@ -56,14 +56,17 @@ func TestSendMessageListAndSend(t *testing.T) {
 func TestSendMessageSupportsBarePlatformTargetWithHomeChannel(t *testing.T) {
 	platform.Register(fakeAdapter{name: "telegram"})
 	t.Cleanup(func() { platform.Unregister("telegram") })
-	t.Setenv("TELEGRAM_HOME_CHANNEL", "10001")
+	workdir := t.TempDir()
+	if err := SetHomeTarget(workdir, "telegram", "10001"); err != nil {
+		t.Fatal(err)
+	}
 
 	tool := NewSendMessageTool()
 	res, err := tool.Call(context.Background(), map[string]any{
 		"action":  "send",
 		"target":  "telegram",
 		"message": "hi",
-	}, ToolContext{})
+	}, ToolContext{Workdir: workdir})
 	if err != nil {
 		t.Fatal(err)
 	}

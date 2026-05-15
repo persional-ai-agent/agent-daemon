@@ -334,7 +334,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		ChatType:   event.ChatType,
 		UserID:     event.UserID,
 		UserName:   event.UserName,
-		HomeTarget: strings.TrimSpace(os.Getenv(tools.HomeTargetEnvVar(w.adapter.Name()))),
+		HomeTarget: tools.ResolveHomeTarget(w.engine.Workdir, w.adapter.Name()),
 	})
 	allowed := ""
 	if w != nil {
@@ -709,6 +709,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			homeChatID := strings.TrimSpace(parsed.args[1])
 			envKey := tools.HomeTargetEnvVar(homePlatform)
 			_ = os.Setenv(envKey, homeChatID)
+			_ = tools.SetHomeTarget(w.engine.Workdir, homePlatform, homeChatID)
 			_ = tools.UpsertChannelDirectory(w.engine.Workdir, tools.ChannelDirectoryEntry{
 				Platform:   homePlatform,
 				ChatID:     homeChatID,
