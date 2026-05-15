@@ -624,7 +624,12 @@ func (s *appState) confirmApproval(approvalID string, approve bool) (map[string]
 }
 
 func parseEventSaveArgs(text string) (path, format string, since, until time.Time, err error) {
-	rest := strings.TrimSpace(strings.TrimPrefix(text, "/events save "))
+	const prefix = "/events save "
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if !strings.HasPrefix(lower, prefix) {
+		return "", "", time.Time{}, time.Time{}, fmt.Errorf("usage: /events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]")
+	}
+	rest := strings.TrimSpace(strings.TrimSpace(text)[len(prefix):])
 	parts := strings.Fields(rest)
 	if len(parts) == 0 {
 		return "", "", time.Time{}, time.Time{}, fmt.Errorf("usage: /events save <file> [json|ndjson] [since=<RFC3339>] [until=<RFC3339>]")
@@ -632,18 +637,19 @@ func parseEventSaveArgs(text string) (path, format string, since, until time.Tim
 	path = parts[0]
 	format = "json"
 	for _, p := range parts[1:] {
+		lp := strings.ToLower(p)
 		switch {
-		case p == "json" || p == "ndjson":
-			format = p
-		case strings.HasPrefix(p, "since="):
-			v := strings.TrimSpace(strings.TrimPrefix(p, "since="))
+		case lp == "json" || lp == "ndjson":
+			format = lp
+		case strings.HasPrefix(lp, "since="):
+			v := strings.TrimSpace(p[len("since="):])
 			t, parseErr := time.Parse(time.RFC3339, v)
 			if parseErr != nil {
 				return "", "", time.Time{}, time.Time{}, fmt.Errorf("invalid since: %w", parseErr)
 			}
 			since = t
-		case strings.HasPrefix(p, "until="):
-			v := strings.TrimSpace(strings.TrimPrefix(p, "until="))
+		case strings.HasPrefix(lp, "until="):
+			v := strings.TrimSpace(p[len("until="):])
 			t, parseErr := time.Parse(time.RFC3339, v)
 			if parseErr != nil {
 				return "", "", time.Time{}, time.Time{}, fmt.Errorf("invalid until: %w", parseErr)

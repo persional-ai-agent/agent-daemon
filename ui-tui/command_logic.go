@@ -257,7 +257,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emit("reconnect probe ok")
 			s.setStatus(true, "ok", "reconnect probe ok")
 		case strings.HasPrefix(current, "/reconnect timeout "):
-			mode := strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout "))
+			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout ")))
 			if mode != "wait" && mode != "reconnect" && mode != "cancel" {
 				return lines, fmt.Errorf("用法: /reconnect timeout wait|reconnect|cancel"), false
 			}
@@ -339,7 +339,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emit("rerun: " + items[idx-1])
 			s.setStatus(true, "ok", "rerun selected")
 		case strings.HasPrefix(current, "/events"):
-			if strings.HasPrefix(current, "/events save ") {
+			if strings.HasPrefix(strings.ToLower(current), "/events save ") {
 				path, format, since, until, pErr := parseEventSaveArgs(current)
 				if pErr != nil {
 					return lines, pErr, false

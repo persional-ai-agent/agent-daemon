@@ -497,6 +497,35 @@ func TestPanelCommandCaseInsensitiveSubcommands(t *testing.T) {
 	}
 }
 
+func TestReconnectTimeoutCommandCaseInsensitive(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		timeoutAction:    "wait",
+	}
+	if _, err, _ := handleTUICommand(s, "/reconnect timeout CANCEL", nil, nil); err != nil {
+		t.Fatalf("reconnect timeout CANCEL failed: %v", err)
+	}
+	if s.timeoutAction != "cancel" {
+		t.Fatalf("timeoutAction=%q", s.timeoutAction)
+	}
+}
+
+func TestParseEventSaveArgsCaseInsensitive(t *testing.T) {
+	path, format, _, _, err := parseEventSaveArgs("/events SAVE /tmp/events.ndjson NDJSON")
+	if err != nil {
+		t.Fatalf("parseEventSaveArgs failed: %v", err)
+	}
+	if path != "/tmp/events.ndjson" || format != "ndjson" {
+		t.Fatalf("unexpected parse result: path=%q format=%q", path, format)
+	}
+}
+
 func TestConfigCommandCaseInsensitiveSubcommands(t *testing.T) {
 	var setKey, setValue string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
