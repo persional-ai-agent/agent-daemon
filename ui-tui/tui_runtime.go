@@ -1150,13 +1150,31 @@ func mapTurnEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 			Status:     status,
 		}}
 	case "error":
-		if text, _ := evt["error"].(string); text != "" {
+		if text := extractRuntimeEventErrorText(evt); text != "" {
 			return []runtimeEvent{{Type: runtimeEventError, Text: text}}
 		}
 		return nil
 	default:
 		return nil
 	}
+}
+
+func extractRuntimeEventErrorText(evt map[string]any) string {
+	if evt == nil {
+		return ""
+	}
+	if text, _ := evt["error"].(string); strings.TrimSpace(text) != "" {
+		return strings.TrimSpace(text)
+	}
+	if text, _ := evt["content"].(string); strings.TrimSpace(text) != "" {
+		return strings.TrimSpace(text)
+	}
+	if data, _ := evt["data"].(map[string]any); data != nil {
+		if text, _ := data["error"].(string); strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
 }
 
 func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {

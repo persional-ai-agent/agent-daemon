@@ -315,6 +315,40 @@ func TestRuntimeStreamEventVariantDeltaAndDone(t *testing.T) {
 	}
 }
 
+func TestRuntimeErrorEventUsesContentFallback(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("err-content")
+	rt.publishTurnEvent(map[string]any{"type": "error", "content": "content error"})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if !strings.Contains(cleaned, "content error") {
+		t.Fatalf("expected content error rendered, got: %q", out)
+	}
+}
+
+func TestRuntimeErrorEventUsesDataFallback(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("err-data")
+	rt.publishTurnEvent(map[string]any{"type": "error", "data": map[string]any{"error": "data error"}})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if !strings.Contains(cleaned, "data error") {
+		t.Fatalf("expected data error rendered, got: %q", out)
+	}
+}
+
 func TestRuntimeFreezeStableAssistantPrefixDuringStream(t *testing.T) {
 	rt := newTerminalRuntime(80)
 	rt.startTurn("freeze")

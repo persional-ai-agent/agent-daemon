@@ -181,7 +181,7 @@ func printEvent(evt map[string]any, emit bool) string {
 	case "model_stream_event":
 		return ""
 	case "error":
-		errText := strings.TrimSpace(fmt.Sprintf("%v", evt["error"]))
+		errText := extractEventErrorText(evt)
 		if errText == "" || errText == "<nil>" {
 			return ""
 		}
@@ -196,6 +196,24 @@ func printEvent(evt map[string]any, emit bool) string {
 		}
 		return fmt.Sprintf("%s: %s", evtType, string(bs))
 	}
+}
+
+func extractEventErrorText(evt map[string]any) string {
+	if evt == nil {
+		return ""
+	}
+	if text, _ := evt["error"].(string); strings.TrimSpace(text) != "" {
+		return strings.TrimSpace(text)
+	}
+	if text, _ := evt["content"].(string); strings.TrimSpace(text) != "" {
+		return strings.TrimSpace(text)
+	}
+	if data, _ := evt["data"].(map[string]any); data != nil {
+		if text, _ := data["error"].(string); strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", evt["error"]))
 }
 
 func printJSONMode(v any, pretty bool) {
