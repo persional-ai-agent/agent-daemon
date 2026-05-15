@@ -74,6 +74,15 @@ func (r *terminalRuntime) publishLine(line string) {
 		return
 	}
 	if strings.HasPrefix(trimmed, "assistant: ") || strings.HasPrefix(trimmed, "result: ") {
+		text := ""
+		if strings.HasPrefix(trimmed, "assistant: ") {
+			text = strings.TrimSpace(strings.TrimPrefix(trimmed, "assistant: "))
+		} else {
+			text = strings.TrimSpace(strings.TrimPrefix(trimmed, "result: "))
+		}
+		if text != "" {
+			r.publish(runtimeEvent{Type: runtimeEventAssistantFinal, Text: normalizeStreamText(text)})
+		}
 		return
 	}
 	if strings.HasPrefix(trimmed, "tool_started: ") || strings.HasPrefix(trimmed, "tool_finished: ") {

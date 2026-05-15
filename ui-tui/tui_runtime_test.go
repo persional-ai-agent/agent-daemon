@@ -268,6 +268,23 @@ func TestRuntimeAssistantMessageWithoutCompletedContent(t *testing.T) {
 	}
 }
 
+func TestRuntimePublishLineAssistantFallback(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("fallback")
+	rt.publishLine("assistant: hello fallback")
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if !strings.Contains(cleaned, "hello fallback") {
+		t.Fatalf("expected fallback assistant text rendered, got: %q", out)
+	}
+}
+
 func TestRuntimeFreezeStableAssistantPrefixDuringStream(t *testing.T) {
 	rt := newTerminalRuntime(80)
 	rt.startTurn("freeze")

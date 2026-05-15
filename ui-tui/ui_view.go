@@ -160,6 +160,9 @@ func printEvent(evt map[string]any, emit bool) string {
 	case "user_message":
 		return ""
 	case "assistant_message":
+		if text, _ := evt["content"].(string); strings.TrimSpace(text) != "" {
+			return fmt.Sprintf("assistant: %s", text)
+		}
 		return ""
 	case "tool_started", "tool_finished":
 		toolName := evt["tool_name"]
