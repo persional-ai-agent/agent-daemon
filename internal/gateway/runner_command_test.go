@@ -145,6 +145,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/SAVE out.json"); got != "/save out.json" {
 		t.Fatalf("slash command should normalize save, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/TOOLS SHOW send_message"); got != "/tools SHOW send_message" {
+		t.Fatalf("slash command should normalize tools root, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/COMPRESS 30"); got != "/compress 30" {
 		t.Fatalf("slash command should normalize compress, got=%q", got)
 	}
@@ -490,5 +493,15 @@ func TestSaveGatewayHistory(t *testing.T) {
 	}
 	if !strings.HasSuffix(path2, filepath.Join("exports", "x.json")) {
 		t.Fatalf("unexpected custom path: %q", path2)
+	}
+}
+
+func TestRenderGatewayToolsList(t *testing.T) {
+	got := renderGatewayToolsList([]string{"b_tool", "a_tool"})
+	if !strings.Contains(got, "Tools (2):") {
+		t.Fatalf("missing header: %q", got)
+	}
+	if !strings.Contains(got, "1. a_tool") || !strings.Contains(got, "2. b_tool") {
+		t.Fatalf("unexpected ordering: %q", got)
 	}
 }

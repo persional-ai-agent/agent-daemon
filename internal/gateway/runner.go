@@ -692,6 +692,47 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, map[string]any{"slash": "/save", "session_id": active, "path": path, "messages": len(msgs)})
 			return
+		case "/tools":
+			sub := "list"
+			if len(parsed.args) >= 1 {
+				sub = strings.ToLower(strings.TrimSpace(parsed.args[0]))
+			}
+			switch sub {
+			case "list":
+				if len(parsed.args) > 1 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools [list|show <name>|schemas]", event.MessageID, map[string]any{"slash": "/tools"})
+					return
+				}
+				reply := renderGatewayToolsList(w.engine.Registry.Names())
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "list"})
+				return
+			case "show":
+				if len(parsed.args) != 2 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools show <name>", event.MessageID, map[string]any{"slash": "/tools"})
+					return
+				}
+				name := strings.TrimSpace(parsed.args[1])
+				for _, schema := range w.engine.Registry.Schemas() {
+					if schema.Function.Name == name {
+						reply := renderGatewayToolSchema(schema)
+						_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "show", "tool": name})
+						return
+					}
+				}
+				_, _ = w.sendText(ctx, event.ChatID, "_Tool not found: "+escapeMarkdown(name)+"_", event.MessageID, map[string]any{"slash": "/tools", "subcommand": "show", "tool": name})
+				return
+			case "schemas":
+				if len(parsed.args) > 1 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools schemas", event.MessageID, map[string]any{"slash": "/tools"})
+					return
+				}
+				reply := renderGatewayToolSchemas(w.engine.Registry.Schemas())
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "schemas"})
+				return
+			default:
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools [list|show <name>|schemas]", event.MessageID, map[string]any{"slash": "/tools"})
+				return
+			}
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -1315,6 +1356,35 @@ func safeGatewayFilePart(s string) string {
 		}
 	}
 	return b.String()
+}
+
+func renderGatewayToolsList(names []string) string {
+	if len(names) == 0 {
+		return "Tools: (empty)"
+	}
+	sort.Strings(names)
+	lines := make([]string, 0, len(names)+1)
+	lines = append(lines, "Tools ("+itoa(len(names))+"):")
+	for i, n := range names {
+		lines = append(lines, itoa(i+1)+". "+n)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderGatewayToolSchema(schema core.ToolSchema) string {
+	bs, err := json.MarshalIndent(schema, "", "  ")
+	if err != nil {
+		return "Schema marshal failed: " + err.Error()
+	}
+	return "Tool schema:\n" + string(bs)
+}
+
+func renderGatewayToolSchemas(schemas []core.ToolSchema) string {
+	bs, err := json.MarshalIndent(schemas, "", "  ")
+	if err != nil {
+		return "Schemas marshal failed: " + err.Error()
+	}
+	return "Tool schemas (" + itoa(len(schemas)) + "):\n" + string(bs)
 }
 
 func withTail(parts []string) string {
