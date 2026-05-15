@@ -320,6 +320,44 @@ func TestRenderGatewayShow(t *testing.T) {
 	}
 }
 
+func TestParseGatewayShowArgs(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		defSID     string
+		wantSID    string
+		wantOffset int
+		wantLimit  int
+		wantErr    bool
+	}{
+		{name: "default", args: nil, defSID: "s1", wantSID: "s1", wantOffset: 0, wantLimit: 20},
+		{name: "explicit session", args: []string{"s2"}, defSID: "s1", wantSID: "s2", wantOffset: 0, wantLimit: 20},
+		{name: "session offset limit", args: []string{"s2", "10", "30"}, defSID: "s1", wantSID: "s2", wantOffset: 10, wantLimit: 30},
+		{name: "offset limit with default session", args: []string{"5", "15"}, defSID: "s1", wantSID: "s1", wantOffset: 5, wantLimit: 15},
+		{name: "offset only with default session", args: []string{"7"}, defSID: "s1", wantSID: "s1", wantOffset: 7, wantLimit: 20},
+		{name: "negative offset", args: []string{"-1"}, defSID: "s1", wantErr: true},
+		{name: "bad limit", args: []string{"s2", "0", "0"}, defSID: "s1", wantErr: true},
+		{name: "too many args", args: []string{"s2", "1", "2", "3"}, defSID: "s1", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sid, offset, limit, err := parseGatewayShowArgs(tc.args, tc.defSID)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got sid=%q offset=%d limit=%d", sid, offset, limit)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if sid != tc.wantSID || offset != tc.wantOffset || limit != tc.wantLimit {
+				t.Fatalf("got sid=%q offset=%d limit=%d want sid=%q offset=%d limit=%d", sid, offset, limit, tc.wantSID, tc.wantOffset, tc.wantLimit)
+			}
+		})
+	}
+}
+
 func TestRenderGatewaySessions(t *testing.T) {
 	items := []map[string]any{
 		{"session_id": "s1", "last_seen": "2026-05-15T10:00:00Z"},

@@ -400,31 +400,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/history", "session_id": active})
 			return
 		case "/show":
-			target := w.currentSessionID()
-			offset := 0
-			limit := 20
-			if len(parsed.args) > 3 {
+			target, offset, limit, parseErr := parseGatewayShowArgs(parsed.args, w.currentSessionID())
+			if parseErr != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
 				return
-			}
-			if len(parsed.args) >= 1 {
-				target = strings.TrimSpace(parsed.args[0])
-			}
-			if len(parsed.args) >= 2 {
-				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[1]))
-				if err != nil || v < 0 {
-					_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
-					return
-				}
-				offset = v
-			}
-			if len(parsed.args) == 3 {
-				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[2]))
-				if err != nil || v <= 0 {
-					_, _ = w.sendText(ctx, event.ChatID, "Usage: /show [session_id] [offset] [limit]", event.MessageID, map[string]any{"slash": "/show"})
-					return
-				}
-				limit = v
 			}
 			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
 			if !ok || detailStore == nil {
@@ -1197,6 +1176,55 @@ func renderGatewayShow(sessionID string, offset, limit int, msgs []core.Message)
 		lines = append(lines, itoa(offset+i+1)+". ["+msg.Role+"] "+content)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func parseGatewayShowArgs(args []string, defaultSessionID string) (sessionID string, offset int, limit int, err error) {
+	sessionID = strings.TrimSpace(defaultSessionID)
+	offset = 0
+	limit = 20
+	if len(args) == 0 {
+		return sessionID, offset, limit, nil
+	}
+	if len(args) > 3 {
+		return "", 0, 0, fmt.Errorf("too many args")
+	}
+	first := strings.TrimSpace(args[0])
+	if first == "" {
+		return "", 0, 0, fmt.Errorf("empty arg")
+	}
+	if n, convErr := strconv.Atoi(first); convErr == nil {
+		if n < 0 {
+			return "", 0, 0, fmt.Errorf("invalid offset")
+		}
+		offset = n
+		if len(args) >= 2 {
+			v, e := strconv.Atoi(strings.TrimSpace(args[1]))
+			if e != nil || v <= 0 {
+				return "", 0, 0, fmt.Errorf("invalid limit")
+			}
+			limit = v
+		}
+		if len(args) == 3 {
+			return "", 0, 0, fmt.Errorf("too many args")
+		}
+		return sessionID, offset, limit, nil
+	}
+	sessionID = first
+	if len(args) >= 2 {
+		v, e := strconv.Atoi(strings.TrimSpace(args[1]))
+		if e != nil || v < 0 {
+			return "", 0, 0, fmt.Errorf("invalid offset")
+		}
+		offset = v
+	}
+	if len(args) == 3 {
+		v, e := strconv.Atoi(strings.TrimSpace(args[2]))
+		if e != nil || v <= 0 {
+			return "", 0, 0, fmt.Errorf("invalid limit")
+		}
+		limit = v
+	}
+	return sessionID, offset, limit, nil
 }
 
 func renderGatewaySessions(activeSessionID string, items []map[string]any) string {
