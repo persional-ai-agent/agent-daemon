@@ -130,6 +130,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/model/providers", s.handleUIModelProviders)
 	mux.HandleFunc("/v1/ui/model/set", s.handleUIModelSet)
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
+	mux.HandleFunc("/v1/ui/gateway/continuity", s.handleUIGatewayContinuity)
+	mux.HandleFunc("/v1/ui/gateway/identity", s.handleUIGatewayIdentity)
 	mux.HandleFunc("/v1/ui/gateway/diagnostics", s.handleUIGatewayDiagnostics)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
 	mux.HandleFunc("/v1/ui/targets", s.handleUITargets)
@@ -765,6 +767,16 @@ type uiTargetsSetHomeRequest struct {
 	ChatID   string `json:"chat_id,omitempty"`
 }
 
+type uiGatewayContinuityRequest struct {
+	Mode string `json:"mode"`
+}
+
+type uiGatewayIdentityRequest struct {
+	Platform string `json:"platform"`
+	UserID   string `json:"user_id"`
+	GlobalID string `json:"global_id,omitempty"`
+}
+
 type sessionCompressor interface {
 	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
 }
@@ -1229,6 +1241,209 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"status": s.GatewayStatusFn(),
 	})
+}
+
+func continuityModeFromRaw(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "user_id", "id":
+		return "user_id"
+	case "user_name", "name":
+		return "user_name"
+	case "off":
+		return "off"
+	default:
+		return "off"
+	}
+}
+
+func gatewayIdentityMapPath(workdir string) string {
+	return filepath.Join(strings.TrimSpace(workdir), ".agent-daemon", "gateway_identity_map.json")
+}
+
+type gatewayIdentityRecord struct {
+	Platform string `json:"platform"`
+	UserID   string `json:"user_id"`
+	GlobalID string `json:"global_id"`
+}
+
+func loadGatewayIdentityMap(workdir string) ([]gatewayIdentityRecord, error) {
+	path := gatewayIdentityMapPath(workdir)
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []gatewayIdentityRecord{}, nil
+		}
+		return nil, err
+	}
+	rows := []gatewayIdentityRecord{}
+	if err := json.Unmarshal(bs, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func saveGatewayIdentityMap(workdir string, rows []gatewayIdentityRecord) error {
+	path := gatewayIdentityMapPath(workdir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	bs, err := json.MarshalIndent(rows, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, bs, 0o644)
+}
+
+func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		mode, err := tools.GetGatewaySetting(s.engineWorkdir(), "continuity_mode")
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		mode = continuityModeFromRaw(mode)
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"continuity_mode": mode,
+			},
+		})
+		return
+	case http.MethodPost:
+		var req uiGatewayContinuityRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+			return
+		}
+		mode := continuityModeFromRaw(req.Mode)
+		if err := tools.SetGatewaySetting(s.engineWorkdir(), "continuity_mode", mode); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"continuity_mode": mode,
+			},
+		})
+		return
+	default:
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
+func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		platformName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
+		userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		globalID := ""
+		for _, row := range rows {
+			if platformName == row.Platform && userID == row.UserID {
+				globalID = strings.TrimSpace(row.GlobalID)
+				break
+			}
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"platform":  platformName,
+				"user_id":   userID,
+				"global_id": globalID,
+			},
+		})
+		return
+	case http.MethodPost:
+		var req uiGatewayIdentityRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+			return
+		}
+		platformName := strings.ToLower(strings.TrimSpace(req.Platform))
+		userID := strings.TrimSpace(req.UserID)
+		globalID := strings.TrimSpace(req.GlobalID)
+		if platformName == "" || userID == "" || globalID == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id/global_id required")
+			return
+		}
+		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		found := false
+		for i := range rows {
+			if rows[i].Platform == platformName && rows[i].UserID == userID {
+				rows[i].GlobalID = globalID
+				found = true
+				break
+			}
+		}
+		if !found {
+			rows = append(rows, gatewayIdentityRecord{Platform: platformName, UserID: userID, GlobalID: globalID})
+		}
+		if err := saveGatewayIdentityMap(s.engineWorkdir(), rows); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"platform":  platformName,
+				"user_id":   userID,
+				"global_id": globalID,
+				"updated":   true,
+			},
+		})
+		return
+	case http.MethodDelete:
+		var req uiGatewayIdentityRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+			return
+		}
+		platformName := strings.ToLower(strings.TrimSpace(req.Platform))
+		userID := strings.TrimSpace(req.UserID)
+		if platformName == "" || userID == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
+			return
+		}
+		rows, err := loadGatewayIdentityMap(s.engineWorkdir())
+		if err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		next := make([]gatewayIdentityRecord, 0, len(rows))
+		for _, row := range rows {
+			if row.Platform == platformName && row.UserID == userID {
+				continue
+			}
+			next = append(next, row)
+		}
+		if err := saveGatewayIdentityMap(s.engineWorkdir(), next); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"platform": platformName,
+				"user_id":  userID,
+				"deleted":  true,
+			},
+		})
+		return
+	default:
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
 }
 
 func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Request) {

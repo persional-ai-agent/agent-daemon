@@ -1096,6 +1096,92 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "result"))
 			s.setStatus(true, "ok", "home target updated")
+		case current == "/whoami" || strings.HasPrefix(current, "/whoami "):
+			parts := strings.Fields(current)
+			if len(parts) != 3 {
+				return lines, fmt.Errorf("用法: /whoami <platform> <user_id>"), false
+			}
+			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
+			userID := strings.TrimSpace(parts[2])
+			if platformName == "" || userID == "" {
+				return lines, fmt.Errorf("用法: /whoami <platform> <user_id>"), false
+			}
+			apiPath := fmt.Sprintf("%s/v1/ui/gateway/identity?platform=%s&user_id=%s", s.httpBase, url.QueryEscape(platformName), url.QueryEscape(userID))
+			out, wErr := httpJSON(http.MethodGet, apiPath, nil)
+			if wErr != nil {
+				s.setErrStatus(wErr)
+				return lines, wErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "identity shown")
+		case current == "/continuity" || strings.HasPrefix(current, "/continuity "):
+			parts := strings.Fields(current)
+			if len(parts) > 2 {
+				return lines, fmt.Errorf("用法: /continuity [off|user_id|user_name]"), false
+			}
+			if len(parts) == 1 {
+				out, cErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/continuity", nil)
+				if cErr != nil {
+					s.setErrStatus(cErr)
+					return lines, cErr, false
+				}
+				emitData(uiPayload(out, "result"))
+				s.setStatus(true, "ok", "continuity shown")
+				continue
+			}
+			mode := strings.ToLower(strings.TrimSpace(parts[1]))
+			if mode != "off" && mode != "user_id" && mode != "user_name" {
+				return lines, fmt.Errorf("用法: /continuity [off|user_id|user_name]"), false
+			}
+			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/continuity", map[string]any{"mode": mode})
+			if cErr != nil {
+				s.setErrStatus(cErr)
+				return lines, cErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "continuity updated")
+		case current == "/setid" || strings.HasPrefix(current, "/setid "):
+			parts := strings.Fields(current)
+			if len(parts) != 4 {
+				return lines, fmt.Errorf("用法: /setid <platform> <user_id> <global_user_id>"), false
+			}
+			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
+			userID := strings.TrimSpace(parts[2])
+			globalID := strings.TrimSpace(parts[3])
+			if platformName == "" || userID == "" || globalID == "" {
+				return lines, fmt.Errorf("用法: /setid <platform> <user_id> <global_user_id>"), false
+			}
+			out, iErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
+				"platform":  platformName,
+				"user_id":   userID,
+				"global_id": globalID,
+			})
+			if iErr != nil {
+				s.setErrStatus(iErr)
+				return lines, iErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "identity updated")
+		case current == "/unsetid" || strings.HasPrefix(current, "/unsetid "):
+			parts := strings.Fields(current)
+			if len(parts) != 3 {
+				return lines, fmt.Errorf("用法: /unsetid <platform> <user_id>"), false
+			}
+			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
+			userID := strings.TrimSpace(parts[2])
+			if platformName == "" || userID == "" {
+				return lines, fmt.Errorf("用法: /unsetid <platform> <user_id>"), false
+			}
+			out, iErr := httpJSON(http.MethodDelete, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
+				"platform": platformName,
+				"user_id":  userID,
+			})
+			if iErr != nil {
+				s.setErrStatus(iErr)
+				return lines, iErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "identity removed")
 		case current == "/gateway" || strings.HasPrefix(current, "/gateway "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 {

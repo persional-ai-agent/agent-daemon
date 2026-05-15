@@ -32,6 +32,10 @@ func TUIHelpEntries() []HelpEntry {
 		{"/compress [n]", "compress current session context"},
 		{"/targets [platform]", "list delivery targets"},
 		{"/sethome <p:id>|<p> <id>", "set platform home target"},
+		{"/whoami <platform> <user_id>", "show mapped global identity"},
+		{"/continuity [off|user_id|user_name]", "show or set continuity mode"},
+		{"/setid <platform> <user_id> <global_id>", "bind identity mapping"},
+		{"/unsetid <platform> <user_id>", "remove identity mapping"},
 		{"/skills", "list loaded skills"},
 		{"/model [provider:model]", "show or set model provider/model"},
 		{"/personality [show|reset|text]", "show or set runtime system prompt"},
@@ -95,7 +99,7 @@ func TUIHelpEntries() []HelpEntry {
 func TUIRootCommands() []string {
 	return []string{
 		"/help", "/session", "/new", "/reset", "/resume", "/reload", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
-		"/stats", "/usage", "/undo", "/retry", "/compress", "/targets", "/sethome", "/skills", "/model", "/personality", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
+		"/stats", "/usage", "/undo", "/retry", "/compress", "/targets", "/sethome", "/whoami", "/continuity", "/setid", "/unsetid", "/skills", "/model", "/personality", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
 		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
 		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
 		"/reconnect", "/recover", "/diag", "/fullscreen", "/quit", "/exit", "/new", "/reset",

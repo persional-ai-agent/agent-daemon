@@ -353,6 +353,10 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/resume", "用法: /resume <session_id>"},
 		{"/compress x", "用法: /compress [tail_messages]"},
 		{"/recover", "用法: /recover context"},
+		{"/whoami", "用法: /whoami <platform> <user_id>"},
+		{"/continuity x y", "用法: /continuity [off|user_id|user_name]"},
+		{"/setid a b", "用法: /setid <platform> <user_id> <global_user_id>"},
+		{"/unsetid a", "用法: /unsetid <platform> <user_id>"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
@@ -721,6 +725,78 @@ func TestTargetsAndSetHomeCommands(t *testing.T) {
 	}
 	if got, _ := lastBody["chat_id"].(string); got != "2002" {
 		t.Fatalf("unexpected chat_id in body: %+v", lastBody)
+	}
+}
+
+func TestContinuityAndIdentityCommands(t *testing.T) {
+	lastMethod := ""
+	lastPath := ""
+	lastBody := map[string]any{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastMethod = r.Method
+		lastPath = r.URL.String()
+		switch r.URL.Path {
+		case "/v1/ui/gateway/continuity":
+			if r.Method == http.MethodGet {
+				_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"continuity_mode": "off"}})
+				return
+			}
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"continuity_mode": "user_name"}})
+		case "/v1/ui/gateway/identity":
+			if r.Method == http.MethodGet {
+				_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"platform": "telegram", "user_id": "u1", "global_id": "gid-1"}})
+				return
+			}
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"updated": true}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	s := &appState{
+		httpBase:         ts.URL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+
+	if _, err, _ := handleTUICommand(s, "/continuity", nil, nil); err != nil {
+		t.Fatalf("/continuity get failed: %v", err)
+	}
+	if lastMethod != http.MethodGet || lastPath != "/v1/ui/gateway/continuity" {
+		t.Fatalf("unexpected continuity get request: %s %s", lastMethod, lastPath)
+	}
+	if _, err, _ := handleTUICommand(s, "/continuity user_name", nil, nil); err != nil {
+		t.Fatalf("/continuity set failed: %v", err)
+	}
+	if got, _ := lastBody["mode"].(string); got != "user_name" {
+		t.Fatalf("unexpected continuity body: %+v", lastBody)
+	}
+	if _, err, _ := handleTUICommand(s, "/whoami telegram u1", nil, nil); err != nil {
+		t.Fatalf("/whoami failed: %v", err)
+	}
+	if lastMethod != http.MethodGet || lastPath != "/v1/ui/gateway/identity?platform=telegram&user_id=u1" {
+		t.Fatalf("unexpected whoami request: %s %s", lastMethod, lastPath)
+	}
+	if _, err, _ := handleTUICommand(s, "/setid telegram u1 gid-2", nil, nil); err != nil {
+		t.Fatalf("/setid failed: %v", err)
+	}
+	if got, _ := lastBody["global_id"].(string); got != "gid-2" {
+		t.Fatalf("unexpected setid body: %+v", lastBody)
+	}
+	if _, err, _ := handleTUICommand(s, "/unsetid telegram u1", nil, nil); err != nil {
+		t.Fatalf("/unsetid failed: %v", err)
+	}
+	if lastMethod != http.MethodDelete || lastPath != "/v1/ui/gateway/identity" {
+		t.Fatalf("unexpected unsetid request: %s %s", lastMethod, lastPath)
 	}
 }
 
