@@ -44,7 +44,7 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "tools", Description: "inspect tool list or schemas", HelpUsage: "/tools [list|show <name>|schemas]"},
 	{Name: "cancel", Description: "cancel the running task", Aliases: []string{"abort", "stop"}},
 	{Name: "compress", Description: "compact current session context", HelpUsage: "/compress [tail_messages]"},
-	{Name: "usage", Description: "show usage/stat summary for active session"},
+	{Name: "usage", Description: "show usage/stat summary", HelpUsage: "/usage [session_id]"},
 	{Name: "queue", Description: "show queued task count", Aliases: []string{"q"}},
 	{Name: "status", Description: "show current session status", Aliases: []string{"s"}},
 	{Name: "pending", Description: "show latest pending approval", Aliases: []string{"pendings"}},

@@ -1017,12 +1017,19 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, "_Compress not supported by session store._", event.MessageID, map[string]any{"slash": "/compress"})
 			return
 		case "/usage":
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /usage [session_id]", event.MessageID, map[string]any{"slash": "/usage"})
+				return
+			}
 			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
 			if !ok || statsStore == nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Usage not supported by session store._", event.MessageID, map[string]any{"slash": "/usage"})
 				return
 			}
 			target := w.currentSessionID()
+			if len(parsed.args) == 1 && strings.TrimSpace(parsed.args[0]) != "" {
+				target = strings.TrimSpace(parsed.args[0])
+			}
 			stats, err := statsStore.SessionStats(target)
 			if err != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Usage failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/usage"})

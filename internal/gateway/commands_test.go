@@ -121,6 +121,9 @@ func TestGatewayCommandUsage(t *testing.T) {
 	if got := GatewayCommandUsage("status"); got != "/status" {
 		t.Fatalf("unexpected status usage: %q", got)
 	}
+	if got := GatewayCommandUsage("usage"); got != "/usage [session_id]" {
+		t.Fatalf("unexpected usage usage: %q", got)
+	}
 }
 
 func TestGatewayApprovalSlashCommands(t *testing.T) {
