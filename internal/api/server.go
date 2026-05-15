@@ -1299,9 +1299,15 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		platformName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
-		userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
-		globalID, err := tools.ResolveGatewayIdentity(s.engineWorkdir(), platformName, userID)
+		ref, parseErr := tools.ParseGatewayIdentityRefArgs([]string{
+			r.URL.Query().Get("platform"),
+			r.URL.Query().Get("user_id"),
+		})
+		if parseErr != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
+			return
+		}
+		globalID, err := tools.ResolveGatewayIdentity(s.engineWorkdir(), ref.Platform, ref.UserID)
 		if err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
@@ -1309,8 +1315,8 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
 			"result": map[string]any{
-				"platform":  platformName,
-				"user_id":   userID,
+				"platform":  ref.Platform,
+				"user_id":   ref.UserID,
 				"global_id": globalID,
 			},
 		})
@@ -1321,23 +1327,21 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 			return
 		}
-		platformName := strings.ToLower(strings.TrimSpace(req.Platform))
-		userID := strings.TrimSpace(req.UserID)
-		globalID := strings.TrimSpace(req.GlobalID)
-		if platformName == "" || userID == "" || globalID == "" {
+		setArgs, parseErr := tools.ParseGatewaySetIdentityArgs([]string{req.Platform, req.UserID, req.GlobalID})
+		if parseErr != nil {
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id/global_id required")
 			return
 		}
-		if err := tools.UpsertGatewayIdentity(s.engineWorkdir(), platformName, userID, globalID); err != nil {
+		if err := tools.UpsertGatewayIdentity(s.engineWorkdir(), setArgs.Platform, setArgs.UserID, setArgs.GlobalID); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
 			"result": map[string]any{
-				"platform":  platformName,
-				"user_id":   userID,
-				"global_id": globalID,
+				"platform":  setArgs.Platform,
+				"user_id":   setArgs.UserID,
+				"global_id": setArgs.GlobalID,
 				"updated":   true,
 			},
 		})
@@ -1348,21 +1352,20 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 			return
 		}
-		platformName := strings.ToLower(strings.TrimSpace(req.Platform))
-		userID := strings.TrimSpace(req.UserID)
-		if platformName == "" || userID == "" {
+		ref, parseErr := tools.ParseGatewayIdentityRefArgs([]string{req.Platform, req.UserID})
+		if parseErr != nil {
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/user_id required")
 			return
 		}
-		if err := tools.DeleteGatewayIdentity(s.engineWorkdir(), platformName, userID); err != nil {
+		if err := tools.DeleteGatewayIdentity(s.engineWorkdir(), ref.Platform, ref.UserID); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
 			"result": map[string]any{
-				"platform": platformName,
-				"user_id":  userID,
+				"platform": ref.Platform,
+				"user_id":  ref.UserID,
 				"deleted":  true,
 			},
 		})
@@ -1378,16 +1381,18 @@ func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Re
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
-	platformName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
-	chatType := strings.TrimSpace(r.URL.Query().Get("chat_type"))
-	chatID := strings.TrimSpace(r.URL.Query().Get("chat_id"))
-	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
-	userName := strings.TrimSpace(r.URL.Query().Get("user_name"))
-	if platformName == "" || chatID == "" {
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_id required")
+	resolveArgs, parseErr := tools.ParseGatewayResolveArgs([]string{
+		r.URL.Query().Get("platform"),
+		r.URL.Query().Get("chat_type"),
+		r.URL.Query().Get("chat_id"),
+		r.URL.Query().Get("user_id"),
+		r.URL.Query().Get("user_name"),
+	})
+	if parseErr != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_type/chat_id/user_id required")
 		return
 	}
-	resolved, err := tools.ResolveGatewaySessionMapping(s.engineWorkdir(), platformName, chatType, chatID, userID, userName)
+	resolved, err := tools.ResolveGatewaySessionMapping(s.engineWorkdir(), resolveArgs.Platform, resolveArgs.ChatType, resolveArgs.ChatID, resolveArgs.UserID, resolveArgs.UserName)
 	if err != nil {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
