@@ -137,6 +137,7 @@
 
 - 已将 gateway identity/session resolve 连同 CLI/API/Gateway 三端统一到 `internal/tools/gateway_identity.go`，消除三套 continuity/global-id 解析漂移。
 - Gateway `identity_store` 已改为复用 `internal/tools` 的持久化读写能力；`runner` 的 `/resolve` 已复用同一 resolve 结果结构。
+- 已将 `/sethome` 参数解析统一到 `internal/tools.ParseSetHomeArgs`，CLI/TUI/Gateway 全部复用同一解析路径，消除 `<platform:chat_id>` 与 `<platform> <chat_id>` 两种写法的行为漂移。
 
 范围：
 

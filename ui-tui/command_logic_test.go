@@ -787,7 +787,10 @@ func TestTargetsAndSetHomeCommands(t *testing.T) {
 	if lastMethod != http.MethodPost || lastPath != "/v1/ui/targets/home" {
 		t.Fatalf("unexpected sethome request: %s %s", lastMethod, lastPath)
 	}
-	if got, _ := lastBody["target"].(string); got != "telegram:1001" {
+	if got, _ := lastBody["platform"].(string); got != "telegram" {
+		t.Fatalf("unexpected platform in body: %+v", lastBody)
+	}
+	if got, _ := lastBody["chat_id"].(string); got != "1001" {
 		t.Fatalf("unexpected sethome target body: %+v", lastBody)
 	}
 

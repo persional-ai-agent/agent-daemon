@@ -925,22 +925,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
 				return
 			}
-			homePlatform := ""
-			homeChatID := ""
-			if len(parsed.args) == 1 {
-				p, c, err := tools.ParseDeliveryTarget(strings.TrimSpace(parsed.args[0]))
-				if err != nil || strings.TrimSpace(c) == "" {
-					_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
-					return
-				}
-				homePlatform, homeChatID = p, c
-			} else {
-				homePlatform = strings.ToLower(strings.TrimSpace(parsed.args[0]))
-				homeChatID = strings.TrimSpace(parsed.args[1])
-				if homePlatform == "" || homeChatID == "" {
-					_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
-					return
-				}
+			homePlatform, homeChatID, err := tools.ParseSetHomeArgs(parsed.args)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
+				return
 			}
 			envKey := tools.HomeTargetEnvVar(homePlatform)
 			_ = os.Setenv(envKey, homeChatID)

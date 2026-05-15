@@ -26,3 +26,20 @@ func TestResolveHomeTargetPrefersEnv(t *testing.T) {
 		t.Fatalf("resolved=%q want=200", got)
 	}
 }
+
+func TestParseSetHomeArgs(t *testing.T) {
+	p, c, err := ParseSetHomeArgs([]string{"telegram:100"})
+	if err != nil || p != "telegram" || c != "100" {
+		t.Fatalf("single token parse mismatch: p=%q c=%q err=%v", p, c, err)
+	}
+	p, c, err = ParseSetHomeArgs([]string{"Telegram", " 200 "})
+	if err != nil || p != "telegram" || c != "200" {
+		t.Fatalf("double token parse mismatch: p=%q c=%q err=%v", p, c, err)
+	}
+	if _, _, err = ParseSetHomeArgs([]string{}); err == nil {
+		t.Fatal("expected error for empty args")
+	}
+	if _, _, err = ParseSetHomeArgs([]string{"telegram"}); err == nil {
+		t.Fatal("expected error for missing chat id")
+	}
+}

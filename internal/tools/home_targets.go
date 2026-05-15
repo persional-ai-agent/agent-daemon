@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,4 +66,23 @@ func ResolveHomeTarget(workdir, platform string) string {
 	}
 	v, _ := GetHomeTarget(workdir, platform)
 	return strings.TrimSpace(v)
+}
+
+func ParseSetHomeArgs(args []string) (platform string, chatID string, err error) {
+	if len(args) == 1 {
+		p, c, pErr := ParseDeliveryTarget(strings.TrimSpace(args[0]))
+		if pErr != nil || strings.TrimSpace(c) == "" {
+			return "", "", fmt.Errorf("invalid sethome target")
+		}
+		return strings.ToLower(strings.TrimSpace(p)), strings.TrimSpace(c), nil
+	}
+	if len(args) == 2 {
+		p := strings.ToLower(strings.TrimSpace(args[0]))
+		c := strings.TrimSpace(args[1])
+		if p == "" || c == "" {
+			return "", "", fmt.Errorf("invalid sethome target")
+		}
+		return p, c, nil
+	}
+	return "", "", fmt.Errorf("invalid sethome args")
 }

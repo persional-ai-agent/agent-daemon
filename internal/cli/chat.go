@@ -373,22 +373,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
 			return true, nil
 		}
-		p := ""
-		cid := ""
-		if len(fields) == 2 {
-			tp, tcid, err := clitools.ParseDeliveryTarget(strings.TrimSpace(fields[1]))
-			if err != nil || strings.TrimSpace(tcid) == "" {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
-				return true, nil
-			}
-			p, cid = tp, tcid
-		} else {
-			p = strings.ToLower(strings.TrimSpace(fields[1]))
-			cid = strings.TrimSpace(fields[2])
-			if p == "" || cid == "" {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
-				return true, nil
-			}
+		p, cid, err := clitools.ParseSetHomeArgs(fields[1:])
+		if err != nil {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+			return true, nil
 		}
 		env := clitools.HomeTargetEnvVar(p)
 		_ = os.Setenv(env, cid)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -1073,22 +1074,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			if len(parts) != 2 && len(parts) != 3 {
 				return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
 			}
-			body := map[string]any{}
-			if len(parts) == 2 {
-				target := strings.TrimSpace(parts[1])
-				if target == "" {
-					return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
-				}
-				body["target"] = target
-			} else {
-				platform := strings.ToLower(strings.TrimSpace(parts[1]))
-				chatID := strings.TrimSpace(parts[2])
-				if platform == "" || chatID == "" {
-					return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
-				}
-				body["platform"] = platform
-				body["chat_id"] = chatID
+			platform, chatID, pErr := tools.ParseSetHomeArgs(parts[1:])
+			if pErr != nil {
+				return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
 			}
+			body := map[string]any{"platform": platform, "chat_id": chatID}
 			out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/targets/home", body)
 			if hErr != nil {
 				s.setErrStatus(hErr)
