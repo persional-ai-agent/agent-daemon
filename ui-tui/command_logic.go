@@ -1339,18 +1339,25 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emitData(uiPayload(out, "model", "result"))
 			s.setStatus(true, "ok", "model shown")
 		case strings.HasPrefix(current, "/model "):
-			spec := strings.TrimSpace(strings.TrimPrefix(current, "/model "))
-			if spec == "" {
-				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+			args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(current, "/model ")))
+			if len(args) != 1 && len(args) != 2 {
+				return lines, fmt.Errorf("用法: /model [provider:model|provider model]"), false
 			}
-			if !strings.Contains(spec, ":") {
-				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+			provider := ""
+			model := ""
+			if len(args) == 1 {
+				if !strings.Contains(args[0], ":") {
+					return lines, fmt.Errorf("用法: /model [provider:model|provider model]"), false
+				}
+				parts := strings.SplitN(args[0], ":", 2)
+				provider = strings.ToLower(strings.TrimSpace(parts[0]))
+				model = strings.TrimSpace(parts[1])
+			} else {
+				provider = strings.ToLower(strings.TrimSpace(args[0]))
+				model = strings.TrimSpace(args[1])
 			}
-			parts := strings.SplitN(spec, ":", 2)
-			provider := strings.ToLower(strings.TrimSpace(parts[0]))
-			model := strings.TrimSpace(parts[1])
 			if provider == "" || model == "" {
-				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+				return lines, fmt.Errorf("用法: /model [provider:model|provider model]"), false
 			}
 			out, mErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/model/set", map[string]any{
 				"provider": provider,

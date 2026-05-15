@@ -38,7 +38,7 @@ func TUIHelpEntries() []HelpEntry {
 		{"/unsetid <platform> <user_id>", "remove identity mapping"},
 		{"/resolve <p> <t> <cid> <uid> [uname]", "resolve gateway session mapping"},
 		{"/skills", "list loaded skills"},
-		{"/model [provider:model]", "show or set model provider/model"},
+		{"/model [provider:model|provider model]", "show or set model provider/model"},
 		{"/personality [show|reset|text]", "show or set runtime system prompt"},
 		{"/gateway status", "show gateway status"},
 		{"/gateway enable", "enable gateway"},

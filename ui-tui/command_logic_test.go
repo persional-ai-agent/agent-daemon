@@ -1035,13 +1035,16 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 	if _, err, _ := handleTUICommand(s, "/model openai:gpt-5-mini", nil, nil); err != nil {
 		t.Fatalf("/model set failed: %v", err)
 	}
+	if _, err, _ := handleTUICommand(s, "/model codex gpt-5-codex", nil, nil); err != nil {
+		t.Fatalf("/model set pair failed: %v", err)
+	}
 	if lastMethod != http.MethodPost || lastPath != "/v1/ui/model/set" {
 		t.Fatalf("unexpected model set request: %s %s", lastMethod, lastPath)
 	}
-	if got, _ := lastBody["provider"].(string); got != "openai" {
+	if got, _ := lastBody["provider"].(string); got != "codex" {
 		t.Fatalf("unexpected provider in body: %+v", lastBody)
 	}
-	if got, _ := lastBody["model"].(string); got != "gpt-5-mini" {
+	if got, _ := lastBody["model"].(string); got != "gpt-5-codex" {
 		t.Fatalf("unexpected model in body: %+v", lastBody)
 	}
 
