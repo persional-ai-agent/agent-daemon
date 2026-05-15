@@ -218,7 +218,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			default:
 				return lines, fmt.Errorf("用法: /fullscreen [on|off]"), false
 			}
-		case current == "/reconnect status":
+		case strings.EqualFold(current, "/reconnect status"):
 			emitData(map[string]any{
 				"enabled":         s.reconnectEnabled,
 				"state":           s.reconnectState,
@@ -243,15 +243,15 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emit("diagnostics exported: " + path)
 			s.setStatus(true, "ok", "diagnostics exported")
-		case current == "/reconnect on":
+		case strings.EqualFold(current, "/reconnect on"):
 			s.reconnectEnabled = true
 			emit("reconnect: on")
 			s.setStatus(true, "ok", "reconnect enabled")
-		case current == "/reconnect off":
+		case strings.EqualFold(current, "/reconnect off"):
 			s.reconnectEnabled = false
 			emit("reconnect: off")
 			s.setStatus(true, "ok", "reconnect disabled")
-		case current == "/reconnect now":
+		case strings.EqualFold(current, "/reconnect now"):
 			conn, _, dErr := websocket.DefaultDialer.Dial(s.wsBase, nil)
 			if dErr != nil {
 				s.reconnectState = "failed"

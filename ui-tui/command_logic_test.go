@@ -540,6 +540,34 @@ func TestReconnectTimeoutCommandCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestReconnectCommandCaseInsensitiveSubcommands(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		wsBase:           "ws://127.0.0.1:1/v1/chat/ws",
+	}
+	if _, err, _ := handleTUICommand(s, "/reconnect OFF", nil, nil); err != nil {
+		t.Fatalf("reconnect OFF failed: %v", err)
+	}
+	if s.reconnectEnabled {
+		t.Fatal("expected reconnectEnabled=false")
+	}
+	if _, err, _ := handleTUICommand(s, "/reconnect ON", nil, nil); err != nil {
+		t.Fatalf("reconnect ON failed: %v", err)
+	}
+	if !s.reconnectEnabled {
+		t.Fatal("expected reconnectEnabled=true")
+	}
+	if _, err, _ := handleTUICommand(s, "/reconnect STATUS", nil, nil); err != nil {
+		t.Fatalf("reconnect STATUS failed: %v", err)
+	}
+}
+
 func TestParseEventSaveArgsCaseInsensitive(t *testing.T) {
 	path, format, _, _, err := parseEventSaveArgs("/events SAVE /tmp/events.ndjson NDJSON")
 	if err != nil {
