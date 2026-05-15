@@ -53,6 +53,16 @@ type GatewayModelSpec struct {
 	Model    string
 }
 
+const GatewayModelUsage = "/model [provider:model|provider model]"
+
+func GatewayModelUsageEN() string {
+	return "Usage: " + GatewayModelUsage
+}
+
+func GatewayModelUsageZH() string {
+	return "用法: " + GatewayModelUsage
+}
+
 type GatewayWhoamiResult struct {
 	Platform       string `json:"platform"`
 	UserID         string `json:"user_id"`

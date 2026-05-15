@@ -155,6 +155,7 @@
 - 已将 gateway status/diagnostics 标准化逻辑沉淀到 `internal/tools/gateway_status.go`（snapshot 提取 + status/diagnostics 归一），后续多入口字段对齐可直接复用。
 - 已新增 `UpdateGatewayContinuityMode` 并接入 CLI/API/Gateway continuity 更新路径，统一“参数归一化 + env 同步 + 持久化”写入行为。
 - 已将 API `/v1/ui/model/set` 切到共享校验与写入路径（`ParseGatewayModelSpecArgs` + `UpdateGatewayModelPreference`），并补 `model_base_url` 统一写入函数。
+- 已统一 `/model` 用法提示文案来源到 `internal/tools`（`GatewayModelUsageEN/ZH`），CLI/Gateway/UI-TUI/API 共用同一 usage 表达，减少提示漂移。
 
 范围：
 

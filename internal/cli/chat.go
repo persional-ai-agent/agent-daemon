@@ -500,7 +500,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/model":
 		if len(fields) > 3 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayModelUsageZH())
 			return true, nil
 		}
 		modelPref, err := clitools.ResolveGatewayModelPreference(eng.Workdir)
@@ -511,7 +511,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) > 1 {
 			next, parseErr := clitools.ParseGatewayModelSpecArgs(fields[1:])
 			if parseErr != nil {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayModelUsageZH())
 				return true, nil
 			}
 			if err := clitools.UpdateGatewayModelPreference(eng.Workdir, next); err != nil {

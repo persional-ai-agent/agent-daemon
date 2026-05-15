@@ -1017,7 +1017,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/model":
 			if len(parsed.args) > 2 {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewayModelUsageEN(), event.MessageID, map[string]any{"slash": "/model"})
 				return
 			}
 			modelPref, err := tools.ResolveGatewayModelPreference(w.engine.Workdir)
@@ -1031,7 +1031,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if len(parsed.args) > 0 {
 				next, pErr := tools.ParseGatewayModelSpecArgs(parsed.args)
 				if pErr != nil {
-					_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
+					_, _ = w.sendText(ctx, event.ChatID, tools.GatewayModelUsageEN(), event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
 				if err := tools.UpdateGatewayModelPreference(w.engine.Workdir, next); err != nil {

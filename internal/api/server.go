@@ -938,7 +938,7 @@ func (s *Server) handleUIModelSet(w http.ResponseWriter, r *http.Request) {
 	}
 	spec, parseErr := tools.ParseGatewayModelSpecArgs([]string{req.Provider, req.Model})
 	if parseErr != nil {
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "provider/model required")
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", tools.GatewayModelUsageEN())
 		return
 	}
 	req.BaseURL = strings.TrimSpace(req.BaseURL)

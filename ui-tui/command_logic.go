@@ -1299,7 +1299,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(current, "/model ")))
 			spec, pErr := tools.ParseGatewayModelSpecArgs(args)
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /model [provider:model|provider model]"), false
+				return lines, fmt.Errorf("%s", tools.GatewayModelUsageZH()), false
 			}
 			out, mErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/model/set", map[string]any{
 				"provider": spec.Provider,
