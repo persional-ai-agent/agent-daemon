@@ -26,6 +26,7 @@ type doctorDoneMsg struct {
 type tuiModel struct {
 	state      *appState
 	inputValue string
+	cursorPos  int
 	compBase   string
 	compItems  []string
 	compIndex  int
@@ -163,11 +164,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			raw := strings.TrimSpace(m.inputValue)
-			m.inputValue = ""
-			m.resetCompletion()
 			if raw == "" {
 				return m, nil
 			}
+			m.inputValue = ""
+			m.cursorPos = 0
+			m.resetCompletion()
 			if raw == "/quit" || raw == "/exit" {
 				return m, tea.Quit
 			}
@@ -187,12 +189,61 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				streamRenderTickCmd(streamRenderInterval),
 			)
 		case "backspace", "ctrl+h":
-			if !m.processing && m.inputValue != "" {
+			if !m.processing && len([]rune(m.inputValue)) > 0 && m.cursorPos > 0 {
 				runes := []rune(m.inputValue)
-				m.inputValue = string(runes[:len(runes)-1])
+				left := append([]rune(nil), runes[:m.cursorPos-1]...)
+				right := append([]rune(nil), runes[m.cursorPos:]...)
+				m.inputValue = string(append(left, right...))
+				m.cursorPos--
 				m.resetCompletion()
 			}
 			return m, nil
+		case "left":
+			if !m.processing && m.cursorPos > 0 {
+				m.cursorPos--
+			}
+			return m, nil
+		case "right":
+			if !m.processing && m.cursorPos < len([]rune(m.inputValue)) {
+				m.cursorPos++
+			}
+			return m, nil
+		case "home", "ctrl+a":
+			if !m.processing {
+				m.cursorPos = 0
+			}
+			return m, nil
+		case "end", "ctrl+e":
+			if !m.processing {
+				m.cursorPos = len([]rune(m.inputValue))
+			}
+			return m, nil
+		case "ctrl+j":
+			if !m.processing {
+				m.insertAtCursor("\n")
+				m.resetCompletion()
+			}
+			return m, nil
+		case "ctrl+s":
+			if m.processing {
+				return m, nil
+			}
+			raw := strings.TrimSpace(m.inputValue)
+			if raw == "" {
+				return m, nil
+			}
+			m.inputValue = ""
+			m.cursorPos = 0
+			m.resetCompletion()
+			m.runtime.startTurn(raw)
+			m.processing = true
+			m.turnStream = make(chan tea.Msg, 64)
+			m.syncViewport(true)
+			return m, tea.Batch(
+				startTurnCmd(m.turnStream, m.state, raw),
+				waitTurnStreamCmd(m.turnStream),
+				streamRenderTickCmd(streamRenderInterval),
+			)
 		case "tab":
 			if m.processing {
 				return m, nil
@@ -201,7 +252,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if !m.processing && len(msg.Runes) > 0 {
-			m.inputValue += string(msg.Runes)
+			m.insertAtCursor(string(msg.Runes))
 			m.resetCompletion()
 			return m, nil
 		}
@@ -213,19 +264,32 @@ func (m tuiModel) View() string {
 	title := lipgloss.NewStyle().Bold(true).Render(
 		fmt.Sprintf("session=%s status=%s/%s transport=%s", m.state.session, m.state.lastStatus, m.state.lastCode, m.state.activeTransport),
 	)
-	footer := "Enter 提交，PgUp/PgDn 翻页，Ctrl+T 折叠思考，Ctrl+C 退出"
+	footer := "Enter 提交，Ctrl+J 换行，Ctrl+S 提交，PgUp/PgDn 翻页，Ctrl+T 折叠思考，Ctrl+C 退出"
 	if m.processing {
-		footer = "处理中...（Enter 提交，PgUp/PgDn 翻页，Ctrl+T 折叠思考，Ctrl+C 退出）"
+		footer = "处理中...（PgUp/PgDn 翻页，Ctrl+T 折叠思考，Ctrl+C 取消当前 turn / 退出）"
 	}
-	inputLine := "› " + m.inputValue
-	if strings.TrimSpace(m.inputValue) == "" {
-		inputLine = "› 输入消息或命令（/help, /quit）"
-	}
+	inputLine := renderInputWithCursor(m.inputValue, m.cursorPos)
 	if len(m.compItems) > 0 && m.compBase != "" {
 		next := m.compItems[m.compIndex%len(m.compItems)]
 		inputLine += "    [Tab补全: " + next + "]"
 	}
 	return title + "\n" + m.viewport.View() + "\n\n" + inputLine + "\n" + footer
+}
+
+func renderInputWithCursor(input string, cursorPos int) string {
+	if strings.TrimSpace(input) == "" {
+		return "› 输入消息或命令（/help, /quit）"
+	}
+	runes := []rune(input)
+	if cursorPos < 0 {
+		cursorPos = 0
+	}
+	if cursorPos > len(runes) {
+		cursorPos = len(runes)
+	}
+	cursor := "│"
+	out := string(runes[:cursorPos]) + cursor + string(runes[cursorPos:])
+	return "› " + strings.ReplaceAll(out, "\n", "\n  ")
 }
 
 func (m *tuiModel) resetCompletion() {
@@ -250,7 +314,25 @@ func (m *tuiModel) applyCompletion() {
 		return
 	}
 	m.inputValue = m.compItems[m.compIndex%len(m.compItems)]
+	m.cursorPos = len([]rune(m.inputValue))
 	m.compIndex = (m.compIndex + 1) % len(m.compItems)
+}
+
+func (m *tuiModel) insertAtCursor(s string) {
+	runes := []rune(m.inputValue)
+	if m.cursorPos < 0 {
+		m.cursorPos = 0
+	}
+	if m.cursorPos > len(runes) {
+		m.cursorPos = len(runes)
+	}
+	insert := []rune(s)
+	left := append([]rune(nil), runes[:m.cursorPos]...)
+	right := append([]rune(nil), runes[m.cursorPos:]...)
+	merged := append(left, insert...)
+	merged = append(merged, right...)
+	m.inputValue = string(merged)
+	m.cursorPos += len(insert)
 }
 
 type turnLineMsg struct {
