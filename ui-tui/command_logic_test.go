@@ -628,6 +628,12 @@ func TestWorkflowCommandCaseInsensitiveSubcommands(t *testing.T) {
 }
 
 func TestCanonicalInputAliasesCaseInsensitive(t *testing.T) {
+	if got := canonicalInput("/GATEWAY status"); got != "/gateway status" {
+		t.Fatalf("/GATEWAY canonical mismatch: %q", got)
+	}
+	if got := canonicalInput("/CONFIG SET agent.note Hello World"); got != "/config SET agent.note Hello World" {
+		t.Fatalf("/CONFIG canonical mismatch: %q", got)
+	}
 	if got := canonicalInput("SHOW sid-1"); got != "/show sid-1" {
 		t.Fatalf("SHOW alias mismatch: %q", got)
 	}

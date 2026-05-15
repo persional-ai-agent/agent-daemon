@@ -355,6 +355,14 @@ func (s *appState) setStatus(ok bool, code, detail string) {
 
 func canonicalInput(text string) string {
 	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "/") {
+		parts := strings.SplitN(text, " ", 2)
+		if len(parts) == 1 {
+			text = strings.ToLower(parts[0])
+		} else {
+			text = strings.ToLower(parts[0]) + " " + parts[1]
+		}
+	}
 	lower := strings.ToLower(text)
 	switch lower {
 	case ":q", "quit":
