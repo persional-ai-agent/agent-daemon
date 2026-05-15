@@ -342,6 +342,21 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Not paired._", event.MessageID)
 			}
 			return
+		case "/session":
+			if len(parsed.args) == 0 {
+				active := w.currentSessionID()
+				_, _ = w.sendText(ctx, event.ChatID, "_Route session: "+escapeMarkdown(w.key)+"\\nActive session: "+escapeMarkdown(active)+"_", event.MessageID, map[string]any{"slash": "/session", "active_session": active, "route_session": w.key})
+				return
+			}
+			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /session [session_id]", event.MessageID, map[string]any{"slash": "/session"})
+				return
+			}
+			target := strings.TrimSpace(parsed.args[0])
+			prev := w.currentSessionID()
+			w.setActiveSessionID(target)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
+			return
 		case "/cancel":
 			w.mu.Lock()
 			cancel := w.cancelCurrent

@@ -15,6 +15,7 @@ type gatewayCommandSpec struct {
 var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "pair", Description: "pair with gateway using a code", HelpUsage: "/pair <code>"},
 	{Name: "unpair", Description: "remove current gateway pairing"},
+	{Name: "session", Description: "show or switch active session", HelpUsage: "/session [session_id]"},
 	{Name: "new", Description: "switch to a new active session", HelpUsage: "/new [session_id]"},
 	{Name: "reset", Description: "reset active session context"},
 	{Name: "resume", Description: "switch to an existing active session", HelpUsage: "/resume <session_id>"},
@@ -50,6 +51,7 @@ var gatewayCommandAuthRequiredSet = map[string]struct{}{
 	"new":       {},
 	"reset":     {},
 	"resume":    {},
+	"session":   {},
 	"recover":   {},
 	"retry":     {},
 	"undo":      {},
