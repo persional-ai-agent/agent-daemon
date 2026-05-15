@@ -304,6 +304,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	// Minimal slash commands for Hermes parity.
 	parsed := parseGatewayCommand(w.adapter.Name(), event.Text)
 	if parsed.isSlash {
+		if GatewayCommandRequiresAuthorization(parsed.head) && !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
+			_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+			return
+		}
 		switch parsed.head {
 		case "/pair":
 			if w.runner == nil {
@@ -332,10 +336,6 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			return
 		case "/cancel":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			w.mu.Lock()
 			cancel := w.cancelCurrent
 			running := w.running
@@ -348,26 +348,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			return
 		case "/queue":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
 			return
 		case "/status":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			reply := w.gatewayStatusText()
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/status"})
 			return
 		case "/approve", "/deny":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			approve := parsed.head == "/approve"
 			approvalID := w.resolveApprovalID(parsed.args)
 			if approvalID == "" {
@@ -378,18 +366,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "approval_id": approvalID})
 			return
 		case "/approvals":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			reply := w.approvalStatus(ctx)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head})
 			return
 		case "/pending":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			reply := w.pendingApprovalStatus()
 			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
 				reply += "\nquick_reply: 批准 / 拒绝"
@@ -401,18 +381,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/grant":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			reply := w.grantApproval(ctx, parsed)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/grant"})
 			return
 		case "/revoke":
-			if !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
-				return
-			}
 			reply := w.revokeApproval(ctx, parsed)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return

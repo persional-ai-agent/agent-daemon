@@ -37,6 +37,18 @@ var gatewayApprovalCommandSet = map[string]struct{}{
 	"help":      {},
 }
 
+var gatewayCommandAuthRequiredSet = map[string]struct{}{
+	"cancel":    {},
+	"queue":     {},
+	"status":    {},
+	"approve":   {},
+	"deny":      {},
+	"approvals": {},
+	"pending":   {},
+	"grant":     {},
+	"revoke":    {},
+}
+
 var yuanbaoQuickReplyAliasToCanonical = map[string]string{
 	"批准": "/approve",
 	"同意": "/approve",
@@ -154,6 +166,23 @@ func GatewayApprovalSlashCommands() []string {
 		}
 	}
 	return out
+}
+
+func GatewayCommandsRequiringAuthorization() []string {
+	out := make([]string, 0, len(gatewayCommandAuthRequiredSet))
+	for _, name := range gatewayHelpCommandOrder {
+		if _, ok := gatewayCommandAuthRequiredSet[name]; ok {
+			out = append(out, "/"+name)
+		}
+	}
+	return out
+}
+
+func GatewayCommandRequiresAuthorization(name string) bool {
+	head := strings.ToLower(strings.TrimSpace(name))
+	head = strings.TrimPrefix(head, "/")
+	_, ok := gatewayCommandAuthRequiredSet[head]
+	return ok
 }
 
 func ResolveYuanbaoQuickReplyCommand(head string) (slash string, ok bool) {

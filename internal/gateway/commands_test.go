@@ -168,3 +168,36 @@ func TestGrantRevokeUsageHelpers(t *testing.T) {
 		t.Fatalf("unexpected combined usage: %q", got)
 	}
 }
+
+func TestGatewayCommandRequiresAuthorization(t *testing.T) {
+	authRequired := GatewayCommandsRequiringAuthorization()
+	if len(authRequired) == 0 {
+		t.Fatal("expected non-empty auth-required command set")
+	}
+	want := map[string]bool{
+		"/cancel": true, "/queue": true, "/status": true, "/approve": true, "/deny": true,
+		"/approvals": true, "/pending": true, "/grant": true, "/revoke": true,
+	}
+	if len(authRequired) != len(want) {
+		t.Fatalf("auth-required command count mismatch: got=%d want=%d list=%v", len(authRequired), len(want), authRequired)
+	}
+	for _, cmd := range authRequired {
+		if !want[cmd] {
+			t.Fatalf("unexpected auth-required command: %s", cmd)
+		}
+		delete(want, cmd)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing auth-required commands: %+v", want)
+	}
+
+	if GatewayCommandRequiresAuthorization("/pair") {
+		t.Fatal("/pair should not require authorization")
+	}
+	if !GatewayCommandRequiresAuthorization("/approve") {
+		t.Fatal("/approve should require authorization")
+	}
+	if !GatewayCommandRequiresAuthorization("status") {
+		t.Fatal("status should require authorization")
+	}
+}
