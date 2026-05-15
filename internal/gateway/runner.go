@@ -43,6 +43,7 @@ type Runner struct {
 	hookSpoolMu   sync.Mutex
 	hookSpoolPath string
 	hookSpoolSeen map[string]time.Time
+	identityStore *identityStore
 }
 
 func NewRunner(adapters []PlatformAdapter, engine *agent.Engine, allowedFor func(platform string) string) *Runner {
@@ -56,6 +57,7 @@ func NewRunner(adapters []PlatformAdapter, engine *agent.Engine, allowedFor func
 		pairFile:      filepath.Join(engine.Workdir, ".agent-daemon", "gateway_pairs.json"),
 		hookSpoolPath: filepath.Join(engine.Workdir, ".agent-daemon", "gateway_hooks_spool.jsonl"),
 		hookSpoolSeen: map[string]time.Time{},
+		identityStore: newIdentityStore(engine.Workdir),
 	}
 	r.loadPairings()
 	r.loadHookSpoolSeen()
@@ -300,6 +302,10 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 	}
 	r.sessionsMu.Unlock()
 
+	if mapped := r.resolveMappedSessionID(adapter.Name(), event.UserID); strings.TrimSpace(mapped) != "" {
+		w.activateSession(mapped, event.UserID)
+	}
+
 	select {
 	case w.queue <- event:
 	default:
@@ -313,6 +319,17 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 		default:
 		}
 	}
+}
+
+func (r *Runner) resolveMappedSessionID(platformName, userID string) string {
+	if r == nil || r.identityStore == nil {
+		return ""
+	}
+	globalID, err := r.identityStore.resolve(platformName, userID)
+	if err != nil || strings.TrimSpace(globalID) == "" {
+		return ""
+	}
+	return BuildSessionKey("global", "user", globalID)
 }
 
 func (w *sessionWorker) run(parent context.Context) {
@@ -390,6 +407,40 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
+			return
+		case "/whoami":
+			globalID := ""
+			if w.runner != nil && w.runner.identityStore != nil {
+				if v, err := w.runner.identityStore.resolve(w.adapter.Name(), event.UserID); err == nil {
+					globalID = strings.TrimSpace(v)
+				}
+			}
+			reply := "platform=" + w.adapter.Name() + "\nuser_id=" + event.UserID + "\nuser_name=" + event.UserName + "\nactive_session=" + w.currentSessionID()
+			if globalID != "" {
+				reply += "\nglobal_id=" + globalID
+			} else {
+				reply += "\nglobal_id=(not set)"
+			}
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
+			return
+		case "/setid":
+			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /setid <global_user_id>", event.MessageID, map[string]any{"slash": "/setid"})
+				return
+			}
+			globalID := strings.TrimSpace(parsed.args[0])
+			if w.runner == nil || w.runner.identityStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Identity store unavailable._", event.MessageID, map[string]any{"slash": "/setid"})
+				return
+			}
+			if err := w.runner.identityStore.bind(w.adapter.Name(), event.UserID, globalID); err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Setid failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/setid"})
+				return
+			}
+			targetSession := BuildSessionKey("global", "user", globalID)
+			prev := w.currentSessionID()
+			w.activateSession(targetSession, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, map[string]any{"slash": "/setid", "global_id": globalID, "session_id": targetSession})
 			return
 		case "/history":
 			limit := 10
