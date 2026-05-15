@@ -78,3 +78,21 @@ func TestGatewayHelpTextYuanbaoAddsQuickReplies(t *testing.T) {
 		t.Fatalf("expected quick reply aliases in help: %q", help)
 	}
 }
+
+func TestGatewayCommandAliasesIntegrity(t *testing.T) {
+	aliases := GatewayCommandAliases()
+	if len(aliases) == 0 {
+		t.Fatal("expected non-empty alias map")
+	}
+	for alias, canonical := range aliases {
+		if alias == canonical {
+			t.Fatalf("alias should not equal canonical: %q", alias)
+		}
+		if IsBuiltInGatewayCommand(alias) {
+			t.Fatalf("alias should not shadow built-in: %q", alias)
+		}
+		if !IsBuiltInGatewayCommand(canonical) {
+			t.Fatalf("alias points to non built-in command: %q -> %q", alias, canonical)
+		}
+	}
+}

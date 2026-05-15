@@ -86,6 +86,23 @@ func BuiltInGatewaySlashCommands() []string {
 	return out
 }
 
+func BuiltInGatewayCommandNames() []string {
+	out := make([]string, 0, len(builtInGatewayCommandSet))
+	for name := range builtInGatewayCommandSet {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func GatewayCommandAliases() map[string]string {
+	out := make(map[string]string, len(gatewayAliasToCanonical))
+	for k, v := range gatewayAliasToCanonical {
+		out[k] = v
+	}
+	return out
+}
+
 func GatewayHelpText(yuanbao bool) string {
 	parts := make([]string, 0, len(gatewayHelpCommandOrder))
 	for _, name := range gatewayHelpCommandOrder {
