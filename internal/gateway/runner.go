@@ -345,12 +345,19 @@ func (w *sessionWorker) run(parent context.Context) {
 
 func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	w.setLastUserID(event.UserID)
+	globalID := ""
+	if w.runner != nil && w.runner.identityStore != nil {
+		if v, err := w.runner.identityStore.resolve(w.adapter.Name(), event.UserID); err == nil {
+			globalID = strings.TrimSpace(v)
+		}
+	}
 	_ = tools.UpsertChannelDirectory(w.engine.Workdir, tools.ChannelDirectoryEntry{
 		Platform:   w.adapter.Name(),
 		ChatID:     event.ChatID,
 		ChatType:   event.ChatType,
 		UserID:     event.UserID,
 		UserName:   event.UserName,
+		GlobalID:   globalID,
 		HomeTarget: tools.ResolveHomeTarget(w.engine.Workdir, w.adapter.Name()),
 	})
 	allowed := ""
@@ -440,6 +447,15 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			targetSession := BuildSessionKey("global", "user", globalID)
 			prev := w.currentSessionID()
 			w.activateSession(targetSession, event.UserID)
+			_ = tools.UpsertChannelDirectory(w.engine.Workdir, tools.ChannelDirectoryEntry{
+				Platform:   w.adapter.Name(),
+				ChatID:     event.ChatID,
+				ChatType:   event.ChatType,
+				UserID:     event.UserID,
+				UserName:   event.UserName,
+				GlobalID:   globalID,
+				HomeTarget: tools.ResolveHomeTarget(w.engine.Workdir, w.adapter.Name()),
+			})
 			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, map[string]any{"slash": "/setid", "global_id": globalID, "session_id": targetSession})
 			return
 		case "/history":
@@ -767,6 +783,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				ChatType:   event.ChatType,
 				UserID:     event.UserID,
 				UserName:   event.UserName,
+				GlobalID:   globalID,
 				HomeTarget: homeChatID,
 			})
 			_, _ = w.sendText(
@@ -1600,6 +1617,12 @@ func renderGatewayTargets(items []tools.ChannelDirectoryEntry, platformFilter st
 		}
 		if strings.TrimSpace(it.UserID) != "" {
 			line += " user=" + it.UserID
+		}
+		if strings.TrimSpace(it.GlobalID) != "" {
+			line += " global=" + it.GlobalID
+		}
+		if strings.TrimSpace(it.LastSeenAt) != "" {
+			line += " last=" + it.LastSeenAt
 		}
 		lines = append(lines, line)
 		if count >= 20 {

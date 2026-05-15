@@ -16,6 +16,7 @@ type ChannelDirectoryEntry struct {
 	ChatType   string `json:"chat_type,omitempty"`
 	UserID     string `json:"user_id,omitempty"`
 	UserName   string `json:"user_name,omitempty"`
+	GlobalID   string `json:"global_id,omitempty"`
 	HomeTarget string `json:"home_target,omitempty"`
 	LastSeenAt string `json:"last_seen_at"`
 }
@@ -60,6 +61,7 @@ func UpsertChannelDirectory(workdir string, entry ChannelDirectoryEntry) error {
 	entry.ChatType = strings.ToLower(strings.TrimSpace(entry.ChatType))
 	entry.UserID = strings.TrimSpace(entry.UserID)
 	entry.UserName = strings.TrimSpace(entry.UserName)
+	entry.GlobalID = strings.TrimSpace(entry.GlobalID)
 	entry.HomeTarget = strings.TrimSpace(entry.HomeTarget)
 	if entry.Platform == "" || entry.ChatID == "" {
 		return nil
@@ -79,6 +81,7 @@ func UpsertChannelDirectory(workdir string, entry ChannelDirectoryEntry) error {
 			items[i].ChatType = nonEmpty(entry.ChatType, items[i].ChatType)
 			items[i].UserID = nonEmpty(entry.UserID, items[i].UserID)
 			items[i].UserName = nonEmpty(entry.UserName, items[i].UserName)
+			items[i].GlobalID = nonEmpty(entry.GlobalID, items[i].GlobalID)
 			items[i].HomeTarget = nonEmpty(entry.HomeTarget, items[i].HomeTarget)
 			items[i].LastSeenAt = entry.LastSeenAt
 			found = true

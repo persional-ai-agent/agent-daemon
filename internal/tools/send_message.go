@@ -95,6 +95,7 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 						"chat_type":    row.ChatType,
 						"user_id":      row.UserID,
 						"user_name":    row.UserName,
+						"global_id":    row.GlobalID,
 						"home_target":  row.HomeTarget,
 						"connected":    false,
 						"last_seen_at": row.LastSeenAt,

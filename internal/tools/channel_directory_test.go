@@ -9,6 +9,7 @@ func TestChannelDirectoryUpsertAndList(t *testing.T) {
 		ChatID:   "100",
 		UserID:   "u1",
 		UserName: "alice",
+		GlobalID: "g1",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +31,7 @@ func TestChannelDirectoryUpsertAndList(t *testing.T) {
 	if rows[0].Platform != "telegram" || rows[0].ChatID != "100" {
 		t.Fatalf("unexpected row: %+v", rows[0])
 	}
-	if rows[0].UserID != "u1" || rows[0].HomeTarget != "100" {
+	if rows[0].UserID != "u1" || rows[0].HomeTarget != "100" || rows[0].GlobalID != "g1" {
 		t.Fatalf("unexpected merged row: %+v", rows[0])
 	}
 }

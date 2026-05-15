@@ -119,6 +119,7 @@ func TestSendMessageListIncludesDirectoryTargets(t *testing.T) {
 		ChatType:   "group",
 		UserID:     "u-1",
 		UserName:   "bob",
+		GlobalID:   "g-bob",
 		HomeTarget: "chan-1",
 	}); err != nil {
 		t.Fatal(err)
@@ -135,6 +136,9 @@ func TestSendMessageListIncludesDirectoryTargets(t *testing.T) {
 			found = true
 			if v, _ := it["connected"].(bool); v {
 				t.Fatalf("directory-only target should be disconnected: %+v", it)
+			}
+			if g, _ := it["global_id"].(string); g != "g-bob" {
+				t.Fatalf("global_id=%q want=g-bob row=%+v", g, it)
 			}
 			break
 		}
