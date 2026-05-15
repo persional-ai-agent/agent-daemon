@@ -13,14 +13,14 @@ type fakeAdapter struct {
 	name string
 }
 
-func (f fakeAdapter) Name() string { return f.name }
-func (f fakeAdapter) Connect(context.Context) error { return nil }
+func (f fakeAdapter) Name() string                     { return f.name }
+func (f fakeAdapter) Connect(context.Context) error    { return nil }
 func (f fakeAdapter) Disconnect(context.Context) error { return nil }
 func (f fakeAdapter) Send(_ context.Context, _ string, _ string, _ string) (platform.SendResult, error) {
 	return platform.SendResult{Success: true, MessageID: "m1"}, nil
 }
 func (f fakeAdapter) EditMessage(context.Context, string, string, string) error { return nil }
-func (f fakeAdapter) SendTyping(context.Context, string) error { return nil }
+func (f fakeAdapter) SendTyping(context.Context, string) error                  { return nil }
 func (f fakeAdapter) OnMessage(context.Context, platform.MessageHandler)        {}
 
 func TestSendMessageListAndSend(t *testing.T) {
@@ -36,11 +36,14 @@ func TestSendMessageListAndSend(t *testing.T) {
 	if _, ok := res["platforms"]; !ok {
 		t.Fatalf("missing platforms: %v", res)
 	}
+	if _, ok := res["targets"]; !ok {
+		t.Fatalf("missing targets in list response: %v", res)
+	}
 
 	res, err = tool.Call(context.Background(), map[string]any{
-		"action":   "send",
-		"target":   "telegram:1",
-		"message":  "hi",
+		"action":  "send",
+		"target":  "telegram:1",
+		"message": "hi",
 	}, ToolContext{})
 	if err != nil {
 		t.Fatal(err)
@@ -50,9 +53,58 @@ func TestSendMessageListAndSend(t *testing.T) {
 	}
 }
 
+func TestSendMessageSupportsBarePlatformTargetWithHomeChannel(t *testing.T) {
+	platform.Register(fakeAdapter{name: "telegram"})
+	t.Cleanup(func() { platform.Unregister("telegram") })
+	t.Setenv("TELEGRAM_HOME_CHANNEL", "10001")
+
+	tool := NewSendMessageTool()
+	res, err := tool.Call(context.Background(), map[string]any{
+		"action":  "send",
+		"target":  "telegram",
+		"message": "hi",
+	}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := res["success"].(bool); !v {
+		t.Fatalf("expected success: %v", res)
+	}
+	if got, _ := res["chat_id"].(string); got != "10001" {
+		t.Fatalf("chat_id=%q want=10001", got)
+	}
+}
+
 func TestHomeTargetEnvVarIncludesYuanbao(t *testing.T) {
 	if got := homeTargetEnvVar("yuanbao"); got != "YUANBAO_HOME_CHANNEL" {
 		t.Fatalf("homeTargetEnvVar(yuanbao)=%q, want %q", got, "YUANBAO_HOME_CHANNEL")
+	}
+}
+
+func TestSendMessageListIncludesHomeTarget(t *testing.T) {
+	platform.Register(fakeAdapter{name: "telegram"})
+	t.Cleanup(func() { platform.Unregister("telegram") })
+	t.Setenv("TELEGRAM_HOME_CHANNEL", "999")
+
+	res, err := NewSendMessageTool().Call(context.Background(), map[string]any{"action": "list"}, ToolContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, _ := res["targets"].([]map[string]any)
+	if len(targets) == 0 {
+		t.Fatalf("targets should not be empty: %v", res)
+	}
+	found := false
+	for _, it := range targets {
+		if it["platform"] == "telegram" {
+			found = true
+			if got, _ := it["home_target"].(string); got != "999" {
+				t.Fatalf("home_target=%q want=999", got)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("telegram target not found in %v", targets)
 	}
 }
 

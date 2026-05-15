@@ -6,10 +6,10 @@ import (
 )
 
 type gatewayCommandSpec struct {
-	Name         string
-	Description  string
-	HelpUsage    string
-	Aliases      []string
+	Name        string
+	Description string
+	HelpUsage   string
+	Aliases     []string
 }
 
 var gatewayCommandCatalog = []gatewayCommandSpec{
@@ -32,6 +32,7 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "clear", Description: "clear active session context by switching to a new session"},
 	{Name: "reload", Description: "reload active session message count from store"},
 	{Name: "save", Description: "export active session messages to json", HelpUsage: "/save [path]"},
+	{Name: "sethome", Description: "set platform home target for send_message", HelpUsage: "/sethome <platform> <chat_id>"},
 	{Name: "tools", Description: "inspect tool list or schemas", HelpUsage: "/tools [list|show <name>|schemas]"},
 	{Name: "cancel", Description: "cancel the running task", Aliases: []string{"abort", "stop"}},
 	{Name: "compress", Description: "compact current session context", HelpUsage: "/compress [tail_messages]"},
@@ -76,6 +77,7 @@ var gatewayCommandAuthRequiredSet = map[string]struct{}{
 	"clear":     {},
 	"reload":    {},
 	"save":      {},
+	"sethome":   {},
 	"tools":     {},
 	"compress":  {},
 	"queue":     {},
@@ -89,22 +91,22 @@ var gatewayCommandAuthRequiredSet = map[string]struct{}{
 }
 
 var yuanbaoQuickReplyAliasToCanonical = map[string]string{
-	"批准": "/approve",
-	"同意": "/approve",
-	"通过": "/approve",
-	"拒绝": "/deny",
-	"驳回": "/deny",
-	"状态": "/status",
+	"批准":  "/approve",
+	"同意":  "/approve",
+	"通过":  "/approve",
+	"拒绝":  "/deny",
+	"驳回":  "/deny",
+	"状态":  "/status",
 	"待审批": "/pending",
-	"审批": "/approvals",
-	"帮助": "/help",
+	"审批":  "/approvals",
+	"帮助":  "/help",
 }
 
 var (
-	builtInGatewayCommandSet  map[string]struct{}
-	gatewayAliasToCanonical   map[string]string
-	gatewayCommandSpecByName  map[string]gatewayCommandSpec
-	gatewayHelpCommandOrder   []string
+	builtInGatewayCommandSet map[string]struct{}
+	gatewayAliasToCanonical  map[string]string
+	gatewayCommandSpecByName map[string]gatewayCommandSpec
+	gatewayHelpCommandOrder  []string
 )
 
 func init() {

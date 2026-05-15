@@ -39,15 +39,15 @@ type gatewayAdapterStub struct {
 	name string
 }
 
-func (a *gatewayAdapterStub) Name() string { return a.name }
-func (a *gatewayAdapterStub) Connect(_ context.Context) error { return nil }
+func (a *gatewayAdapterStub) Name() string                       { return a.name }
+func (a *gatewayAdapterStub) Connect(_ context.Context) error    { return nil }
 func (a *gatewayAdapterStub) Disconnect(_ context.Context) error { return nil }
 func (a *gatewayAdapterStub) Send(_ context.Context, _, _, _ string) (SendResult, error) {
 	return SendResult{Success: true}, nil
 }
 func (a *gatewayAdapterStub) EditMessage(_ context.Context, _, _, _ string) error { return nil }
-func (a *gatewayAdapterStub) SendTyping(_ context.Context, _ string) error { return nil }
-func (a *gatewayAdapterStub) OnMessage(_ context.Context, _ MessageHandler) {}
+func (a *gatewayAdapterStub) SendTyping(_ context.Context, _ string) error        { return nil }
+func (a *gatewayAdapterStub) OnMessage(_ context.Context, _ MessageHandler)       {}
 
 func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
 	tests := []struct {
@@ -144,6 +144,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	}
 	if got := normalizeGatewayCommand("slack", "/SAVE out.json"); got != "/save out.json" {
 		t.Fatalf("slash command should normalize save, got=%q", got)
+	}
+	if got := normalizeGatewayCommand("slack", "/SETHOME telegram 123"); got != "/sethome telegram 123" {
+		t.Fatalf("slash command should normalize sethome, got=%q", got)
 	}
 	if got := normalizeGatewayCommand("slack", "/TOOLS SHOW send_message"); got != "/tools SHOW send_message" {
 		t.Fatalf("slash command should normalize tools root, got=%q", got)

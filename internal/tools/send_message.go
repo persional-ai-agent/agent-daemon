@@ -71,17 +71,27 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 	case "list":
 		names := platform.Names()
 		sort.Strings(names)
-		return map[string]any{"success": true, "platforms": names}, nil
+		items := make([]map[string]any, 0, len(names))
+		for _, name := range names {
+			home := strings.TrimSpace(os.Getenv(HomeTargetEnvVar(name)))
+			items = append(items, map[string]any{
+				"platform":    name,
+				"connected":   true,
+				"home_target": home,
+			})
+		}
+		return map[string]any{"success": true, "platforms": names, "targets": items}, nil
 	case "send":
 		p := strings.ToLower(strings.TrimSpace(strArg(args, "platform")))
 		chatID := strings.TrimSpace(strArg(args, "chat_id"))
 		if target := strings.TrimSpace(strArg(args, "target")); target != "" {
 			parts := strings.SplitN(target, ":", 2)
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("invalid target %q (expected platform:chat_id)", target)
+			if len(parts) == 1 {
+				p = strings.ToLower(strings.TrimSpace(parts[0]))
+			} else if len(parts) == 2 {
+				p = strings.ToLower(strings.TrimSpace(parts[0]))
+				chatID = strings.TrimSpace(parts[1])
 			}
-			p = strings.ToLower(strings.TrimSpace(parts[0]))
-			chatID = strings.TrimSpace(parts[1])
 		}
 		if p == "" && strings.TrimSpace(tc.GatewayPlatform) != "" {
 			p = strings.ToLower(strings.TrimSpace(tc.GatewayPlatform))
@@ -90,7 +100,7 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 			chatID = strings.TrimSpace(tc.GatewayChatID)
 		}
 		if chatID == "" && p != "" {
-			if v := strings.TrimSpace(os.Getenv(homeTargetEnvVar(p))); v != "" {
+			if v := strings.TrimSpace(os.Getenv(HomeTargetEnvVar(p))); v != "" {
 				chatID = v
 			}
 		}
@@ -148,6 +158,10 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 }
 
 func homeTargetEnvVar(platform string) string {
+	return HomeTargetEnvVar(platform)
+}
+
+func HomeTargetEnvVar(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "telegram":
 		return "TELEGRAM_HOME_CHANNEL"

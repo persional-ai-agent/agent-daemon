@@ -111,17 +111,17 @@ type sessionWorker struct {
 
 	queue chan MessageEvent
 
-	mu                  sync.Mutex
-	activeSessionID     string
-	lastUserID          string
-	lastUserInputByUser map[string]string
-	lastShowByUser      map[string]showCursorState
+	mu                   sync.Mutex
+	activeSessionID      string
+	lastUserID           string
+	lastUserInputByUser  map[string]string
+	lastShowByUser       map[string]showCursorState
 	lastSessionIDsByUser map[string][]string
-	cancelCurrent       context.CancelFunc
-	running             bool
-	lastApprovalID      string
-	lastApprovalCommand string
-	lastApprovalReason  string
+	cancelCurrent        context.CancelFunc
+	running              bool
+	lastApprovalID       string
+	lastApprovalCommand  string
+	lastApprovalReason   string
 }
 
 type showCursorState struct {
@@ -284,15 +284,15 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 	if w == nil {
 		engCopy := *r.engine
 		w = &sessionWorker{
-			key:             sessionKey,
-			adapter:         adapter,
-			engine:          &engCopy,
-			allowed:         allowed,
-			runner:          r,
-			queue:           make(chan MessageEvent, 32),
-			activeSessionID: sessionKey,
-			lastUserInputByUser: map[string]string{},
-			lastShowByUser:      map[string]showCursorState{},
+			key:                  sessionKey,
+			adapter:              adapter,
+			engine:               &engCopy,
+			allowed:              allowed,
+			runner:               r,
+			queue:                make(chan MessageEvent, 32),
+			activeSessionID:      sessionKey,
+			lastUserInputByUser:  map[string]string{},
+			lastShowByUser:       map[string]showCursorState{},
 			lastSessionIDsByUser: map[string][]string{},
 		}
 		r.sessions[sessionKey] = w
@@ -560,27 +560,27 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /new [session_id] or /reset", event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
-				if next == "" {
-					next = uuid.NewString()
-				}
-				prev := w.currentSessionID()
-				w.activateSession(next, event.UserID)
-				_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
-				return
+			if next == "" {
+				next = uuid.NewString()
+			}
+			prev := w.currentSessionID()
+			w.activateSession(next, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
+			return
 		case "/resume":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resume <session_id>", event.MessageID, map[string]any{"slash": "/resume"})
 				return
 			}
 			target := strings.TrimSpace(parsed.args[0])
-				if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
-					_, _ = w.sendText(ctx, event.ChatID, "_Resume failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resume"})
-					return
-				}
-				prev := w.currentSessionID()
-				w.activateSession(target, event.UserID)
-				_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
+			if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Resume failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resume"})
 				return
+			}
+			prev := w.currentSessionID()
+			w.activateSession(target, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
+			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /recover context", event.MessageID, map[string]any{"slash": "/recover"})
@@ -590,11 +590,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if strings.TrimSpace(lastInput) == "" {
 				_, _ = w.sendText(ctx, event.ChatID, "_No recent user input to replay._", event.MessageID, map[string]any{"slash": "/recover"})
 				return
-				}
-				prev := w.currentSessionID()
-				next := uuid.NewString()
-				w.activateSession(next, event.UserID)
-				_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
+			}
+			prev := w.currentSessionID()
+			next := uuid.NewString()
+			w.activateSession(next, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
 			replay := event
 			replay.Text = lastInput
 			select {
@@ -642,20 +642,20 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Undo failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/undo"})
 					return
 				}
-				}
-				w.activateSession(nextSession, event.UserID)
-				_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
-				return
+			}
+			w.activateSession(nextSession, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
+			return
 		case "/clear":
 			if len(parsed.args) > 0 {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /clear", event.MessageID, map[string]any{"slash": "/clear"})
 				return
-				}
-				prev := w.currentSessionID()
-				next := uuid.NewString()
-				w.activateSession(next, event.UserID)
-				_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
-				return
+			}
+			prev := w.currentSessionID()
+			next := uuid.NewString()
+			w.activateSession(next, event.UserID)
+			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
+			return
 		case "/reload":
 			if len(parsed.args) > 0 {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /reload", event.MessageID, map[string]any{"slash": "/reload"})
@@ -691,6 +691,23 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, map[string]any{"slash": "/save", "session_id": active, "path": path, "messages": len(msgs)})
+			return
+		case "/sethome":
+			if len(parsed.args) != 2 || strings.TrimSpace(parsed.args[0]) == "" || strings.TrimSpace(parsed.args[1]) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
+				return
+			}
+			homePlatform := strings.ToLower(strings.TrimSpace(parsed.args[0]))
+			homeChatID := strings.TrimSpace(parsed.args[1])
+			envKey := tools.HomeTargetEnvVar(homePlatform)
+			_ = os.Setenv(envKey, homeChatID)
+			_, _ = w.sendText(
+				ctx,
+				event.ChatID,
+				"_Home target updated: "+escapeMarkdown(homePlatform)+":"+escapeMarkdown(homeChatID)+" ("+escapeMarkdown(envKey)+" )_",
+				event.MessageID,
+				map[string]any{"slash": "/sethome", "platform": homePlatform, "chat_id": homeChatID, "env": envKey},
+			)
 			return
 		case "/tools":
 			sub := "list"
