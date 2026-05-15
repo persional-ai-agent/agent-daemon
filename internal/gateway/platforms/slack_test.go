@@ -52,7 +52,11 @@ func TestRenderSlackSlashCommand(t *testing.T) {
 		{name: "built in with arg", command: "/approve", text: "abc", want: "/approve abc"},
 		{name: "built in direct", command: "/status", text: "", want: "/status"},
 		{name: "text already slash", command: "/agent", text: "/pending", want: "/pending"},
+		{name: "text slash uppercase", command: "/agent", text: "/STATUS", want: "/status"},
+		{name: "text slash alias", command: "/agent", text: "/approval", want: "/approvals"},
 		{name: "generic entrypoint", command: "/agent", text: "status", want: "/status"},
+		{name: "generic entrypoint alias", command: "/agent", text: "abort", want: "/cancel"},
+		{name: "builtin uppercase canonicalized", command: "/APPROVE", text: "abc", want: "/approve abc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
