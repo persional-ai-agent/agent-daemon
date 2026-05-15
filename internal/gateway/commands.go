@@ -16,6 +16,7 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "pair", Description: "pair with gateway using a code", HelpUsage: "/pair <code>"},
 	{Name: "unpair", Description: "remove current gateway pairing"},
 	{Name: "cancel", Description: "cancel the running task", Aliases: []string{"abort", "stop"}},
+	{Name: "compress", Description: "compact current session context", HelpUsage: "/compress [tail_messages]"},
 	{Name: "queue", Description: "show queued task count", Aliases: []string{"q"}},
 	{Name: "status", Description: "show current session status", Aliases: []string{"s"}},
 	{Name: "pending", Description: "show latest pending approval", Aliases: []string{"pendings"}},
@@ -40,6 +41,7 @@ var gatewayApprovalCommandSet = map[string]struct{}{
 
 var gatewayCommandAuthRequiredSet = map[string]struct{}{
 	"cancel":    {},
+	"compress":  {},
 	"queue":     {},
 	"status":    {},
 	"approve":   {},

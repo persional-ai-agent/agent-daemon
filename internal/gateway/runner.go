@@ -351,6 +351,31 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_No active task._", event.MessageID, map[string]any{"slash": "/cancel"})
 			}
 			return
+		case "/compress":
+			keepLastN := 20
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: "+GatewayCommandUsage("compress"), event.MessageID, map[string]any{"slash": "/compress"})
+				return
+			}
+			if len(parsed.args) == 1 {
+				n, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
+				if err != nil || n <= 0 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: "+GatewayCommandUsage("compress"), event.MessageID, map[string]any{"slash": "/compress"})
+					return
+				}
+				keepLastN = n
+			}
+			if compactor, ok := w.engine.SessionStore.(gatewaySessionCompactor); ok && compactor != nil {
+				before, after, err := compactor.CompactSession(w.key, keepLastN)
+				if err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Compress failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/compress"})
+					return
+				}
+				_, _ = w.sendText(ctx, event.ChatID, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", event.MessageID, map[string]any{"slash": "/compress"})
+				return
+			}
+			_, _ = w.sendText(ctx, event.ChatID, "_Compress not supported by session store._", event.MessageID, map[string]any{"slash": "/compress"})
+			return
 		case "/queue":
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
