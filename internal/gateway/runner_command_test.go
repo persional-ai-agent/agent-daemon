@@ -68,6 +68,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/SHOW s1 0 20"); got != "/show s1 0 20" {
 		t.Fatalf("slash command should normalize show, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/SESSIONS 5"); got != "/sessions 5" {
+		t.Fatalf("slash command should normalize sessions, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/STATS s-1"); got != "/stats s-1" {
 		t.Fatalf("slash command should normalize stats, got=%q", got)
 	}
@@ -273,5 +276,22 @@ func TestRenderGatewayShow(t *testing.T) {
 	}
 	if !strings.Contains(got, "11. [user] u1") || !strings.Contains(got, "12. [assistant] a1") {
 		t.Fatalf("missing rows: %q", got)
+	}
+}
+
+func TestRenderGatewaySessions(t *testing.T) {
+	items := []map[string]any{
+		{"session_id": "s1", "last_seen": "2026-05-15T10:00:00Z"},
+		{"session_id": "s2", "last_seen": "2026-05-15T09:00:00Z"},
+	}
+	got := renderGatewaySessions("s2", items)
+	if !strings.Contains(got, "Recent sessions:") {
+		t.Fatalf("missing header: %q", got)
+	}
+	if !strings.Contains(got, "1. s1 last_seen=2026-05-15T10:00:00Z") {
+		t.Fatalf("missing first row: %q", got)
+	}
+	if !strings.Contains(got, "2. s2 last_seen=2026-05-15T09:00:00Z [active]") {
+		t.Fatalf("missing active row: %q", got)
 	}
 }

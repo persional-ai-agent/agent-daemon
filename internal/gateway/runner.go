@@ -140,6 +140,10 @@ type gatewaySessionDetailStore interface {
 	LoadMessagesPage(sessionID string, offset, limit int) ([]core.Message, error)
 }
 
+type gatewaySessionLister interface {
+	ListRecentSessions(limit int) ([]map[string]any, error)
+}
+
 func parseGatewayCommand(platformName, text string) gatewayCommand {
 	raw := normalizeGatewayCommand(platformName, strings.TrimSpace(text))
 	parts := strings.Fields(raw)
@@ -428,6 +432,33 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			reply := renderGatewayShow(target, offset, limit, msgs)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/show", "session_id": target, "offset": offset, "limit": limit})
+			return
+		case "/sessions":
+			limit := 10
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sessions [n]", event.MessageID, map[string]any{"slash": "/sessions"})
+				return
+			}
+			if len(parsed.args) == 1 {
+				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
+				if err != nil || v <= 0 {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /sessions [n]", event.MessageID, map[string]any{"slash": "/sessions"})
+					return
+				}
+				limit = v
+			}
+			lister, ok := w.engine.SessionStore.(gatewaySessionLister)
+			if !ok || lister == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Sessions not supported by session store._", event.MessageID, map[string]any{"slash": "/sessions"})
+				return
+			}
+			items, err := lister.ListRecentSessions(limit)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Sessions failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/sessions"})
+				return
+			}
+			reply := renderGatewaySessions(w.currentSessionID(), items)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/sessions", "count": len(items), "limit": limit})
 			return
 		case "/stats":
 			target := w.currentSessionID()
@@ -1067,6 +1098,27 @@ func renderGatewayShow(sessionID string, offset, limit int, msgs []core.Message)
 			content = content[:120] + "..."
 		}
 		lines = append(lines, itoa(offset+i+1)+". ["+msg.Role+"] "+content)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderGatewaySessions(activeSessionID string, items []map[string]any) string {
+	lines := []string{"Recent sessions:"}
+	if len(items) == 0 {
+		lines = append(lines, "(empty)")
+		return strings.Join(lines, "\n")
+	}
+	for i, item := range items {
+		sid, _ := item["session_id"].(string)
+		lastSeen, _ := item["last_seen"].(string)
+		line := itoa(i+1) + ". " + sid
+		if strings.TrimSpace(lastSeen) != "" {
+			line += " last_seen=" + lastSeen
+		}
+		if strings.TrimSpace(sid) != "" && strings.TrimSpace(sid) == strings.TrimSpace(activeSessionID) {
+			line += " [active]"
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }
