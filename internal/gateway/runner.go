@@ -702,8 +702,7 @@ func normalizeGatewayCommand(platformName, text string) string {
 		return cmd
 	}
 	headLower := strings.ToLower(parts[0])
-	switch headLower {
-	case "pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help":
+	if IsBuiltInGatewayCommand(headLower) {
 		return "/" + headLower + withTail(parts)
 	}
 	if !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {

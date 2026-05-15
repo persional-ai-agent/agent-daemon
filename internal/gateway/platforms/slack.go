@@ -265,10 +265,5 @@ func renderSlackSlashCommand(cmd slack.SlashCommand) string {
 }
 
 func isBuiltInGatewaySlashCommand(name string) bool {
-	switch strings.TrimSpace(strings.ToLower(name)) {
-	case "pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help":
-		return true
-	default:
-		return false
-	}
+	return gateway.IsBuiltInGatewayCommand(name)
 }

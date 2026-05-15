@@ -1,6 +1,10 @@
 package platforms
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+)
 
 func TestTelegramDiscordApprovalCommandsConsistency(t *testing.T) {
 	telegram := map[string]bool{}
@@ -31,7 +35,7 @@ func TestGatewayBuiltInCommandsCrossPlatformConsistency(t *testing.T) {
 	for _, c := range DiscordApplicationCommands() {
 		discord["/"+c.Name] = true
 	}
-	shared := []string{"/pair", "/unpair", "/cancel", "/queue", "/status", "/pending", "/approvals", "/grant", "/revoke", "/approve", "/deny", "/help"}
+	shared := gateway.BuiltInGatewaySlashCommands()
 	for _, name := range shared {
 		if !telegram[name] {
 			t.Fatalf("telegram missing command: %s", name)
