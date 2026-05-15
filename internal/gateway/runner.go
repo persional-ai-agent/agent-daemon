@@ -557,11 +557,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
 			return
 		case "/setid":
-			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
+			globalID, pErr := tools.ParseGatewayGlobalIDArg(parsed.args)
+			if pErr != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /setid <global_user_id>", event.MessageID, map[string]any{"slash": "/setid"})
 				return
 			}
-			globalID := strings.TrimSpace(parsed.args[0])
 			if w.runner == nil || w.runner.identityStore == nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Identity store unavailable._", event.MessageID, map[string]any{"slash": "/setid"})
 				return

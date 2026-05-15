@@ -37,6 +37,17 @@ type GatewayResolveArgs struct {
 	UserName string
 }
 
+type GatewayIdentityRef struct {
+	Platform string
+	UserID   string
+}
+
+type GatewaySetIdentityArgs struct {
+	Platform string
+	UserID   string
+	GlobalID string
+}
+
 var gatewayIdentityMu sync.Mutex
 
 func NormalizeContinuityMode(raw string) string {
@@ -252,4 +263,44 @@ func ParseGatewayResolveArgsWithDefaults(args []string, defaults GatewayResolveA
 		return defaults, nil
 	}
 	return ParseGatewayResolveArgs(args)
+}
+
+func ParseGatewayIdentityRefArgs(args []string) (GatewayIdentityRef, error) {
+	if len(args) != 2 {
+		return GatewayIdentityRef{}, fmt.Errorf("invalid identity args")
+	}
+	out := GatewayIdentityRef{
+		Platform: strings.ToLower(strings.TrimSpace(args[0])),
+		UserID:   strings.TrimSpace(args[1]),
+	}
+	if out.Platform == "" || out.UserID == "" {
+		return GatewayIdentityRef{}, fmt.Errorf("invalid identity args")
+	}
+	return out, nil
+}
+
+func ParseGatewaySetIdentityArgs(args []string) (GatewaySetIdentityArgs, error) {
+	if len(args) != 3 {
+		return GatewaySetIdentityArgs{}, fmt.Errorf("invalid setid args")
+	}
+	out := GatewaySetIdentityArgs{
+		Platform: strings.ToLower(strings.TrimSpace(args[0])),
+		UserID:   strings.TrimSpace(args[1]),
+		GlobalID: strings.TrimSpace(args[2]),
+	}
+	if out.Platform == "" || out.UserID == "" || out.GlobalID == "" {
+		return GatewaySetIdentityArgs{}, fmt.Errorf("invalid setid args")
+	}
+	return out, nil
+}
+
+func ParseGatewayGlobalIDArg(args []string) (string, error) {
+	if len(args) != 1 {
+		return "", fmt.Errorf("invalid global id arg")
+	}
+	globalID := strings.TrimSpace(args[0])
+	if globalID == "" {
+		return "", fmt.Errorf("invalid global id arg")
+	}
+	return globalID, nil
 }

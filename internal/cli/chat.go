@@ -418,20 +418,19 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")
 		return true, nil
 	case "/whoami":
-		if len(fields) != 3 {
+		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
+		if parseErr != nil {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /whoami <platform> <user_id>")
 			return true, nil
 		}
-		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
-		userID := strings.TrimSpace(fields[2])
-		globalID, err := clitools.ResolveGatewayIdentity(eng.Workdir, platformName, userID)
+		globalID, err := clitools.ResolveGatewayIdentity(eng.Workdir, ref.Platform, ref.UserID)
 		if err != nil {
 			return true, err
 		}
 		mode, _ := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
 		printCLIEnvelope(true, map[string]any{
-			"platform":        platformName,
-			"user_id":         userID,
+			"platform":        ref.Platform,
+			"user_id":         ref.UserID,
 			"global_id":       globalID,
 			"continuity_mode": clitools.NormalizeContinuityMode(mode),
 		}, "", "")
@@ -461,37 +460,26 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}, "", "")
 		return true, nil
 	case "/setid":
-		if len(fields) != 4 {
+		setArgs, parseErr := clitools.ParseGatewaySetIdentityArgs(fields[1:])
+		if parseErr != nil {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
 			return true, nil
 		}
-		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
-		userID := strings.TrimSpace(fields[2])
-		globalID := strings.TrimSpace(fields[3])
-		if platformName == "" || userID == "" || globalID == "" {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
-			return true, nil
-		}
-		if err := clitools.UpsertGatewayIdentity(eng.Workdir, platformName, userID, globalID); err != nil {
+		if err := clitools.UpsertGatewayIdentity(eng.Workdir, setArgs.Platform, setArgs.UserID, setArgs.GlobalID); err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"platform": platformName, "user_id": userID, "global_id": globalID, "updated": true}, "", "")
+		printCLIEnvelope(true, map[string]any{"platform": setArgs.Platform, "user_id": setArgs.UserID, "global_id": setArgs.GlobalID, "updated": true}, "", "")
 		return true, nil
 	case "/unsetid":
-		if len(fields) != 3 {
+		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
+		if parseErr != nil {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /unsetid <platform> <user_id>")
 			return true, nil
 		}
-		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
-		userID := strings.TrimSpace(fields[2])
-		if platformName == "" || userID == "" {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /unsetid <platform> <user_id>")
-			return true, nil
-		}
-		if err := clitools.DeleteGatewayIdentity(eng.Workdir, platformName, userID); err != nil {
+		if err := clitools.DeleteGatewayIdentity(eng.Workdir, ref.Platform, ref.UserID); err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"platform": platformName, "user_id": userID, "deleted": true}, "", "")
+		printCLIEnvelope(true, map[string]any{"platform": ref.Platform, "user_id": ref.UserID, "deleted": true}, "", "")
 		return true, nil
 	case "/todo":
 		if eng.TodoStore == nil {

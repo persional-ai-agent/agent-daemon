@@ -75,3 +75,27 @@ func TestParseGatewayResolveArgsWithDefaults(t *testing.T) {
 		t.Fatalf("unexpected defaults parse result: %+v", got)
 	}
 }
+
+func TestParseGatewayIdentityArgs(t *testing.T) {
+	ref, err := ParseGatewayIdentityRefArgs([]string{"Telegram", "u1"})
+	if err != nil || ref.Platform != "telegram" || ref.UserID != "u1" {
+		t.Fatalf("unexpected ref parse: %+v err=%v", ref, err)
+	}
+	setArgs, err := ParseGatewaySetIdentityArgs([]string{"Telegram", "u1", "gid-1"})
+	if err != nil || setArgs.Platform != "telegram" || setArgs.UserID != "u1" || setArgs.GlobalID != "gid-1" {
+		t.Fatalf("unexpected setid parse: %+v err=%v", setArgs, err)
+	}
+	globalID, err := ParseGatewayGlobalIDArg([]string{"gid-2"})
+	if err != nil || globalID != "gid-2" {
+		t.Fatalf("unexpected global id parse: %q err=%v", globalID, err)
+	}
+	if _, err := ParseGatewayIdentityRefArgs([]string{"telegram"}); err == nil {
+		t.Fatal("expected invalid whoami/unsetid args error")
+	}
+	if _, err := ParseGatewaySetIdentityArgs([]string{"telegram", "u1"}); err == nil {
+		t.Fatal("expected invalid setid args error")
+	}
+	if _, err := ParseGatewayGlobalIDArg([]string{}); err == nil {
+		t.Fatal("expected invalid global id arg error")
+	}
+}

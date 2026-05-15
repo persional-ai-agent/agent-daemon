@@ -1088,15 +1088,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "home target updated")
 		case current == "/whoami" || strings.HasPrefix(current, "/whoami "):
 			parts := strings.Fields(current)
-			if len(parts) != 3 {
+			ref, pErr := tools.ParseGatewayIdentityRefArgs(parts[1:])
+			if pErr != nil {
 				return lines, fmt.Errorf("用法: /whoami <platform> <user_id>"), false
 			}
-			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
-			userID := strings.TrimSpace(parts[2])
-			if platformName == "" || userID == "" {
-				return lines, fmt.Errorf("用法: /whoami <platform> <user_id>"), false
-			}
-			apiPath := fmt.Sprintf("%s/v1/ui/gateway/identity?platform=%s&user_id=%s", s.httpBase, url.QueryEscape(platformName), url.QueryEscape(userID))
+			apiPath := fmt.Sprintf("%s/v1/ui/gateway/identity?platform=%s&user_id=%s", s.httpBase, url.QueryEscape(ref.Platform), url.QueryEscape(ref.UserID))
 			out, wErr := httpJSON(http.MethodGet, apiPath, nil)
 			if wErr != nil {
 				s.setErrStatus(wErr)
@@ -1132,19 +1128,14 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "continuity updated")
 		case current == "/setid" || strings.HasPrefix(current, "/setid "):
 			parts := strings.Fields(current)
-			if len(parts) != 4 {
-				return lines, fmt.Errorf("用法: /setid <platform> <user_id> <global_user_id>"), false
-			}
-			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
-			userID := strings.TrimSpace(parts[2])
-			globalID := strings.TrimSpace(parts[3])
-			if platformName == "" || userID == "" || globalID == "" {
+			setArgs, pErr := tools.ParseGatewaySetIdentityArgs(parts[1:])
+			if pErr != nil {
 				return lines, fmt.Errorf("用法: /setid <platform> <user_id> <global_user_id>"), false
 			}
 			out, iErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
-				"platform":  platformName,
-				"user_id":   userID,
-				"global_id": globalID,
+				"platform":  setArgs.Platform,
+				"user_id":   setArgs.UserID,
+				"global_id": setArgs.GlobalID,
 			})
 			if iErr != nil {
 				s.setErrStatus(iErr)
@@ -1154,17 +1145,13 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "identity updated")
 		case current == "/unsetid" || strings.HasPrefix(current, "/unsetid "):
 			parts := strings.Fields(current)
-			if len(parts) != 3 {
-				return lines, fmt.Errorf("用法: /unsetid <platform> <user_id>"), false
-			}
-			platformName := strings.ToLower(strings.TrimSpace(parts[1]))
-			userID := strings.TrimSpace(parts[2])
-			if platformName == "" || userID == "" {
+			ref, pErr := tools.ParseGatewayIdentityRefArgs(parts[1:])
+			if pErr != nil {
 				return lines, fmt.Errorf("用法: /unsetid <platform> <user_id>"), false
 			}
 			out, iErr := httpJSON(http.MethodDelete, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
-				"platform": platformName,
-				"user_id":  userID,
+				"platform": ref.Platform,
+				"user_id":  ref.UserID,
 			})
 			if iErr != nil {
 				s.setErrStatus(iErr)
