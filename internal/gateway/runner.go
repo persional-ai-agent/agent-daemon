@@ -111,6 +111,7 @@ type sessionWorker struct {
 	queue chan MessageEvent
 
 	mu                  sync.Mutex
+	activeSessionID     string
 	cancelCurrent       context.CancelFunc
 	running             bool
 	lastApprovalID      string
@@ -260,12 +261,13 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 	if w == nil {
 		engCopy := *r.engine
 		w = &sessionWorker{
-			key:     sessionKey,
-			adapter: adapter,
-			engine:  &engCopy,
-			allowed: allowed,
-			runner:  r,
-			queue:   make(chan MessageEvent, 32),
+			key:             sessionKey,
+			adapter:         adapter,
+			engine:          &engCopy,
+			allowed:         allowed,
+			runner:          r,
+			queue:           make(chan MessageEvent, 32),
+			activeSessionID: sessionKey,
 		}
 		r.sessions[sessionKey] = w
 		go w.run(ctx)
@@ -351,6 +353,21 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_No active task._", event.MessageID, map[string]any{"slash": "/cancel"})
 			}
 			return
+		case "/new", "/reset":
+			next := ""
+			if parsed.head == "/new" && len(parsed.args) == 1 {
+				next = strings.TrimSpace(parsed.args[0])
+			} else if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /new [session_id] or /reset", event.MessageID, map[string]any{"slash": parsed.head})
+				return
+			}
+			if next == "" {
+				next = uuid.NewString()
+			}
+			prev := w.currentSessionID()
+			w.setActiveSessionID(next)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
+			return
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -365,8 +382,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				}
 				keepLastN = n
 			}
+			activeSessionID := w.currentSessionID()
 			if compactor, ok := w.engine.SessionStore.(gatewaySessionCompactor); ok && compactor != nil {
-				before, after, err := compactor.CompactSession(w.key, keepLastN)
+				before, after, err := compactor.CompactSession(activeSessionID, keepLastN)
 				if err != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "_Compress failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/compress"})
 					return
@@ -434,7 +452,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		return
 	}
 
-	sessionKey := w.key
+	sessionKey := w.currentSessionID()
 
 	history, err := w.engine.SessionStore.LoadMessages(sessionKey, 500)
 	if err != nil {
@@ -872,9 +890,11 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 }
 
 func (w *sessionWorker) gatewayStatusText() string {
+	activeSessionID := w.currentSessionID()
 	lines := []string{
 		"platform: " + w.adapter.Name(),
-		"session: " + w.key,
+		"route_session: " + w.key,
+		"active_session: " + activeSessionID,
 		"queue: " + itoa(len(w.queue)),
 	}
 	if w.runner != nil {
@@ -913,6 +933,25 @@ func (w *sessionWorker) isRunning() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.running
+}
+
+func (w *sessionWorker) currentSessionID() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.TrimSpace(w.activeSessionID) == "" {
+		return w.key
+	}
+	return strings.TrimSpace(w.activeSessionID)
+}
+
+func (w *sessionWorker) setActiveSessionID(sessionID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		sessionID = w.key
+	}
+	w.activeSessionID = sessionID
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {
@@ -1007,7 +1046,7 @@ func parseApprovalManageCommand(head string, argsIn []string) (map[string]any, s
 
 func (w *sessionWorker) approvalToolContext() tools.ToolContext {
 	return tools.ToolContext{
-		SessionID:      w.key,
+		SessionID:      w.currentSessionID(),
 		SessionStore:   w.engine.SearchStore,
 		MemoryStore:    w.engine.MemoryStore,
 		TodoStore:      w.engine.TodoStore,

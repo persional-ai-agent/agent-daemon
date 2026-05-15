@@ -15,6 +15,8 @@ type gatewayCommandSpec struct {
 var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "pair", Description: "pair with gateway using a code", HelpUsage: "/pair <code>"},
 	{Name: "unpair", Description: "remove current gateway pairing"},
+	{Name: "new", Description: "switch to a new active session", HelpUsage: "/new [session_id]"},
+	{Name: "reset", Description: "reset active session context"},
 	{Name: "cancel", Description: "cancel the running task", Aliases: []string{"abort", "stop"}},
 	{Name: "compress", Description: "compact current session context", HelpUsage: "/compress [tail_messages]"},
 	{Name: "queue", Description: "show queued task count", Aliases: []string{"q"}},
@@ -41,6 +43,8 @@ var gatewayApprovalCommandSet = map[string]struct{}{
 
 var gatewayCommandAuthRequiredSet = map[string]struct{}{
 	"cancel":    {},
+	"new":       {},
+	"reset":     {},
 	"compress":  {},
 	"queue":     {},
 	"status":    {},
