@@ -428,6 +428,37 @@ func TestSendTurnReconnect(t *testing.T) {
 	}
 }
 
+func TestSendTurnReturnsErrorOnTerminalErrorEvent(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Fatalf("upgrade: %v", err)
+		}
+		defer conn.Close()
+		var req map[string]any
+		if err := conn.ReadJSON(&req); err != nil {
+			t.Fatalf("read req: %v", err)
+		}
+		_ = conn.WriteJSON(map[string]any{
+			"type": "error",
+			"data": map[string]any{"error": "model call failed after retries: exceed_context_size_error"},
+		})
+	}))
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
+	s := newState()
+	s.wsBase = wsURL
+	err := s.sendTurn("ping", func(map[string]any) {})
+	if err == nil {
+		t.Fatal("expected sendTurn to return terminal error")
+	}
+	if !strings.Contains(err.Error(), "exceed_context_size_error") {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
 func TestExportDiagnostics(t *testing.T) {
 	s := newState()
 	s.session = "diag-session"

@@ -1505,11 +1505,22 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 					if code, ok := evt["error_code"].(string); ok && strings.TrimSpace(code) != "" {
 						s.lastErrorCode = code
 					}
-					if em, ok := evt["error"].(string); ok && strings.TrimSpace(em) != "" {
-						s.lastErrorText = em
+					if errText := extractEventErrorText(evt); strings.TrimSpace(errText) != "" {
+						s.lastErrorText = errText
 					}
 				}
 				s.diagUpdatedAt = time.Now().Format(time.RFC3339)
+				if evtType == "error" || evtType == "max_iterations_reached" {
+					errText := strings.TrimSpace(extractEventErrorText(evt))
+					if errText == "" {
+						if evtType == "max_iterations_reached" {
+							errText = "max iterations reached"
+						} else {
+							errText = "turn returned terminal error event"
+						}
+					}
+					return fmt.Errorf("%s", errText)
+				}
 				return nil
 			}
 		}
