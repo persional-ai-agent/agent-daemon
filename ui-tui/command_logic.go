@@ -663,6 +663,24 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			_ = s.saveRuntimeState()
 			emit("session switched: " + s.session)
 			s.setStatus(true, "ok", "new session created")
+		case current == "/resume" || strings.HasPrefix(current, "/resume "):
+			parts := strings.Fields(current)
+			if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+				return lines, fmt.Errorf("用法: /resume <session_id>"), false
+			}
+			sid := strings.TrimSpace(parts[1])
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			s.session = sid
+			s.lastShowSession = sid
+			s.lastShowOffset = 0
+			_ = s.saveRuntimeState()
+			emitData(map[string]any{"session_id": sid, "loaded_messages": out["count"]})
+			emit("session resumed: " + s.session)
+			s.setStatus(true, "ok", "session resumed")
 		case current == "/reset" || strings.HasPrefix(current, "/reset "):
 			parts := strings.Fields(current)
 			nextID := uuid.NewString()
@@ -966,6 +984,29 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(result)
 			s.setStatus(true, "ok", "undo applied")
+		case current == "/compress" || strings.HasPrefix(current, "/compress "):
+			parts := strings.Fields(current)
+			keepLastN := 20
+			if len(parts) > 2 {
+				return lines, fmt.Errorf("用法: /compress [tail_messages]"), false
+			}
+			if len(parts) == 2 {
+				n, cErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+				if cErr != nil || n <= 0 {
+					return lines, fmt.Errorf("用法: /compress [tail_messages]"), false
+				}
+				keepLastN = n
+			}
+			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/sessions/compress", map[string]any{
+				"session_id":  s.session,
+				"keep_last_n": keepLastN,
+			})
+			if cErr != nil {
+				s.setErrStatus(cErr)
+				return lines, cErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "session compressed")
 		case current == "/retry":
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=500", s.httpBase, url.PathEscape(s.session)), nil)
 			if hErr != nil {

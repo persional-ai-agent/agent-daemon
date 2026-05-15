@@ -350,6 +350,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/pretty maybe", "用法: /pretty on|off"},
 		{"/targets a b", "用法: /targets [platform]"},
 		{"/sethome", "用法: /sethome <platform:chat_id>|<platform> <chat_id>"},
+		{"/resume", "用法: /resume <session_id>"},
+		{"/compress x", "用法: /compress [tail_messages]"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
@@ -735,6 +737,14 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 				"ok":       true,
 				"messages": []map[string]any{{"role": "user", "content": "hello"}},
 				"stats":    map[string]any{"total_messages": 1},
+				"count":    1,
+			})
+		case "/v1/ui/sessions/s3":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":       true,
+				"messages": []map[string]any{{"role": "assistant", "content": "world"}},
+				"stats":    map[string]any{"total_messages": 1},
+				"count":    1,
 			})
 		case "/v1/ui/sessions/undo":
 			undoCalls++
@@ -742,6 +752,19 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"ok":     true,
 				"result": map[string]any{"new_session_id": "s2", "undone": true, "removed_messages": 1},
+			})
+		case "/v1/ui/sessions/compress":
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+				"result": map[string]any{
+					"session_id":       "s1",
+					"compressed":       true,
+					"before_messages":  100,
+					"after_messages":   20,
+					"dropped_messages": 80,
+					"keep_last_n":      20,
+				},
 			})
 		case "/v1/ui/skills":
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "skills": []map[string]any{{"name": "skill-a"}}})
@@ -806,6 +829,19 @@ func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
 	if lastPath != "/v1/ui/sessions/s1?offset=0&limit=1" {
 		t.Fatalf("unexpected usage request path: %s", lastPath)
 	}
+	if _, err, _ := handleTUICommand(s, "/resume s3", nil, nil); err != nil {
+		t.Fatalf("/resume failed: %v", err)
+	}
+	if s.session != "s3" {
+		t.Fatalf("session after resume=%q", s.session)
+	}
+	if _, err, _ := handleTUICommand(s, "/compress", nil, nil); err != nil {
+		t.Fatalf("/compress failed: %v", err)
+	}
+	if got, _ := lastBody["session_id"].(string); got != "s3" {
+		t.Fatalf("unexpected compress body: %+v", lastBody)
+	}
+
 	if _, err, _ := handleTUICommand(s, "/undo", nil, nil); err != nil {
 		t.Fatalf("/undo failed: %v", err)
 	}
