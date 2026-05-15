@@ -13,7 +13,7 @@ type gatewayPlatformCommandSpec struct {
 	DiscordOpts []*discordgo.ApplicationCommandOption
 }
 
-func gatewayPlatformCommandSpecs() []gatewayPlatformCommandSpec {
+func GatewayPlatformCommandSpecs() []gatewayPlatformCommandSpec {
 	return []gatewayPlatformCommandSpec{
 		{
 			Name:        "pair",
@@ -69,6 +69,10 @@ func gatewayPlatformCommandSpecs() []gatewayPlatformCommandSpec {
 		},
 		{Name: "help", Description: "show supported commands", Telegram: true, Discord: true},
 	}
+}
+
+func gatewayPlatformCommandSpecs() []gatewayPlatformCommandSpec {
+	return GatewayPlatformCommandSpecs()
 }
 
 func telegramCommandsFromSpecs(specs []gatewayPlatformCommandSpec) []tgbotapi.BotCommand {

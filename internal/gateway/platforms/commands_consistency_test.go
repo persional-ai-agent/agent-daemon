@@ -8,7 +8,7 @@ import (
 )
 
 func TestGatewayPlatformCommandSpecsCoverCatalog(t *testing.T) {
-	specs := gatewayPlatformCommandSpecs()
+	specs := GatewayPlatformCommandSpecs()
 	if len(specs) == 0 {
 		t.Fatal("empty platform command specs")
 	}
@@ -30,6 +30,44 @@ func TestGatewayPlatformCommandSpecsCoverCatalog(t *testing.T) {
 	}
 	if len(fromCatalog) != 0 {
 		t.Fatalf("catalog commands missing in platform specs: %+v", fromCatalog)
+	}
+}
+
+func TestTelegramCommandsExactlyFromSpecs(t *testing.T) {
+	specs := GatewayPlatformCommandSpecs()
+	expected := telegramCommandsFromSpecs(specs)
+	actual := TelegramCommands()
+	if len(actual) != len(expected) {
+		t.Fatalf("telegram command count mismatch: got=%d want=%d", len(actual), len(expected))
+	}
+	for i := range expected {
+		if actual[i].Command != expected[i].Command || actual[i].Description != expected[i].Description {
+			t.Fatalf("telegram command mismatch at %d: got=%+v want=%+v", i, actual[i], expected[i])
+		}
+	}
+}
+
+func TestDiscordCommandsExactlyFromSpecs(t *testing.T) {
+	specs := GatewayPlatformCommandSpecs()
+	expected := discordCommandsFromSpecs(specs)
+	actual := DiscordApplicationCommands()
+	if len(actual) != len(expected) {
+		t.Fatalf("discord command count mismatch: got=%d want=%d", len(actual), len(expected))
+	}
+	for i := range expected {
+		if actual[i].Name != expected[i].Name || actual[i].Description != expected[i].Description {
+			t.Fatalf("discord command mismatch at %d: got=(%s,%s) want=(%s,%s)", i, actual[i].Name, actual[i].Description, expected[i].Name, expected[i].Description)
+		}
+		if len(actual[i].Options) != len(expected[i].Options) {
+			t.Fatalf("discord option count mismatch for %s: got=%d want=%d", actual[i].Name, len(actual[i].Options), len(expected[i].Options))
+		}
+		for j := range expected[i].Options {
+			gotOpt := actual[i].Options[j]
+			wantOpt := expected[i].Options[j]
+			if gotOpt.Name != wantOpt.Name || gotOpt.Description != wantOpt.Description || gotOpt.Type != wantOpt.Type || gotOpt.Required != wantOpt.Required {
+				t.Fatalf("discord option mismatch for %s[%d]: got=%+v want=%+v", actual[i].Name, j, gotOpt, wantOpt)
+			}
+		}
 	}
 }
 
