@@ -99,3 +99,21 @@ func TestParseGatewayIdentityArgs(t *testing.T) {
 		t.Fatal("expected invalid global id arg error")
 	}
 }
+
+func TestParseGatewayContinuityModeArg(t *testing.T) {
+	mode, err := ParseGatewayContinuityModeArg([]string{"name"})
+	if err != nil || mode != "user_name" {
+		t.Fatalf("unexpected continuity parse: mode=%q err=%v", mode, err)
+	}
+	mode, err = ParseGatewayContinuityModeArg([]string{"id"})
+	if err != nil || mode != "user_id" {
+		t.Fatalf("unexpected continuity parse: mode=%q err=%v", mode, err)
+	}
+	mode, err = ParseGatewayContinuityModeArg([]string{"off"})
+	if err != nil || mode != "off" {
+		t.Fatalf("unexpected continuity parse: mode=%q err=%v", mode, err)
+	}
+	if _, err := ParseGatewayContinuityModeArg([]string{}); err == nil {
+		t.Fatal("expected invalid continuity arg length")
+	}
+}

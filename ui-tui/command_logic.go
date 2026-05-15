@@ -1115,8 +1115,8 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "continuity shown")
 				continue
 			}
-			mode := strings.ToLower(strings.TrimSpace(parts[1]))
-			if mode != "off" && mode != "user_id" && mode != "user_name" {
+			mode, pErr := tools.ParseGatewayContinuityModeArg(parts[1:])
+			if pErr != nil {
 				return lines, fmt.Errorf("用法: /continuity [off|user_id|user_name]"), false
 			}
 			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/continuity", map[string]any{"mode": mode})

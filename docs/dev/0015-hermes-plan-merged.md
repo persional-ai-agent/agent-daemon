@@ -140,6 +140,7 @@
 - 已将 `/sethome` 参数解析统一到 `internal/tools.ParseSetHomeArgs`，CLI/TUI/Gateway 全部复用同一解析路径，消除 `<platform:chat_id>` 与 `<platform> <chat_id>` 两种写法的行为漂移。
 - 已将 `/resolve` 参数解析统一到 `internal/tools.ParseGatewayResolveArgs`（Gateway 支持默认当前会话上下文走 `ParseGatewayResolveArgsWithDefaults`），CLI/TUI/Gateway 复用同一校验规则。
 - 已将 `/whoami`、`/setid`、`/unsetid`（含 gateway 内 `/setid`）参数解析统一到 `internal/tools`，三端共享同一 identity 参数校验规则。
+- 已将 `/continuity` 更新参数归一化到 `internal/tools.ParseGatewayContinuityModeArg`，CLI/TUI/Gateway 三端共享同一 mode 校验与别名归一（`id/name` -> `user_id/user_name`）。
 
 范围：
 

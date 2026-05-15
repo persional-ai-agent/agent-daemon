@@ -549,7 +549,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
 				return
 			}
-			mode := tools.NormalizeContinuityMode(parsed.args[0])
+			mode, pErr := tools.ParseGatewayContinuityModeArg(parsed.args)
+			if pErr != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
+				return
+			}
 			_ = os.Setenv("AGENT_GATEWAY_CONTINUITY", mode)
 			if w.runner != nil && w.runner.engine != nil {
 				_ = tools.SetGatewaySetting(w.runner.engine.Workdir, "continuity_mode", mode)

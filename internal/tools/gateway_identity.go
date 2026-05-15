@@ -304,3 +304,16 @@ func ParseGatewayGlobalIDArg(args []string) (string, error) {
 	}
 	return globalID, nil
 }
+
+func ParseGatewayContinuityModeArg(args []string) (string, error) {
+	if len(args) != 1 {
+		return "", fmt.Errorf("invalid continuity args")
+	}
+	mode := NormalizeContinuityMode(args[0])
+	switch mode {
+	case "off", "user_id", "user_name":
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid continuity mode")
+	}
+}
