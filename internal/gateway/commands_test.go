@@ -28,3 +28,25 @@ func TestBuiltInGatewaySlashCommandsContainsCoreSet(t *testing.T) {
 		t.Fatalf("missing built-ins: %+v", want)
 	}
 }
+
+func TestResolveGatewayCommandAliases(t *testing.T) {
+	cases := map[string]string{
+		"approval": "approvals",
+		"pendings": "pending",
+		"abort":    "cancel",
+		"stop":     "cancel",
+		"q":        "queue",
+		"s":        "status",
+		"h":        "help",
+		"approve":  "approve",
+	}
+	for in, want := range cases {
+		got, ok := ResolveGatewayCommand(in)
+		if !ok || got != want {
+			t.Fatalf("resolve(%q)=(%q,%v) want=(%q,true)", in, got, ok, want)
+		}
+	}
+	if got, ok := ResolveGatewayCommand("unknown"); ok || got != "" {
+		t.Fatalf("resolve unknown got=(%q,%v)", got, ok)
+	}
+}

@@ -23,9 +23,16 @@ func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
 		{input: "帮助", want: "/help"},
 		{input: "/status", want: "/status"},
 		{input: "/STATUS", want: "/status"},
+		{input: "/APPROVAL", want: "/approvals"},
+		{input: "/PENDINGS", want: "/pending"},
+		{input: "/STOP", want: "/cancel"},
 		{input: "/APPROVE AP-3", want: "/approve AP-3"},
+		{input: "/Q", want: "/queue"},
 		{input: "APPROVE ap-4", want: "/approve ap-4"},
 		{input: "STATUS", want: "/status"},
+		{input: "approval", want: "/approvals"},
+		{input: "pendings", want: "/pending"},
+		{input: "abort", want: "/cancel"},
 		{input: "custom text", want: "custom text"},
 	}
 	for _, tt := range tests {

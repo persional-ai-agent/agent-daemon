@@ -692,18 +692,21 @@ func normalizeGatewayCommand(platformName, text string) string {
 		if len(parts) == 0 {
 			return ""
 		}
-		if len(parts) == 1 {
-			return strings.ToLower(parts[0])
+		head := strings.TrimPrefix(parts[0], "/")
+		if canonical, ok := ResolveGatewayCommand(head); ok {
+			return "/" + canonical + withTail(parts)
 		}
-		return strings.ToLower(parts[0]) + " " + strings.Join(parts[1:], " ")
+		if len(parts) == 1 {
+			return "/" + strings.ToLower(head)
+		}
+		return "/" + strings.ToLower(head) + withTail(parts)
 	}
 	parts := strings.Fields(cmd)
 	if len(parts) == 0 {
 		return cmd
 	}
-	headLower := strings.ToLower(parts[0])
-	if IsBuiltInGatewayCommand(headLower) {
-		return "/" + headLower + withTail(parts)
+	if canonical, ok := ResolveGatewayCommand(parts[0]); ok {
+		return "/" + canonical + withTail(parts)
 	}
 	if !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {
 		return cmd
