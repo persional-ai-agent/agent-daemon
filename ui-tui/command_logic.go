@@ -899,6 +899,54 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "stats", "result"))
 			s.setStatus(true, "ok", "stats loaded")
+		case current == "/targets" || strings.HasPrefix(current, "/targets "):
+			parts := strings.Fields(current)
+			apiPath := s.httpBase + "/v1/ui/targets"
+			if len(parts) > 2 {
+				return lines, fmt.Errorf("用法: /targets [platform]"), false
+			}
+			if len(parts) == 2 {
+				platform := strings.ToLower(strings.TrimSpace(parts[1]))
+				if platform == "" {
+					return lines, fmt.Errorf("用法: /targets [platform]"), false
+				}
+				apiPath = apiPath + "?platform=" + url.QueryEscape(platform)
+			}
+			out, tErr := httpJSON(http.MethodGet, apiPath, nil)
+			if tErr != nil {
+				s.setErrStatus(tErr)
+				return lines, tErr, false
+			}
+			emitData(uiPayload(out, "targets", "result"))
+			s.setStatus(true, "ok", "targets listed")
+		case current == "/sethome" || strings.HasPrefix(current, "/sethome "):
+			parts := strings.Fields(current)
+			if len(parts) != 2 && len(parts) != 3 {
+				return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
+			}
+			body := map[string]any{}
+			if len(parts) == 2 {
+				target := strings.TrimSpace(parts[1])
+				if target == "" {
+					return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
+				}
+				body["target"] = target
+			} else {
+				platform := strings.ToLower(strings.TrimSpace(parts[1]))
+				chatID := strings.TrimSpace(parts[2])
+				if platform == "" || chatID == "" {
+					return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
+				}
+				body["platform"] = platform
+				body["chat_id"] = chatID
+			}
+			out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/targets/home", body)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "home target updated")
 		case current == "/gateway" || strings.HasPrefix(current, "/gateway "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 {

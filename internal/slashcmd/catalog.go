@@ -22,6 +22,8 @@ func TUIHelpEntries() []HelpEntry {
 		{"/next", "show next page (based on last /show)"},
 		{"/prev", "show previous page (based on last /show)"},
 		{"/stats [sid]", "show session stats"},
+		{"/targets [platform]", "list delivery targets"},
+		{"/sethome <p:id>|<p> <id>", "set platform home target"},
 		{"/gateway status", "show gateway status"},
 		{"/gateway enable", "enable gateway"},
 		{"/gateway disable", "disable gateway"},
@@ -82,7 +84,7 @@ func TUIHelpEntries() []HelpEntry {
 func TUIRootCommands() []string {
 	return []string{
 		"/help", "/session", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
-		"/stats", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
+		"/stats", "/targets", "/sethome", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
 		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
 		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
 		"/reconnect", "/recover", "/diag", "/fullscreen", "/quit", "/exit", "/new", "/reset",

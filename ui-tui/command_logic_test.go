@@ -346,6 +346,8 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/api http://bad", "API 地址必须以 ws:// 或 wss:// 开头"},
 		{"/http ws://bad", "HTTP API 地址必须以 http:// 或 https:// 开头"},
 		{"/pretty maybe", "用法: /pretty on|off"},
+		{"/targets a b", "用法: /targets [platform]"},
+		{"/sethome", "用法: /sethome <platform:chat_id>|<platform> <chat_id>"},
 	}
 	for _, tc := range cases {
 		_, err, _ := handleTUICommand(s, tc.cmd, nil, nil)
@@ -648,6 +650,72 @@ func TestConfigCommandCaseInsensitiveSubcommands(t *testing.T) {
 	}
 	if setKey != "agent.note" || setValue != "hello world" {
 		t.Fatalf("unexpected spaced payload: key=%q value=%q", setKey, setValue)
+	}
+}
+
+func TestTargetsAndSetHomeCommands(t *testing.T) {
+	lastMethod := ""
+	lastPath := ""
+	lastBody := map[string]any{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastMethod = r.Method
+		lastPath = r.URL.String()
+		switch r.URL.Path {
+		case "/v1/ui/targets":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":      true,
+				"targets": []map[string]any{{"target": "telegram:1001"}},
+			})
+		case "/v1/ui/targets/home":
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":     true,
+				"result": map[string]any{"target": "telegram:1001"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	s := &appState{
+		httpBase:         ts.URL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+
+	if _, err, _ := handleTUICommand(s, "/targets telegram", nil, nil); err != nil {
+		t.Fatalf("targets command failed: %v", err)
+	}
+	if lastMethod != http.MethodGet || lastPath != "/v1/ui/targets?platform=telegram" {
+		t.Fatalf("unexpected targets request: %s %s", lastMethod, lastPath)
+	}
+
+	if _, err, _ := handleTUICommand(s, "/sethome telegram:1001", nil, nil); err != nil {
+		t.Fatalf("sethome target command failed: %v", err)
+	}
+	if lastMethod != http.MethodPost || lastPath != "/v1/ui/targets/home" {
+		t.Fatalf("unexpected sethome request: %s %s", lastMethod, lastPath)
+	}
+	if got, _ := lastBody["target"].(string); got != "telegram:1001" {
+		t.Fatalf("unexpected sethome target body: %+v", lastBody)
+	}
+
+	lastBody = map[string]any{}
+	if _, err, _ := handleTUICommand(s, "/sethome telegram 2002", nil, nil); err != nil {
+		t.Fatalf("sethome platform chat command failed: %v", err)
+	}
+	if got, _ := lastBody["platform"].(string); got != "telegram" {
+		t.Fatalf("unexpected platform in body: %+v", lastBody)
+	}
+	if got, _ := lastBody["chat_id"].(string); got != "2002" {
+		t.Fatalf("unexpected chat_id in body: %+v", lastBody)
 	}
 }
 

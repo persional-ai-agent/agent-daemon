@@ -123,6 +123,8 @@ func TestUIContractSuccessEnvelopeAndHeaders(t *testing.T) {
 		{name: "config", method: http.MethodGet, path: "/v1/ui/config"},
 		{name: "gateway", method: http.MethodGet, path: "/v1/ui/gateway/status"},
 		{name: "gateway_diagnostics", method: http.MethodGet, path: "/v1/ui/gateway/diagnostics"},
+		{name: "targets", method: http.MethodGet, path: "/v1/ui/targets?platform=telegram"},
+		{name: "targets_home", method: http.MethodPost, path: "/v1/ui/targets/home", body: `{"target":"telegram:1001"}`},
 		{name: "skills", method: http.MethodGet, path: "/v1/ui/skills"},
 		{name: "skills_reload", method: http.MethodPost, path: "/v1/ui/skills/reload"},
 		{name: "skills_search", method: http.MethodPost, path: "/v1/ui/skills/search", body: `{"query":"code review","repo":"anthropics/skills"}`},

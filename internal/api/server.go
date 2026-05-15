@@ -130,6 +130,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/gateway/status", s.handleUIGatewayStatus)
 	mux.HandleFunc("/v1/ui/gateway/diagnostics", s.handleUIGatewayDiagnostics)
 	mux.HandleFunc("/v1/ui/gateway/action", s.handleUIGatewayAction)
+	mux.HandleFunc("/v1/ui/targets", s.handleUITargets)
+	mux.HandleFunc("/v1/ui/targets/home", s.handleUITargetsHome)
 	mux.HandleFunc("/v1/ui/plugins/dashboards", s.handleUIPluginDashboards)
 	mux.HandleFunc("/v1/ui/cron/jobs/action", s.handleUICronJobAction)
 	mux.HandleFunc("/v1/ui/cron/jobs/", s.handleUICronJobDetail)
@@ -750,6 +752,12 @@ type uiSessionReplayRequest struct {
 	Limit     int    `json:"limit,omitempty"`
 }
 
+type uiTargetsSetHomeRequest struct {
+	Target   string `json:"target,omitempty"`
+	Platform string `json:"platform,omitempty"`
+	ChatID   string `json:"chat_id,omitempty"`
+}
+
 type sessionCompressor interface {
 	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
 }
@@ -781,6 +789,71 @@ func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 	writeUIJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
 		"result": res,
+	})
+}
+
+func (s *Server) handleUITargets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	filter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
+	platforms, targets, err := tools.BuildDeliveryTargets(s.engineWorkdir(), filter)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"platform":  filter,
+		"count":     len(targets),
+		"platforms": platforms,
+		"targets":   targets,
+	})
+}
+
+func (s *Server) handleUITargetsHome(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiTargetsSetHomeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	platformName := strings.ToLower(strings.TrimSpace(req.Platform))
+	chatID := strings.TrimSpace(req.ChatID)
+	if target := strings.TrimSpace(req.Target); target != "" {
+		p, c, err := tools.ParseDeliveryTarget(target)
+		if err != nil || strings.TrimSpace(c) == "" {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "target must be platform:chat_id")
+			return
+		}
+		platformName = p
+		chatID = c
+	}
+	if platformName == "" || chatID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "platform/chat_id required")
+		return
+	}
+	env := tools.HomeTargetEnvVar(platformName)
+	_ = os.Setenv(env, chatID)
+	_ = tools.SetHomeTarget(s.engineWorkdir(), platformName, chatID)
+	_ = tools.UpsertChannelDirectory(s.engineWorkdir(), tools.ChannelDirectoryEntry{
+		Platform:   platformName,
+		ChatID:     chatID,
+		HomeTarget: chatID,
+	})
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"platform":    platformName,
+			"chat_id":     chatID,
+			"target":      platformName + ":" + chatID,
+			"home_target": chatID,
+			"env":         env,
+		},
 	})
 }
 
