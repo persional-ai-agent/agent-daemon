@@ -497,6 +497,30 @@ func TestPanelCommandCaseInsensitiveSubcommands(t *testing.T) {
 	}
 }
 
+func TestPrettyAndFullscreenCaseInsensitiveArgs(t *testing.T) {
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+	}
+	if _, err, _ := handleTUICommand(s, "/pretty ON", nil, nil); err != nil {
+		t.Fatalf("pretty ON failed: %v", err)
+	}
+	if !s.pretty {
+		t.Fatal("expected pretty=true")
+	}
+	if _, err, _ := handleTUICommand(s, "/fullscreen OFF", nil, nil); err != nil {
+		t.Fatalf("fullscreen OFF failed: %v", err)
+	}
+	if s.fullscreen {
+		t.Fatal("expected fullscreen=false")
+	}
+}
+
 func TestReconnectTimeoutCommandCaseInsensitive(t *testing.T) {
 	s := &appState{
 		historyPath:      filepath.Join(t.TempDir(), "history.log"),

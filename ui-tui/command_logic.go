@@ -202,16 +202,22 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/fullscreen":
 			emit(fmt.Sprintf("fullscreen: %v", s.fullscreen))
 			s.setStatus(true, "ok", "fullscreen status shown")
-		case current == "/fullscreen on":
-			s.fullscreen = true
-			_ = s.saveRuntimeState()
-			emit("fullscreen: on")
-			s.setStatus(true, "ok", "fullscreen enabled")
-		case current == "/fullscreen off":
-			s.fullscreen = false
-			_ = s.saveRuntimeState()
-			emit("fullscreen: off")
-			s.setStatus(true, "ok", "fullscreen disabled")
+		case strings.HasPrefix(current, "/fullscreen "):
+			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/fullscreen ")))
+			switch mode {
+			case "on":
+				s.fullscreen = true
+				_ = s.saveRuntimeState()
+				emit("fullscreen: on")
+				s.setStatus(true, "ok", "fullscreen enabled")
+			case "off":
+				s.fullscreen = false
+				_ = s.saveRuntimeState()
+				emit("fullscreen: off")
+				s.setStatus(true, "ok", "fullscreen disabled")
+			default:
+				return lines, fmt.Errorf("用法: /fullscreen [on|off]"), false
+			}
 		case current == "/reconnect status":
 			emitData(map[string]any{
 				"enabled":         s.reconnectEnabled,
@@ -683,7 +689,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			emit("saved: " + path)
 			s.setStatus(true, "ok", "json saved")
 		case current == "/pretty" || strings.HasPrefix(current, "/pretty "):
-			mode := strings.TrimSpace(strings.TrimPrefix(current, "/pretty"))
+			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/pretty")))
 			if mode == "on" {
 				s.pretty = true
 				emit("pretty json: on")
