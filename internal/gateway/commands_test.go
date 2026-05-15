@@ -54,6 +54,23 @@ func TestResolveGatewayCommandAliases(t *testing.T) {
 	}
 }
 
+func TestCanonicalizeGatewaySlashText(t *testing.T) {
+	cases := map[string]string{
+		"/STATUS":          "/status",
+		"/approval":        "/approvals",
+		"/approve ap-1":    "/approve ap-1",
+		"/APPROVE ap-1":    "/approve ap-1",
+		"/unknown CMD":     "/unknown CMD",
+		"   /HeLp   ":      "/help",
+		"   /grant 3600  ": "/grant 3600",
+	}
+	for in, want := range cases {
+		if got := CanonicalizeGatewaySlashText(in); got != want {
+			t.Fatalf("input=%q got=%q want=%q", in, got, want)
+		}
+	}
+}
+
 func TestGatewayHelpTextIncludesBuiltIns(t *testing.T) {
 	help := GatewayHelpText(false)
 	if !strings.HasPrefix(help, "Commands: ") {

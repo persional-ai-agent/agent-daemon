@@ -113,6 +113,26 @@ func ResolveGatewayCommand(name string) (canonical string, ok bool) {
 	return "", false
 }
 
+// CanonicalizeGatewaySlashText normalizes slash command head casing/aliases while preserving arguments.
+// Unknown slash heads are lower-cased and retained.
+func CanonicalizeGatewaySlashText(text string) string {
+	parts := strings.Fields(strings.TrimSpace(text))
+	if len(parts) == 0 {
+		return ""
+	}
+	head := strings.TrimPrefix(parts[0], "/")
+	if canonical, ok := ResolveGatewayCommand(head); ok {
+		if len(parts) == 1 {
+			return "/" + canonical
+		}
+		return "/" + canonical + " " + strings.Join(parts[1:], " ")
+	}
+	if len(parts) == 1 {
+		return "/" + strings.ToLower(head)
+	}
+	return "/" + strings.ToLower(head) + " " + strings.Join(parts[1:], " ")
+}
+
 func BuiltInGatewaySlashCommands() []string {
 	out := make([]string, 0, len(builtInGatewayCommandSet))
 	for name := range builtInGatewayCommandSet {

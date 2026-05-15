@@ -682,18 +682,7 @@ func normalizeGatewayCommand(platformName, text string) string {
 		return ""
 	}
 	if strings.HasPrefix(cmd, "/") {
-		parts := strings.Fields(cmd)
-		if len(parts) == 0 {
-			return ""
-		}
-		head := strings.TrimPrefix(parts[0], "/")
-		if canonical, ok := ResolveGatewayCommand(head); ok {
-			return "/" + canonical + withTail(parts)
-		}
-		if len(parts) == 1 {
-			return "/" + strings.ToLower(head)
-		}
-		return "/" + strings.ToLower(head) + withTail(parts)
+		return CanonicalizeGatewaySlashText(cmd)
 	}
 	parts := strings.Fields(cmd)
 	if len(parts) == 0 {

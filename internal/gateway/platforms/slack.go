@@ -252,7 +252,7 @@ func renderSlackSlashCommand(cmd slack.SlashCommand) string {
 	}
 	text := strings.TrimSpace(cmd.Text)
 	if strings.HasPrefix(text, "/") {
-		return canonicalizeSlashText(text)
+		return gateway.CanonicalizeGatewaySlashText(text)
 	}
 	cmdBase := strings.TrimPrefix(command, "/")
 	if canonical, ok := gateway.ResolveGatewayCommand(cmdBase); ok {
@@ -264,25 +264,7 @@ func renderSlackSlashCommand(cmd slack.SlashCommand) string {
 	if text == "" {
 		return command
 	}
-	return canonicalizeSlashText("/" + text)
-}
-
-func canonicalizeSlashText(text string) string {
-	parts := strings.Fields(strings.TrimSpace(text))
-	if len(parts) == 0 {
-		return ""
-	}
-	head := strings.TrimPrefix(parts[0], "/")
-	if canonical, ok := gateway.ResolveGatewayCommand(head); ok {
-		if len(parts) == 1 {
-			return "/" + canonical
-		}
-		return "/" + canonical + " " + strings.Join(parts[1:], " ")
-	}
-	if len(parts) == 1 {
-		return "/" + strings.ToLower(head)
-	}
-	return "/" + strings.ToLower(head) + " " + strings.Join(parts[1:], " ")
+	return gateway.CanonicalizeGatewaySlashText("/" + text)
 }
 
 func isBuiltInGatewaySlashCommand(name string) bool {
