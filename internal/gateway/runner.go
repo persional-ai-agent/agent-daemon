@@ -918,7 +918,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if len(parsed.args) == 1 {
 				filter = strings.ToLower(strings.TrimSpace(parsed.args[0]))
 			}
-			items, err := tools.ListChannelDirectory(w.engine.Workdir)
+			_, items, err := tools.BuildDeliveryTargets(w.engine.Workdir, filter)
 			if err != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Targets failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/targets"})
 				return
@@ -1731,7 +1731,7 @@ func renderGatewaySkillView(root, name string) (string, error) {
 	return "Skill: " + name + "\n" + strings.Join(lines, "\n"), nil
 }
 
-func renderGatewayTargets(items []tools.ChannelDirectoryEntry, platformFilter string) string {
+func renderGatewayTargets(items []map[string]any, platformFilter string) string {
 	filter := strings.ToLower(strings.TrimSpace(platformFilter))
 	lines := make([]string, 0, len(items)+2)
 	title := "Known targets"
@@ -1741,22 +1741,35 @@ func renderGatewayTargets(items []tools.ChannelDirectoryEntry, platformFilter st
 	lines = append(lines, title+":")
 	count := 0
 	for _, it := range items {
-		if filter != "" && it.Platform != filter {
+		platformName, _ := it["platform"].(string)
+		if filter != "" && platformName != filter {
 			continue
 		}
 		count++
-		line := it.Platform + ":" + it.ChatID
-		if strings.TrimSpace(it.HomeTarget) != "" {
-			line += " [home=" + it.HomeTarget + "]"
+		target, _ := it["target"].(string)
+		if strings.TrimSpace(target) == "" {
+			chatID, _ := it["chat_id"].(string)
+			target = platformName + ":" + chatID
 		}
-		if strings.TrimSpace(it.UserID) != "" {
-			line += " user=" + it.UserID
+		line := target
+		if home, _ := it["home_target"].(string); strings.TrimSpace(home) != "" {
+			line += " [home=" + home + "]"
 		}
-		if strings.TrimSpace(it.GlobalID) != "" {
-			line += " global=" + it.GlobalID
+		if userID, _ := it["user_id"].(string); strings.TrimSpace(userID) != "" {
+			line += " user=" + userID
 		}
-		if strings.TrimSpace(it.LastSeenAt) != "" {
-			line += " last=" + it.LastSeenAt
+		if globalID, _ := it["global_id"].(string); strings.TrimSpace(globalID) != "" {
+			line += " global=" + globalID
+		}
+		if last, _ := it["last_seen_at"].(string); strings.TrimSpace(last) != "" {
+			line += " last=" + last
+		}
+		if connected, ok := it["connected"].(bool); ok {
+			if connected {
+				line += " connected=yes"
+			} else {
+				line += " connected=no"
+			}
 		}
 		lines = append(lines, line)
 		if count >= 20 {

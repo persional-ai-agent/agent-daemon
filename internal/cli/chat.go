@@ -404,26 +404,9 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) == 2 {
 			filter = strings.ToLower(strings.TrimSpace(fields[1]))
 		}
-		rows, err := clitools.ListChannelDirectory(eng.Workdir)
+		_, out, err := clitools.BuildDeliveryTargets(eng.Workdir, filter)
 		if err != nil {
 			return true, err
-		}
-		out := make([]map[string]any, 0, len(rows))
-		for _, row := range rows {
-			if filter != "" && row.Platform != filter {
-				continue
-			}
-			out = append(out, map[string]any{
-				"platform":     row.Platform,
-				"chat_id":      row.ChatID,
-				"target":       row.Platform + ":" + row.ChatID,
-				"chat_type":    row.ChatType,
-				"user_id":      row.UserID,
-				"user_name":    row.UserName,
-				"global_id":    row.GlobalID,
-				"home_target":  row.HomeTarget,
-				"last_seen_at": row.LastSeenAt,
-			})
 		}
 		printCLIEnvelope(true, map[string]any{"count": len(out), "platform": filter, "targets": out}, "", "")
 		return true, nil

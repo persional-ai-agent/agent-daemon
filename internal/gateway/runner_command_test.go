@@ -11,7 +11,6 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
-	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 type gatewayStatusStoreStub struct{}
@@ -297,9 +296,9 @@ func TestCompactGatewayHistoryTailDefaults(t *testing.T) {
 }
 
 func TestRenderGatewayTargets(t *testing.T) {
-	text := renderGatewayTargets([]tools.ChannelDirectoryEntry{
-		{Platform: "telegram", ChatID: "100", HomeTarget: "100", UserID: "u1"},
-		{Platform: "discord", ChatID: "c1"},
+	text := renderGatewayTargets([]map[string]any{
+		{"platform": "telegram", "chat_id": "100", "target": "telegram:100", "home_target": "100", "user_id": "u1"},
+		{"platform": "discord", "chat_id": "c1", "target": "discord:c1"},
 	}, "telegram")
 	if !strings.Contains(text, "telegram:100") {
 		t.Fatalf("missing target row: %q", text)
