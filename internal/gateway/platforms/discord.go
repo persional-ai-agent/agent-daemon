@@ -269,8 +269,16 @@ func DiscordApplicationCommands() []*discordgo.ApplicationCommand {
 }
 
 func renderDiscordSlashCommand(data discordgo.ApplicationCommandInteractionData) string {
-	canonical, ok := gateway.ResolveGatewayCommand(strings.TrimSpace(data.Name))
-	if !ok {
+	base := gateway.CanonicalizeGatewaySlashText("/" + strings.TrimSpace(data.Name))
+	if strings.TrimSpace(base) == "" {
+		return ""
+	}
+	parts := strings.Fields(base)
+	if len(parts) == 0 {
+		return ""
+	}
+	canonical := strings.TrimPrefix(parts[0], "/")
+	if !gateway.IsBuiltInGatewayCommand(canonical) {
 		return ""
 	}
 	name := "/" + canonical

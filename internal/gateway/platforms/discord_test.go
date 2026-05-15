@@ -97,6 +97,16 @@ func TestRenderDiscordSlashCommand(t *testing.T) {
 			want: "/status",
 		},
 		{
+			name: "uppercase built-in",
+			data: discordgo.ApplicationCommandInteractionData{Name: "STATUS"},
+			want: "/status",
+		},
+		{
+			name: "alias command",
+			data: discordgo.ApplicationCommandInteractionData{Name: "approval"},
+			want: "/approvals",
+		},
+		{
 			name: "unknown command",
 			data: discordgo.ApplicationCommandInteractionData{Name: "unknown"},
 			want: "",
