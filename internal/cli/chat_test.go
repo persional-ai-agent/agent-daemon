@@ -312,6 +312,22 @@ func TestHandleSlashCommandContinuityAndIdentity(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandResolve(t *testing.T) {
+	workdir := t.TempDir()
+	eng := makeEngineForSlashTests(nil)
+	eng.Workdir = workdir
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	if err := tools.SetGatewaySetting(workdir, "continuity_mode", "user_name"); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/resolve telegram group 1001 u1 Alice", state, eng); err != nil || !handled {
+		t.Fatalf("resolve handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/resolve telegram group 1001", state, eng); err != nil || !handled {
+		t.Fatalf("resolve invalid handled=%v err=%v", handled, err)
+	}
+}
+
 func TestHandleSlashCommandNewAndResume(t *testing.T) {
 	store := &testSessionStore{bySession: map[string][]core.Message{
 		"old": {{Role: "user", Content: "stored"}},

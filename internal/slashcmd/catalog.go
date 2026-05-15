@@ -123,6 +123,7 @@ func CLIHelpLines() []string {
 		"/targets [platform]           列出已知可投递目标",
 		"/continuity [off|user_id|user_name] 查看或设置 continuity 模式",
 		"/whoami <platform> <user_id>  查看身份映射",
+		"/resolve <platform> <chat_type> <chat_id> <user_id> [user_name]  解析网关会话映射",
 		"/setid <platform> <user_id> <global_user_id>   绑定身份映射",
 		"/unsetid <platform> <user_id>  解绑身份映射",
 		"/history [n]                  预览最近 n 条上下文消息",

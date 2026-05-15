@@ -18,6 +18,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 	"github.com/dingjingmaster/agent-daemon/internal/slashcmd"
 	clitools "github.com/dingjingmaster/agent-daemon/internal/tools"
 )
@@ -448,6 +449,61 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			"continuity_mode": continuityModeFromRaw(mode),
 		}, "", "")
 		return true, nil
+	case "/resolve":
+		if len(fields) != 5 && len(fields) != 6 {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]")
+			return true, nil
+		}
+		platformName := strings.ToLower(strings.TrimSpace(fields[1]))
+		chatType := strings.TrimSpace(fields[2])
+		chatID := strings.TrimSpace(fields[3])
+		userID := strings.TrimSpace(fields[4])
+		userName := ""
+		if len(fields) == 6 {
+			userName = strings.TrimSpace(fields[5])
+		}
+		if platformName == "" || chatType == "" || chatID == "" || userID == "" {
+			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]")
+			return true, nil
+		}
+		routeSession := gateway.BuildSessionKey(platformName, chatType, chatID)
+		mode, err := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
+		if err != nil {
+			return true, err
+		}
+		mode = continuityModeFromRaw(mode)
+		globalID, err := resolveGatewayIdentity(eng.Workdir, platformName, userID)
+		if err != nil {
+			return true, err
+		}
+		globalSource := "mapped"
+		if strings.TrimSpace(globalID) == "" {
+			globalSource = "none"
+			if autoID := autoGlobalIdentity(mode, userID, userName); strings.TrimSpace(autoID) != "" {
+				globalID = autoID
+				globalSource = "auto"
+			}
+		}
+		mappedSession := ""
+		resolvedSession := routeSession
+		if strings.TrimSpace(globalID) != "" {
+			mappedSession = gateway.BuildSessionKey("global", "user", globalID)
+			resolvedSession = mappedSession
+		}
+		printCLIEnvelope(true, map[string]any{
+			"platform":         platformName,
+			"chat_type":        chatType,
+			"chat_id":          chatID,
+			"user_id":          userID,
+			"user_name":        userName,
+			"route_session":    routeSession,
+			"mapped_session":   mappedSession,
+			"resolved_session": resolvedSession,
+			"global_id":        globalID,
+			"global_source":    globalSource,
+			"continuity_mode":  mode,
+		}, "", "")
+		return true, nil
 	case "/setid":
 		if len(fields) != 4 {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
@@ -804,6 +860,25 @@ func continuityModeFromRaw(raw string) string {
 		return "off"
 	default:
 		return "off"
+	}
+}
+
+func autoGlobalIdentity(mode, userID, userName string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "user_id":
+		if strings.TrimSpace(userID) == "" {
+			return ""
+		}
+		return "uid:" + strings.TrimSpace(userID)
+	case "user_name":
+		n := strings.ToLower(strings.TrimSpace(userName))
+		n = strings.ReplaceAll(n, " ", "_")
+		if n == "" {
+			return ""
+		}
+		return "uname:" + n
+	default:
+		return ""
 	}
 }
 
