@@ -1,8 +1,11 @@
 package gateway
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/dingjingmaster/agent-daemon/internal/core"
 )
 
 func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
@@ -111,5 +114,38 @@ func TestParseApprovalManageCommand(t *testing.T) {
 	args, usage = parseApprovalManageCommand("/grant", []string{"pattern"})
 	if args != nil || usage != GatewayGrantPatternOrRevokePatternUsage() {
 		t.Fatalf("expected pattern usage error, got args=%+v usage=%q", args, usage)
+	}
+}
+
+func TestIsGatewayContextLimitError(t *testing.T) {
+	cases := []struct {
+		errText string
+		want    bool
+	}{
+		{"openai api error (400): {\"error\":{\"type\":\"exceed_context_size_error\"}}", true},
+		{"request (32985 tokens) exceeds the available context size (32768 tokens)", true},
+		{"network timeout", false},
+	}
+	for _, tc := range cases {
+		got := isGatewayContextLimitError(errors.New(tc.errText))
+		if got != tc.want {
+			t.Fatalf("err=%q got=%v want=%v", tc.errText, got, tc.want)
+		}
+	}
+}
+
+func TestCompactGatewayHistory(t *testing.T) {
+	history := []core.Message{
+		{Role: "user", Content: "1"},
+		{Role: "assistant", Content: "2"},
+		{Role: "user", Content: "3"},
+		{Role: "assistant", Content: "4"},
+	}
+	got := compactGatewayHistory(history, 2)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(got))
+	}
+	if got[0].Content != "3" || got[1].Content != "4" {
+		t.Fatalf("unexpected compacted history: %+v", got)
 	}
 }

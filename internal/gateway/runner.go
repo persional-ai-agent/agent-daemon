@@ -125,6 +125,10 @@ type gatewayCommand struct {
 	isSlash bool
 }
 
+type gatewaySessionCompactor interface {
+	CompactSession(sessionID string, keepLastN int) (before int, after int, err error)
+}
+
 func parseGatewayCommand(platformName, text string) gatewayCommand {
 	raw := normalizeGatewayCommand(platformName, strings.TrimSpace(text))
 	parts := strings.Fields(raw)
@@ -561,6 +565,17 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 
 	userInput := gatewayUserInput(event)
 	res, runErr := eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+	if runErr != nil && isGatewayContextLimitError(runErr) {
+		_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("上下文过长，正在自动压缩并重试一次..."), event.MessageID, map[string]any{"phase": "context_recovery"})
+		if compactor, ok := w.engine.SessionStore.(gatewaySessionCompactor); ok && compactor != nil {
+			_, _, _ = compactor.CompactSession(sessionKey, 20)
+		}
+		history = compactGatewayHistory(history, 20)
+		res, runErr = eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+		if runErr == nil {
+			_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("上下文恢复完成，继续执行。"), event.MessageID, map[string]any{"phase": "context_recovery"})
+		}
+	}
 
 	w.mu.Lock()
 	w.cancelCurrent = nil
@@ -698,6 +713,26 @@ func normalizeGatewayCommand(platformName, text string) string {
 		return slash + withTail(parts)
 	}
 	return cmd
+}
+
+func isGatewayContextLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "exceed_context_size_error") ||
+		strings.Contains(msg, "exceeds the available context size") ||
+		(strings.Contains(msg, "context size") && strings.Contains(msg, "exceed"))
+}
+
+func compactGatewayHistory(history []core.Message, tail int) []core.Message {
+	if tail <= 0 {
+		tail = 20
+	}
+	if len(history) <= tail {
+		return core.CloneMessages(history)
+	}
+	return core.CloneMessages(history[len(history)-tail:])
 }
 
 func withTail(parts []string) string {
