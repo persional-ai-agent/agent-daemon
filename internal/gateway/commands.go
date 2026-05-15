@@ -38,7 +38,7 @@ var gatewayCommandCatalog = []gatewayCommandSpec{
 	{Name: "sethome", Description: "set platform home target for send_message", HelpUsage: "/sethome <platform> <chat_id> | /sethome <platform:chat_id>"},
 	{Name: "targets", Description: "list known gateway delivery targets", HelpUsage: "/targets [platform]"},
 	{Name: "continuity", Description: "show or set cross-platform continuity mode", HelpUsage: "/continuity [off|user_id|user_name]"},
-	{Name: "model", Description: "show current runtime model info"},
+	{Name: "model", Description: "show or set runtime model preference", HelpUsage: "/model [provider:model|provider model]"},
 	{Name: "personality", Description: "show or set runtime system prompt", HelpUsage: "/personality [show|reset|<text>]"},
 	{Name: "skills", Description: "list local skills or show a skill", HelpUsage: "/skills [name]"},
 	{Name: "tools", Description: "inspect tool list or schemas", HelpUsage: "/tools [list|show <name>|schemas]"},

@@ -349,6 +349,31 @@ func continuityModeFromRaw(raw string) string {
 	}
 }
 
+func parseGatewayModelSpec(args []string) (provider, modelName string, ok bool) {
+	if len(args) == 1 {
+		spec := strings.TrimSpace(args[0])
+		parts := strings.SplitN(spec, ":", 2)
+		if len(parts) != 2 {
+			return "", "", false
+		}
+		provider = strings.ToLower(strings.TrimSpace(parts[0]))
+		modelName = strings.TrimSpace(parts[1])
+		if provider == "" || modelName == "" {
+			return "", "", false
+		}
+		return provider, modelName, true
+	}
+	if len(args) == 2 {
+		provider = strings.ToLower(strings.TrimSpace(args[0]))
+		modelName = strings.TrimSpace(args[1])
+		if provider == "" || modelName == "" {
+			return "", "", false
+		}
+		return provider, modelName, true
+	}
+	return "", "", false
+}
+
 func continuityMode() string {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
 	return continuityModeFromRaw(mode)
@@ -1039,13 +1064,44 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/usage", "session_id": target})
 			return
 		case "/model":
-			if len(parsed.args) > 0 {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /model", event.MessageID, map[string]any{"slash": "/model"})
+			if len(parsed.args) > 2 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
 				return
 			}
-			provider := strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
-			modelName := strings.TrimSpace(os.Getenv("AGENT_MODEL"))
-			baseURL := strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
+			provider, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_provider")
+			modelName, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_name")
+			baseURL, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_base_url")
+			if strings.TrimSpace(provider) == "" {
+				provider = strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
+			}
+			if strings.TrimSpace(modelName) == "" {
+				modelName = strings.TrimSpace(os.Getenv("AGENT_MODEL"))
+			}
+			if strings.TrimSpace(baseURL) == "" {
+				baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
+			}
+			if len(parsed.args) > 0 {
+				nextProvider, nextModel, ok := parseGatewayModelSpec(parsed.args)
+				if !ok {
+					_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
+					return
+				}
+				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_provider", nextProvider); err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
+					return
+				}
+				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_name", nextModel); err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
+					return
+				}
+				_ = os.Setenv("AGENT_MODEL_PROVIDER", nextProvider)
+				_ = os.Setenv("AGENT_MODEL", nextModel)
+				provider = nextProvider
+				modelName = nextModel
+				reply := "_Model preference updated: " + escapeMarkdown(provider) + ":" + escapeMarkdown(modelName) + "_\nTakes effect for newly started daemon/model client."
+				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "updated": true})
+				return
+			}
 			if provider == "" {
 				provider = "openai"
 			}

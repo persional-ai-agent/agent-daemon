@@ -323,6 +323,23 @@ func TestAutoGlobalIdentity(t *testing.T) {
 	}
 }
 
+func TestParseGatewayModelSpec(t *testing.T) {
+	p, m, ok := parseGatewayModelSpec([]string{"openai:gpt-5"})
+	if !ok || p != "openai" || m != "gpt-5" {
+		t.Fatalf("unexpected parse result: p=%q m=%q ok=%v", p, m, ok)
+	}
+	p, m, ok = parseGatewayModelSpec([]string{"codex", "gpt-5-codex"})
+	if !ok || p != "codex" || m != "gpt-5-codex" {
+		t.Fatalf("unexpected parse result: p=%q m=%q ok=%v", p, m, ok)
+	}
+	if _, _, ok = parseGatewayModelSpec([]string{"invalid"}); ok {
+		t.Fatal("expected invalid parse for single token without colon")
+	}
+	if _, _, ok = parseGatewayModelSpec([]string{"", "x"}); ok {
+		t.Fatal("expected invalid parse for empty provider")
+	}
+}
+
 func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
 	t.Setenv("AGENT_GATEWAY_CONTINUITY", "user_id")
 	r := &Runner{identityStore: newIdentityStore(t.TempDir())}
