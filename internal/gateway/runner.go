@@ -709,6 +709,29 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				map[string]any{"slash": "/sethome", "platform": homePlatform, "chat_id": homeChatID, "env": envKey},
 			)
 			return
+		case "/skills":
+			root := filepath.Join(w.engine.Workdir, "skills")
+			if len(parsed.args) == 0 {
+				reply, err := renderGatewaySkillsList(root)
+				if err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Skills failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/skills"})
+					return
+				}
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/skills", "subcommand": "list"})
+				return
+			}
+			if len(parsed.args) == 1 {
+				name := strings.TrimSpace(parsed.args[0])
+				reply, err := renderGatewaySkillView(root, name)
+				if err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Skill not found: "+escapeMarkdown(name)+"_", event.MessageID, map[string]any{"slash": "/skills", "subcommand": "show", "name": name})
+					return
+				}
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/skills", "subcommand": "show", "name": name})
+				return
+			}
+			_, _ = w.sendText(ctx, event.ChatID, "Usage: /skills [name]", event.MessageID, map[string]any{"slash": "/skills"})
+			return
 		case "/tools":
 			sub := "list"
 			if len(parsed.args) >= 1 {
@@ -775,6 +798,21 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "_Compress not supported by session store._", event.MessageID, map[string]any{"slash": "/compress"})
+			return
+		case "/usage":
+			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
+			if !ok || statsStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Usage not supported by session store._", event.MessageID, map[string]any{"slash": "/usage"})
+				return
+			}
+			target := w.currentSessionID()
+			stats, err := statsStore.SessionStats(target)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Usage failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/usage"})
+				return
+			}
+			reply := renderGatewayStats(target, stats)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/usage", "session_id": target})
 			return
 		case "/queue":
 			qLen := len(w.queue)
@@ -1386,6 +1424,52 @@ func renderGatewayToolsList(names []string) string {
 		lines = append(lines, itoa(i+1)+". "+n)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderGatewaySkillsList(root string) (string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "Skills (0): skills directory not found.", nil
+		}
+		return "", err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, e.Name(), "SKILL.md")); err == nil {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return "Skills (0): no local skills found.", nil
+	}
+	return "Skills (" + itoa(len(names)) + "): " + strings.Join(names, ", "), nil
+}
+
+func renderGatewaySkillView(root, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("empty skill name")
+	}
+	path := filepath.Join(root, name, "SKILL.md")
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	content := strings.TrimSpace(string(bs))
+	if content == "" {
+		return "Skill: " + name + "\n(empty)", nil
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) > 12 {
+		lines = lines[:12]
+		lines = append(lines, "...(truncated)")
+	}
+	return "Skill: " + name + "\n" + strings.Join(lines, "\n"), nil
 }
 
 func renderGatewayToolSchema(schema core.ToolSchema) string {
