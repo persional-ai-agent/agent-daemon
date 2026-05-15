@@ -201,3 +201,24 @@ func TestGatewayCommandRequiresAuthorization(t *testing.T) {
 		t.Fatal("status should require authorization")
 	}
 }
+
+func TestGatewayCommandOrderAndDescriptions(t *testing.T) {
+	order := GatewayCommandOrder()
+	if len(order) == 0 {
+		t.Fatal("empty command order")
+	}
+	seen := map[string]bool{}
+	for _, name := range order {
+		if seen[name] {
+			t.Fatalf("duplicate command in order: %s", name)
+		}
+		seen[name] = true
+	}
+
+	descs := GatewayCommandDescriptions()
+	for _, name := range order {
+		if strings.TrimSpace(descs[name]) == "" {
+			t.Fatalf("empty description for command: %s", name)
+		}
+	}
+}

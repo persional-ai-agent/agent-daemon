@@ -1,8 +1,9 @@
 package platforms
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/bwmarrin/discordgo"
+	"github.com/dingjingmaster/agent-daemon/internal/gateway"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type gatewayPlatformCommandSpec struct {
@@ -14,60 +15,42 @@ type gatewayPlatformCommandSpec struct {
 }
 
 func GatewayPlatformCommandSpecs() []gatewayPlatformCommandSpec {
-	return []gatewayPlatformCommandSpec{
-		{
-			Name:        "pair",
-			Description: "pair with gateway using a code",
+	order := gateway.GatewayCommandOrder()
+	desc := gateway.GatewayCommandDescriptions()
+	out := make([]gatewayPlatformCommandSpec, 0, len(order))
+	for _, name := range order {
+		out = append(out, gatewayPlatformCommandSpec{
+			Name:        name,
+			Description: desc[name],
 			Telegram:    true,
 			Discord:     true,
-			DiscordOpts: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "pair code", Required: true},
-			},
-		},
-		{Name: "unpair", Description: "remove current gateway pairing", Telegram: true, Discord: true},
-		{Name: "cancel", Description: "cancel the running task", Telegram: true, Discord: true},
-		{Name: "queue", Description: "show queued task count", Telegram: true, Discord: true},
-		{Name: "status", Description: "show current session status", Telegram: true, Discord: true},
-		{Name: "pending", Description: "show latest pending approval", Telegram: true, Discord: true},
-		{Name: "approvals", Description: "show active approvals", Telegram: true, Discord: true},
-		{
-			Name:        "grant",
-			Description: "grant session or pattern approval",
-			Telegram:    true,
-			Discord:     true,
-			DiscordOpts: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
-				{Type: discordgo.ApplicationCommandOptionInteger, Name: "ttl", Description: "ttl seconds", Required: false},
-			},
-		},
-		{
-			Name:        "revoke",
-			Description: "revoke session or pattern approval",
-			Telegram:    true,
-			Discord:     true,
-			DiscordOpts: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
-			},
-		},
-		{
-			Name:        "approve",
-			Description: "approve a pending approval id",
-			Telegram:    true,
-			Discord:     true,
-			DiscordOpts: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false},
-			},
-		},
-		{
-			Name:        "deny",
-			Description: "deny a pending approval id",
-			Telegram:    true,
-			Discord:     true,
-			DiscordOpts: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false},
-			},
-		},
-		{Name: "help", Description: "show supported commands", Telegram: true, Discord: true},
+			DiscordOpts: discordCommandOptions(name),
+		})
+	}
+	return out
+}
+
+func discordCommandOptions(name string) []*discordgo.ApplicationCommandOption {
+	switch name {
+	case "pair":
+		return []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "pair code", Required: true},
+		}
+	case "grant":
+		return []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "ttl", Description: "ttl seconds", Required: false},
+		}
+	case "revoke":
+		return []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
+		}
+	case "approve", "deny":
+		return []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false},
+		}
+	default:
+		return nil
 	}
 }
 

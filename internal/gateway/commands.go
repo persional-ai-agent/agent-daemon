@@ -7,23 +7,24 @@ import (
 
 type gatewayCommandSpec struct {
 	Name         string
+	Description  string
 	HelpUsage    string
 	Aliases      []string
 }
 
 var gatewayCommandCatalog = []gatewayCommandSpec{
-	{Name: "pair", HelpUsage: "/pair <code>"},
-	{Name: "unpair"},
-	{Name: "cancel", Aliases: []string{"abort", "stop"}},
-	{Name: "queue", Aliases: []string{"q"}},
-	{Name: "status", Aliases: []string{"s"}},
-	{Name: "pending", Aliases: []string{"pendings"}},
-	{Name: "approvals", Aliases: []string{"approval"}},
-	{Name: "grant", HelpUsage: "/grant [ttl], /grant pattern <name> [ttl]"},
-	{Name: "revoke", HelpUsage: "/revoke, /revoke pattern <name>"},
-	{Name: "approve", HelpUsage: "/approve <id>"},
-	{Name: "deny", HelpUsage: "/deny <id>"},
-	{Name: "help", Aliases: []string{"h"}},
+	{Name: "pair", Description: "pair with gateway using a code", HelpUsage: "/pair <code>"},
+	{Name: "unpair", Description: "remove current gateway pairing"},
+	{Name: "cancel", Description: "cancel the running task", Aliases: []string{"abort", "stop"}},
+	{Name: "queue", Description: "show queued task count", Aliases: []string{"q"}},
+	{Name: "status", Description: "show current session status", Aliases: []string{"s"}},
+	{Name: "pending", Description: "show latest pending approval", Aliases: []string{"pendings"}},
+	{Name: "approvals", Description: "show active approvals", Aliases: []string{"approval"}},
+	{Name: "grant", Description: "grant session or pattern approval", HelpUsage: "/grant [ttl], /grant pattern <name> [ttl]"},
+	{Name: "revoke", Description: "revoke session or pattern approval", HelpUsage: "/revoke, /revoke pattern <name>"},
+	{Name: "approve", Description: "approve a pending approval id", HelpUsage: "/approve <id>"},
+	{Name: "deny", Description: "deny a pending approval id", HelpUsage: "/deny <id>"},
+	{Name: "help", Description: "show supported commands", Aliases: []string{"h"}},
 }
 
 var gatewayApprovalCommandSet = map[string]struct{}{
@@ -127,6 +128,20 @@ func BuiltInGatewayCommandNames() []string {
 		out = append(out, name)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func GatewayCommandOrder() []string {
+	out := make([]string, 0, len(gatewayHelpCommandOrder))
+	out = append(out, gatewayHelpCommandOrder...)
+	return out
+}
+
+func GatewayCommandDescriptions() map[string]string {
+	out := make(map[string]string, len(gatewayCommandSpecByName))
+	for name, spec := range gatewayCommandSpecByName {
+		out[name] = strings.TrimSpace(spec.Description)
+	}
 	return out
 }
 
