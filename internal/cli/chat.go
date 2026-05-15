@@ -18,6 +18,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/slashcmd"
 	clitools "github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
@@ -100,6 +101,7 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 		if line == "" {
 			continue
 		}
+		line = slashcmd.NormalizeInput(line)
 		if strings.EqualFold(line, "/exit") || strings.EqualFold(line, "/quit") {
 			return nil
 		}
