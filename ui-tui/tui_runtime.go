@@ -975,11 +975,12 @@ func (engine *uiRenderEngine) renderNode(node *uiNode) string {
 	case nodeError:
 		return engine.errorStyle.Render(node.Content)
 	case nodeAssistant:
-		markdownContent := node.Content
 		if node.Status != "done" {
-			markdownContent = normalizeStreamingMarkdown(markdownContent)
+			// Keep streaming path deterministic and immediate: render plain text
+			// during token-by-token updates, then format markdown after completion.
+			return wrapPlainContent(node.Content, engine.effectiveWidth())
 		}
-		rendered, err := engine.renderMarkdown(markdownContent)
+		rendered, err := engine.renderMarkdown(node.Content)
 		if err == nil {
 			return rendered
 		}

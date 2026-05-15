@@ -190,7 +190,7 @@ func TestRuntimeDiffRenderNoChange(t *testing.T) {
 	}
 }
 
-func TestRuntimeStreamingMarkdownRenderedBeforeDone(t *testing.T) {
+func TestRuntimeStreamingMarkdownVisibleBeforeDone(t *testing.T) {
 	rt := newTerminalRuntime(80)
 	rt.startTurn("markdown")
 	rt.publishTurnEvent(map[string]any{
@@ -209,8 +209,8 @@ func TestRuntimeStreamingMarkdownRenderedBeforeDone(t *testing.T) {
 	if !strings.Contains(out, "bold") {
 		t.Fatalf("expected rendered output contains bold text, got: %q", out)
 	}
-	if strings.Contains(out, "**bold**") {
-		t.Fatalf("expected markdown rendered during streaming, got raw markdown: %q", out)
+	if !strings.Contains(out, "**bold**") {
+		t.Fatalf("expected raw markdown visible during streaming, got: %q", out)
 	}
 }
 
