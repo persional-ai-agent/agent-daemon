@@ -108,6 +108,39 @@ func TestSendMessageListIncludesHomeTarget(t *testing.T) {
 	}
 }
 
+func TestSendMessageListIncludesDirectoryTargets(t *testing.T) {
+	workdir := t.TempDir()
+	if err := UpsertChannelDirectory(workdir, ChannelDirectoryEntry{
+		Platform:   "discord",
+		ChatID:     "chan-1",
+		ChatType:   "group",
+		UserID:     "u-1",
+		UserName:   "bob",
+		HomeTarget: "chan-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := NewSendMessageTool().Call(context.Background(), map[string]any{"action": "list"}, ToolContext{Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, _ := res["targets"].([]map[string]any)
+	found := false
+	for _, it := range targets {
+		if it["platform"] == "discord" && it["chat_id"] == "chan-1" {
+			found = true
+			if v, _ := it["connected"].(bool); v {
+				t.Fatalf("directory-only target should be disconnected: %+v", it)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("directory target not found: %+v", targets)
+	}
+}
+
 func TestSendMessageSchemaActionIsOptional(t *testing.T) {
 	schema := NewSendMessageTool().Schema()
 	required, _ := schema.Function.Parameters["required"].([]string)

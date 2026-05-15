@@ -72,6 +72,7 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 		names := platform.Names()
 		sort.Strings(names)
 		items := make([]map[string]any, 0, len(names))
+		seen := map[string]bool{}
 		for _, name := range names {
 			home := strings.TrimSpace(os.Getenv(HomeTargetEnvVar(name)))
 			items = append(items, map[string]any{
@@ -79,6 +80,28 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 				"connected":   true,
 				"home_target": home,
 			})
+			seen[name+":"] = true
+		}
+		if tc.Workdir != "" {
+			if rows, err := ListChannelDirectory(tc.Workdir); err == nil {
+				for _, row := range rows {
+					key := row.Platform + ":" + row.ChatID
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+					items = append(items, map[string]any{
+						"platform":     row.Platform,
+						"chat_id":      row.ChatID,
+						"chat_type":    row.ChatType,
+						"user_id":      row.UserID,
+						"user_name":    row.UserName,
+						"home_target":  row.HomeTarget,
+						"connected":    false,
+						"last_seen_at": row.LastSeenAt,
+					})
+				}
+			}
 		}
 		return map[string]any{"success": true, "platforms": names, "targets": items}, nil
 	case "send":

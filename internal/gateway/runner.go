@@ -328,6 +328,14 @@ func (w *sessionWorker) run(parent context.Context) {
 
 func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	w.setLastUserID(event.UserID)
+	_ = tools.UpsertChannelDirectory(w.engine.Workdir, tools.ChannelDirectoryEntry{
+		Platform:   w.adapter.Name(),
+		ChatID:     event.ChatID,
+		ChatType:   event.ChatType,
+		UserID:     event.UserID,
+		UserName:   event.UserName,
+		HomeTarget: strings.TrimSpace(os.Getenv(tools.HomeTargetEnvVar(w.adapter.Name()))),
+	})
 	allowed := ""
 	if w != nil {
 		allowed = w.allowed
@@ -701,6 +709,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			homeChatID := strings.TrimSpace(parsed.args[1])
 			envKey := tools.HomeTargetEnvVar(homePlatform)
 			_ = os.Setenv(envKey, homeChatID)
+			_ = tools.UpsertChannelDirectory(w.engine.Workdir, tools.ChannelDirectoryEntry{
+				Platform:   homePlatform,
+				ChatID:     homeChatID,
+				ChatType:   event.ChatType,
+				UserID:     event.UserID,
+				UserName:   event.UserName,
+				HomeTarget: homeChatID,
+			})
 			_, _ = w.sendText(
 				ctx,
 				event.ChatID,
