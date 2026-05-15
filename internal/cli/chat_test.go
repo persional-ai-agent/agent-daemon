@@ -181,6 +181,29 @@ func TestHandleSlashCommandStats(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandUsageAndPersonality(t *testing.T) {
+	eng := makeEngineForSlashTests([]core.Message{{Role: "user", Content: "a"}})
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	if handled, err := handleSlashCommandState(context.Background(), "/usage", state, eng); err != nil || !handled {
+		t.Fatalf("usage handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/personality show", state, eng); err != nil || !handled {
+		t.Fatalf("personality show handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/personality custom prompt", state, eng); err != nil || !handled {
+		t.Fatalf("personality set handled=%v err=%v", handled, err)
+	}
+	if state.SystemPrompt != "custom prompt" {
+		t.Fatalf("system prompt not updated: %q", state.SystemPrompt)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/personality reset", state, eng); err != nil || !handled {
+		t.Fatalf("personality reset handled=%v err=%v", handled, err)
+	}
+	if strings.TrimSpace(state.SystemPrompt) == "custom prompt" {
+		t.Fatalf("system prompt should be reset: %q", state.SystemPrompt)
+	}
+}
+
 func TestHandleSlashCommandNewAndResume(t *testing.T) {
 	store := &testSessionStore{bySession: map[string][]core.Message{
 		"old": {{Role: "user", Content: "stored"}},

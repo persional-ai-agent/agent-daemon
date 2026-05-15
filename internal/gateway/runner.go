@@ -115,6 +115,7 @@ type sessionWorker struct {
 
 	mu                   sync.Mutex
 	activeSessionID      string
+	systemPrompt         string
 	lastUserID           string
 	lastUserInputByUser  map[string]string
 	lastShowByUser       map[string]showCursorState
@@ -293,6 +294,7 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 			runner:               r,
 			queue:                make(chan MessageEvent, 32),
 			activeSessionID:      sessionKey,
+			systemPrompt:         agent.DefaultSystemPrompt(),
 			lastUserInputByUser:  map[string]string{},
 			lastShowByUser:       map[string]showCursorState{},
 			lastSessionIDsByUser: map[string][]string{},
@@ -1052,6 +1054,25 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				"\nBase URL: " + baseURL
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "base_url": baseURL})
 			return
+		case "/personality":
+			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {
+				reply := "System prompt:\n" + w.currentSystemPrompt()
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/personality", "mode": "show"})
+				return
+			}
+			if len(parsed.args) == 1 && strings.EqualFold(strings.TrimSpace(parsed.args[0]), "reset") {
+				w.setSystemPrompt(agent.DefaultSystemPrompt())
+				_, _ = w.sendText(ctx, event.ChatID, "_Personality reset to default._", event.MessageID, map[string]any{"slash": "/personality", "mode": "reset"})
+				return
+			}
+			next := strings.TrimSpace(strings.TrimPrefix(parsed.raw, parsed.head))
+			if next == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /personality [show|reset|<text>]", event.MessageID, map[string]any{"slash": "/personality"})
+				return
+			}
+			w.setSystemPrompt(next)
+			_, _ = w.sendText(ctx, event.ChatID, "_Personality updated._", event.MessageID, map[string]any{"slash": "/personality", "mode": "set"})
+			return
 		case "/queue":
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
@@ -1266,20 +1287,20 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	}
 
 	userInput := gatewayUserInput(event)
-	res, runErr := eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+	res, runErr := eng.Run(runCtx, sessionKey, userInput, w.currentSystemPrompt(), history)
 	if runErr != nil && isGatewayContextLimitError(runErr) {
 		_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("上下文过长，正在自动压缩并重试一次..."), event.MessageID, map[string]any{"phase": "context_recovery"})
 		if compactor, ok := w.engine.SessionStore.(gatewaySessionCompactor); ok && compactor != nil {
 			_, _, _ = compactor.CompactSession(sessionKey, 20)
 		}
 		history = compactGatewayHistory(history, 20)
-		res, runErr = eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+		res, runErr = eng.Run(runCtx, sessionKey, userInput, w.currentSystemPrompt(), history)
 		if runErr == nil {
 			_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("上下文恢复完成，继续执行。"), event.MessageID, map[string]any{"phase": "context_recovery"})
 		} else if isGatewayContextLimitError(runErr) {
 			_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("压缩后仍超限，正在使用空上下文重试一次..."), event.MessageID, map[string]any{"phase": "context_recovery"})
 			history = nil
-			res, runErr = eng.Run(runCtx, sessionKey, userInput, agent.DefaultSystemPrompt(), history)
+			res, runErr = eng.Run(runCtx, sessionKey, userInput, w.currentSystemPrompt(), history)
 			if runErr == nil {
 				_, _ = w.sendText(context.Background(), event.ChatID, escapeMarkdown("已使用空上下文恢复并继续执行。"), event.MessageID, map[string]any{"phase": "context_recovery"})
 			}
@@ -1935,6 +1956,25 @@ func (w *sessionWorker) currentSessionID() string {
 		return w.key
 	}
 	return strings.TrimSpace(w.activeSessionID)
+}
+
+func (w *sessionWorker) currentSystemPrompt() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.TrimSpace(w.systemPrompt) == "" {
+		return agent.DefaultSystemPrompt()
+	}
+	return w.systemPrompt
+}
+
+func (w *sessionWorker) setSystemPrompt(prompt string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.TrimSpace(prompt) == "" {
+		w.systemPrompt = agent.DefaultSystemPrompt()
+		return
+	}
+	w.systemPrompt = prompt
 }
 
 func (w *sessionWorker) setActiveSessionID(sessionID string) {

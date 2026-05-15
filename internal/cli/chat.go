@@ -241,6 +241,26 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		printCLIEnvelope(true, map[string]any{"stats": stats}, "", "")
 		return true, nil
+	case "/usage":
+		target := state.SessionID
+		if len(fields) > 1 {
+			target = strings.TrimSpace(fields[1])
+		}
+		if eng.SessionStore == nil {
+			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			return true, nil
+		}
+		detailer, ok := eng.SessionStore.(sessionDetailer)
+		if !ok {
+			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持统计信息。")
+			return true, nil
+		}
+		stats, err := detailer.SessionStats(target)
+		if err != nil {
+			return true, err
+		}
+		printCLIEnvelope(true, map[string]any{"usage": stats}, "", "")
+		return true, nil
 	case "/show":
 		target := state.SessionID
 		offset := 0
@@ -374,6 +394,19 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/model":
 		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "note": "用 agentd model show/set 查看或持久切换模型。"}, "", "")
+		return true, nil
+	case "/personality":
+		if len(fields) == 1 || strings.EqualFold(strings.TrimSpace(fields[1]), "show") {
+			printCLIEnvelope(true, map[string]any{"system_prompt": state.SystemPrompt}, "", "")
+			return true, nil
+		}
+		if strings.EqualFold(strings.TrimSpace(fields[1]), "reset") {
+			state.SystemPrompt = agent.DefaultSystemPrompt()
+			printCLIEnvelope(true, map[string]any{"reset": true, "system_prompt": state.SystemPrompt}, "", "")
+			return true, nil
+		}
+		state.SystemPrompt = strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
+		printCLIEnvelope(true, map[string]any{"updated": true, "system_prompt": state.SystemPrompt}, "", "")
 		return true, nil
 	case "/tui":
 		printTUIStatus(eng)
