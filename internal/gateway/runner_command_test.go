@@ -175,6 +175,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/WHOAMI"); got != "/whoami" {
 		t.Fatalf("slash command should normalize whoami, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/RESOLVE telegram group 1001 u1"); got != "/resolve telegram group 1001 u1" {
+		t.Fatalf("slash command should normalize resolve, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/CONTINUITY user_name"); got != "/continuity user_name" {
 		t.Fatalf("slash command should normalize continuity, got=%q", got)
 	}

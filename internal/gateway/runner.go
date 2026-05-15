@@ -519,6 +519,79 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
 			return
+		case "/resolve":
+			resolvePlatform := w.adapter.Name()
+			resolveChatType := event.ChatType
+			resolveChatID := event.ChatID
+			resolveUserID := event.UserID
+			resolveUserName := event.UserName
+			if len(parsed.args) != 0 && len(parsed.args) != 4 && len(parsed.args) != 5 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
+				return
+			}
+			if len(parsed.args) == 4 || len(parsed.args) == 5 {
+				resolvePlatform = strings.ToLower(strings.TrimSpace(parsed.args[0]))
+				resolveChatType = strings.TrimSpace(parsed.args[1])
+				resolveChatID = strings.TrimSpace(parsed.args[2])
+				resolveUserID = strings.TrimSpace(parsed.args[3])
+				if len(parsed.args) == 5 {
+					resolveUserName = strings.TrimSpace(parsed.args[4])
+				}
+			}
+			if strings.TrimSpace(resolvePlatform) == "" || strings.TrimSpace(resolveChatID) == "" || strings.TrimSpace(resolveUserID) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
+				return
+			}
+			mode := "off"
+			if w.runner != nil {
+				mode = w.runner.continuityMode()
+			}
+			globalID := ""
+			globalSource := "none"
+			if w.runner != nil && w.runner.identityStore != nil {
+				if v, err := w.runner.identityStore.resolve(resolvePlatform, resolveUserID); err == nil && strings.TrimSpace(v) != "" {
+					globalID = strings.TrimSpace(v)
+					globalSource = "mapped"
+				}
+			}
+			if strings.TrimSpace(globalID) == "" {
+				if autoID := autoGlobalIdentity(mode, resolveUserID, resolveUserName); strings.TrimSpace(autoID) != "" {
+					globalID = autoID
+					globalSource = "auto"
+				}
+			}
+			routeSession := BuildSessionKey(resolvePlatform, resolveChatType, resolveChatID)
+			mappedSession := ""
+			resolvedSession := routeSession
+			if strings.TrimSpace(globalID) != "" {
+				mappedSession = BuildSessionKey("global", "user", globalID)
+				resolvedSession = mappedSession
+			}
+			reply := "platform=" + resolvePlatform +
+				"\nchat_type=" + resolveChatType +
+				"\nchat_id=" + resolveChatID +
+				"\nuser_id=" + resolveUserID +
+				"\nuser_name=" + resolveUserName +
+				"\nroute_session=" + routeSession +
+				"\nmapped_session=" + mappedSession +
+				"\nresolved_session=" + resolvedSession +
+				"\nglobal_id=" + globalID +
+				"\nglobal_source=" + globalSource +
+				"\ncontinuity_mode=" + mode
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{
+				"slash":            "/resolve",
+				"platform":         resolvePlatform,
+				"chat_type":        resolveChatType,
+				"chat_id":          resolveChatID,
+				"user_id":          resolveUserID,
+				"route_session":    routeSession,
+				"mapped_session":   mappedSession,
+				"resolved_session": resolvedSession,
+				"global_id":        globalID,
+				"global_source":    globalSource,
+				"continuity_mode":  mode,
+			})
+			return
 		case "/continuity":
 			if len(parsed.args) > 1 {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
