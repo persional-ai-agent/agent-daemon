@@ -20,6 +20,18 @@ func (gatewayStatusStoreStub) SessionStats(sessionID string) (map[string]any, er
 	return map[string]any{"session_id": sessionID, "message_count": 42}, nil
 }
 
+type gatewaySessionMapStore struct {
+	bySession map[string][]core.Message
+}
+
+func (s gatewaySessionMapStore) AppendMessage(string, core.Message) error { return nil }
+func (s gatewaySessionMapStore) LoadMessages(sessionID string, _ int) ([]core.Message, error) {
+	msgs := s.bySession[sessionID]
+	out := make([]core.Message, len(msgs))
+	copy(out, msgs)
+	return out, nil
+}
+
 type gatewayAdapterStub struct {
 	name string
 }
@@ -411,5 +423,33 @@ func TestGatewayStatusTextUsesLastUserPairingAndStats(t *testing.T) {
 	}
 	if !strings.Contains(got, "route_session: route:s1") || !strings.Contains(got, "active_session: active:s1") {
 		t.Fatalf("expected route/active session lines, got: %q", got)
+	}
+}
+
+func TestActivateSessionSyncsCursorAndLastUserInput(t *testing.T) {
+	w := &sessionWorker{
+		key: "route:s1",
+		engine: &agent.Engine{
+			SessionStore: gatewaySessionMapStore{
+				bySession: map[string][]core.Message{
+					"s2": {
+						{Role: "user", Content: "hello"},
+						{Role: "assistant", Content: "ok"},
+						{Role: "user", Content: "latest input"},
+					},
+				},
+			},
+		},
+	}
+	w.activateSession("s2")
+	if got := w.currentSessionID(); got != "s2" {
+		t.Fatalf("active session mismatch: %q", got)
+	}
+	sid, offset, limit := w.showCursor()
+	if sid != "s2" || offset != 0 || limit != 20 {
+		t.Fatalf("show cursor mismatch: sid=%q offset=%d limit=%d", sid, offset, limit)
+	}
+	if got := w.getLastUserInput(); got != "latest input" {
+		t.Fatalf("last user input mismatch: %q", got)
 	}
 }

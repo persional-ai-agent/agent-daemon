@@ -373,7 +373,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			target := strings.TrimSpace(parsed.args[0])
 			prev := w.currentSessionID()
-			w.setActiveSessionID(target)
+			w.activateSession(target)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
 			return
 		case "/history":
@@ -508,7 +508,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			target := list[idx-1]
 			prev := w.currentSessionID()
-			w.setActiveSessionID(target)
+			w.activateSession(target)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/pick", "session_id": target, "index": idx})
 			return
 		case "/stats":
@@ -553,27 +553,27 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /new [session_id] or /reset", event.MessageID, map[string]any{"slash": parsed.head})
 				return
 			}
-			if next == "" {
-				next = uuid.NewString()
-			}
-			prev := w.currentSessionID()
-			w.setActiveSessionID(next)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
-			return
+				if next == "" {
+					next = uuid.NewString()
+				}
+				prev := w.currentSessionID()
+				w.activateSession(next)
+				_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
+				return
 		case "/resume":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resume <session_id>", event.MessageID, map[string]any{"slash": "/resume"})
 				return
 			}
 			target := strings.TrimSpace(parsed.args[0])
-			if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
-				_, _ = w.sendText(ctx, event.ChatID, "_Resume failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resume"})
+				if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
+					_, _ = w.sendText(ctx, event.ChatID, "_Resume failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resume"})
+					return
+				}
+				prev := w.currentSessionID()
+				w.activateSession(target)
+				_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
 				return
-			}
-			prev := w.currentSessionID()
-			w.setActiveSessionID(target)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
-			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /recover context", event.MessageID, map[string]any{"slash": "/recover"})
@@ -583,11 +583,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if strings.TrimSpace(lastInput) == "" {
 				_, _ = w.sendText(ctx, event.ChatID, "_No recent user input to replay._", event.MessageID, map[string]any{"slash": "/recover"})
 				return
-			}
-			prev := w.currentSessionID()
-			next := uuid.NewString()
-			w.setActiveSessionID(next)
-			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
+				}
+				prev := w.currentSessionID()
+				next := uuid.NewString()
+				w.activateSession(next)
+				_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
 			replay := event
 			replay.Text = lastInput
 			select {
@@ -635,22 +635,20 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Undo failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/undo"})
 					return
 				}
-			}
-			w.setActiveSessionID(nextSession)
-			w.setLastUserInput(latestUserInputFromMessages(nextMsgs))
-			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
-			return
+				}
+				w.activateSession(nextSession)
+				_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
+				return
 		case "/clear":
 			if len(parsed.args) > 0 {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /clear", event.MessageID, map[string]any{"slash": "/clear"})
 				return
-			}
-			prev := w.currentSessionID()
-			next := uuid.NewString()
-			w.setActiveSessionID(next)
-			w.clearLastUserInput()
-			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
-			return
+				}
+				prev := w.currentSessionID()
+				next := uuid.NewString()
+				w.activateSession(next)
+				_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
+				return
 		case "/reload":
 			if len(parsed.args) > 0 {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /reload", event.MessageID, map[string]any{"slash": "/reload"})
@@ -1422,6 +1420,22 @@ func (w *sessionWorker) setActiveSessionID(sessionID string) {
 		sessionID = w.key
 	}
 	w.activeSessionID = sessionID
+}
+
+func (w *sessionWorker) activateSession(sessionID string) {
+	w.setActiveSessionID(sessionID)
+	active := w.currentSessionID()
+	w.setShowCursor(active, 0, 20)
+	if w.engine == nil || w.engine.SessionStore == nil {
+		w.clearLastUserInput()
+		return
+	}
+	msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
+	if err != nil {
+		w.clearLastUserInput()
+		return
+	}
+	w.setLastUserInput(latestUserInputFromMessages(msgs))
 }
 
 func (w *sessionWorker) setLastUserInput(text string) {

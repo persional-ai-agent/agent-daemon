@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"

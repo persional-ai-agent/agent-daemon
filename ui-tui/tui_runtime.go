@@ -160,10 +160,10 @@ const (
 )
 
 type runtimeEventParser struct {
-	state            parserState
-	pendingText      string
-	toolStarts       map[string]time.Time
-	inlineThinkingID string
+	state             parserState
+	pendingText       string
+	toolStarts        map[string]time.Time
+	inlineThinkingID  string
 	sawAssistantDelta bool
 }
 
@@ -349,13 +349,13 @@ type uiNode struct {
 }
 
 type uiStateTree struct {
-	nodes              []*uiNode
-	nextID             int
-	streamingAssistant string
+	nodes                   []*uiNode
+	nextID                  int
+	streamingAssistant      string
 	currentTurnAssistantIDs []string
-	thinkingNodeByID   map[string]string
-	thinkingExpanded   bool
-	toolNodeByCallID   map[string]string
+	thinkingNodeByID        map[string]string
+	thinkingExpanded        bool
+	toolNodeByCallID        map[string]string
 }
 
 func newUIStateTree() *uiStateTree {
@@ -752,9 +752,9 @@ func newUIRenderEngine(width int) *uiRenderEngine {
 		cache:       make(map[string]string),
 		nodeTypes:   make(map[string]uiNodeType),
 		fingerprint: make(map[string]string),
-		userStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#A8A8A8")).Padding(0, 1),
+		userStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6600")).Background(lipgloss.Color("#333333")).Padding(0, 1),
 		metaStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")),
-		errorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true),
+		errorStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("#CC3333")).Bold(true),
 	}
 }
 
