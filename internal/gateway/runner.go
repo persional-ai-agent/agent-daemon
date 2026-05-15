@@ -465,7 +465,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				UserName: event.UserName,
 			})
 			if parseErr != nil {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewayResolveUsageEN(), event.MessageID, map[string]any{"slash": "/resolve"})
 				return
 			}
 			resolved, err := tools.ResolveGatewaySessionMapping(w.engine.Workdir, resolveArgs.Platform, resolveArgs.ChatType, resolveArgs.ChatID, resolveArgs.UserID, resolveArgs.UserName)
@@ -480,7 +480,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/continuity":
 			if len(parsed.args) > 1 {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewayContinuityUsageEN(), event.MessageID, map[string]any{"slash": "/continuity"})
 				return
 			}
 			if len(parsed.args) == 0 {
@@ -493,7 +493,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			mode, pErr := tools.ParseGatewayContinuityModeArg(parsed.args)
 			if pErr != nil {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewayContinuityUsageEN(), event.MessageID, map[string]any{"slash": "/continuity"})
 				return
 			}
 			updatedMode, uErr := tools.UpdateGatewayContinuityMode(w.engine.Workdir, mode)
@@ -506,7 +506,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/setid":
 			globalID, pErr := tools.ParseGatewayGlobalIDArg(parsed.args)
 			if pErr != nil {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /setid <global_user_id>", event.MessageID, map[string]any{"slash": "/setid"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewaySetIDGatewayUsageEN(), event.MessageID, map[string]any{"slash": "/setid"})
 				return
 			}
 			if w.runner == nil || w.runner.identityStore == nil {
@@ -533,7 +533,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/unsetid":
 			if len(parsed.args) > 0 {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /unsetid", event.MessageID, map[string]any{"slash": "/unsetid"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewayUnsetIDGatewayUsageEN(), event.MessageID, map[string]any{"slash": "/unsetid"})
 				return
 			}
 			if w.runner == nil || w.runner.identityStore == nil {
@@ -858,12 +858,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/sethome":
 			if len(parsed.args) == 0 || len(parsed.args) > 2 {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewaySetHomeUsageEN(), event.MessageID, map[string]any{"slash": "/sethome"})
 				return
 			}
 			homePlatform, homeChatID, err := tools.ParseSetHomeArgs(parsed.args)
 			if err != nil {
-				_, _ = w.sendText(ctx, event.ChatID, "Usage: /sethome <platform> <chat_id> | /sethome <platform:chat_id>", event.MessageID, map[string]any{"slash": "/sethome"})
+				_, _ = w.sendText(ctx, event.ChatID, tools.GatewaySetHomeUsageEN(), event.MessageID, map[string]any{"slash": "/sethome"})
 				return
 			}
 			envKey := tools.HomeTargetEnvVar(homePlatform)

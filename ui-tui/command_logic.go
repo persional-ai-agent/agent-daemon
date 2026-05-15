@@ -1072,11 +1072,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/sethome" || strings.HasPrefix(current, "/sethome "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 && len(parts) != 3 {
-				return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
+				return lines, fmt.Errorf("%s", tools.GatewaySetHomeUsageZH()), false
 			}
 			platform, chatID, pErr := tools.ParseSetHomeArgs(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /sethome <platform:chat_id>|<platform> <chat_id>"), false
+				return lines, fmt.Errorf("%s", tools.GatewaySetHomeUsageZH()), false
 			}
 			body := map[string]any{"platform": platform, "chat_id": chatID}
 			out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/targets/home", body)
@@ -1090,7 +1090,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			ref, pErr := tools.ParseGatewayIdentityRefArgs(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /whoami <platform> <user_id>"), false
+				return lines, fmt.Errorf("%s", tools.GatewayWhoamiUsageZH()), false
 			}
 			apiPath := fmt.Sprintf("%s/v1/ui/gateway/identity?platform=%s&user_id=%s", s.httpBase, url.QueryEscape(ref.Platform), url.QueryEscape(ref.UserID))
 			out, wErr := httpJSON(http.MethodGet, apiPath, nil)
@@ -1103,7 +1103,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/continuity" || strings.HasPrefix(current, "/continuity "):
 			parts := strings.Fields(current)
 			if len(parts) > 2 {
-				return lines, fmt.Errorf("用法: /continuity [off|user_id|user_name]"), false
+				return lines, fmt.Errorf("%s", tools.GatewayContinuityUsageZH()), false
 			}
 			if len(parts) == 1 {
 				out, cErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/continuity", nil)
@@ -1117,7 +1117,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			mode, pErr := tools.ParseGatewayContinuityModeArg(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /continuity [off|user_id|user_name]"), false
+				return lines, fmt.Errorf("%s", tools.GatewayContinuityUsageZH()), false
 			}
 			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/continuity", map[string]any{"mode": mode})
 			if cErr != nil {
@@ -1130,7 +1130,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			setArgs, pErr := tools.ParseGatewaySetIdentityArgs(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /setid <platform> <user_id> <global_user_id>"), false
+				return lines, fmt.Errorf("%s", tools.GatewaySetIDUsageZH()), false
 			}
 			out, iErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
 				"platform":  setArgs.Platform,
@@ -1147,7 +1147,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			ref, pErr := tools.ParseGatewayIdentityRefArgs(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /unsetid <platform> <user_id>"), false
+				return lines, fmt.Errorf("%s", tools.GatewayUnsetIDUsageZH()), false
 			}
 			out, iErr := httpJSON(http.MethodDelete, s.httpBase+"/v1/ui/gateway/identity", map[string]any{
 				"platform": ref.Platform,
@@ -1163,7 +1163,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			resolvedArgs, pErr := tools.ParseGatewayResolveArgs(parts[1:])
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				return lines, fmt.Errorf("%s", tools.GatewayResolveUsageZH()), false
 			}
 			apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(resolvedArgs.Platform), url.QueryEscape(resolvedArgs.ChatType), url.QueryEscape(resolvedArgs.ChatID), url.QueryEscape(resolvedArgs.UserID))
 			if resolvedArgs.UserName != "" {

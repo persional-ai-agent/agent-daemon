@@ -370,12 +370,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/sethome":
 		if len(fields) == 1 || len(fields) > 3 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewaySetHomeUsageZH())
 			return true, nil
 		}
 		p, cid, err := clitools.ParseSetHomeArgs(fields[1:])
 		if err != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewaySetHomeUsageZH())
 			return true, nil
 		}
 		env := clitools.HomeTargetEnvVar(p)
@@ -400,7 +400,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/continuity":
 		if len(fields) > 2 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /continuity [off|user_id|user_name]")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayContinuityUsageZH())
 			return true, nil
 		}
 		if len(fields) == 1 {
@@ -413,7 +413,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		mode, parseErr := clitools.ParseGatewayContinuityModeArg(fields[1:])
 		if parseErr != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /continuity [off|user_id|user_name]")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayContinuityUsageZH())
 			return true, nil
 		}
 		mode, err := clitools.UpdateGatewayContinuityMode(eng.Workdir, mode)
@@ -425,7 +425,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/whoami":
 		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
 		if parseErr != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /whoami <platform> <user_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayWhoamiUsageZH())
 			return true, nil
 		}
 		globalID, err := clitools.ResolveGatewayIdentity(eng.Workdir, ref.Platform, ref.UserID)
@@ -443,7 +443,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/resolve":
 		resolvedArgs, parseErr := clitools.ParseGatewayResolveArgs(fields[1:])
 		if parseErr != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resolve <platform> <chat_type> <chat_id> <user_id> [user_name]")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayResolveUsageZH())
 			return true, nil
 		}
 		resolved, err := clitools.ResolveGatewaySessionMapping(eng.Workdir, resolvedArgs.Platform, resolvedArgs.ChatType, resolvedArgs.ChatID, resolvedArgs.UserID, resolvedArgs.UserName)
@@ -455,7 +455,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/setid":
 		setArgs, parseErr := clitools.ParseGatewaySetIdentityArgs(fields[1:])
 		if parseErr != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /setid <platform> <user_id> <global_user_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewaySetIDUsageZH())
 			return true, nil
 		}
 		if err := clitools.UpsertGatewayIdentity(eng.Workdir, setArgs.Platform, setArgs.UserID, setArgs.GlobalID); err != nil {
@@ -466,7 +466,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/unsetid":
 		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
 		if parseErr != nil {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /unsetid <platform> <user_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.GatewayUnsetIDUsageZH())
 			return true, nil
 		}
 		if err := clitools.DeleteGatewayIdentity(eng.Workdir, ref.Platform, ref.UserID); err != nil {

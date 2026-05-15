@@ -54,6 +54,14 @@ type GatewayModelSpec struct {
 }
 
 const GatewayModelUsage = "/model [provider:model|provider model]"
+const GatewaySetHomeUsage = "/sethome <platform> <chat_id> | /sethome <platform:chat_id>"
+const GatewayContinuityUsage = "/continuity [off|user_id|user_name]"
+const GatewayWhoamiUsage = "/whoami <platform> <user_id>"
+const GatewayResolveUsage = "/resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"
+const GatewaySetIDUsage = "/setid <platform> <user_id> <global_user_id>"
+const GatewayUnsetIDUsage = "/unsetid <platform> <user_id>"
+const GatewaySetIDGatewayUsage = "/setid <global_user_id>"
+const GatewayUnsetIDGatewayUsage = "/unsetid"
 
 func GatewayModelUsageEN() string {
 	return "Usage: " + GatewayModelUsage
@@ -61,6 +69,21 @@ func GatewayModelUsageEN() string {
 
 func GatewayModelUsageZH() string {
 	return "用法: " + GatewayModelUsage
+}
+
+func GatewaySetHomeUsageEN() string      { return "Usage: " + GatewaySetHomeUsage }
+func GatewaySetHomeUsageZH() string      { return "用法: " + GatewaySetHomeUsage }
+func GatewayContinuityUsageEN() string   { return "Usage: " + GatewayContinuityUsage }
+func GatewayContinuityUsageZH() string   { return "用法: " + GatewayContinuityUsage }
+func GatewayWhoamiUsageEN() string       { return "Usage: " + GatewayWhoamiUsage }
+func GatewayWhoamiUsageZH() string       { return "用法: " + GatewayWhoamiUsage }
+func GatewayResolveUsageEN() string      { return "Usage: " + GatewayResolveUsage }
+func GatewayResolveUsageZH() string      { return "用法: " + GatewayResolveUsage }
+func GatewaySetIDUsageZH() string        { return "用法: " + GatewaySetIDUsage }
+func GatewayUnsetIDUsageZH() string      { return "用法: " + GatewayUnsetIDUsage }
+func GatewaySetIDGatewayUsageEN() string { return "Usage: " + GatewaySetIDGatewayUsage }
+func GatewayUnsetIDGatewayUsageEN() string {
+	return "Usage: " + GatewayUnsetIDGatewayUsage
 }
 
 type GatewayWhoamiResult struct {

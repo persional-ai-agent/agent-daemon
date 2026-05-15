@@ -349,7 +349,7 @@ func TestHandleTUICommandArgumentValidationErrors(t *testing.T) {
 		{"/http ws://bad", "HTTP API 地址必须以 http:// 或 https:// 开头"},
 		{"/pretty maybe", "用法: /pretty on|off"},
 		{"/targets a b", "用法: /targets [platform]"},
-		{"/sethome", "用法: /sethome <platform:chat_id>|<platform> <chat_id>"},
+		{"/sethome", "用法: /sethome <platform> <chat_id> | /sethome <platform:chat_id>"},
 		{"/resume", "用法: /resume <session_id>"},
 		{"/compress x", "用法: /compress [tail_messages]"},
 		{"/recover", "用法: /recover context"},
