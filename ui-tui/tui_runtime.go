@@ -1167,32 +1167,6 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 	eventType := strings.ToLower(strings.TrimSpace(asStringFromMap(data, "event_type")))
 	eventData, _ := data["event_data"].(map[string]any)
 
-	switch eventType {
-	case "text_delta":
-		text := asStringFromMapRaw(eventData, "text")
-		if text == "" {
-			text = asStringFromMapRaw(eventData, "delta")
-		}
-		if text == "" {
-			return nil
-		}
-		return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: normalizeStreamText(text)}}
-	case "tool_call_start", "tool_args_start":
-		return []runtimeEvent{{
-			Type:       runtimeEventToolStart,
-			ToolName:   asStringFromMap(eventData, "tool_name"),
-			ToolCallID: asStringFromMap(eventData, "tool_call_id"),
-			Status:     "running",
-		}}
-	case "tool_call_done":
-		return []runtimeEvent{{
-			Type:       runtimeEventToolEnd,
-			ToolName:   asStringFromMap(eventData, "tool_name"),
-			ToolCallID: asStringFromMap(eventData, "tool_call_id"),
-			Status:     "completed",
-		}}
-	}
-
 	if strings.Contains(eventType, "reasoning") {
 		thinkingID := buildThinkingID(eventType, eventData)
 		if strings.Contains(eventType, "delta") {
@@ -1220,7 +1194,68 @@ func mapModelStreamEventToRuntimeEvents(evt map[string]any) []runtimeEvent {
 		}
 	}
 
+	switch {
+	case eventType == "text_delta" || strings.Contains(eventType, "text_delta") || (strings.HasSuffix(eventType, ".delta") && !strings.Contains(eventType, "reasoning")):
+		text := firstAvailableString(eventData, "text", "delta", "output_text", "content")
+		if text == "" && !hasAnyStringKey(eventData, "text", "delta", "output_text", "content") {
+			return nil
+		}
+		return []runtimeEvent{{Type: runtimeEventTokenDelta, Text: normalizeStreamText(text)}}
+	case eventType == "tool_call_start" || eventType == "tool_args_start":
+		return []runtimeEvent{{
+			Type:       runtimeEventToolStart,
+			ToolName:   asStringFromMap(eventData, "tool_name"),
+			ToolCallID: asStringFromMap(eventData, "tool_call_id"),
+			Status:     "running",
+		}}
+	case eventType == "tool_call_done":
+		return []runtimeEvent{{
+			Type:       runtimeEventToolEnd,
+			ToolName:   asStringFromMap(eventData, "tool_name"),
+			ToolCallID: asStringFromMap(eventData, "tool_call_id"),
+			Status:     "completed",
+		}}
+	}
+
+	if eventType == "message_done" || strings.HasSuffix(eventType, ".done") {
+		text := firstNonEmptyString(eventData, "text", "output_text", "content", "final_response")
+		if strings.TrimSpace(text) == "" {
+			return nil
+		}
+		return []runtimeEvent{{Type: runtimeEventAssistantFinal, Text: normalizeStreamText(text)}}
+	}
+
 	return nil
+}
+
+func firstNonEmptyString(data map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v := asStringFromMapRaw(data, key); strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func firstAvailableString(data map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if _, ok := data[key]; !ok {
+			continue
+		}
+		if v, ok := data[key].(string); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+func hasAnyStringKey(data map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := data[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func extractEventType(evt map[string]any) string {

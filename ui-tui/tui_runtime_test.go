@@ -285,6 +285,36 @@ func TestRuntimePublishLineAssistantFallback(t *testing.T) {
 	}
 }
 
+func TestRuntimeStreamEventVariantDeltaAndDone(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	rt.startTurn("variant")
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "response.output_text.delta",
+			"event_data": map[string]any{"delta": "hello "},
+		},
+	})
+	rt.publishTurnEvent(map[string]any{
+		"type": "model_stream_event",
+		"data": map[string]any{
+			"event_type": "response.output_text.done",
+			"event_data": map[string]any{"output_text": "hello world"},
+		},
+	})
+	rt.consumePendingEvents()
+	rt.endTurn()
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(out, "")
+	if !strings.Contains(cleaned, "hello world") {
+		t.Fatalf("expected variant stream text rendered, got: %q", out)
+	}
+}
+
 func TestRuntimeFreezeStableAssistantPrefixDuringStream(t *testing.T) {
 	rt := newTerminalRuntime(80)
 	rt.startTurn("freeze")
