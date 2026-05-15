@@ -114,6 +114,7 @@ type sessionWorker struct {
 	mu                  sync.Mutex
 	activeSessionID     string
 	lastUserInput       string
+	lastUserID          string
 	lastShowSessionID   string
 	lastShowOffset      int
 	lastShowLimit       int
@@ -319,6 +320,7 @@ func (w *sessionWorker) run(parent context.Context) {
 }
 
 func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
+	w.setLastUserID(event.UserID)
 	allowed := ""
 	if w != nil {
 		allowed = w.allowed
@@ -1331,11 +1333,18 @@ func (w *sessionWorker) gatewayStatusText() string {
 		"queue: " + itoa(len(w.queue)),
 	}
 	if w.runner != nil {
-		paired := w.runner.isPaired(w.adapter.Name(), w.engine.GatewayUserID)
+		paired := w.runner.isPaired(w.adapter.Name(), w.getLastUserID())
 		if paired {
 			lines = append(lines, "paired: yes")
 		} else {
 			lines = append(lines, "paired: no")
+		}
+	}
+	if statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore); ok && statsStore != nil {
+		if stats, err := statsStore.SessionStats(activeSessionID); err == nil {
+			if n, ok := stats["message_count"]; ok {
+				lines = append(lines, "message_count: "+fmt.Sprintf("%v", n))
+			}
 		}
 	}
 	lines = append(lines, "running: "+map[bool]string{true: "yes", false: "no"}[w.isRunning()])
@@ -1401,6 +1410,18 @@ func (w *sessionWorker) getLastUserInput() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return strings.TrimSpace(w.lastUserInput)
+}
+
+func (w *sessionWorker) setLastUserID(userID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastUserID = strings.TrimSpace(userID)
+}
+
+func (w *sessionWorker) getLastUserID() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.TrimSpace(w.lastUserID)
 }
 
 func (w *sessionWorker) clearLastUserInput() {

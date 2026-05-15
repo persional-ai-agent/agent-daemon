@@ -1,12 +1,38 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
 )
+
+type gatewayStatusStoreStub struct{}
+
+func (gatewayStatusStoreStub) AppendMessage(string, core.Message) error { return nil }
+func (gatewayStatusStoreStub) LoadMessages(string, int) ([]core.Message, error) {
+	return nil, nil
+}
+func (gatewayStatusStoreStub) SessionStats(sessionID string) (map[string]any, error) {
+	return map[string]any{"session_id": sessionID, "message_count": 42}, nil
+}
+
+type gatewayAdapterStub struct {
+	name string
+}
+
+func (a *gatewayAdapterStub) Name() string { return a.name }
+func (a *gatewayAdapterStub) Connect(_ context.Context) error { return nil }
+func (a *gatewayAdapterStub) Disconnect(_ context.Context) error { return nil }
+func (a *gatewayAdapterStub) Send(_ context.Context, _, _, _ string) (SendResult, error) {
+	return SendResult{Success: true}, nil
+}
+func (a *gatewayAdapterStub) EditMessage(_ context.Context, _, _, _ string) error { return nil }
+func (a *gatewayAdapterStub) SendTyping(_ context.Context, _ string) error { return nil }
+func (a *gatewayAdapterStub) OnMessage(_ context.Context, _ MessageHandler) {}
 
 func TestNormalizeGatewayCommandForYuanbao(t *testing.T) {
 	tests := []struct {
@@ -322,5 +348,30 @@ func TestSetAndGetLastSessionIDs(t *testing.T) {
 	again := w.getLastSessionIDs()
 	if again[0] != "s1" {
 		t.Fatalf("expected copy semantics, got %+v", again)
+	}
+}
+
+func TestGatewayStatusTextUsesLastUserPairingAndStats(t *testing.T) {
+	w := &sessionWorker{
+		key:             "route:s1",
+		activeSessionID: "active:s1",
+		adapter:         &gatewayAdapterStub{name: "slack"},
+		engine:          &agent.Engine{SessionStore: gatewayStatusStoreStub{}},
+		runner: &Runner{
+			pairings: map[string]map[string]bool{
+				"slack": {"u-1": true},
+			},
+		},
+	}
+	w.setLastUserID("u-1")
+	got := w.gatewayStatusText()
+	if !strings.Contains(got, "paired: yes") {
+		t.Fatalf("expected paired yes, got: %q", got)
+	}
+	if !strings.Contains(got, "message_count: 42") {
+		t.Fatalf("expected message_count in status, got: %q", got)
+	}
+	if !strings.Contains(got, "route_session: route:s1") || !strings.Contains(got, "active_session: active:s1") {
+		t.Fatalf("expected route/active session lines, got: %q", got)
 	}
 }
