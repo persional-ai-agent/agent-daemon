@@ -7,6 +7,32 @@ import (
 	"github.com/dingjingmaster/agent-daemon/internal/gateway"
 )
 
+func TestGatewayPlatformCommandSpecsCoverCatalog(t *testing.T) {
+	specs := gatewayPlatformCommandSpecs()
+	if len(specs) == 0 {
+		t.Fatal("empty platform command specs")
+	}
+	fromCatalog := map[string]bool{}
+	for _, name := range gateway.BuiltInGatewayCommandNames() {
+		fromCatalog[name] = true
+	}
+	for _, spec := range specs {
+		if !fromCatalog[spec.Name] {
+			t.Fatalf("spec has command not in gateway catalog: %s", spec.Name)
+		}
+		if !spec.Telegram || !spec.Discord {
+			t.Fatalf("spec must be enabled for both telegram/discord: %s", spec.Name)
+		}
+		if spec.Description == "" {
+			t.Fatalf("spec description empty: %s", spec.Name)
+		}
+		delete(fromCatalog, spec.Name)
+	}
+	if len(fromCatalog) != 0 {
+		t.Fatalf("catalog commands missing in platform specs: %+v", fromCatalog)
+	}
+}
+
 func TestTelegramDiscordApprovalCommandsConsistency(t *testing.T) {
 	telegram := map[string]bool{}
 	for _, c := range TelegramCommands() {

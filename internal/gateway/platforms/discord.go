@@ -265,25 +265,7 @@ func (d *DiscordAdapter) registerCommands() error {
 }
 
 func DiscordApplicationCommands() []*discordgo.ApplicationCommand {
-	return []*discordgo.ApplicationCommand{
-		{Name: "pair", Description: "pair with gateway using a code", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "pair code", Required: true}}},
-		{Name: "unpair", Description: "remove current gateway pairing"},
-		{Name: "cancel", Description: "cancel the running task"},
-		{Name: "queue", Description: "show queued task count"},
-		{Name: "status", Description: "show current session status"},
-		{Name: "pending", Description: "show latest pending approval"},
-		{Name: "approvals", Description: "show active approvals"},
-		{Name: "grant", Description: "grant session or pattern approval", Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
-			{Type: discordgo.ApplicationCommandOptionInteger, Name: "ttl", Description: "ttl seconds", Required: false},
-		}},
-		{Name: "revoke", Description: "revoke session or pattern approval", Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionString, Name: "pattern", Description: "pattern name for pattern approval", Required: false},
-		}},
-		{Name: "approve", Description: "approve a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
-		{Name: "deny", Description: "deny a pending approval id", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "approval id", Required: false}}},
-		{Name: "help", Description: "show supported commands"},
-	}
+	return discordCommandsFromSpecs(gatewayPlatformCommandSpecs())
 }
 
 func renderDiscordSlashCommand(data discordgo.ApplicationCommandInteractionData) string {

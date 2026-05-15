@@ -246,18 +246,5 @@ func (t *TelegramAdapter) registerCommands() error {
 }
 
 func TelegramCommands() []tgbotapi.BotCommand {
-	return []tgbotapi.BotCommand{
-		{Command: "pair", Description: "pair with gateway using a code"},
-		{Command: "unpair", Description: "remove current gateway pairing"},
-		{Command: "cancel", Description: "cancel the running task"},
-		{Command: "queue", Description: "show queued task count"},
-		{Command: "status", Description: "show current session status"},
-		{Command: "pending", Description: "show latest pending approval"},
-		{Command: "approvals", Description: "show active approvals"},
-		{Command: "grant", Description: "grant session or pattern approval"},
-		{Command: "revoke", Description: "revoke session or pattern approval"},
-		{Command: "approve", Description: "approve a pending approval id"},
-		{Command: "deny", Description: "deny a pending approval id"},
-		{Command: "help", Description: "show supported commands"},
-	}
+	return telegramCommandsFromSpecs(gatewayPlatformCommandSpecs())
 }
