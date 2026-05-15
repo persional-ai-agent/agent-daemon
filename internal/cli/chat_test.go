@@ -306,3 +306,15 @@ func TestPrintCLIEnvelopeError(t *testing.T) {
 		t.Fatalf("unexpected error payload: %+v", out)
 	}
 }
+
+func TestPrintSlashHelpUsesSharedCatalog(t *testing.T) {
+	line := captureStdout(t, func() {
+		printSlashHelp()
+	})
+	if !strings.Contains(line, "/help | /commands") {
+		t.Fatalf("unexpected help output: %s", line)
+	}
+	if !strings.Contains(line, "/quit | /exit") {
+		t.Fatalf("missing quit help output: %s", line)
+	}
+}

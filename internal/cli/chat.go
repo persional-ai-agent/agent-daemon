@@ -368,30 +368,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 }
 
 func printSlashHelp() {
-	lines := []string{
-		"/help | /commands             显示命令帮助",
-		"/status | /session            显示当前会话状态",
-		"/new [session_id]             新建并切换会话",
-		"/reset [session_id]           清空上下文并切换到新会话",
-		"/resume <session_id>          切换并加载已有会话",
-		"/retry                        重试上一条用户消息",
-		"/undo                         从当前上下文撤销上一轮",
-		"/compress [tail]              压缩当前上下文，保留最近 tail 条",
-		"/save [path]                  导出当前上下文为 JSON",
-		"/history [n]                  预览最近 n 条上下文消息",
-		"/sessions [n]                 列出最近 n 个会话",
-		"/show [sid] [offset] [limit]  分页查看会话消息",
-		"/stats [session_id]           查看会话统计",
-		"/tools [list|show|schemas]    查看工具列表、单个 schema 或全部 schema",
-		"/toolsets [list|show|resolve] 查看工具集",
-		"/todo                         查看当前会话 todo",
-		"/memory [memory|user]         查看持久记忆",
-		"/model                        显示当前模型客户端",
-		"/reload                       从存储重载当前会话",
-		"/clear                        清空当前进程内上下文",
-		"/tui                          显示 CLI/TUI 能力状态",
-		"/quit | /exit                 退出会话",
-	}
+	lines := slashcmd.CLIHelpLines()
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
