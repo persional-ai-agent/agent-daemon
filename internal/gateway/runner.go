@@ -1074,29 +1074,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
 			return
 		case "/status":
-			reply := w.gatewayStatusText()
+			snapshot := w.gatewayStatusSnapshot()
+			reply := tools.RenderGatewayStatusText(snapshot)
 			meta := map[string]any{"slash": "/status"}
-			for k, v := range tools.BuildGatewayStatusPayload(tools.GatewayStatusSnapshot{
-				Platform:      w.adapter.Name(),
-				RouteSession:  w.key,
-				ActiveSession: w.currentSessionID(),
-				QueueLen:      len(w.queue),
-				Paired:        w.runner != nil && w.runner.isPaired(w.adapter.Name(), w.getLastUserID()),
-				ContinuityMode: func() string {
-					if w.runner != nil {
-						return w.runner.continuityMode()
-					}
-					return "off"
-				}(),
-				MappedSession: func() string {
-					if w.runner != nil {
-						return w.runner.resolveMappedSessionID(w.adapter.Name(), w.getLastUserID(), "")
-					}
-					return ""
-				}(),
-				Running:        w.isRunning(),
-				LastApprovalID: w.resolveApprovalID(nil),
-			}) {
+			for k, v := range tools.BuildGatewayStatusPayload(snapshot) {
 				meta[k] = v
 			}
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
@@ -1923,7 +1904,7 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 	return strings.Join(lines, "\n")
 }
 
-func (w *sessionWorker) gatewayStatusText() string {
+func (w *sessionWorker) gatewayStatusSnapshot() tools.GatewayStatusSnapshot {
 	activeSessionID := w.currentSessionID()
 	lastUserID := w.getLastUserID()
 	snapshot := tools.GatewayStatusSnapshot{
@@ -1952,7 +1933,11 @@ func (w *sessionWorker) gatewayStatusText() string {
 	if last := w.resolveApprovalID(nil); strings.TrimSpace(last) != "" {
 		snapshot.LastApprovalID = last
 	}
-	return tools.RenderGatewayStatusText(snapshot)
+	return snapshot
+}
+
+func (w *sessionWorker) gatewayStatusText() string {
+	return tools.RenderGatewayStatusText(w.gatewayStatusSnapshot())
 }
 
 func (w *sessionWorker) pendingApprovalStatus() string {

@@ -148,6 +148,7 @@
 - 已将 `/whoami` 与 `/resolve` 的响应结构与文本拼装统一到 `internal/tools`（`Build*Payload`/`Render*Text`），CLI/API/Gateway 复用同一结果字段集合。
 - 已将 UI API 层 gateway 参数校验入口改为复用 `internal/tools` 解析函数（identity/ref/setid/resolve），消除 API 与 CLI/TUI/Gateway 的参数语义漂移。
 - 已新增 gateway 状态/诊断共享渲染辅助（`internal/tools/gateway_status.go`），并接入 Gateway `/status` 元数据与 API diagnostics fallback，统一关键字段映射。
+- 已将 Gateway `/status` 文本与元数据统一复用单一 `gatewayStatusSnapshot()` 计算路径，消除同命令内部双路径字段差异风险。
 
 范围：
 
