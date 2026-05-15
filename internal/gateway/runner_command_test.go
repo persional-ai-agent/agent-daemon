@@ -77,6 +77,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	if got := normalizeGatewayCommand("slack", "/SESSIONS 5"); got != "/sessions 5" {
 		t.Fatalf("slash command should normalize sessions, got=%q", got)
 	}
+	if got := normalizeGatewayCommand("slack", "/PICK 2"); got != "/pick 2" {
+		t.Fatalf("slash command should normalize pick, got=%q", got)
+	}
 	if got := normalizeGatewayCommand("slack", "/STATS s-1"); got != "/stats s-1" {
 		t.Fatalf("slash command should normalize stats, got=%q", got)
 	}
@@ -305,5 +308,19 @@ func TestRenderGatewaySessions(t *testing.T) {
 	}
 	if !strings.Contains(got, "2. s2 last_seen=2026-05-15T09:00:00Z [active]") {
 		t.Fatalf("missing active row: %q", got)
+	}
+}
+
+func TestSetAndGetLastSessionIDs(t *testing.T) {
+	w := &sessionWorker{}
+	w.setLastSessionIDs([]string{"s1", "s2"})
+	got := w.getLastSessionIDs()
+	if len(got) != 2 || got[0] != "s1" || got[1] != "s2" {
+		t.Fatalf("unexpected cached session ids: %+v", got)
+	}
+	got[0] = "changed"
+	again := w.getLastSessionIDs()
+	if again[0] != "s1" {
+		t.Fatalf("expected copy semantics, got %+v", again)
 	}
 }

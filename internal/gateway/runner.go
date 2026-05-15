@@ -117,6 +117,7 @@ type sessionWorker struct {
 	lastShowSessionID   string
 	lastShowOffset      int
 	lastShowLimit       int
+	lastSessionIDs      []string
 	cancelCurrent       context.CancelFunc
 	running             bool
 	lastApprovalID      string
@@ -494,8 +495,40 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Sessions failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/sessions"})
 				return
 			}
+			ids := make([]string, 0, len(items))
+			for _, item := range items {
+				sid, _ := item["session_id"].(string)
+				if strings.TrimSpace(sid) != "" {
+					ids = append(ids, strings.TrimSpace(sid))
+				}
+			}
+			w.setLastSessionIDs(ids)
 			reply := renderGatewaySessions(w.currentSessionID(), items)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/sessions", "count": len(items), "limit": limit})
+			return
+		case "/pick":
+			if len(parsed.args) != 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /pick <index>", event.MessageID, map[string]any{"slash": "/pick"})
+				return
+			}
+			idx, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
+			if err != nil || idx <= 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /pick <index>", event.MessageID, map[string]any{"slash": "/pick"})
+				return
+			}
+			list := w.getLastSessionIDs()
+			if len(list) == 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "_No /sessions list available. Run /sessions first._", event.MessageID, map[string]any{"slash": "/pick"})
+				return
+			}
+			if idx > len(list) {
+				_, _ = w.sendText(ctx, event.ChatID, "_Pick index out of range: max="+itoa(len(list))+"_", event.MessageID, map[string]any{"slash": "/pick"})
+				return
+			}
+			target := list[idx-1]
+			prev := w.currentSessionID()
+			w.setActiveSessionID(target)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/pick", "session_id": target, "index": idx})
 			return
 		case "/stats":
 			target := w.currentSessionID()
@@ -1388,6 +1421,18 @@ func (w *sessionWorker) showCursor() (sessionID string, offset, limit int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return strings.TrimSpace(w.lastShowSessionID), w.lastShowOffset, w.lastShowLimit
+}
+
+func (w *sessionWorker) setLastSessionIDs(ids []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastSessionIDs = append([]string(nil), ids...)
+}
+
+func (w *sessionWorker) getLastSessionIDs() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.lastSessionIDs...)
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {
