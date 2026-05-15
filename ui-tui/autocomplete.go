@@ -1,15 +1,13 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/dingjingmaster/agent-daemon/internal/slashcmd"
+)
 
 func rootSlashCommands() []string {
-	return []string{
-		"/help", "/session", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
-		"/stats", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
-		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
-		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
-		"/reconnect", "/recover", "/diag", "/fullscreen", "/quit", "/exit", "/new", "/reset",
-	}
+	return slashcmd.TUIRootCommands()
 }
 
 func commandSecondTokens(cmd string) []string {
