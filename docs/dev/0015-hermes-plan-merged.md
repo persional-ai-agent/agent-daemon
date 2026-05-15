@@ -143,6 +143,7 @@
 - 已将 `/continuity` 更新参数归一化到 `internal/tools.ParseGatewayContinuityModeArg`，CLI/TUI/Gateway 三端共享同一 mode 校验与别名归一（`id/name` -> `user_id/user_name`）。
 - 已统一 continuity 读取语义到 `internal/tools.ResolveGatewayContinuityMode`（环境变量 `AGENT_GATEWAY_CONTINUITY` 优先，配置文件兜底），并接入 CLI/API/Gateway/session-resolve，消除展示与路由分歧。
 - 已将 `/model` 参数解析统一到 `internal/tools.ParseGatewayModelSpecArgs`，CLI/TUI/Gateway 共用同一 `provider:model` / `provider model` 解析与校验路径。
+- 已统一 model 偏好读取/更新到 `internal/tools.ResolveGatewayModelPreference` 与 `UpdateGatewayModelPreference`，CLI/Gateway 共用同一持久化与环境变量同步逻辑。
 
 范围：
 

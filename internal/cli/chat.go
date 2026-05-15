@@ -514,32 +514,22 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
 			return true, nil
 		}
-		provider, _ := clitools.GetGatewaySetting(eng.Workdir, "model_provider")
-		modelName, _ := clitools.GetGatewaySetting(eng.Workdir, "model_name")
-		baseURL, _ := clitools.GetGatewaySetting(eng.Workdir, "model_base_url")
-		if strings.TrimSpace(provider) == "" {
-			provider = strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
+		modelPref, err := clitools.ResolveGatewayModelPreference(eng.Workdir)
+		if err != nil {
+			return true, err
 		}
-		if strings.TrimSpace(modelName) == "" {
-			modelName = strings.TrimSpace(os.Getenv("AGENT_MODEL"))
-		}
-		if strings.TrimSpace(baseURL) == "" {
-			baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
-		}
+		provider := modelPref.Provider
+		modelName := modelPref.Model
+		baseURL := modelPref.BaseURL
 		if len(fields) > 1 {
 			next, parseErr := clitools.ParseGatewayModelSpecArgs(fields[1:])
 			if parseErr != nil {
 				printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
 				return true, nil
 			}
-			if err := clitools.SetGatewaySetting(eng.Workdir, "model_provider", next.Provider); err != nil {
+			if err := clitools.UpdateGatewayModelPreference(eng.Workdir, next); err != nil {
 				return true, err
 			}
-			if err := clitools.SetGatewaySetting(eng.Workdir, "model_name", next.Model); err != nil {
-				return true, err
-			}
-			_ = os.Setenv("AGENT_MODEL_PROVIDER", next.Provider)
-			_ = os.Setenv("AGENT_MODEL", next.Model)
 			printCLIEnvelope(true, map[string]any{
 				"updated":  true,
 				"provider": next.Provider,

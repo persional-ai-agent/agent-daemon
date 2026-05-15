@@ -9,6 +9,15 @@ import (
 )
 
 const GatewayContinuityEnvVar = "AGENT_GATEWAY_CONTINUITY"
+const GatewayModelProviderEnvVar = "AGENT_MODEL_PROVIDER"
+const GatewayModelNameEnvVar = "AGENT_MODEL"
+const GatewayModelBaseURLEnvVar = "AGENT_BASE_URL"
+
+type GatewayModelPreference struct {
+	Provider string
+	Model    string
+	BaseURL  string
+}
 
 var gatewaySettingsMu sync.Mutex
 
@@ -73,4 +82,45 @@ func ResolveGatewayContinuityMode(workdir string) (string, error) {
 		return "", err
 	}
 	return NormalizeContinuityMode(v), nil
+}
+
+func ResolveGatewayModelPreference(workdir string) (GatewayModelPreference, error) {
+	provider, err := GetGatewaySetting(workdir, "model_provider")
+	if err != nil {
+		return GatewayModelPreference{}, err
+	}
+	modelName, err := GetGatewaySetting(workdir, "model_name")
+	if err != nil {
+		return GatewayModelPreference{}, err
+	}
+	baseURL, err := GetGatewaySetting(workdir, "model_base_url")
+	if err != nil {
+		return GatewayModelPreference{}, err
+	}
+	if strings.TrimSpace(provider) == "" {
+		provider = strings.TrimSpace(os.Getenv(GatewayModelProviderEnvVar))
+	}
+	if strings.TrimSpace(modelName) == "" {
+		modelName = strings.TrimSpace(os.Getenv(GatewayModelNameEnvVar))
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = strings.TrimSpace(os.Getenv(GatewayModelBaseURLEnvVar))
+	}
+	return GatewayModelPreference{
+		Provider: strings.TrimSpace(provider),
+		Model:    strings.TrimSpace(modelName),
+		BaseURL:  strings.TrimSpace(baseURL),
+	}, nil
+}
+
+func UpdateGatewayModelPreference(workdir string, spec GatewayModelSpec) error {
+	if err := SetGatewaySetting(workdir, "model_provider", spec.Provider); err != nil {
+		return err
+	}
+	if err := SetGatewaySetting(workdir, "model_name", spec.Model); err != nil {
+		return err
+	}
+	_ = os.Setenv(GatewayModelProviderEnvVar, spec.Provider)
+	_ = os.Setenv(GatewayModelNameEnvVar, spec.Model)
+	return nil
 }

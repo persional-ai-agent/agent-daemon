@@ -37,3 +37,30 @@ func TestResolveGatewayContinuityMode(t *testing.T) {
 		t.Fatalf("mode=%q want=user_id", got)
 	}
 }
+
+func TestResolveAndUpdateGatewayModelPreference(t *testing.T) {
+	workdir := t.TempDir()
+	if err := SetGatewaySetting(workdir, "model_provider", "openai"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGatewaySetting(workdir, "model_name", "gpt-5"); err != nil {
+		t.Fatal(err)
+	}
+	pref, err := ResolveGatewayModelPreference(workdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pref.Provider != "openai" || pref.Model != "gpt-5" {
+		t.Fatalf("unexpected pref: %+v", pref)
+	}
+	if err := UpdateGatewayModelPreference(workdir, GatewayModelSpec{Provider: "codex", Model: "gpt-5-codex"}); err != nil {
+		t.Fatal(err)
+	}
+	pref, err = ResolveGatewayModelPreference(workdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pref.Provider != "codex" || pref.Model != "gpt-5-codex" {
+		t.Fatalf("unexpected updated pref: %+v", pref)
+	}
+}

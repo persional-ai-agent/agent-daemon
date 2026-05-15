@@ -1043,34 +1043,24 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
 				return
 			}
-			provider, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_provider")
-			modelName, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_name")
-			baseURL, _ := tools.GetGatewaySetting(w.engine.Workdir, "model_base_url")
-			if strings.TrimSpace(provider) == "" {
-				provider = strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
+			modelPref, err := tools.ResolveGatewayModelPreference(w.engine.Workdir)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Model query failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
+				return
 			}
-			if strings.TrimSpace(modelName) == "" {
-				modelName = strings.TrimSpace(os.Getenv("AGENT_MODEL"))
-			}
-			if strings.TrimSpace(baseURL) == "" {
-				baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
-			}
+			provider := modelPref.Provider
+			modelName := modelPref.Model
+			baseURL := modelPref.BaseURL
 			if len(parsed.args) > 0 {
 				next, pErr := tools.ParseGatewayModelSpecArgs(parsed.args)
 				if pErr != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
-				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_provider", next.Provider); err != nil {
+				if err := tools.UpdateGatewayModelPreference(w.engine.Workdir, next); err != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
-				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_name", next.Model); err != nil {
-					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
-					return
-				}
-				_ = os.Setenv("AGENT_MODEL_PROVIDER", next.Provider)
-				_ = os.Setenv("AGENT_MODEL", next.Model)
 				provider = next.Provider
 				modelName = next.Model
 				reply := "_Model preference updated: " + escapeMarkdown(provider) + ":" + escapeMarkdown(modelName) + "_\nTakes effect for newly started daemon/model client."
