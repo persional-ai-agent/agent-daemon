@@ -52,10 +52,11 @@ type Server struct {
 }
 
 type chatRequest struct {
-	SessionID string `json:"session_id"`
-	Message   string `json:"message"`
-	TurnID    string `json:"turn_id,omitempty"`
-	Resume    bool   `json:"resume,omitempty"`
+	SessionID    string `json:"session_id"`
+	Message      string `json:"message"`
+	TurnID       string `json:"turn_id,omitempty"`
+	Resume       bool   `json:"resume,omitempty"`
+	SystemPrompt string `json:"system_prompt,omitempty"`
 }
 
 type cancelRequest struct {
@@ -121,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions/branch", s.handleUISessionBranch)
 	mux.HandleFunc("/v1/ui/sessions/resume", s.handleUISessionResume)
 	mux.HandleFunc("/v1/ui/sessions/compress", s.handleUISessionCompress)
+	mux.HandleFunc("/v1/ui/sessions/undo", s.handleUISessionUndo)
 	mux.HandleFunc("/v1/ui/sessions/replay", s.handleUISessionReplay)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
@@ -746,6 +748,11 @@ type uiSessionCompressRequest struct {
 	KeepLastN int    `json:"keep_last_n,omitempty"`
 }
 
+type uiSessionUndoRequest struct {
+	SessionID    string `json:"session_id"`
+	NewSessionID string `json:"new_session_id,omitempty"`
+}
+
 type uiSessionReplayRequest struct {
 	SessionID string `json:"session_id"`
 	Offset    int    `json:"offset,omitempty"`
@@ -1078,6 +1085,83 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 			"after_messages":   after,
 			"dropped_messages": before - after,
 			"keep_last_n":      keep,
+		},
+	})
+}
+
+func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionUndoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.NewSessionID = strings.TrimSpace(req.NewSessionID)
+	if req.SessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	if req.NewSessionID == "" {
+		req.NewSessionID = uuid.NewString()
+	}
+	if req.NewSessionID == req.SessionID {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "new_session_id must differ from session_id")
+		return
+	}
+	ss, ok := s.Engine.SessionStore.(sessionBranchStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session undo not supported")
+		return
+	}
+	msgs, err := ss.LoadMessages(req.SessionID, 500)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	idx := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "user" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"source_session_id": req.SessionID,
+				"new_session_id":    req.NewSessionID,
+				"copied_messages":   len(msgs),
+				"removed_messages":  0,
+				"undone":            false,
+				"reason":            "no_user_message",
+			},
+		})
+		return
+	}
+	next := core.CloneMessages(msgs[:idx])
+	for _, msg := range next {
+		if err := ss.AppendMessage(req.NewSessionID, msg); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"source_session_id": req.SessionID,
+			"new_session_id":    req.NewSessionID,
+			"copied_messages":   len(next),
+			"removed_messages":  len(msgs) - len(next),
+			"undone":            true,
 		},
 	})
 }
@@ -2480,6 +2564,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if req.SessionID == "" {
 		req.SessionID = uuid.NewString()
 	}
+	systemPrompt := strings.TrimSpace(req.SystemPrompt)
+	if systemPrompt == "" {
+		systemPrompt = agent.DefaultSystemPrompt()
+	}
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
@@ -2491,7 +2579,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.unregisterActiveRun(req.SessionID, token)
 		cancel()
 	}()
-	res, err := s.Engine.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
+	res, err := s.Engine.Run(ctx, req.SessionID, req.Message, systemPrompt, history)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			writeAPIError(w, http.StatusConflict, "cancelled", "request cancelled")
@@ -2540,6 +2628,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if req.SessionID == "" {
 		req.SessionID = uuid.NewString()
 	}
+	systemPrompt := strings.TrimSpace(req.SystemPrompt)
+	if systemPrompt == "" {
+		systemPrompt = agent.DefaultSystemPrompt()
+	}
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
@@ -2574,7 +2666,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		res, err := eng.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
+		res, err := eng.Run(ctx, req.SessionID, req.Message, systemPrompt, history)
 		done <- runResponse{Result: res, Err: err}
 	}()
 
@@ -2738,6 +2830,10 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 	if req.SessionID == "" {
 		req.SessionID = uuid.NewString()
 	}
+	systemPrompt := strings.TrimSpace(req.SystemPrompt)
+	if systemPrompt == "" {
+		systemPrompt = agent.DefaultSystemPrompt()
+	}
 
 	history, err := s.loadHistory(req.SessionID)
 	if err != nil {
@@ -2775,7 +2871,7 @@ func (s *Server) handleChatWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		res, runErr := eng.Run(ctx, req.SessionID, req.Message, agent.DefaultSystemPrompt(), history)
+		res, runErr := eng.Run(ctx, req.SessionID, req.Message, systemPrompt, history)
 		done <- runResponse{Result: res, Err: runErr}
 	}()
 

@@ -320,7 +320,16 @@ func (m *tuiModel) applyCompletion() {
 		m.resetCompletion()
 		return
 	}
-	if m.compBase != base || len(m.compItems) == 0 {
+	keepCycle := false
+	if len(m.compItems) > 0 {
+		for _, item := range m.compItems {
+			if item == base {
+				keepCycle = true
+				break
+			}
+		}
+	}
+	if !keepCycle && (m.compBase != base || len(m.compItems) == 0) {
 		m.compBase = base
 		m.compItems = slashCompletions(base)
 		m.compIndex = 0

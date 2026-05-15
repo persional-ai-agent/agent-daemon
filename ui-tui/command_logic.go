@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -644,6 +645,43 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/session":
 			emit("session: " + s.session)
 			s.setStatus(true, "ok", "session shown")
+		case current == "/new" || strings.HasPrefix(current, "/new "):
+			parts := strings.Fields(current)
+			nextID := uuid.NewString()
+			if len(parts) > 2 {
+				return lines, fmt.Errorf("用法: /new [session_id]"), false
+			}
+			if len(parts) == 2 {
+				nextID = strings.TrimSpace(parts[1])
+				if nextID == "" {
+					return lines, fmt.Errorf("用法: /new [session_id]"), false
+				}
+			}
+			s.session = nextID
+			s.lastShowSession = s.session
+			s.lastShowOffset = 0
+			_ = s.saveRuntimeState()
+			emit("session switched: " + s.session)
+			s.setStatus(true, "ok", "new session created")
+		case current == "/reset" || strings.HasPrefix(current, "/reset "):
+			parts := strings.Fields(current)
+			nextID := uuid.NewString()
+			if len(parts) > 2 {
+				return lines, fmt.Errorf("用法: /reset [session_id]"), false
+			}
+			if len(parts) == 2 {
+				nextID = strings.TrimSpace(parts[1])
+				if nextID == "" {
+					return lines, fmt.Errorf("用法: /reset [session_id]"), false
+				}
+			}
+			s.session = nextID
+			s.lastShowSession = s.session
+			s.lastShowOffset = 0
+			s.chatLog = s.chatLog[:0]
+			_ = s.saveRuntimeState()
+			emit("session reset: " + s.session)
+			s.setStatus(true, "ok", "session reset")
 		case strings.HasPrefix(current, "/session "):
 			next := strings.TrimSpace(strings.TrimPrefix(current, "/session "))
 			if next == "" {
@@ -899,6 +937,61 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "stats", "result"))
 			s.setStatus(true, "ok", "stats loaded")
+		case current == "/usage" || strings.HasPrefix(current, "/usage "):
+			sid, pErr := parseStatsArgs(strings.Replace(current, "/usage", "/stats", 1), s.session)
+			if pErr != nil {
+				return lines, fmt.Errorf("用法: /usage [session]"), false
+			}
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			stats := uiPayload(out, "stats", "result")
+			emitData(map[string]any{"session_id": sid, "usage": stats})
+			s.setStatus(true, "ok", "usage loaded")
+		case current == "/undo":
+			out, uErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/sessions/undo", map[string]any{"session_id": s.session})
+			if uErr != nil {
+				s.setErrStatus(uErr)
+				return lines, uErr, false
+			}
+			result, _ := uiPayload(out, "result").(map[string]any)
+			if sid, _ := result["new_session_id"].(string); strings.TrimSpace(sid) != "" {
+				s.session = strings.TrimSpace(sid)
+				s.lastShowSession = s.session
+				s.lastShowOffset = 0
+				_ = s.saveRuntimeState()
+				emit("session switched: " + s.session)
+			}
+			emitData(result)
+			s.setStatus(true, "ok", "undo applied")
+		case current == "/retry":
+			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=500", s.httpBase, url.PathEscape(s.session)), nil)
+			if hErr != nil {
+				s.setErrStatus(hErr)
+				return lines, hErr, false
+			}
+			msgs, _ := out["messages"].([]any)
+			lastUser := ""
+			for i := len(msgs) - 1; i >= 0; i-- {
+				m, _ := msgs[i].(map[string]any)
+				role, _ := m["role"].(string)
+				if role != "user" {
+					continue
+				}
+				text, _ := m["content"].(string)
+				lastUser = strings.TrimSpace(text)
+				if lastUser != "" {
+					break
+				}
+			}
+			if lastUser == "" {
+				return lines, fmt.Errorf("没有可重试的上一条用户消息"), false
+			}
+			queue = append([]string{"/undo", lastUser}, queue...)
+			emit("retry queued")
+			s.setStatus(true, "ok", "retry queued")
 		case current == "/targets" || strings.HasPrefix(current, "/targets "):
 			parts := strings.Fields(current)
 			apiPath := s.httpBase + "/v1/ui/targets"
@@ -1028,6 +1121,64 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				continue
 			}
 			return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
+		case current == "/skills":
+			out, skErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/skills", nil)
+			if skErr != nil {
+				s.setErrStatus(skErr)
+				return lines, skErr, false
+			}
+			emitData(uiPayload(out, "skills", "result"))
+			s.setStatus(true, "ok", "skills listed")
+		case current == "/model":
+			out, mErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/model", nil)
+			if mErr != nil {
+				s.setErrStatus(mErr)
+				return lines, mErr, false
+			}
+			emitData(uiPayload(out, "model", "result"))
+			s.setStatus(true, "ok", "model shown")
+		case strings.HasPrefix(current, "/model "):
+			spec := strings.TrimSpace(strings.TrimPrefix(current, "/model "))
+			if spec == "" {
+				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+			}
+			if !strings.Contains(spec, ":") {
+				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+			}
+			parts := strings.SplitN(spec, ":", 2)
+			provider := strings.ToLower(strings.TrimSpace(parts[0]))
+			model := strings.TrimSpace(parts[1])
+			if provider == "" || model == "" {
+				return lines, fmt.Errorf("用法: /model [provider:model]"), false
+			}
+			out, mErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/model/set", map[string]any{
+				"provider": provider,
+				"model":    model,
+			})
+			if mErr != nil {
+				s.setErrStatus(mErr)
+				return lines, mErr, false
+			}
+			emitData(uiPayload(out, "result"))
+			s.setStatus(true, "ok", "model updated")
+		case current == "/personality" || strings.EqualFold(current, "/personality show"):
+			emitData(map[string]any{"system_prompt": s.systemPrompt})
+			s.setStatus(true, "ok", "personality shown")
+		case strings.EqualFold(current, "/personality reset"):
+			s.systemPrompt = agent.DefaultSystemPrompt()
+			emitData(map[string]any{"reset": true, "system_prompt": s.systemPrompt})
+			s.setStatus(true, "ok", "personality reset")
+		case strings.HasPrefix(current, "/personality "):
+			next := strings.TrimSpace(strings.TrimPrefix(current, "/personality "))
+			if next == "" {
+				return lines, fmt.Errorf("用法: /personality [show|reset|<text>]"), false
+			}
+			if strings.EqualFold(next, "show") || strings.EqualFold(next, "reset") {
+				return lines, fmt.Errorf("用法: /personality [show|reset|<text>]"), false
+			}
+			s.systemPrompt = next
+			emitData(map[string]any{"updated": true, "system_prompt": s.systemPrompt})
+			s.setStatus(true, "ok", "personality updated")
 		default:
 			s.addChatLine("user: " + current)
 			if onEvent == nil {

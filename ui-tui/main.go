@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	appconfig "github.com/dingjingmaster/agent-daemon/internal/config"
 	"github.com/dingjingmaster/agent-daemon/internal/slashcmd"
 	"github.com/google/uuid"
@@ -73,9 +74,10 @@ type doctorItem struct {
 }
 
 type appState struct {
-	wsBase   string
-	httpBase string
-	session  string
+	wsBase       string
+	httpBase     string
+	session      string
+	systemPrompt string
 
 	pretty bool
 
@@ -187,6 +189,7 @@ func newState() *appState {
 		wsBase:           wsBase,
 		httpBase:         httpBase,
 		session:          session,
+		systemPrompt:     agent.DefaultSystemPrompt(),
 		pretty:           true,
 		lastStatus:       "ok",
 		lastDetail:       "initialized",
@@ -1372,6 +1375,9 @@ func (s *appState) sendTurn(message string, onEvent func(map[string]any)) error 
 			"message":    message,
 			"turn_id":    turnID,
 			"resume":     attempt > 0,
+		}
+		if strings.TrimSpace(s.systemPrompt) != "" {
+			req["system_prompt"] = s.systemPrompt
 		}
 		if err := conn.WriteJSON(req); err != nil {
 			reconnectReason = err.Error()

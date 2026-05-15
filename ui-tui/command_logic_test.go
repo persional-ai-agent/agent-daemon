@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestParseOptionalPositiveIntArg(t *testing.T) {
@@ -716,6 +718,145 @@ func TestTargetsAndSetHomeCommands(t *testing.T) {
 	}
 	if got, _ := lastBody["chat_id"].(string); got != "2002" {
 		t.Fatalf("unexpected chat_id in body: %+v", lastBody)
+	}
+}
+
+func TestNewResetUsageUndoRetrySkillsModelPersonalityCommands(t *testing.T) {
+	lastMethod := ""
+	lastPath := ""
+	lastBody := map[string]any{}
+	undoCalls := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastMethod = r.Method
+		lastPath = r.URL.String()
+		switch r.URL.Path {
+		case "/v1/ui/sessions/s1":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":       true,
+				"messages": []map[string]any{{"role": "user", "content": "hello"}},
+				"stats":    map[string]any{"total_messages": 1},
+			})
+		case "/v1/ui/sessions/undo":
+			undoCalls++
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":     true,
+				"result": map[string]any{"new_session_id": "s2", "undone": true, "removed_messages": 1},
+			})
+		case "/v1/ui/skills":
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "skills": []map[string]any{{"name": "skill-a"}}})
+		case "/v1/ui/model":
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "model": map[string]any{"provider": "openai", "model": "gpt-5"}})
+		case "/v1/ui/model/set":
+			_ = json.NewDecoder(r.Body).Decode(&lastBody)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"provider": "openai", "model": "gpt-5-mini"}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+	wsUpgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := wsUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Fatalf("upgrade: %v", err)
+		}
+		defer conn.Close()
+		var req map[string]any
+		if err := conn.ReadJSON(&req); err != nil {
+			t.Fatalf("read req: %v", err)
+		}
+		_ = conn.WriteJSON(map[string]any{"type": "session", "session_id": req["session_id"]})
+		_ = conn.WriteJSON(map[string]any{"type": "result", "final_response": "ok"})
+	}))
+	defer wsServer.Close()
+	wsURL := "ws" + strings.TrimPrefix(wsServer.URL, "http")
+
+	s := &appState{
+		httpBase:         ts.URL,
+		wsBase:           wsURL,
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+		systemPrompt:     "base-prompt",
+	}
+
+	if _, err, _ := handleTUICommand(s, "/new s-new", nil, nil); err != nil {
+		t.Fatalf("/new failed: %v", err)
+	}
+	if s.session != "s-new" {
+		t.Fatalf("session=%q", s.session)
+	}
+	if _, err, _ := handleTUICommand(s, "/reset s-reset", nil, nil); err != nil {
+		t.Fatalf("/reset failed: %v", err)
+	}
+	if s.session != "s-reset" {
+		t.Fatalf("session=%q", s.session)
+	}
+	s.session = "s1"
+
+	if _, err, _ := handleTUICommand(s, "/usage s1", nil, nil); err != nil {
+		t.Fatalf("/usage failed: %v", err)
+	}
+	if lastPath != "/v1/ui/sessions/s1?offset=0&limit=1" {
+		t.Fatalf("unexpected usage request path: %s", lastPath)
+	}
+	if _, err, _ := handleTUICommand(s, "/undo", nil, nil); err != nil {
+		t.Fatalf("/undo failed: %v", err)
+	}
+	if undoCalls != 1 {
+		t.Fatalf("undoCalls=%d", undoCalls)
+	}
+	if s.session != "s2" {
+		t.Fatalf("session after undo=%q", s.session)
+	}
+
+	s.session = "s1"
+	if _, err, _ := handleTUICommand(s, "/retry", nil, nil); err != nil {
+		t.Fatalf("/retry failed: %v", err)
+	}
+	if undoCalls != 2 {
+		t.Fatalf("retry should trigger undo, undoCalls=%d", undoCalls)
+	}
+
+	if _, err, _ := handleTUICommand(s, "/skills", nil, nil); err != nil {
+		t.Fatalf("/skills failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/model", nil, nil); err != nil {
+		t.Fatalf("/model failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/model openai:gpt-5-mini", nil, nil); err != nil {
+		t.Fatalf("/model set failed: %v", err)
+	}
+	if lastMethod != http.MethodPost || lastPath != "/v1/ui/model/set" {
+		t.Fatalf("unexpected model set request: %s %s", lastMethod, lastPath)
+	}
+	if got, _ := lastBody["provider"].(string); got != "openai" {
+		t.Fatalf("unexpected provider in body: %+v", lastBody)
+	}
+	if got, _ := lastBody["model"].(string); got != "gpt-5-mini" {
+		t.Fatalf("unexpected model in body: %+v", lastBody)
+	}
+
+	if _, err, _ := handleTUICommand(s, "/personality show", nil, nil); err != nil {
+		t.Fatalf("/personality show failed: %v", err)
+	}
+	if _, err, _ := handleTUICommand(s, "/personality custom", nil, nil); err != nil {
+		t.Fatalf("/personality set failed: %v", err)
+	}
+	if s.systemPrompt != "custom" {
+		t.Fatalf("systemPrompt=%q", s.systemPrompt)
+	}
+	if _, err, _ := handleTUICommand(s, "/personality reset", nil, nil); err != nil {
+		t.Fatalf("/personality reset failed: %v", err)
+	}
+	if strings.TrimSpace(s.systemPrompt) == "" {
+		t.Fatal("expected non-empty default system prompt after reset")
 	}
 }
 
