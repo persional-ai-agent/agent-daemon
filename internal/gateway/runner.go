@@ -337,31 +337,6 @@ func (r *Runner) resolveMappedSessionID(platformName, userID, userName string) s
 	return ""
 }
 
-func parseGatewayModelSpec(args []string) (provider, modelName string, ok bool) {
-	if len(args) == 1 {
-		spec := strings.TrimSpace(args[0])
-		parts := strings.SplitN(spec, ":", 2)
-		if len(parts) != 2 {
-			return "", "", false
-		}
-		provider = strings.ToLower(strings.TrimSpace(parts[0]))
-		modelName = strings.TrimSpace(parts[1])
-		if provider == "" || modelName == "" {
-			return "", "", false
-		}
-		return provider, modelName, true
-	}
-	if len(args) == 2 {
-		provider = strings.ToLower(strings.TrimSpace(args[0]))
-		modelName = strings.TrimSpace(args[1])
-		if provider == "" || modelName == "" {
-			return "", "", false
-		}
-		return provider, modelName, true
-	}
-	return "", "", false
-}
-
 func (r *Runner) continuityMode() string {
 	if r == nil || r.engine == nil {
 		return "off"
@@ -1081,23 +1056,23 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
 			}
 			if len(parsed.args) > 0 {
-				nextProvider, nextModel, ok := parseGatewayModelSpec(parsed.args)
-				if !ok {
+				next, pErr := tools.ParseGatewayModelSpecArgs(parsed.args)
+				if pErr != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "Usage: /model [provider:model|provider model]", event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
-				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_provider", nextProvider); err != nil {
+				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_provider", next.Provider); err != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
-				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_name", nextModel); err != nil {
+				if err := tools.SetGatewaySetting(w.engine.Workdir, "model_name", next.Model); err != nil {
 					_, _ = w.sendText(ctx, event.ChatID, "_Model update failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/model"})
 					return
 				}
-				_ = os.Setenv("AGENT_MODEL_PROVIDER", nextProvider)
-				_ = os.Setenv("AGENT_MODEL", nextModel)
-				provider = nextProvider
-				modelName = nextModel
+				_ = os.Setenv("AGENT_MODEL_PROVIDER", next.Provider)
+				_ = os.Setenv("AGENT_MODEL", next.Model)
+				provider = next.Provider
+				modelName = next.Model
 				reply := "_Model preference updated: " + escapeMarkdown(provider) + ":" + escapeMarkdown(modelName) + "_\nTakes effect for newly started daemon/model client."
 				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "updated": true})
 				return

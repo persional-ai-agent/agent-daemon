@@ -527,23 +527,23 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			baseURL = strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
 		}
 		if len(fields) > 1 {
-			nextProvider, nextModel, ok := parseCLIModelSpec(fields[1:])
-			if !ok {
+			next, parseErr := clitools.ParseGatewayModelSpecArgs(fields[1:])
+			if parseErr != nil {
 				printCLIEnvelope(false, nil, "invalid_argument", "用法: /model [provider:model|provider model]")
 				return true, nil
 			}
-			if err := clitools.SetGatewaySetting(eng.Workdir, "model_provider", nextProvider); err != nil {
+			if err := clitools.SetGatewaySetting(eng.Workdir, "model_provider", next.Provider); err != nil {
 				return true, err
 			}
-			if err := clitools.SetGatewaySetting(eng.Workdir, "model_name", nextModel); err != nil {
+			if err := clitools.SetGatewaySetting(eng.Workdir, "model_name", next.Model); err != nil {
 				return true, err
 			}
-			_ = os.Setenv("AGENT_MODEL_PROVIDER", nextProvider)
-			_ = os.Setenv("AGENT_MODEL", nextModel)
+			_ = os.Setenv("AGENT_MODEL_PROVIDER", next.Provider)
+			_ = os.Setenv("AGENT_MODEL", next.Model)
 			printCLIEnvelope(true, map[string]any{
 				"updated":  true,
-				"provider": nextProvider,
-				"model":    nextModel,
+				"provider": next.Provider,
+				"model":    next.Model,
 				"note":     "model preference updated; takes effect for newly started daemon/model client",
 			}, "", "")
 			return true, nil
@@ -790,31 +790,6 @@ func compactHistory(history []core.Message, tail int) ([]core.Message, map[strin
 	next = append(next, core.Message{Role: "assistant", Content: "[Context summary created by /compress]\n" + summary})
 	next = append(next, core.CloneMessages(recent)...)
 	return next, map[string]any{"compacted": true, "before": len(history), "after": len(next), "summarized_messages": len(head), "tail_messages": tail}
-}
-
-func parseCLIModelSpec(args []string) (provider, modelName string, ok bool) {
-	if len(args) == 1 {
-		spec := strings.TrimSpace(args[0])
-		parts := strings.SplitN(spec, ":", 2)
-		if len(parts) != 2 {
-			return "", "", false
-		}
-		provider = strings.ToLower(strings.TrimSpace(parts[0]))
-		modelName = strings.TrimSpace(parts[1])
-		if provider == "" || modelName == "" {
-			return "", "", false
-		}
-		return provider, modelName, true
-	}
-	if len(args) == 2 {
-		provider = strings.ToLower(strings.TrimSpace(args[0]))
-		modelName = strings.TrimSpace(args[1])
-		if provider == "" || modelName == "" {
-			return "", "", false
-		}
-		return provider, modelName, true
-	}
-	return "", "", false
 }
 
 func summarizeForCLI(messages []core.Message, budget int) string {

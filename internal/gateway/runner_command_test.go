@@ -328,18 +328,18 @@ func TestAutoGlobalIdentity(t *testing.T) {
 }
 
 func TestParseGatewayModelSpec(t *testing.T) {
-	p, m, ok := parseGatewayModelSpec([]string{"openai:gpt-5"})
-	if !ok || p != "openai" || m != "gpt-5" {
-		t.Fatalf("unexpected parse result: p=%q m=%q ok=%v", p, m, ok)
+	spec, err := tools.ParseGatewayModelSpecArgs([]string{"openai:gpt-5"})
+	if err != nil || spec.Provider != "openai" || spec.Model != "gpt-5" {
+		t.Fatalf("unexpected parse result: spec=%+v err=%v", spec, err)
 	}
-	p, m, ok = parseGatewayModelSpec([]string{"codex", "gpt-5-codex"})
-	if !ok || p != "codex" || m != "gpt-5-codex" {
-		t.Fatalf("unexpected parse result: p=%q m=%q ok=%v", p, m, ok)
+	spec, err = tools.ParseGatewayModelSpecArgs([]string{"codex", "gpt-5-codex"})
+	if err != nil || spec.Provider != "codex" || spec.Model != "gpt-5-codex" {
+		t.Fatalf("unexpected parse result: spec=%+v err=%v", spec, err)
 	}
-	if _, _, ok = parseGatewayModelSpec([]string{"invalid"}); ok {
+	if _, err = tools.ParseGatewayModelSpecArgs([]string{"invalid"}); err == nil {
 		t.Fatal("expected invalid parse for single token without colon")
 	}
-	if _, _, ok = parseGatewayModelSpec([]string{"", "x"}); ok {
+	if _, err = tools.ParseGatewayModelSpecArgs([]string{"", "x"}); err == nil {
 		t.Fatal("expected invalid parse for empty provider")
 	}
 }

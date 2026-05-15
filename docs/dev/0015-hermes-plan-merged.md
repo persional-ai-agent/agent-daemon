@@ -142,6 +142,7 @@
 - 已将 `/whoami`、`/setid`、`/unsetid`（含 gateway 内 `/setid`）参数解析统一到 `internal/tools`，三端共享同一 identity 参数校验规则。
 - 已将 `/continuity` 更新参数归一化到 `internal/tools.ParseGatewayContinuityModeArg`，CLI/TUI/Gateway 三端共享同一 mode 校验与别名归一（`id/name` -> `user_id/user_name`）。
 - 已统一 continuity 读取语义到 `internal/tools.ResolveGatewayContinuityMode`（环境变量 `AGENT_GATEWAY_CONTINUITY` 优先，配置文件兜底），并接入 CLI/API/Gateway/session-resolve，消除展示与路由分歧。
+- 已将 `/model` 参数解析统一到 `internal/tools.ParseGatewayModelSpecArgs`，CLI/TUI/Gateway 共用同一 `provider:model` / `provider model` 解析与校验路径。
 
 范围：
 

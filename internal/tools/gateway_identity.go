@@ -48,6 +48,11 @@ type GatewaySetIdentityArgs struct {
 	GlobalID string
 }
 
+type GatewayModelSpec struct {
+	Provider string
+	Model    string
+}
+
 var gatewayIdentityMu sync.Mutex
 
 func NormalizeContinuityMode(raw string) string {
@@ -315,4 +320,33 @@ func ParseGatewayContinuityModeArg(args []string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid continuity mode")
 	}
+}
+
+func ParseGatewayModelSpecArgs(args []string) (GatewayModelSpec, error) {
+	if len(args) == 1 {
+		spec := strings.TrimSpace(args[0])
+		parts := strings.SplitN(spec, ":", 2)
+		if len(parts) != 2 {
+			return GatewayModelSpec{}, fmt.Errorf("invalid model spec")
+		}
+		out := GatewayModelSpec{
+			Provider: strings.ToLower(strings.TrimSpace(parts[0])),
+			Model:    strings.TrimSpace(parts[1]),
+		}
+		if out.Provider == "" || out.Model == "" {
+			return GatewayModelSpec{}, fmt.Errorf("invalid model spec")
+		}
+		return out, nil
+	}
+	if len(args) == 2 {
+		out := GatewayModelSpec{
+			Provider: strings.ToLower(strings.TrimSpace(args[0])),
+			Model:    strings.TrimSpace(args[1]),
+		}
+		if out.Provider == "" || out.Model == "" {
+			return GatewayModelSpec{}, fmt.Errorf("invalid model spec")
+		}
+		return out, nil
+	}
+	return GatewayModelSpec{}, fmt.Errorf("invalid model spec")
 }

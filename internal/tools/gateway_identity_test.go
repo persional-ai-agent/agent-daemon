@@ -117,3 +117,17 @@ func TestParseGatewayContinuityModeArg(t *testing.T) {
 		t.Fatal("expected invalid continuity arg length")
 	}
 }
+
+func TestParseGatewayModelSpecArgs(t *testing.T) {
+	got, err := ParseGatewayModelSpecArgs([]string{"openai:gpt-5"})
+	if err != nil || got.Provider != "openai" || got.Model != "gpt-5" {
+		t.Fatalf("unexpected one-arg model parse: %+v err=%v", got, err)
+	}
+	got, err = ParseGatewayModelSpecArgs([]string{"OpenAI", "gpt-5.1"})
+	if err != nil || got.Provider != "openai" || got.Model != "gpt-5.1" {
+		t.Fatalf("unexpected two-arg model parse: %+v err=%v", got, err)
+	}
+	if _, err := ParseGatewayModelSpecArgs([]string{"openai"}); err == nil {
+		t.Fatal("expected invalid one-arg model parse")
+	}
+}
