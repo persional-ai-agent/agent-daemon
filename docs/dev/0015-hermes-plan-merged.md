@@ -133,6 +133,11 @@
 
 - 让同一 slash 命令在 CLI、TUI、Gateway 中行为一致。
 
+最新进展（2026-05-15）：
+
+- 已将 gateway identity/session resolve 连同 CLI/API/Gateway 三端统一到 `internal/tools/gateway_identity.go`，消除三套 continuity/global-id 解析漂移。
+- Gateway `identity_store` 已改为复用 `internal/tools` 的持久化读写能力；`runner` 的 `/resolve` 已复用同一 resolve 结果结构。
+
 范围：
 
 - `internal/cli/`

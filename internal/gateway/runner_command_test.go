@@ -11,6 +11,7 @@ import (
 
 	"github.com/dingjingmaster/agent-daemon/internal/agent"
 	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 type gatewayStatusStoreStub struct{}
@@ -315,13 +316,13 @@ func TestRenderGatewayTargets(t *testing.T) {
 }
 
 func TestAutoGlobalIdentity(t *testing.T) {
-	if got := autoGlobalIdentity("off", "u1", "Alice"); got != "" {
+	if got := tools.AutoGlobalIdentity("off", "u1", "Alice"); got != "" {
 		t.Fatalf("off mode should not map, got=%q", got)
 	}
-	if got := autoGlobalIdentity("user_id", "u1", "Alice"); got != "uid:u1" {
+	if got := tools.AutoGlobalIdentity("user_id", "u1", "Alice"); got != "uid:u1" {
 		t.Fatalf("user_id mode mismatch: %q", got)
 	}
-	if got := autoGlobalIdentity("user_name", "u1", "Alice Bob"); got != "uname:alice_bob" {
+	if got := tools.AutoGlobalIdentity("user_name", "u1", "Alice Bob"); got != "uname:alice_bob" {
 		t.Fatalf("user_name mode mismatch: %q", got)
 	}
 }
@@ -345,7 +346,8 @@ func TestParseGatewayModelSpec(t *testing.T) {
 
 func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
 	t.Setenv("AGENT_GATEWAY_CONTINUITY", "user_id")
-	r := &Runner{identityStore: newIdentityStore(t.TempDir())}
+	workdir := t.TempDir()
+	r := &Runner{identityStore: newIdentityStore(workdir), engine: &agent.Engine{Workdir: workdir}}
 	got := r.resolveMappedSessionID("telegram", "u9", "Alice")
 	want := BuildSessionKey("global", "user", "uid:u9")
 	if got != want {
@@ -354,13 +356,13 @@ func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
 }
 
 func TestContinuityModeFromRaw(t *testing.T) {
-	if got := continuityModeFromRaw("name"); got != "user_name" {
+	if got := tools.NormalizeContinuityMode("name"); got != "user_name" {
 		t.Fatalf("name alias mismatch: %q", got)
 	}
-	if got := continuityModeFromRaw("id"); got != "user_id" {
+	if got := tools.NormalizeContinuityMode("id"); got != "user_id" {
 		t.Fatalf("id alias mismatch: %q", got)
 	}
-	if got := continuityModeFromRaw("xxx"); got != "off" {
+	if got := tools.NormalizeContinuityMode("xxx"); got != "off" {
 		t.Fatalf("unknown alias should be off: %q", got)
 	}
 }

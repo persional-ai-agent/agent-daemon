@@ -324,29 +324,17 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 }
 
 func (r *Runner) resolveMappedSessionID(platformName, userID, userName string) string {
-	if r == nil || r.identityStore == nil {
+	if r == nil || r.engine == nil {
 		return ""
 	}
-	globalID, err := r.identityStore.resolve(platformName, userID)
+	globalID, err := tools.ResolveGatewayIdentity(r.engine.Workdir, platformName, userID)
 	if err == nil && strings.TrimSpace(globalID) != "" {
 		return BuildSessionKey("global", "user", globalID)
 	}
-	if auto := autoGlobalIdentity(r.continuityMode(), userID, userName); strings.TrimSpace(auto) != "" {
+	if auto := tools.AutoGlobalIdentity(r.continuityMode(), userID, userName); strings.TrimSpace(auto) != "" {
 		return BuildSessionKey("global", "user", auto)
 	}
 	return ""
-}
-
-func continuityModeFromRaw(raw string) string {
-	mode := strings.ToLower(strings.TrimSpace(raw))
-	switch mode {
-	case "user_id", "userid", "id":
-		return "user_id"
-	case "user_name", "username", "name":
-		return "user_name"
-	default:
-		return "off"
-	}
 }
 
 func parseGatewayModelSpec(args []string) (provider, modelName string, ok bool) {
@@ -376,7 +364,7 @@ func parseGatewayModelSpec(args []string) (provider, modelName string, ok bool) 
 
 func continuityMode() string {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
-	return continuityModeFromRaw(mode)
+	return tools.NormalizeContinuityMode(mode)
 }
 
 func (r *Runner) continuityMode() string {
@@ -388,28 +376,9 @@ func (r *Runner) continuityMode() string {
 		return "off"
 	}
 	if v, err := tools.GetGatewaySetting(r.engine.Workdir, "continuity_mode"); err == nil {
-		return continuityModeFromRaw(v)
+		return tools.NormalizeContinuityMode(v)
 	}
 	return "off"
-}
-
-func autoGlobalIdentity(mode, userID, userName string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "user_id":
-		if strings.TrimSpace(userID) == "" {
-			return ""
-		}
-		return "uid:" + strings.TrimSpace(userID)
-	case "user_name":
-		n := strings.ToLower(strings.TrimSpace(userName))
-		n = strings.ReplaceAll(n, " ", "_")
-		if n == "" {
-			return ""
-		}
-		return "uname:" + n
-	default:
-		return ""
-	}
 }
 
 func (w *sessionWorker) run(parent context.Context) {
@@ -506,7 +475,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if w.runner != nil {
 				mode = w.runner.continuityMode()
 			}
-			autoID := autoGlobalIdentity(mode, event.UserID, event.UserName)
+			autoID := tools.AutoGlobalIdentity(mode, event.UserID, event.UserName)
 			reply := "platform=" + w.adapter.Name() + "\nuser_id=" + event.UserID + "\nuser_name=" + event.UserName + "\nactive_session=" + w.currentSessionID()
 			if globalID != "" {
 				reply += "\nglobal_id=" + globalID
@@ -542,31 +511,17 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resolve [platform chat_type chat_id user_id [user_name]]", event.MessageID, map[string]any{"slash": "/resolve"})
 				return
 			}
-			mode := "off"
-			if w.runner != nil {
-				mode = w.runner.continuityMode()
+			resolved, err := tools.ResolveGatewaySessionMapping(w.engine.Workdir, resolvePlatform, resolveChatType, resolveChatID, resolveUserID, resolveUserName)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Resolve failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resolve"})
+				return
 			}
-			globalID := ""
-			globalSource := "none"
-			if w.runner != nil && w.runner.identityStore != nil {
-				if v, err := w.runner.identityStore.resolve(resolvePlatform, resolveUserID); err == nil && strings.TrimSpace(v) != "" {
-					globalID = strings.TrimSpace(v)
-					globalSource = "mapped"
-				}
-			}
-			if strings.TrimSpace(globalID) == "" {
-				if autoID := autoGlobalIdentity(mode, resolveUserID, resolveUserName); strings.TrimSpace(autoID) != "" {
-					globalID = autoID
-					globalSource = "auto"
-				}
-			}
-			routeSession := BuildSessionKey(resolvePlatform, resolveChatType, resolveChatID)
-			mappedSession := ""
-			resolvedSession := routeSession
-			if strings.TrimSpace(globalID) != "" {
-				mappedSession = BuildSessionKey("global", "user", globalID)
-				resolvedSession = mappedSession
-			}
+			mode := resolved.ContinuityMode
+			globalID := resolved.GlobalID
+			globalSource := resolved.GlobalSource
+			routeSession := resolved.RouteSession
+			mappedSession := resolved.MappedSession
+			resolvedSession := resolved.ResolvedSession
 			reply := "platform=" + resolvePlatform +
 				"\nchat_type=" + resolveChatType +
 				"\nchat_id=" + resolveChatID +
@@ -605,7 +560,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
 				return
 			}
-			mode := continuityModeFromRaw(parsed.args[0])
+			mode := tools.NormalizeContinuityMode(parsed.args[0])
 			_ = os.Setenv("AGENT_GATEWAY_CONTINUITY", mode)
 			if w.runner != nil && w.runner.engine != nil {
 				_ = tools.SetGatewaySetting(w.runner.engine.Workdir, "continuity_mode", mode)
