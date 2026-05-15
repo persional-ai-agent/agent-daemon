@@ -663,6 +663,28 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.setLastUserInput(latestUserInputFromMessages(msgs))
 			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, map[string]any{"slash": "/reload", "session_id": active, "messages": len(msgs)})
 			return
+		case "/save":
+			if len(parsed.args) > 1 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /save [path]", event.MessageID, map[string]any{"slash": "/save"})
+				return
+			}
+			active := w.currentSessionID()
+			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Save failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/save"})
+				return
+			}
+			requested := ""
+			if len(parsed.args) == 1 {
+				requested = strings.TrimSpace(parsed.args[0])
+			}
+			path, err := saveGatewayHistory(w.engine.Workdir, active, msgs, requested)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Save failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/save"})
+				return
+			}
+			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, map[string]any{"slash": "/save", "session_id": active, "path": path, "messages": len(msgs)})
+			return
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
@@ -1244,6 +1266,48 @@ func renderGatewaySessions(activeSessionID string, items []map[string]any) strin
 		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func saveGatewayHistory(workdir, sessionID string, history []core.Message, requested string) (string, error) {
+	path := strings.TrimSpace(requested)
+	if path == "" {
+		path = filepath.Join(".agent-daemon", "gateway-exports", "gateway-session-"+safeGatewayFilePart(sessionID)+"-"+time.Now().Format("20060102-150405")+".json")
+	}
+	if !filepath.IsAbs(path) {
+		base := strings.TrimSpace(workdir)
+		if base == "" {
+			base = "."
+		}
+		path = filepath.Join(base, path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	payload := map[string]any{"session_id": sessionID, "messages": history}
+	bs, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, bs, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func safeGatewayFilePart(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "session"
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 func withTail(parts []string) string {

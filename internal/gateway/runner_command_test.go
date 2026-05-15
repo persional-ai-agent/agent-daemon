@@ -2,7 +2,10 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -138,6 +141,9 @@ func TestNormalizeGatewayCommandNonYuanbao(t *testing.T) {
 	}
 	if got := normalizeGatewayCommand("slack", "/RELOAD"); got != "/reload" {
 		t.Fatalf("slash command should normalize reload, got=%q", got)
+	}
+	if got := normalizeGatewayCommand("slack", "/SAVE out.json"); got != "/save out.json" {
+		t.Fatalf("slash command should normalize save, got=%q", got)
 	}
 	if got := normalizeGatewayCommand("slack", "/COMPRESS 30"); got != "/compress 30" {
 		t.Fatalf("slash command should normalize compress, got=%q", got)
@@ -451,5 +457,38 @@ func TestActivateSessionSyncsCursorAndLastUserInput(t *testing.T) {
 	}
 	if got := w.getLastUserInput(); got != "latest input" {
 		t.Fatalf("last user input mismatch: %q", got)
+	}
+}
+
+func TestSaveGatewayHistory(t *testing.T) {
+	dir := t.TempDir()
+	history := []core.Message{{Role: "user", Content: "hello"}, {Role: "assistant", Content: "world"}}
+	path, err := saveGatewayHistory(dir, "s1", history, "")
+	if err != nil {
+		t.Fatalf("saveGatewayHistory error: %v", err)
+	}
+	if !strings.HasPrefix(path, dir) {
+		t.Fatalf("expected path under temp dir, got %q", path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("saved file missing: %v", err)
+	}
+	bs, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read saved file error: %v", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(bs, &out); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if out["session_id"] != "s1" {
+		t.Fatalf("unexpected session_id: %+v", out)
+	}
+	path2, err := saveGatewayHistory(dir, "s2", history, filepath.Join("exports", "x.json"))
+	if err != nil {
+		t.Fatalf("saveGatewayHistory custom path error: %v", err)
+	}
+	if !strings.HasSuffix(path2, filepath.Join("exports", "x.json")) {
+		t.Fatalf("unexpected custom path: %q", path2)
 	}
 }
