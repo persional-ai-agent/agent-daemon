@@ -538,6 +538,12 @@ func TestReconnectTimeoutCommandCaseInsensitive(t *testing.T) {
 	if s.timeoutAction != "cancel" {
 		t.Fatalf("timeoutAction=%q", s.timeoutAction)
 	}
+	if _, err, _ := handleTUICommand(s, "/reconnect TIMEOUT WAIT", nil, nil); err != nil {
+		t.Fatalf("reconnect TIMEOUT WAIT failed: %v", err)
+	}
+	if s.timeoutAction != "wait" {
+		t.Fatalf("timeoutAction=%q", s.timeoutAction)
+	}
 }
 
 func TestReconnectCommandCaseInsensitiveSubcommands(t *testing.T) {
@@ -565,6 +571,26 @@ func TestReconnectCommandCaseInsensitiveSubcommands(t *testing.T) {
 	}
 	if _, err, _ := handleTUICommand(s, "/reconnect STATUS", nil, nil); err != nil {
 		t.Fatalf("reconnect STATUS failed: %v", err)
+	}
+}
+
+func TestDiagExportCaseInsensitiveSubcommand(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "diag.json")
+	s := &appState{
+		historyPath:      filepath.Join(t.TempDir(), "history.log"),
+		historyMaxLines:  100,
+		eventMaxItems:    100,
+		panelData:        map[string]any{},
+		fullscreenPanel:  "overview",
+		panelRefreshSec:  8,
+		reconnectEnabled: true,
+		session:          "s1",
+	}
+	if _, err, _ := handleTUICommand(s, "/diag EXPORT "+outFile, nil, nil); err != nil {
+		t.Fatalf("diag EXPORT failed: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Fatalf("expected diagnostics file: %v", err)
 	}
 }
 

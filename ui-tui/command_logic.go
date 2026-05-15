@@ -232,8 +232,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/diag":
 			emitData(s.diagnosticsSnapshot())
 			s.setStatus(true, "ok", "diagnostics shown")
-		case current == "/diag export" || strings.HasPrefix(current, "/diag export "):
-			path := strings.TrimSpace(strings.TrimPrefix(current, "/diag export"))
+		case strings.EqualFold(current, "/diag export") || strings.HasPrefix(strings.ToLower(current), "/diag export "):
+			const diagExportPrefix = "/diag export"
+			path := strings.TrimSpace(current[len(diagExportPrefix):])
 			if path == "" {
 				return lines, fmt.Errorf("用法: /diag export <file>"), false
 			}
@@ -262,8 +263,9 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.reconnectState = "connecting"
 			emit("reconnect probe ok")
 			s.setStatus(true, "ok", "reconnect probe ok")
-		case strings.HasPrefix(current, "/reconnect timeout "):
-			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/reconnect timeout ")))
+		case strings.HasPrefix(strings.ToLower(current), "/reconnect timeout "):
+			const reconnectTimeoutPrefix = "/reconnect timeout "
+			mode := strings.ToLower(strings.TrimSpace(current[len(reconnectTimeoutPrefix):]))
 			if mode != "wait" && mode != "reconnect" && mode != "cancel" {
 				return lines, fmt.Errorf("用法: /reconnect timeout wait|reconnect|cancel"), false
 			}
