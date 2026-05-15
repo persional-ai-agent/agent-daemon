@@ -518,9 +518,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		provider := modelPref.Provider
-		modelName := modelPref.Model
-		baseURL := modelPref.BaseURL
+		displayPref := clitools.DisplayGatewayModelPreference(modelPref)
 		if len(fields) > 1 {
 			next, parseErr := clitools.ParseGatewayModelSpecArgs(fields[1:])
 			if parseErr != nil {
@@ -538,16 +536,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			}, "", "")
 			return true, nil
 		}
-		if provider == "" {
-			provider = "openai"
-		}
-		if modelName == "" {
-			modelName = "(default)"
-		}
-		if baseURL == "" {
-			baseURL = "(default)"
-		}
-		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "provider": provider, "model": modelName, "base_url": baseURL}, "", "")
+		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "provider": displayPref.Provider, "model": displayPref.Model, "base_url": displayPref.BaseURL}, "", "")
 		return true, nil
 	case "/personality":
 		if len(fields) == 1 || strings.EqualFold(strings.TrimSpace(fields[1]), "show") {

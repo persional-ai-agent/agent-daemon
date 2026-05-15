@@ -124,3 +124,21 @@ func UpdateGatewayModelPreference(workdir string, spec GatewayModelSpec) error {
 	_ = os.Setenv(GatewayModelNameEnvVar, spec.Model)
 	return nil
 }
+
+func DisplayGatewayModelPreference(pref GatewayModelPreference) GatewayModelPreference {
+	out := GatewayModelPreference{
+		Provider: strings.TrimSpace(pref.Provider),
+		Model:    strings.TrimSpace(pref.Model),
+		BaseURL:  strings.TrimSpace(pref.BaseURL),
+	}
+	if out.Provider == "" {
+		out.Provider = "openai"
+	}
+	if out.Model == "" {
+		out.Model = "(default)"
+	}
+	if out.BaseURL == "" {
+		out.BaseURL = "(default)"
+	}
+	return out
+}

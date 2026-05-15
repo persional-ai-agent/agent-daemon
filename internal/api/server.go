@@ -882,13 +882,26 @@ func (s *Server) handleUIModel(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
-	if s.ModelInfoFn == nil {
-		writeUIError(w, http.StatusNotImplemented, "not_supported", "model info unavailable")
+	pref, err := tools.ResolveGatewayModelPreference(s.engineWorkdir())
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
+	displayPref := tools.DisplayGatewayModelPreference(pref)
+	model := map[string]any{
+		"provider": displayPref.Provider,
+		"model":    displayPref.Model,
+		"base_url": displayPref.BaseURL,
+	}
+	if s.ModelInfoFn != nil {
+		for k, v := range s.ModelInfoFn() {
+			model[k] = v
+		}
+	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":    true,
-		"model": s.ModelInfoFn(),
+		"ok":         true,
+		"model":      model,
+		"preference": displayPref,
 	})
 }
 

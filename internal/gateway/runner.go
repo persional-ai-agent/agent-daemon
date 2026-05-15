@@ -1067,20 +1067,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "updated": true})
 				return
 			}
-			if provider == "" {
-				provider = "openai"
-			}
-			if modelName == "" {
-				modelName = "(default)"
-			}
-			if baseURL == "" {
-				baseURL = "(default)"
-			}
+			displayPref := tools.DisplayGatewayModelPreference(tools.GatewayModelPreference{Provider: provider, Model: modelName, BaseURL: baseURL})
 			reply := "Model client: " + fmt.Sprintf("%T", w.engine.Client) +
-				"\nProvider: " + provider +
-				"\nModel: " + modelName +
-				"\nBase URL: " + baseURL
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "base_url": baseURL})
+				"\nProvider: " + displayPref.Provider +
+				"\nModel: " + displayPref.Model +
+				"\nBase URL: " + displayPref.BaseURL
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/model", "provider": displayPref.Provider, "model": displayPref.Model, "base_url": displayPref.BaseURL})
 			return
 		case "/personality":
 			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {

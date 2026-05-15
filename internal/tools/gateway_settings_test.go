@@ -64,3 +64,10 @@ func TestResolveAndUpdateGatewayModelPreference(t *testing.T) {
 		t.Fatalf("unexpected updated pref: %+v", pref)
 	}
 }
+
+func TestDisplayGatewayModelPreference(t *testing.T) {
+	got := DisplayGatewayModelPreference(GatewayModelPreference{})
+	if got.Provider != "openai" || got.Model != "(default)" || got.BaseURL != "(default)" {
+		t.Fatalf("unexpected default display pref: %+v", got)
+	}
+}

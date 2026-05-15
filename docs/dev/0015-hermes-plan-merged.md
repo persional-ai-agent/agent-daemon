@@ -144,6 +144,7 @@
 - 已统一 continuity 读取语义到 `internal/tools.ResolveGatewayContinuityMode`（环境变量 `AGENT_GATEWAY_CONTINUITY` 优先，配置文件兜底），并接入 CLI/API/Gateway/session-resolve，消除展示与路由分歧。
 - 已将 `/model` 参数解析统一到 `internal/tools.ParseGatewayModelSpecArgs`，CLI/TUI/Gateway 共用同一 `provider:model` / `provider model` 解析与校验路径。
 - 已统一 model 偏好读取/更新到 `internal/tools.ResolveGatewayModelPreference` 与 `UpdateGatewayModelPreference`，CLI/Gateway 共用同一持久化与环境变量同步逻辑。
+- 已统一 model 偏好默认展示策略到 `internal/tools.DisplayGatewayModelPreference`，并让 `/v1/ui/model` 返回 `model + preference`（保留 ModelInfo 输出并追加统一偏好视图）。
 
 范围：
 
