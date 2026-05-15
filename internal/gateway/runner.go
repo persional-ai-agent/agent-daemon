@@ -1871,6 +1871,7 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 
 func (w *sessionWorker) gatewayStatusText() string {
 	activeSessionID := w.currentSessionID()
+	lastUserID := w.getLastUserID()
 	lines := []string{
 		"platform: " + w.adapter.Name(),
 		"route_session: " + w.key,
@@ -1878,11 +1879,16 @@ func (w *sessionWorker) gatewayStatusText() string {
 		"queue: " + itoa(len(w.queue)),
 	}
 	if w.runner != nil {
-		paired := w.runner.isPaired(w.adapter.Name(), w.getLastUserID())
+		paired := w.runner.isPaired(w.adapter.Name(), lastUserID)
 		if paired {
 			lines = append(lines, "paired: yes")
 		} else {
 			lines = append(lines, "paired: no")
+		}
+		mode := w.runner.continuityMode()
+		lines = append(lines, "continuity_mode: "+mode)
+		if mapped := w.runner.resolveMappedSessionID(w.adapter.Name(), lastUserID, ""); strings.TrimSpace(mapped) != "" {
+			lines = append(lines, "mapped_session: "+mapped)
 		}
 	}
 	if statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore); ok && statsStore != nil {

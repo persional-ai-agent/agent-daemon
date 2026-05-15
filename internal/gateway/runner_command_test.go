@@ -508,6 +508,9 @@ func TestGatewayStatusTextUsesLastUserPairingAndStats(t *testing.T) {
 	if !strings.Contains(got, "message_count: 42") {
 		t.Fatalf("expected message_count in status, got: %q", got)
 	}
+	if !strings.Contains(got, "continuity_mode: off") {
+		t.Fatalf("expected continuity mode in status, got: %q", got)
+	}
 	if !strings.Contains(got, "route_session: route:s1") || !strings.Contains(got, "active_session: active:s1") {
 		t.Fatalf("expected route/active session lines, got: %q", got)
 	}
