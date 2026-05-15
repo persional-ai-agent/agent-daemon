@@ -369,6 +369,20 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.setActiveSessionID(next)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
 			return
+		case "/resume":
+			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /resume <session_id>", event.MessageID, map[string]any{"slash": "/resume"})
+				return
+			}
+			target := strings.TrimSpace(parsed.args[0])
+			if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Resume failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/resume"})
+				return
+			}
+			prev := w.currentSessionID()
+			w.setActiveSessionID(target)
+			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
+			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /recover context", event.MessageID, map[string]any{"slash": "/recover"})
