@@ -204,6 +204,17 @@ func TestHandleSlashCommandUsageAndPersonality(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandCancelAndStop(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	if handled, err := handleSlashCommandState(context.Background(), "/cancel", state, eng); err != nil || !handled {
+		t.Fatalf("cancel handled=%v err=%v", handled, err)
+	}
+	if handled, err := handleSlashCommandState(context.Background(), "/stop", state, eng); err != nil || !handled {
+		t.Fatalf("stop handled=%v err=%v", handled, err)
+	}
+}
+
 func TestHandleSlashCommandSetHomeAndTargets(t *testing.T) {
 	workdir := t.TempDir()
 	eng := makeEngineForSlashTests(nil)

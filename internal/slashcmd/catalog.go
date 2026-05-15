@@ -86,6 +86,7 @@ func TUIRootCommands() []string {
 		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
 		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
 		"/reconnect", "/recover", "/diag", "/fullscreen", "/quit", "/exit", "/new", "/reset",
+		"/stop",
 	}
 }
 
@@ -113,6 +114,7 @@ func CLIHelpLines() []string {
 		"/memory [memory|user]         查看持久记忆",
 		"/model                        显示当前模型客户端",
 		"/personality [show|reset|...] 查看或设置会话 system prompt",
+		"/cancel | /stop               取消当前任务（若支持）",
 		"/reload                       从存储重载当前会话",
 		"/clear                        清空当前进程内上下文",
 		"/tui                          显示 CLI/TUI 能力状态",

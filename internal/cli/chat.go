@@ -450,6 +450,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		state.SystemPrompt = strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
 		printCLIEnvelope(true, map[string]any{"updated": true, "system_prompt": state.SystemPrompt}, "", "")
 		return true, nil
+	case "/cancel", "/stop":
+		// Interactive CLI currently has no async running task handle to cancel.
+		printCLIEnvelope(false, nil, "not_supported", "当前 CLI 模式不支持 /cancel；请使用 Ctrl+C 中断当前轮。")
+		return true, nil
 	case "/tui":
 		printTUIStatus(eng)
 		return true, nil

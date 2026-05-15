@@ -39,6 +39,8 @@ func NormalizeInput(text string) string {
 		return "/help"
 	case "/h":
 		return "/help"
+	case "stop", "abort", "/stop", "/abort":
+		return "/cancel"
 	}
 	if strings.HasPrefix(lower, "/gw ") && !strings.HasPrefix(lower, "/gateway ") {
 		return "/gateway " + strings.TrimSpace(text[len("/gw "):])

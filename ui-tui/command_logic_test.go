@@ -787,6 +787,12 @@ func TestCanonicalInputAliasesCaseInsensitive(t *testing.T) {
 	if got := canonicalInput("cfg get"); got != "/config get" {
 		t.Fatalf("cfg alias mismatch: %q", got)
 	}
+	if got := canonicalInput("stop"); got != "/cancel" {
+		t.Fatalf("stop alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/STOP"); got != "/cancel" {
+		t.Fatalf("/STOP alias mismatch: %q", got)
+	}
 }
 
 func TestIsContextLimitError(t *testing.T) {

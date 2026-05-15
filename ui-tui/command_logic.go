@@ -284,7 +284,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			emitData(uiPayload(out, "status", "result"))
 			s.setStatus(true, "ok", "health checked")
-		case current == "/cancel":
+		case current == "/cancel" || current == "/stop":
 			out, cErr := httpJSON(http.MethodPost, s.httpBase+"/v1/chat/cancel", map[string]any{"session_id": s.session})
 			if cErr != nil {
 				s.setErrStatus(cErr)
