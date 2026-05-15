@@ -159,6 +159,7 @@
 - 已统一 gateway 常用命令 usage 文案来源（`sethome/continuity/whoami/resolve/setid/unsetid`），CLI/Gateway/UI-TUI 复用 shared helper，降低多入口文案偏差。
 - 已将 API gateway `invalid_argument`（continuity/identity/resolve）错误文案切到 `internal/tools` 统一 helper，减少 API 与其他入口提示语义偏差。
 - 已新增 `BuildGatewayIdentityPayload` 并接入 API `/v1/ui/gateway/identity`（GET/POST/DELETE）与 CLI `setid/unsetid` 输出，统一 identity 成功响应字段风格。
+- 已新增 `BuildGatewayContinuityPayload` 并接入 API/CLI/Gateway `/continuity` 成功输出（含 Gateway 命令元数据），统一 continuity 字段结构为 `continuity_mode`。
 
 范围：
 

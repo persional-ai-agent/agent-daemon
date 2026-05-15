@@ -1273,9 +1273,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
-			"result": map[string]any{
-				"continuity_mode": mode,
-			},
+			"result": tools.BuildGatewayContinuityPayload(mode),
 		})
 		return
 	case http.MethodPost:
@@ -1296,9 +1294,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
-			"result": map[string]any{
-				"continuity_mode": mode,
-			},
+			"result": tools.BuildGatewayContinuityPayload(mode),
 		})
 		return
 	default:

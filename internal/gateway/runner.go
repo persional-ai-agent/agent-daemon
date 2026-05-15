@@ -488,7 +488,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				if w.runner != nil {
 					mode = w.runner.continuityMode()
 				}
-				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
+				meta := tools.BuildGatewayContinuityPayload(mode)
+				meta["slash"] = "/continuity"
+				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, meta)
 				return
 			}
 			mode, pErr := tools.ParseGatewayContinuityModeArg(parsed.args)
@@ -501,7 +503,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Continuity update failed: "+escapeMarkdown(uErr.Error())+"_", event.MessageID, map[string]any{"slash": "/continuity"})
 				return
 			}
-			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(updatedMode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": updatedMode})
+			meta := tools.BuildGatewayContinuityPayload(updatedMode)
+			meta["slash"] = "/continuity"
+			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(updatedMode)+"_", event.MessageID, meta)
 			return
 		case "/setid":
 			globalID, pErr := tools.ParseGatewayGlobalIDArg(parsed.args)

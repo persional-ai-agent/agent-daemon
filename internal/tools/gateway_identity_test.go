@@ -190,3 +190,10 @@ func TestBuildGatewayIdentityPayload(t *testing.T) {
 		t.Fatalf("unexpected global_id for delete payload: %+v", got)
 	}
 }
+
+func TestBuildGatewayContinuityPayload(t *testing.T) {
+	got := BuildGatewayContinuityPayload("name")
+	if got["continuity_mode"] != "user_name" {
+		t.Fatalf("unexpected continuity payload: %+v", got)
+	}
+}

@@ -485,3 +485,9 @@ func BuildGatewayIdentityPayload(platform, userID, globalID string, updated, del
 	}
 	return payload
 }
+
+func BuildGatewayContinuityPayload(mode string) map[string]any {
+	return map[string]any{
+		"continuity_mode": NormalizeContinuityMode(mode),
+	}
+}

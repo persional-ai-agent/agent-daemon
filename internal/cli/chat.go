@@ -408,7 +408,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			if err != nil {
 				return true, err
 			}
-			printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")
+			printCLIEnvelope(true, clitools.BuildGatewayContinuityPayload(mode), "", "")
 			return true, nil
 		}
 		mode, parseErr := clitools.ParseGatewayContinuityModeArg(fields[1:])
@@ -420,7 +420,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewayContinuityPayload(mode), "", "")
 		return true, nil
 	case "/whoami":
 		ref, parseErr := clitools.ParseGatewayIdentityRefArgs(fields[1:])
