@@ -814,6 +814,29 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			reply := renderGatewayStats(target, stats)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/usage", "session_id": target})
 			return
+		case "/model":
+			if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /model", event.MessageID, map[string]any{"slash": "/model"})
+				return
+			}
+			provider := strings.TrimSpace(os.Getenv("AGENT_MODEL_PROVIDER"))
+			modelName := strings.TrimSpace(os.Getenv("AGENT_MODEL"))
+			baseURL := strings.TrimSpace(os.Getenv("AGENT_BASE_URL"))
+			if provider == "" {
+				provider = "openai"
+			}
+			if modelName == "" {
+				modelName = "(default)"
+			}
+			if baseURL == "" {
+				baseURL = "(default)"
+			}
+			reply := "Model client: " + fmt.Sprintf("%T", w.engine.Client) +
+				"\nProvider: " + provider +
+				"\nModel: " + modelName +
+				"\nBase URL: " + baseURL
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "base_url": baseURL})
+			return
 		case "/queue":
 			qLen := len(w.queue)
 			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
