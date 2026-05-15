@@ -302,7 +302,7 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 	}
 	r.sessionsMu.Unlock()
 
-	if mapped := r.resolveMappedSessionID(adapter.Name(), event.UserID); strings.TrimSpace(mapped) != "" {
+	if mapped := r.resolveMappedSessionID(adapter.Name(), event.UserID, event.UserName); strings.TrimSpace(mapped) != "" {
 		w.activateSession(mapped, event.UserID)
 	}
 
@@ -321,15 +321,49 @@ func (r *Runner) enqueueMessage(ctx context.Context, adapter PlatformAdapter, ev
 	}
 }
 
-func (r *Runner) resolveMappedSessionID(platformName, userID string) string {
+func (r *Runner) resolveMappedSessionID(platformName, userID, userName string) string {
 	if r == nil || r.identityStore == nil {
 		return ""
 	}
 	globalID, err := r.identityStore.resolve(platformName, userID)
-	if err != nil || strings.TrimSpace(globalID) == "" {
+	if err == nil && strings.TrimSpace(globalID) != "" {
+		return BuildSessionKey("global", "user", globalID)
+	}
+	if auto := autoGlobalIdentity(continuityMode(), userID, userName); strings.TrimSpace(auto) != "" {
+		return BuildSessionKey("global", "user", auto)
+	}
+	return ""
+}
+
+func continuityMode() string {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
+	switch mode {
+	case "user_id", "userid", "id":
+		return "user_id"
+	case "user_name", "username", "name":
+		return "user_name"
+	default:
+		return "off"
+	}
+}
+
+func autoGlobalIdentity(mode, userID, userName string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "user_id":
+		if strings.TrimSpace(userID) == "" {
+			return ""
+		}
+		return "uid:" + strings.TrimSpace(userID)
+	case "user_name":
+		n := strings.ToLower(strings.TrimSpace(userName))
+		n = strings.ReplaceAll(n, " ", "_")
+		if n == "" {
+			return ""
+		}
+		return "uname:" + n
+	default:
 		return ""
 	}
-	return BuildSessionKey("global", "user", globalID)
 }
 
 func (w *sessionWorker) run(parent context.Context) {
@@ -422,11 +456,17 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					globalID = strings.TrimSpace(v)
 				}
 			}
+			mode := continuityMode()
+			autoID := autoGlobalIdentity(mode, event.UserID, event.UserName)
 			reply := "platform=" + w.adapter.Name() + "\nuser_id=" + event.UserID + "\nuser_name=" + event.UserName + "\nactive_session=" + w.currentSessionID()
 			if globalID != "" {
 				reply += "\nglobal_id=" + globalID
 			} else {
 				reply += "\nglobal_id=(not set)"
+			}
+			reply += "\ncontinuity_mode=" + mode
+			if autoID != "" {
+				reply += "\nauto_global_id=" + autoID
 			}
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/whoami", "user_id": event.UserID, "global_id": globalID})
 			return

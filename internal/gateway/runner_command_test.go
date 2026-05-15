@@ -303,6 +303,28 @@ func TestRenderGatewayTargets(t *testing.T) {
 	}
 }
 
+func TestAutoGlobalIdentity(t *testing.T) {
+	if got := autoGlobalIdentity("off", "u1", "Alice"); got != "" {
+		t.Fatalf("off mode should not map, got=%q", got)
+	}
+	if got := autoGlobalIdentity("user_id", "u1", "Alice"); got != "uid:u1" {
+		t.Fatalf("user_id mode mismatch: %q", got)
+	}
+	if got := autoGlobalIdentity("user_name", "u1", "Alice Bob"); got != "uname:alice_bob" {
+		t.Fatalf("user_name mode mismatch: %q", got)
+	}
+}
+
+func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
+	t.Setenv("AGENT_GATEWAY_CONTINUITY", "user_id")
+	r := &Runner{identityStore: newIdentityStore(t.TempDir())}
+	got := r.resolveMappedSessionID("telegram", "u9", "Alice")
+	want := BuildSessionKey("global", "user", "uid:u9")
+	if got != want {
+		t.Fatalf("auto continuity mapping mismatch: got=%q want=%q", got, want)
+	}
+}
+
 func TestLatestUserInputFromMessages(t *testing.T) {
 	history := []core.Message{
 		{Role: "user", Content: "hello"},
