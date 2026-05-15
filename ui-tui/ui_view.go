@@ -178,10 +178,14 @@ func printEvent(evt map[string]any, emit bool) string {
 	case "model_stream_event":
 		return ""
 	case "error":
-		if emit {
-			fmt.Printf("[error] %v\n", evt["error"])
+		errText := strings.TrimSpace(fmt.Sprintf("%v", evt["error"]))
+		if errText == "" || errText == "<nil>" {
+			return ""
 		}
-		return fmt.Sprintf("error: %v", evt["error"])
+		if emit {
+			fmt.Printf("[error] %s\n", errText)
+		}
+		return fmt.Sprintf("error: %s", errText)
 	default:
 		bs, _ := json.Marshal(evt)
 		if emit {

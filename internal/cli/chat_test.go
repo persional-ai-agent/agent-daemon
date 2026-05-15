@@ -252,6 +252,28 @@ func TestHandleSlashCommandRetry(t *testing.T) {
 	}
 }
 
+func TestRunChatFirstMessageEOFReturnsNil(t *testing.T) {
+	client := &scriptedClient{response: "ok"}
+	eng := makeEngineForSlashTests(nil)
+	eng.Client = client
+
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	if err := RunChat(context.Background(), eng, "s1", "测试", ""); err != nil {
+		t.Fatalf("RunChat returned error: %v", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("calls=%d", client.calls)
+	}
+}
+
 func TestPrintCLIEnvelopeSuccess(t *testing.T) {
 	line := captureStdout(t, func() {
 		printCLIEnvelope(true, map[string]any{"session_id": "s1"}, "", "")

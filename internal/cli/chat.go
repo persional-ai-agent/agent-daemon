@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -81,11 +83,20 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 	printChatWelcome(state.SessionID)
 	for {
 		fmt.Print("agent> ")
+		eofRead := false
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			return err
+			if !errors.Is(err, io.EOF) {
+				return err
+			}
+			eofRead = true
+			line = strings.TrimSpace(line)
+			if line == "" {
+				return nil
+			}
+		} else {
+			line = strings.TrimSpace(line)
 		}
-		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -107,6 +118,9 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 		}
 		state.History = append([]core.Message(nil), res.Messages...)
 		fmt.Println(res.FinalResponse)
+		if eofRead {
+			return nil
+		}
 	}
 }
 
