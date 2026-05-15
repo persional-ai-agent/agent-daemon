@@ -1279,8 +1279,13 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 			writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
 			return
 		}
-		mode := tools.NormalizeContinuityMode(req.Mode)
-		if err := tools.SetGatewaySetting(s.engineWorkdir(), "continuity_mode", mode); err != nil {
+		mode, parseErr := tools.ParseGatewayContinuityModeArg([]string{req.Mode})
+		if parseErr != nil {
+			writeUIError(w, http.StatusBadRequest, "invalid_argument", "mode must be off|user_id|user_name")
+			return
+		}
+		mode, err := tools.UpdateGatewayContinuityMode(s.engineWorkdir(), mode)
+		if err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}

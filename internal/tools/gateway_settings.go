@@ -84,6 +84,18 @@ func ResolveGatewayContinuityMode(workdir string) (string, error) {
 	return NormalizeContinuityMode(v), nil
 }
 
+func UpdateGatewayContinuityMode(workdir, rawMode string) (string, error) {
+	mode, err := ParseGatewayContinuityModeArg([]string{rawMode})
+	if err != nil {
+		return "", err
+	}
+	_ = os.Setenv(GatewayContinuityEnvVar, mode)
+	if err := SetGatewaySetting(workdir, "continuity_mode", mode); err != nil {
+		return "", err
+	}
+	return mode, nil
+}
+
 func ResolveGatewayModelPreference(workdir string) (GatewayModelPreference, error) {
 	provider, err := GetGatewaySetting(workdir, "model_provider")
 	if err != nil {

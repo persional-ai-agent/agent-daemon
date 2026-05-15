@@ -153,6 +153,7 @@
 - 已新增 `NormalizeGatewayStatusMap` 并接入 API gateway status 读取路径；在保持现有契约不变前提下，统一内部状态标准化入口。
 - 已新增 `NormalizeGatewayDiagnosticsMap` 并接入 API gateway diagnostics 两条分支（自定义/fallback），统一内部诊断结构标准化入口且不改变外部契约。
 - 已将 gateway status/diagnostics 标准化逻辑沉淀到 `internal/tools/gateway_status.go`（snapshot 提取 + status/diagnostics 归一），后续多入口字段对齐可直接复用。
+- 已新增 `UpdateGatewayContinuityMode` 并接入 CLI/API/Gateway continuity 更新路径，统一“参数归一化 + env 同步 + 持久化”写入行为。
 
 范围：
 

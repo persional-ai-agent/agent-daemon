@@ -496,11 +496,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /continuity [off|user_id|user_name]", event.MessageID, map[string]any{"slash": "/continuity"})
 				return
 			}
-			_ = os.Setenv("AGENT_GATEWAY_CONTINUITY", mode)
-			if w.runner != nil && w.runner.engine != nil {
-				_ = tools.SetGatewaySetting(w.runner.engine.Workdir, "continuity_mode", mode)
+			updatedMode, uErr := tools.UpdateGatewayContinuityMode(w.engine.Workdir, mode)
+			if uErr != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Continuity update failed: "+escapeMarkdown(uErr.Error())+"_", event.MessageID, map[string]any{"slash": "/continuity"})
+				return
 			}
-			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(mode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": mode})
+			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(updatedMode)+"_", event.MessageID, map[string]any{"slash": "/continuity", "mode": updatedMode})
 			return
 		case "/setid":
 			globalID, pErr := tools.ParseGatewayGlobalIDArg(parsed.args)

@@ -416,7 +416,8 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /continuity [off|user_id|user_name]")
 			return true, nil
 		}
-		if err := clitools.SetGatewaySetting(eng.Workdir, "continuity_mode", mode); err != nil {
+		mode, err := clitools.UpdateGatewayContinuityMode(eng.Workdir, mode)
+		if err != nil {
 			return true, err
 		}
 		printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")

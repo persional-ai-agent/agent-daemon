@@ -71,3 +71,21 @@ func TestDisplayGatewayModelPreference(t *testing.T) {
 		t.Fatalf("unexpected default display pref: %+v", got)
 	}
 }
+
+func TestUpdateGatewayContinuityMode(t *testing.T) {
+	workdir := t.TempDir()
+	mode, err := UpdateGatewayContinuityMode(workdir, "name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != "user_name" {
+		t.Fatalf("mode=%q want=user_name", mode)
+	}
+	got, err := GetGatewaySetting(workdir, "continuity_mode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "user_name" {
+		t.Fatalf("stored=%q want=user_name", got)
+	}
+}
