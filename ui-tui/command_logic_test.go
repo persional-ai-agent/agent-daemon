@@ -735,6 +735,30 @@ func TestWorkflowCommandCaseInsensitiveSubcommands(t *testing.T) {
 }
 
 func TestCanonicalInputAliasesCaseInsensitive(t *testing.T) {
+	if got := canonicalInput("/Q"); got != "/quit" {
+		t.Fatalf("/Q alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/H"); got != "/help" {
+		t.Fatalf("/H alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/GW status"); got != "/gateway status" {
+		t.Fatalf("/GW alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/CFG get"); got != "/config get" {
+		t.Fatalf("/CFG alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/SESS 10"); got != "/sessions 10" {
+		t.Fatalf("/SESS alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/WB save demo"); got != "/workbench save demo" {
+		t.Fatalf("/WB alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/WF list"); got != "/workflow list" {
+		t.Fatalf("/WF alias mismatch: %q", got)
+	}
+	if got := canonicalInput("/BM add demo"); got != "/bookmark add demo" {
+		t.Fatalf("/BM alias mismatch: %q", got)
+	}
 	if got := canonicalInput("/GATEWAY status"); got != "/gateway status" {
 		t.Fatalf("/GATEWAY canonical mismatch: %q", got)
 	}

@@ -367,6 +367,8 @@ func canonicalInput(text string) string {
 	switch lower {
 	case ":q", "quit":
 		return "/quit"
+	case "/q":
+		return "/quit"
 	case "ls":
 		return "/tools"
 	case "sessions":
@@ -385,6 +387,26 @@ func canonicalInput(text string) string {
 		return "/config get"
 	case "h":
 		return "/help"
+	case "/h":
+		return "/help"
+	}
+	if strings.HasPrefix(lower, "/gw ") && !strings.HasPrefix(lower, "/gateway ") {
+		return "/gateway " + strings.TrimSpace(text[len("/gw "):])
+	}
+	if strings.HasPrefix(lower, "/cfg ") && !strings.HasPrefix(lower, "/config ") {
+		return "/config " + strings.TrimSpace(text[len("/cfg "):])
+	}
+	if strings.HasPrefix(lower, "/sess ") && !strings.HasPrefix(lower, "/sessions ") {
+		return "/sessions " + strings.TrimSpace(text[len("/sess "):])
+	}
+	if strings.HasPrefix(lower, "/wb ") && !strings.HasPrefix(lower, "/workbench ") {
+		return "/workbench " + strings.TrimSpace(text[len("/wb "):])
+	}
+	if strings.HasPrefix(lower, "/wf ") && !strings.HasPrefix(lower, "/workflow ") {
+		return "/workflow " + strings.TrimSpace(text[len("/wf "):])
+	}
+	if strings.HasPrefix(lower, "/bm ") && !strings.HasPrefix(lower, "/bookmark ") {
+		return "/bookmark " + strings.TrimSpace(text[len("/bm "):])
 	}
 	if strings.HasPrefix(lower, "show ") && !strings.HasPrefix(lower, "/show ") {
 		return "/show " + strings.TrimSpace(text[len("show "):])
