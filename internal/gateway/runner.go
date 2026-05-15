@@ -114,6 +114,9 @@ type sessionWorker struct {
 	mu                  sync.Mutex
 	activeSessionID     string
 	lastUserInput       string
+	lastShowSessionID   string
+	lastShowOffset      int
+	lastShowLimit       int
 	cancelCurrent       context.CancelFunc
 	running             bool
 	lastApprovalID      string
@@ -430,8 +433,42 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Show failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/show"})
 				return
 			}
+			w.setShowCursor(target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/show", "session_id": target, "offset": offset, "limit": limit})
+			return
+		case "/next", "/prev":
+			if len(parsed.args) > 0 {
+				_, _ = w.sendText(ctx, event.ChatID, "Usage: /next or /prev", event.MessageID, map[string]any{"slash": parsed.head})
+				return
+			}
+			target, offset, limit := w.showCursor()
+			if strings.TrimSpace(target) == "" {
+				target = w.currentSessionID()
+				offset = 0
+				limit = 20
+			}
+			if parsed.head == "/next" {
+				offset += limit
+			} else {
+				offset -= limit
+				if offset < 0 {
+					offset = 0
+				}
+			}
+			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
+			if !ok || detailStore == nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_Show pagination not supported by session store._", event.MessageID, map[string]any{"slash": parsed.head})
+				return
+			}
+			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
+			if err != nil {
+				_, _ = w.sendText(ctx, event.ChatID, "_"+strings.TrimPrefix(parsed.head, "/")+" failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": parsed.head})
+				return
+			}
+			w.setShowCursor(target, offset, limit)
+			reply := renderGatewayShow(target, offset, limit, msgs)
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "session_id": target, "offset": offset, "limit": limit})
 			return
 		case "/sessions":
 			limit := 10
@@ -1337,6 +1374,20 @@ func (w *sessionWorker) clearLastUserInput() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.lastUserInput = ""
+}
+
+func (w *sessionWorker) setShowCursor(sessionID string, offset, limit int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastShowSessionID = strings.TrimSpace(sessionID)
+	w.lastShowOffset = offset
+	w.lastShowLimit = limit
+}
+
+func (w *sessionWorker) showCursor() (sessionID string, offset, limit int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.TrimSpace(w.lastShowSessionID), w.lastShowOffset, w.lastShowLimit
 }
 
 func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {
