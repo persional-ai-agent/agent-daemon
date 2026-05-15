@@ -947,7 +947,7 @@ func parseApprovalManageCommand(cmd string) (map[string]any, string) {
 	}
 	if strings.EqualFold(parts[1], "pattern") {
 		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			return nil, "Usage: /grant pattern <name> [ttl] or /revoke pattern <name>"
+			return nil, "Usage: " + GatewayGrantPatternUsage() + " or " + GatewayRevokePatternUsage()
 		}
 		args["scope"] = "pattern"
 		args["pattern"] = strings.TrimSpace(parts[2])
@@ -955,7 +955,7 @@ func parseApprovalManageCommand(cmd string) (map[string]any, string) {
 			if ttl, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && ttl >= 0 {
 				args["ttl_seconds"] = ttl
 			} else if strings.HasPrefix(parts[0], "/grant") {
-				return nil, "Usage: /grant pattern <name> [ttl]"
+				return nil, "Usage: " + GatewayGrantPatternUsage()
 			}
 		}
 		return args, ""
@@ -964,7 +964,7 @@ func parseApprovalManageCommand(cmd string) (map[string]any, string) {
 		args["ttl_seconds"] = ttl
 		return args, ""
 	}
-	return nil, "Usage: " + GatewayCommandUsage("grant") + ", " + GatewayCommandUsage("revoke")
+	return nil, GatewayGrantRevokeCombinedUsage()
 }
 
 func (w *sessionWorker) approvalToolContext() tools.ToolContext {

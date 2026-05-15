@@ -130,6 +130,18 @@ func GatewayCommandUsage(name string) string {
 	return gatewayHelpCommandEntry(name)
 }
 
+func GatewayGrantPatternUsage() string {
+	return "/grant pattern <name> [ttl]"
+}
+
+func GatewayRevokePatternUsage() string {
+	return "/revoke pattern <name>"
+}
+
+func GatewayGrantRevokeCombinedUsage() string {
+	return "Usage: " + GatewayCommandUsage("grant") + ", " + GatewayCommandUsage("revoke")
+}
+
 func GatewayApprovalSlashCommands() []string {
 	out := make([]string, 0, len(gatewayApprovalCommandSet))
 	for _, name := range gatewayHelpCommandOrder {

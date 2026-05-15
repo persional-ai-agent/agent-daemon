@@ -156,3 +156,15 @@ func TestYuanbaoQuickReplyAliasesText(t *testing.T) {
 		t.Fatalf("quick reply aliases text mismatch: got=%q want=%q", got, want)
 	}
 }
+
+func TestGrantRevokeUsageHelpers(t *testing.T) {
+	if got := GatewayGrantPatternUsage(); got != "/grant pattern <name> [ttl]" {
+		t.Fatalf("unexpected grant pattern usage: %q", got)
+	}
+	if got := GatewayRevokePatternUsage(); got != "/revoke pattern <name>" {
+		t.Fatalf("unexpected revoke pattern usage: %q", got)
+	}
+	if got := GatewayGrantRevokeCombinedUsage(); got != "Usage: /grant [ttl], /grant pattern <name> [ttl], /revoke, /revoke pattern <name>" {
+		t.Fatalf("unexpected combined usage: %q", got)
+	}
+}
