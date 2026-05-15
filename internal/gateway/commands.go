@@ -138,6 +138,10 @@ func GatewayRevokePatternUsage() string {
 	return "/revoke pattern <name>"
 }
 
+func GatewayGrantPatternOrRevokePatternUsage() string {
+	return "Usage: " + GatewayGrantPatternUsage() + " or " + GatewayRevokePatternUsage()
+}
+
 func GatewayGrantRevokeCombinedUsage() string {
 	return "Usage: " + GatewayCommandUsage("grant") + ", " + GatewayCommandUsage("revoke")
 }

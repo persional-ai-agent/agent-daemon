@@ -85,3 +85,31 @@ func TestParseGatewayCommand(t *testing.T) {
 		t.Fatalf("unexpected plain parsed command: %+v", got)
 	}
 }
+
+func TestParseApprovalManageCommand(t *testing.T) {
+	args, usage := parseApprovalManageCommand("/grant", []string{"pattern", "tool_*", "3600"})
+	if usage != "" {
+		t.Fatalf("unexpected usage error: %s", usage)
+	}
+	if args["scope"] != "pattern" || args["pattern"] != "tool_*" || args["ttl_seconds"] != 3600 {
+		t.Fatalf("unexpected grant pattern args: %+v", args)
+	}
+
+	args, usage = parseApprovalManageCommand("/revoke", []string{"pattern", "tool_*"})
+	if usage != "" {
+		t.Fatalf("unexpected revoke usage error: %s", usage)
+	}
+	if args["scope"] != "pattern" || args["pattern"] != "tool_*" {
+		t.Fatalf("unexpected revoke pattern args: %+v", args)
+	}
+
+	args, usage = parseApprovalManageCommand("/grant", []string{"bad-ttl"})
+	if args != nil || usage == "" {
+		t.Fatalf("expected usage error for bad grant ttl, got args=%+v usage=%q", args, usage)
+	}
+
+	args, usage = parseApprovalManageCommand("/grant", []string{"pattern"})
+	if args != nil || usage != GatewayGrantPatternOrRevokePatternUsage() {
+		t.Fatalf("expected pattern usage error, got args=%+v usage=%q", args, usage)
+	}
+}

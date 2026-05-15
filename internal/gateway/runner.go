@@ -405,7 +405,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
-			reply := w.grantApproval(ctx, parsed.raw)
+			reply := w.grantApproval(ctx, parsed)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/grant"})
 			return
 		case "/revoke":
@@ -413,7 +413,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
 				return
 			}
-			reply := w.revokeApproval(ctx, parsed.raw)
+			reply := w.revokeApproval(ctx, parsed)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
 			return
 		case "/help":
@@ -887,20 +887,20 @@ func (w *sessionWorker) isRunning() bool {
 	return w.running
 }
 
-func (w *sessionWorker) grantApproval(ctx context.Context, cmd string) string {
-	args, usageErr := parseApprovalManageCommand(cmd)
+func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand) string {
+	args, usageErr := parseApprovalManageCommand(parsed.head, parsed.args)
 	if usageErr != "" {
 		return usageErr
 	}
 	args["action"] = "grant"
 	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
-	parsed := tools.ParseJSONArgs(raw)
-	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+	out := tools.ParseJSONArgs(raw)
+	if errText, _ := out["error"].(string); strings.TrimSpace(errText) != "" {
 		return "Grant failed: " + errText
 	}
-	scope, _ := parsed["scope"].(string)
-	pattern, _ := parsed["pattern"].(string)
-	expiresAt, _ := parsed["expires_at"].(string)
+	scope, _ := out["scope"].(string)
+	pattern, _ := out["pattern"].(string)
+	expiresAt, _ := out["expires_at"].(string)
 	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
 		if strings.TrimSpace(expiresAt) != "" {
 			return "Granted pattern approval: " + pattern + " until " + expiresAt
@@ -913,20 +913,20 @@ func (w *sessionWorker) grantApproval(ctx context.Context, cmd string) string {
 	return "Granted session approval."
 }
 
-func (w *sessionWorker) revokeApproval(ctx context.Context, cmd string) string {
-	args, usageErr := parseApprovalManageCommand(cmd)
+func (w *sessionWorker) revokeApproval(ctx context.Context, parsed gatewayCommand) string {
+	args, usageErr := parseApprovalManageCommand(parsed.head, parsed.args)
 	if usageErr != "" {
 		return usageErr
 	}
 	args["action"] = "revoke"
 	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
-	parsed := tools.ParseJSONArgs(raw)
-	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
+	out := tools.ParseJSONArgs(raw)
+	if errText, _ := out["error"].(string); strings.TrimSpace(errText) != "" {
 		return "Revoke failed: " + errText
 	}
-	scope, _ := parsed["scope"].(string)
-	pattern, _ := parsed["pattern"].(string)
-	revoked, _ := parsed["revoked"].(bool)
+	scope, _ := out["scope"].(string)
+	pattern, _ := out["pattern"].(string)
+	revoked, _ := out["revoked"].(bool)
 	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
 		if revoked {
 			return "Revoked pattern approval: " + pattern
@@ -939,15 +939,25 @@ func (w *sessionWorker) revokeApproval(ctx context.Context, cmd string) string {
 	return "No active session approval."
 }
 
-func parseApprovalManageCommand(cmd string) (map[string]any, string) {
-	parts := strings.Fields(strings.TrimSpace(cmd))
+func parseApprovalManageCommand(head string, argsIn []string) (map[string]any, string) {
+	if strings.TrimSpace(head) == "" {
+		return nil, GatewayGrantRevokeCombinedUsage()
+	}
+	canonical := strings.ToLower(strings.TrimSpace(head))
+	if !strings.HasPrefix(canonical, "/") {
+		canonical = "/" + canonical
+	}
+	argsIn = append([]string(nil), argsIn...)
+	parts := make([]string, 0, len(argsIn)+1)
+	parts = append(parts, canonical)
+	parts = append(parts, argsIn...)
 	args := map[string]any{}
 	if len(parts) <= 1 {
 		return args, ""
 	}
 	if strings.EqualFold(parts[1], "pattern") {
 		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			return nil, "Usage: " + GatewayGrantPatternUsage() + " or " + GatewayRevokePatternUsage()
+			return nil, GatewayGrantPatternOrRevokePatternUsage()
 		}
 		args["scope"] = "pattern"
 		args["pattern"] = strings.TrimSpace(parts[2])
