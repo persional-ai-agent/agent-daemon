@@ -684,14 +684,36 @@ func pendingApprovalDetails(parsed map[string]any) (string, string, string, bool
 
 func normalizeGatewayCommand(platformName, text string) string {
 	cmd := strings.TrimSpace(text)
-	if strings.HasPrefix(cmd, "/") || !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {
+	if cmd == "" {
+		return ""
+	}
+	if strings.HasPrefix(cmd, "/") {
+		parts := strings.Fields(cmd)
+		if len(parts) == 0 {
+			return ""
+		}
+		if len(parts) == 1 {
+			return strings.ToLower(parts[0])
+		}
+		return strings.ToLower(parts[0]) + " " + strings.Join(parts[1:], " ")
+	}
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
 		return cmd
 	}
-	switch cmd {
+	headLower := strings.ToLower(parts[0])
+	switch headLower {
+	case "pair", "unpair", "cancel", "queue", "status", "pending", "approvals", "grant", "revoke", "approve", "deny", "help":
+		return "/" + headLower + withTail(parts)
+	}
+	if !strings.EqualFold(strings.TrimSpace(platformName), "yuanbao") {
+		return cmd
+	}
+	switch strings.TrimSpace(parts[0]) {
 	case "批准", "同意", "通过":
-		return "/approve"
+		return "/approve" + withTail(parts)
 	case "拒绝", "驳回":
-		return "/deny"
+		return "/deny" + withTail(parts)
 	case "状态":
 		return "/status"
 	case "待审批":
@@ -703,6 +725,13 @@ func normalizeGatewayCommand(platformName, text string) string {
 	default:
 		return cmd
 	}
+}
+
+func withTail(parts []string) string {
+	if len(parts) <= 1 {
+		return ""
+	}
+	return " " + strings.Join(parts[1:], " ")
 }
 
 func (w *sessionWorker) setPendingApproval(id, command, reason string) {
