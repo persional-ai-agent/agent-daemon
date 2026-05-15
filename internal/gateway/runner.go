@@ -362,21 +362,12 @@ func parseGatewayModelSpec(args []string) (provider, modelName string, ok bool) 
 	return "", "", false
 }
 
-func continuityMode() string {
-	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_CONTINUITY")))
-	return tools.NormalizeContinuityMode(mode)
-}
-
 func (r *Runner) continuityMode() string {
-	mode := continuityMode()
-	if mode != "off" {
-		return mode
-	}
 	if r == nil || r.engine == nil {
 		return "off"
 	}
-	if v, err := tools.GetGatewaySetting(r.engine.Workdir, "continuity_mode"); err == nil {
-		return tools.NormalizeContinuityMode(v)
+	if v, err := tools.ResolveGatewayContinuityMode(r.engine.Workdir); err == nil {
+		return v
 	}
 	return "off"
 }

@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+const GatewayContinuityEnvVar = "AGENT_GATEWAY_CONTINUITY"
+
 var gatewaySettingsMu sync.Mutex
 
 func gatewaySettingsPath(workdir string) string {
@@ -60,4 +62,15 @@ func GetGatewaySetting(workdir, key string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(m[key]), nil
+}
+
+func ResolveGatewayContinuityMode(workdir string) (string, error) {
+	if v := strings.TrimSpace(os.Getenv(GatewayContinuityEnvVar)); v != "" {
+		return NormalizeContinuityMode(v), nil
+	}
+	v, err := GetGatewaySetting(workdir, "continuity_mode")
+	if err != nil {
+		return "", err
+	}
+	return NormalizeContinuityMode(v), nil
 }

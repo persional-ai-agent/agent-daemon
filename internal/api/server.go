@@ -1247,12 +1247,11 @@ func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		mode, err := tools.GetGatewaySetting(s.engineWorkdir(), "continuity_mode")
+		mode, err := tools.ResolveGatewayContinuityMode(s.engineWorkdir())
 		if err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		mode = tools.NormalizeContinuityMode(mode)
 		writeUIJSON(w, http.StatusOK, map[string]any{
 			"ok": true,
 			"result": map[string]any{

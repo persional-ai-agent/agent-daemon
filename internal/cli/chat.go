@@ -404,11 +404,11 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			return true, nil
 		}
 		if len(fields) == 1 {
-			mode, err := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
+			mode, err := clitools.ResolveGatewayContinuityMode(eng.Workdir)
 			if err != nil {
 				return true, err
 			}
-			printCLIEnvelope(true, map[string]any{"continuity_mode": clitools.NormalizeContinuityMode(mode)}, "", "")
+			printCLIEnvelope(true, map[string]any{"continuity_mode": mode}, "", "")
 			return true, nil
 		}
 		mode, parseErr := clitools.ParseGatewayContinuityModeArg(fields[1:])
@@ -431,12 +431,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		mode, _ := clitools.GetGatewaySetting(eng.Workdir, "continuity_mode")
+		mode, _ := clitools.ResolveGatewayContinuityMode(eng.Workdir)
 		printCLIEnvelope(true, map[string]any{
 			"platform":        ref.Platform,
 			"user_id":         ref.UserID,
 			"global_id":       globalID,
-			"continuity_mode": clitools.NormalizeContinuityMode(mode),
+			"continuity_mode": mode,
 		}, "", "")
 		return true, nil
 	case "/resolve":

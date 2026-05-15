@@ -192,11 +192,10 @@ func ResolveGatewaySessionMapping(workdir, platformName, chatType, chatID, userI
 	chatID = strings.TrimSpace(chatID)
 	userID = strings.TrimSpace(userID)
 	userName = strings.TrimSpace(userName)
-	mode, err := GetGatewaySetting(workdir, "continuity_mode")
+	mode, err := ResolveGatewayContinuityMode(workdir)
 	if err != nil {
 		return GatewaySessionResolveResult{}, err
 	}
-	mode = NormalizeContinuityMode(mode)
 	globalID, err := ResolveGatewayIdentity(workdir, platformName, userID)
 	if err != nil {
 		return GatewaySessionResolveResult{}, err
