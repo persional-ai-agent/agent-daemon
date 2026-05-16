@@ -105,6 +105,15 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := NoTurnToUndoEN(); got != "_No turn to undo._" {
 		t.Fatalf("unexpected no turn to undo: %s", got)
 	}
+	if got := RetryNotAvailableZH(); got != "没有可重试的上一条用户消息。" {
+		t.Fatalf("unexpected retry not available zh: %s", got)
+	}
+	if got := TodoStoreUnavailableEN(); got != "todo store unavailable" {
+		t.Fatalf("unexpected todo unavailable en: %s", got)
+	}
+	if got := MemoryStoreUnavailableEN(); got != "memory store unavailable" {
+		t.Fatalf("unexpected memory unavailable en: %s", got)
+	}
 	if got := FailedWithEscapedErrorEN("Resolve", "bad request"); got != "_Resolve failed: bad request_" {
 		t.Fatalf("unexpected failed-with-error text: %s", got)
 	}

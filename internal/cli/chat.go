@@ -155,6 +155,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(true, clitools.BuildSessionOverviewPayload(state.SessionID, "", len(state.History), len(eng.Registry.Names())), "", "")
 		return true, nil
 	case "/new", "/reset":
+		if (cmd == "/new" && len(fields) > 2) || (cmd == "/reset" && len(fields) > 1) {
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandNewResetUsage))
+			return true, nil
+		}
 		prev := state.SessionID
 		nextID := uuid.NewString()
 		if len(fields) > 1 {
@@ -188,10 +192,14 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return handleToolsetsSlash(fields), nil
 	case "/history":
 		limit := 10
+		if len(fields) > 2 {
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZHOptionalN("/history"))
+			return true, nil
+		}
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandHistoryUsage)+"  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZHOptionalNPositive("/history"))
 				return true, nil
 			}
 			limit = v
@@ -200,10 +208,14 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/sessions":
 		limit := 10
+		if len(fields) > 2 {
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZHOptionalN("/sessions"))
+			return true, nil
+		}
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandSessionsUsage)+"  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZHOptionalNPositive("/sessions"))
 				return true, nil
 			}
 			limit = v
@@ -267,18 +279,28 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		target := state.SessionID
 		offset := 0
 		limit := 20
+		if len(fields) > 4 {
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandShowUsage))
+			return true, nil
+		}
 		if len(fields) > 1 {
 			target = strings.TrimSpace(fields[1])
 		}
 		if len(fields) > 2 {
-			if v, err := strconv.Atoi(fields[2]); err == nil && v >= 0 {
-				offset = v
+			v, err := strconv.Atoi(fields[2])
+			if err != nil || v < 0 {
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandShowUsage))
+				return true, nil
 			}
+			offset = v
 		}
 		if len(fields) > 3 {
-			if v, err := strconv.Atoi(fields[3]); err == nil && v > 0 {
-				limit = v
+			v, err := strconv.Atoi(fields[3])
+			if err != nil || v <= 0 {
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandShowUsage))
+				return true, nil
 			}
+			limit = v
 		}
 		if eng.SessionStore == nil {
 			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
@@ -320,7 +342,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/retry":
 		idx := lastUserMessageIndex(state.History)
 		if idx < 0 {
-			printCLIEnvelope(false, nil, "not_available", "没有可重试的上一条用户消息。")
+			printCLIEnvelope(false, nil, "not_available", clitools.RetryNotAvailableZH())
 			return true, nil
 		}
 		userInput := state.History[idx].Content
@@ -483,7 +505,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/todo":
 		if eng.TodoStore == nil {
-			printCLIEnvelope(false, nil, "not_available", "todo store unavailable")
+			printCLIEnvelope(false, nil, "not_available", clitools.TodoStoreUnavailableEN())
 			return true, nil
 		}
 		items := eng.TodoStore.List(state.SessionID)
@@ -491,7 +513,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/memory":
 		if eng.MemoryStore == nil {
-			printCLIEnvelope(false, nil, "not_available", "memory store unavailable")
+			printCLIEnvelope(false, nil, "not_available", clitools.MemoryStoreUnavailableEN())
 			return true, nil
 		}
 		snapshot, err := eng.MemoryStore.Snapshot()

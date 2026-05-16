@@ -180,6 +180,18 @@ func NoTurnToUndoEN() string {
 	return "_No turn to undo._"
 }
 
+func RetryNotAvailableZH() string {
+	return "没有可重试的上一条用户消息。"
+}
+
+func TodoStoreUnavailableEN() string {
+	return "todo store unavailable"
+}
+
+func MemoryStoreUnavailableEN() string {
+	return "memory store unavailable"
+}
+
 func FailedWithEscapedErrorEN(subject, escapedErr string) string {
 	return "_" + subject + " failed: " + escapedErr + "_"
 }

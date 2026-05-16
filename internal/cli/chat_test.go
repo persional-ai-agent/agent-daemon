@@ -429,6 +429,58 @@ func TestHandleSlashCommandRetry(t *testing.T) {
 	}
 }
 
+func TestHandleSlashCommandRetryNoMessage(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	line := captureStdout(t, func() {
+		_, _ = handleSlashCommandState(context.Background(), "/retry", state, eng)
+	})
+	var out map[string]any
+	if err := json.Unmarshal([]byte(line), &out); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if out["ok"] != false {
+		t.Fatalf("expected error envelope, got: %+v", out)
+	}
+	errObj, _ := out["error"].(map[string]any)
+	if errObj["code"] != "not_available" || errObj["message"] != tools.RetryNotAvailableZH() {
+		t.Fatalf("unexpected retry no-message payload: %+v", out)
+	}
+}
+
+func TestHandleSlashCommandStrictArgumentValidation(t *testing.T) {
+	eng := makeEngineForSlashTests(nil)
+	state := &chatState{SessionID: "s1", SystemPrompt: "sp"}
+	cases := []struct {
+		cmd  string
+		want string
+	}{
+		{cmd: "/new a b", want: tools.UsageZH(tools.CommandNewResetUsage)},
+		{cmd: "/reset a", want: tools.UsageZH(tools.CommandNewResetUsage)},
+		{cmd: "/history 1 2", want: tools.UsageZHOptionalN("/history")},
+		{cmd: "/sessions 1 2", want: tools.UsageZHOptionalN("/sessions")},
+		{cmd: "/show s1 -1", want: tools.UsageZH(tools.CommandShowUsage)},
+		{cmd: "/show s1 0 0", want: tools.UsageZH(tools.CommandShowUsage)},
+		{cmd: "/show s1 0 1 x", want: tools.UsageZH(tools.CommandShowUsage)},
+	}
+	for _, tc := range cases {
+		line := captureStdout(t, func() {
+			_, _ = handleSlashCommandState(context.Background(), tc.cmd, state, eng)
+		})
+		var out map[string]any
+		if err := json.Unmarshal([]byte(line), &out); err != nil {
+			t.Fatalf("invalid json for %q: %v", tc.cmd, err)
+		}
+		if out["ok"] != false {
+			t.Fatalf("expected error envelope for %q: %+v", tc.cmd, out)
+		}
+		errObj, _ := out["error"].(map[string]any)
+		if errObj["code"] != "invalid_argument" || errObj["message"] != tc.want {
+			t.Fatalf("unexpected error for %q: %+v", tc.cmd, out)
+		}
+	}
+}
+
 func TestRunWithContextRecoveryCompressRetry(t *testing.T) {
 	store := &testSessionStore{msgs: []core.Message{{Role: "user", Content: "u1"}, {Role: "assistant", Content: "a1"}}}
 	reg := tools.NewRegistry()
