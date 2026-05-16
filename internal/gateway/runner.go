@@ -408,13 +408,13 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	parsed := parseGatewayCommand(w.adapter.Name(), event.Text)
 	if parsed.isSlash {
 		if GatewayCommandRequiresAuthorization(parsed.head) && !authorized && (w.runner == nil || !w.runner.isPaired(w.adapter.Name(), event.UserID)) {
-			_, _ = w.adapter.Send(ctx, event.ChatID, "_Access denied._", event.MessageID)
+			_, _ = w.adapter.Send(ctx, event.ChatID, tools.AccessDeniedEN(), event.MessageID)
 			return
 		}
 		switch parsed.head {
 		case "/pair":
 			if w.runner == nil {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Pairing unavailable._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.PairingUnavailableEN(), event.MessageID)
 				return
 			}
 			code := ""
@@ -422,20 +422,20 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				code = strings.TrimSpace(parsed.args[0])
 			}
 			if w.runner.tryPair(w.adapter.Name(), event.UserID, code) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Paired successfully._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.PairSucceededEN(), event.MessageID)
 			} else {
 				_, _ = w.adapter.Send(ctx, event.ChatID, tools.FailedEN("Pair"), event.MessageID)
 			}
 			return
 		case "/unpair":
 			if w.runner == nil {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Unpair unavailable._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.UnpairUnavailableEN(), event.MessageID)
 				return
 			}
 			if w.runner.unpair(w.adapter.Name(), event.UserID) {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Unpaired._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.UnpairedEN(), event.MessageID)
 			} else {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Not paired._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.NotPairedEN(), event.MessageID)
 			}
 			return
 		case "/session":
@@ -535,7 +535,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			if w.runner == nil || w.runner.identityStore == nil {
-				w.sendSlashText(ctx, event, "_Identity store unavailable._", "/setid")
+				w.sendSlashText(ctx, event, tools.IdentityStoreUnavailableEN(), "/setid")
 				return
 			}
 			if err := w.runner.identityStore.bind(w.adapter.Name(), event.UserID, globalID); err != nil {
@@ -563,7 +563,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			if w.runner == nil || w.runner.identityStore == nil {
-				w.sendSlashText(ctx, event, "_Identity store unavailable._", "/unsetid")
+				w.sendSlashText(ctx, event, tools.IdentityStoreUnavailableEN(), "/unsetid")
 				return
 			}
 			if err := w.runner.identityStore.unbind(w.adapter.Name(), event.UserID); err != nil {
@@ -701,11 +701,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			list := w.getLastSessionIDs(event.UserID)
 			if len(list) == 0 {
-				w.sendSlashText(ctx, event, "_No /sessions list available. Run /sessions first._", "/pick")
+				w.sendSlashText(ctx, event, tools.SessionsListRequiredForPickEN(), "/pick")
 				return
 			}
 			if idx > len(list) {
-				w.sendSlashText(ctx, event, "_Pick index out of range: max="+itoa(len(list))+"_", "/pick")
+				w.sendSlashText(ctx, event, tools.PickIndexOutOfRangeEN(len(list)), "/pick")
 				return
 			}
 			target := list[idx-1]
@@ -744,9 +744,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.mu.Unlock()
 			if cancel != nil && running {
 				cancel()
-				w.sendSlashText(ctx, event, "_Cancelled._", "/cancel")
+				w.sendSlashText(ctx, event, tools.CancelledEN(), "/cancel")
 			} else {
-				w.sendSlashText(ctx, event, "_No active task._", "/cancel")
+				w.sendSlashText(ctx, event, tools.NoActiveTaskEN(), "/cancel")
 			}
 			return
 		case "/new", "/reset":
@@ -787,7 +787,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			lastInput := w.getLastUserInput(event.UserID)
 			if strings.TrimSpace(lastInput) == "" {
-				w.sendSlashText(ctx, event, "_No recent user input to replay._", "/recover")
+				w.sendSlashText(ctx, event, tools.NoRecentUserInputToReplayEN(), "/recover")
 				return
 			}
 			prev := w.currentSessionID()
@@ -800,7 +800,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			select {
 			case w.queue <- replay:
 			default:
-				w.sendSlashText(ctx, event, "_Recover replay queue is full; please resend manually._", "/recover")
+				w.sendSlashText(ctx, event, tools.RecoverReplayQueueFullEN(), "/recover")
 			}
 			return
 		case "/retry":
@@ -812,7 +812,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				}
 			}
 			if strings.TrimSpace(lastInput) == "" {
-				w.sendSlashText(ctx, event, "_No recent user input to replay._", "/retry")
+				w.sendSlashText(ctx, event, tools.NoRecentUserInputToReplayEN(), "/retry")
 				return
 			}
 			w.sendSlashText(ctx, event, tools.RetryReplayingEN(), "/retry")
@@ -821,7 +821,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			select {
 			case w.queue <- replay:
 			default:
-				w.sendSlashText(ctx, event, "_Retry queue is full; please resend manually._", "/retry")
+				w.sendSlashText(ctx, event, tools.RetryQueueFullEN(), "/retry")
 			}
 			return
 		case "/undo":
@@ -833,7 +833,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			nextMsgs, removed := removeLastTurnFromMessages(msgs)
 			if removed == 0 {
-				w.sendSlashText(ctx, event, "_No turn to undo._", "/undo")
+				w.sendSlashText(ctx, event, tools.NoTurnToUndoEN(), "/undo")
 				return
 			}
 			nextSession := uuid.NewString()
@@ -1016,13 +1016,13 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/compress":
 			keepLastN := 20
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: "+GatewayCommandUsage("compress"), "/compress")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandCompressUsage), "/compress")
 				return
 			}
 			if len(parsed.args) == 1 {
 				n, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
 				if err != nil || n <= 0 {
-					w.sendSlashText(ctx, event, "Usage: "+GatewayCommandUsage("compress"), "/compress")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandCompressUsage), "/compress")
 					return
 				}
 				keepLastN = n
@@ -1172,7 +1172,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		}
 	}
 	if !authorized {
-		w.sendAuthText(ctx, event, "_Access denied._", "denied")
+		w.sendAuthText(ctx, event, tools.AccessDeniedEN(), "denied")
 		return
 	}
 	w.setLastUserInput(event.UserID, event.Text)

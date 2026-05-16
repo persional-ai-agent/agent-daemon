@@ -60,6 +60,51 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := WorkflowCommandsEmptyEN(); got != "workflow commands empty" {
 		t.Fatalf("unexpected workflow commands empty: %s", got)
 	}
+	if got := AccessDeniedEN(); got != "_Access denied._" {
+		t.Fatalf("unexpected access denied: %s", got)
+	}
+	if got := PairingUnavailableEN(); got != "_Pairing unavailable._" {
+		t.Fatalf("unexpected pairing unavailable: %s", got)
+	}
+	if got := PairSucceededEN(); got != "_Paired successfully._" {
+		t.Fatalf("unexpected pair succeeded: %s", got)
+	}
+	if got := UnpairUnavailableEN(); got != "_Unpair unavailable._" {
+		t.Fatalf("unexpected unpair unavailable: %s", got)
+	}
+	if got := UnpairedEN(); got != "_Unpaired._" {
+		t.Fatalf("unexpected unpaired: %s", got)
+	}
+	if got := NotPairedEN(); got != "_Not paired._" {
+		t.Fatalf("unexpected not paired: %s", got)
+	}
+	if got := IdentityStoreUnavailableEN(); got != "_Identity store unavailable._" {
+		t.Fatalf("unexpected identity store unavailable: %s", got)
+	}
+	if got := SessionsListRequiredForPickEN(); got != "_No /sessions list available. Run /sessions first._" {
+		t.Fatalf("unexpected sessions list required: %s", got)
+	}
+	if got := PickIndexOutOfRangeEN(8); got != "_Pick index out of range: max=8_" {
+		t.Fatalf("unexpected pick out of range: %s", got)
+	}
+	if got := CancelledEN(); got != "_Cancelled._" {
+		t.Fatalf("unexpected cancelled: %s", got)
+	}
+	if got := NoActiveTaskEN(); got != "_No active task._" {
+		t.Fatalf("unexpected no active task: %s", got)
+	}
+	if got := NoRecentUserInputToReplayEN(); got != "_No recent user input to replay._" {
+		t.Fatalf("unexpected no recent input: %s", got)
+	}
+	if got := RecoverReplayQueueFullEN(); got != "_Recover replay queue is full; please resend manually._" {
+		t.Fatalf("unexpected recover replay queue full: %s", got)
+	}
+	if got := RetryQueueFullEN(); got != "_Retry queue is full; please resend manually._" {
+		t.Fatalf("unexpected retry queue full: %s", got)
+	}
+	if got := NoTurnToUndoEN(); got != "_No turn to undo._" {
+		t.Fatalf("unexpected no turn to undo: %s", got)
+	}
 	if got := FailedWithEscapedErrorEN("Resolve", "bad request"); got != "_Resolve failed: bad request_" {
 		t.Fatalf("unexpected failed-with-error text: %s", got)
 	}

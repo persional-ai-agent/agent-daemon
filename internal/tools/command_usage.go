@@ -120,6 +120,66 @@ func WorkflowCommandsEmptyEN() string {
 	return "workflow commands empty"
 }
 
+func AccessDeniedEN() string {
+	return "_Access denied._"
+}
+
+func PairingUnavailableEN() string {
+	return "_Pairing unavailable._"
+}
+
+func PairSucceededEN() string {
+	return "_Paired successfully._"
+}
+
+func UnpairUnavailableEN() string {
+	return "_Unpair unavailable._"
+}
+
+func UnpairedEN() string {
+	return "_Unpaired._"
+}
+
+func NotPairedEN() string {
+	return "_Not paired._"
+}
+
+func IdentityStoreUnavailableEN() string {
+	return "_Identity store unavailable._"
+}
+
+func SessionsListRequiredForPickEN() string {
+	return "_No /sessions list available. Run /sessions first._"
+}
+
+func PickIndexOutOfRangeEN(max int) string {
+	return fmt.Sprintf("_Pick index out of range: max=%d_", max)
+}
+
+func CancelledEN() string {
+	return "_Cancelled._"
+}
+
+func NoActiveTaskEN() string {
+	return "_No active task._"
+}
+
+func NoRecentUserInputToReplayEN() string {
+	return "_No recent user input to replay._"
+}
+
+func RecoverReplayQueueFullEN() string {
+	return "_Recover replay queue is full; please resend manually._"
+}
+
+func RetryQueueFullEN() string {
+	return "_Retry queue is full; please resend manually._"
+}
+
+func NoTurnToUndoEN() string {
+	return "_No turn to undo._"
+}
+
 func FailedWithEscapedErrorEN(subject, escapedErr string) string {
 	return "_" + subject + " failed: " + escapedErr + "_"
 }

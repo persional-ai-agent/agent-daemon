@@ -210,6 +210,7 @@
 - 已新增 `internal/tools/session_message_text.go` 并批量接入 Gateway 会话操作结果文案（switch/resume/recover/retry/undo/clear/reload/save/compress），替换 runner 分发中的同类硬编码字符串，继续收敛命令回包文本来源。
 - 已新增 Gateway 失败结果文案共享 helper（`FailedWithEscapedErrorEN` / `FailedFromSlashWithEscapedErrorEN`）并批量接入 `runner` 命令分发失败分支，清理 `_<cmd> failed: ..._` 手写拼接，进一步统一跨命令失败回包格式。
 - 已补充通用失败文案 helper（`FailedEN` / `MarshalFailedEN`）并接入 Gateway `/pair` 失败与 tool schema 序列化失败分支，继续减少 `runner` 内零散 `failed` 文案拼接点。
+- 已新增 Gateway 固定状态文案共享 helper（如 `AccessDeniedEN`、`IdentityStoreUnavailableEN`、`NoActiveTaskEN`、`NoTurnToUndoEN`、`PickIndexOutOfRangeEN` 等）并批量替换 `runner` 对应硬编码回复，同时将 `/compress` usage 残留切至 `CommandCompressUsage` 共享入口，进一步收敛命令回包文本与 usage 来源。
 
 范围：
 
