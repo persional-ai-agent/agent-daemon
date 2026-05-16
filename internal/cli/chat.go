@@ -293,7 +293,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"session_id": target, "offset": offset, "limit": limit, "count": len(msgs), "messages": msgs}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionShowPayload(target, offset, limit, msgs), "", "")
 		return true, nil
 	case "/reload":
 		if eng.SessionStore == nil {

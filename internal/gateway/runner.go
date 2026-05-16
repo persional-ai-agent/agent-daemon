@@ -596,7 +596,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/show", "session_id": target, "offset": offset, "limit": limit})
+			meta := tools.BuildSessionShowPayload(target, offset, limit, msgs)
+			meta["slash"] = "/show"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/next", "/prev":
 			if len(parsed.args) > 0 {
@@ -629,7 +631,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "session_id": target, "offset": offset, "limit": limit})
+			meta := tools.BuildSessionShowPayload(target, offset, limit, msgs)
+			meta["slash"] = parsed.head
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/sessions":
 			limit := 10
