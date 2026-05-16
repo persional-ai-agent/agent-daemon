@@ -950,7 +950,7 @@ func (s *Server) handleUIModelSet(w http.ResponseWriter, r *http.Request) {
 	if len(result) > 0 {
 		payload["backend_result"] = result
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": payload})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(payload))
 }
 
 func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
@@ -1404,7 +1404,7 @@ func (s *Server) handleUICronJobs(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 	case http.MethodPost:
 		var req uiCronJobRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1436,7 +1436,7 @@ func (s *Server) handleUICronJobs(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 	default:
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 	}
@@ -1456,7 +1456,7 @@ func (s *Server) handleUICronJobDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) handleUICronJobAction(w http.ResponseWriter, r *http.Request) {
@@ -1527,7 +1527,7 @@ func (s *Server) handleUICronJobAction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) dispatchUICron(w http.ResponseWriter, r *http.Request, args map[string]any) (map[string]any, bool) {
@@ -2277,7 +2277,7 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result["success"] = true
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 }
 
 func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
@@ -2517,7 +2517,7 @@ func (s *Server) handleUIVoiceToggle(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 }
 
 func (s *Server) handleUIVoiceRecord(w http.ResponseWriter, r *http.Request) {
@@ -2548,7 +2548,7 @@ func (s *Server) handleUIVoiceRecord(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 }
 
 func (s *Server) handleUIVoiceTTS(w http.ResponseWriter, r *http.Request) {
@@ -2575,7 +2575,7 @@ func (s *Server) handleUIVoiceTTS(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 }
 
 func (s *Server) voiceStatus() map[string]any {

@@ -184,6 +184,7 @@
 - 已在 Gateway command 分发中进一步批量替换 `slash` 元数据构造（覆盖大量 usage/error 分支）为 `BuildSlashPayload(...)`，将命令元数据入口进一步收敛到 shared helper。
 - 已补充 CLI 单对象成功响应共享 helper（`BuildObjectPayload`），并接入 `/tools show` 与 `/toolsets show`，进一步减少 CLI 手写 payload 分支。
 - 已新增 UI API 会话操作共享 payload helper（`BuildUISession*Payload`），并批量接入 `/v1/ui/sessions/branch|resume|compress|undo|replay` 成功返回，统一 API 会话操作响应字段语义。
+- 已新增 UI API 成功封装 helper（`BuildUIResultEnvelope`），并批量替换多处 `ok+result` 直写返回（如 model set、gateway identity、approval confirm、cron action 等路径），进一步收敛 API 响应封装入口。
 
 范围：
 
