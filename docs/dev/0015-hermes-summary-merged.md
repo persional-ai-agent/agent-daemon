@@ -1,5 +1,16 @@
 # 0015 hermes summary merged
 
+## 最终收口状态（2026-05-16）
+
+- 对应 `docs/dev/0015-hermes-plan-merged.md` 的 `TODO-001` ~ `TODO-016` 已全部完成。
+- 最后一轮收口能力包含：
+  - `TODO-013`：ACP 完整协议层最小闭环（capabilities/session 管理/auth/事件映射）
+  - `TODO-014`：research trajectory 扩展（run/compress/stats/export + filter）
+  - `TODO-015`：setup migrate dry-run/preset/overwrite + checkpoint rollback + shell completion
+  - `TODO-016`：Web session rename/delete/export 管理闭环
+  - `TODO-008`：toolsets Web 管理闭环（list + set/enable/disable/clear）
+  - `TODO-007`：工具能力级收口补齐（新增 transcription）
+
 ## 模块
 
 - `hermes`
