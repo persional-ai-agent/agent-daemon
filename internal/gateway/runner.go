@@ -1734,7 +1734,7 @@ func renderGatewaySkillsList(root string) (string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "Skills (0): skills directory not found.", nil
+			return "Skills (0): " + tools.SkillsDirectoryNotFoundEN() + ".", nil
 		}
 		return "", err
 	}
@@ -2201,7 +2201,7 @@ func (w *sessionWorker) revokeApproval(ctx context.Context, parsed gatewayComman
 		if revoked {
 			return "Revoked pattern approval: " + pattern
 		}
-		return "Pattern approval not found: " + pattern
+		return tools.NotFoundEN("pattern approval", pattern)
 	}
 	if revoked {
 		return "Revoked session approval."
@@ -2235,7 +2235,7 @@ func parseApprovalManageCommand(head string, argsIn []string) (map[string]any, s
 			if ttl, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && ttl >= 0 {
 				args["ttl_seconds"] = ttl
 			} else if strings.HasPrefix(parts[0], "/grant") {
-				return nil, "Usage: " + GatewayGrantPatternUsage()
+				return nil, tools.UsageEN(GatewayGrantPatternUsage())
 			}
 		}
 		return args, ""

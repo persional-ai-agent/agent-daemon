@@ -48,4 +48,7 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := PendingApprovalNotFoundZH(); got != "未找到待处理审批" {
 		t.Fatalf("unexpected pending approval zh: %s", got)
 	}
+	if got := SkillsDirectoryNotFoundEN(); got != "skills directory not found" {
+		t.Fatalf("unexpected skills directory not found: %s", got)
+	}
 }

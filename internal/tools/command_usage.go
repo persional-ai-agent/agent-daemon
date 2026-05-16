@@ -105,6 +105,10 @@ func PendingApprovalNotFoundZH() string {
 	return "未找到待处理审批"
 }
 
+func SkillsDirectoryNotFoundEN() string {
+	return "skills directory not found"
+}
+
 func UsageZHOptionalN(prefix string) string {
 	return UsageZH(prefix + " [n]")
 }
