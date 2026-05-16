@@ -341,7 +341,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		prev := state.SessionID
 		state.SessionID = uuid.NewString()
 		state.History = nil
-		printCLIEnvelope(true, map[string]any{"recovered": true, "previous_session_id": prev, "session_id": state.SessionID}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionRecoverPayload(prev, state.SessionID, false), "", "")
 		return true, nil
 	case "/compress":
 		tail := 20

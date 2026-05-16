@@ -762,7 +762,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, map[string]any{"slash": "/recover", "session_id": next})
+			meta := tools.BuildSessionRecoverPayload(prev, next, true)
+			meta["slash"] = "/recover"
+			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, meta)
 			replay := event
 			replay.Text = lastInput
 			select {
