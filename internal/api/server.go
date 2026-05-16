@@ -127,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/acp/cancel", s.handleACPCancel)
 	mux.HandleFunc("/v1/ui/tools", s.handleUITools)
 	mux.HandleFunc("/v1/ui/tools/", s.handleUIToolSchema)
+	mux.HandleFunc("/v1/ui/toolsets", s.handleUIToolsets)
+	mux.HandleFunc("/v1/ui/toolsets/manage", s.handleUIToolsetsManage)
 	mux.HandleFunc("/v1/ui/sessions", s.handleUISessions)
 	mux.HandleFunc("/v1/ui/sessions/", s.handleUISessionDetail)
 	mux.HandleFunc("/v1/ui/sessions/branch", s.handleUISessionBranch)
@@ -883,6 +885,11 @@ type uiConfigSetRequest struct {
 	Value string `json:"value"`
 }
 
+type uiToolsetsManageRequest struct {
+	Action   string   `json:"action"`
+	Toolsets []string `json:"toolsets,omitempty"`
+}
+
 type uiSessionBranchRequest struct {
 	SessionID    string `json:"session_id"`
 	NewSessionID string `json:"new_session_id,omitempty"`
@@ -969,6 +976,140 @@ func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(res))
+}
+
+func (s *Server) handleUIToolsets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	items := tools.ListToolsetsWithEnv(nil)
+	enabled := strings.TrimSpace(os.Getenv("AGENT_ENABLED_TOOLSETS"))
+	if enabled == "" && s.ConfigSnapshotFn != nil {
+		if snap := s.ConfigSnapshotFn(); snap != nil {
+			if raw, ok := snap["enabled_toolsets"]; ok {
+				enabled = strings.TrimSpace(fmt.Sprintf("%v", raw))
+			}
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"count":            len(items),
+			"toolsets":         items,
+			"enabled_toolsets": enabled,
+		},
+	})
+}
+
+func (s *Server) handleUIToolsetsManage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if s.ConfigUpdateFn == nil {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "config update unavailable")
+		return
+	}
+	var req uiToolsetsManageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == "" {
+		action = "set"
+	}
+	current := strings.TrimSpace(os.Getenv("AGENT_ENABLED_TOOLSETS"))
+	if current == "" && s.ConfigSnapshotFn != nil {
+		if snap := s.ConfigSnapshotFn(); snap != nil {
+			if raw, ok := snap["enabled_toolsets"]; ok {
+				current = strings.TrimSpace(fmt.Sprintf("%v", raw))
+			}
+		}
+	}
+	currentList := splitCSV(current)
+	nextList := currentList
+	switch action {
+	case "set":
+		nextList = normalizeToolsets(req.Toolsets)
+	case "enable", "add":
+		nextList = unionToolsets(currentList, req.Toolsets)
+	case "disable", "remove":
+		nextList = subtractToolsets(currentList, req.Toolsets)
+	case "clear", "off":
+		nextList = nil
+	default:
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "action must be set|enable|disable|clear")
+		return
+	}
+	next := strings.Join(nextList, ",")
+	res, err := s.ConfigUpdateFn("tools.enabled_toolsets", next)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	_ = os.Setenv("AGENT_ENABLED_TOOLSETS", next)
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(map[string]any{
+		"action":            action,
+		"enabled_toolsets":  next,
+		"enabled_list":      nextList,
+		"config_update":     res,
+		"previous_toolsets": strings.Join(currentList, ","),
+		"previous_list":     currentList,
+	}))
+}
+
+func splitCSV(v string) []string {
+	return normalizeToolsets(strings.Split(strings.TrimSpace(v), ","))
+}
+
+func normalizeToolsets(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		n := strings.ToLower(strings.TrimSpace(raw))
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func unionToolsets(base []string, add []string) []string {
+	out := append([]string{}, normalizeToolsets(base)...)
+	seen := map[string]struct{}{}
+	for _, n := range out {
+		seen[n] = struct{}{}
+	}
+	for _, n := range normalizeToolsets(add) {
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func subtractToolsets(base []string, remove []string) []string {
+	rm := map[string]struct{}{}
+	for _, n := range normalizeToolsets(remove) {
+		rm[n] = struct{}{}
+	}
+	out := make([]string, 0, len(base))
+	for _, n := range normalizeToolsets(base) {
+		if _, ok := rm[n]; ok {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 func (s *Server) handleUITargets(w http.ResponseWriter, r *http.Request) {

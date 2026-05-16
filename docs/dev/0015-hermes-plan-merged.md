@@ -77,7 +77,7 @@
 | `TODO-005` | `done` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` + `mattermost` + `sms` + `bluebubbles` 网关适配器（inbound/outbound 最小闭环），并接入 gateway setup/status/platforms、运行时装配与 webhook API 路由。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`internal/gateway/platforms/mattermost.go`、`internal/gateway/platforms/sms.go`、`internal/gateway/platforms/bluebubbles.go`、`internal/api/server.go`、`cmd/agentd/main.go` |
 | `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
-| `TODO-008` | `partial` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；TUI/Web 启停管理仍待补齐。 | `internal/tools/toolsets.go`、`cmd/agentd/main.go`、`internal/cli/chat.go` |
+| `TODO-008` | `done` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；并补齐 TUI/Web 启停管理闭环（list + enable/disable/set/clear）。 | `internal/tools/toolsets.go`、`internal/api/server.go`、`internal/cli/chat.go` |
 | `TODO-009` | `done` | 已补主流 provider profile（OpenRouter/Nous/NVIDIA NIM/MiMo/GLM/Kimi/MiniMax/HuggingFace/custom_openai）接入、`model providers` 能力与配置状态输出，且 TUI/Web 通过既有 `/model providers` + `/model set` 路径可查看并切换 profile。 | `cmd/agentd/main.go`、`cmd/agentd/main_test.go`、`internal/api/server.go`、`ui-tui/command_logic.go` |
 | `TODO-010` | `done` | 已补 skills provenance（source/version/trigger task）、usage 计数、审计日志、历史快照与 rollback；并在长任务摘要中输出 skill draft 建议，覆盖 create/edit/patch/delete/sync/rollback 闭环。 | `internal/tools/builtin.go`、`internal/tools/skills_meta.go`、`internal/api/server.go` |
 | `TODO-011` | `done` | 已补 memory 来源追踪与可信度、外部 provider 状态开关（status/off/on）、记忆 reset/list/revoke/insights 与周期性记忆洞察入口，支持用户查看、撤销、禁用并保留 session/turn provenance。 | `internal/memory/store.go`、`internal/tools/builtin.go`、`internal/cli/chat.go` |
@@ -413,6 +413,12 @@
 - 未配置凭证的平台工具不会暴露给模型。
 - `agentd toolsets list/show/resolve` 能解释工具来源和不可用原因。
 - TUI/Web 可启停 toolset 并立即影响新 turn。
+
+最新进展（2026-05-16）：
+
+- 已新增 Web UI API：`GET /v1/ui/toolsets`，返回 toolset 列表、可用性与当前 `enabled_toolsets`。
+- 已新增 `POST /v1/ui/toolsets/manage`，支持 `set|enable|disable|clear`，并同步写入 `tools.enabled_toolsets`。
+- 已补 `internal/api/server_test.go` 覆盖 list/manage 关键路径（enable/disable/clear）。
 
 ## P2：补齐系统级完整度
 

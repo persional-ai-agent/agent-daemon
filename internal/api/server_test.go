@@ -729,6 +729,55 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("toolsets_list_manage", func(t *testing.T) {
+		t.Setenv("AGENT_ENABLED_TOOLSETS", "core,web")
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/ui/toolsets", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled_toolsets":"core,web"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"toolsets"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/toolsets/manage", bytes.NewBufferString(`{"action":"enable","toolsets":["browser"]}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled_toolsets":"core,web,browser"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/toolsets/manage", bytes.NewBufferString(`{"action":"disable","toolsets":["web"]}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled_toolsets":"core,browser"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/toolsets/manage", bytes.NewBufferString(`{"action":"clear"}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"enabled_toolsets":""`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
 	t.Run("sessions", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/v1/ui/sessions?limit=2", nil)
