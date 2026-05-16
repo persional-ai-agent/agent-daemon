@@ -930,9 +930,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Skills failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, tools.BuildSlashPayload("/skills"))
 					return
 				}
-				meta := tools.BuildSlashPayload("/skills")
-				meta["subcommand"] = "list"
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
+					meta := tools.BuildSlashSubcommandPayload("/skills", "list")
+					_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			}
 			if len(parsed.args) == 1 {
@@ -944,10 +943,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Skill not found: "+escapeMarkdown(name)+"_", event.MessageID, meta)
 					return
 				}
-				meta := tools.BuildSlashPayload("/skills")
-				meta["subcommand"] = "show"
-				meta["name"] = name
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
+					meta := tools.BuildSlashSubcommandPayload("/skills", "show")
+					meta["name"] = name
+					_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "Usage: /skills [name]", event.MessageID, tools.BuildSlashPayload("/skills"))
@@ -964,8 +962,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolsList(w.engine.Registry.Names())
-				meta := tools.BuildSlashPayload("/tools")
-				meta["subcommand"] = "list"
+				meta := tools.BuildSlashSubcommandPayload("/tools", "list")
 				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			case "show":
@@ -977,10 +974,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				for _, schema := range w.engine.Registry.Schemas() {
 					if schema.Function.Name == name {
 						reply := renderGatewayToolSchema(schema)
-						meta := tools.BuildSlashPayload("/tools")
-						meta["subcommand"] = "show"
-						meta["tool"] = name
-						_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
+							meta := tools.BuildSlashSubcommandPayload("/tools", "show")
+							meta["tool"] = name
+							_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 						return
 					}
 				}
@@ -994,9 +990,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolSchemas(w.engine.Registry.Schemas())
-				meta := tools.BuildSlashPayload("/tools")
-				meta["subcommand"] = "schemas"
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
+					meta := tools.BuildSlashSubcommandPayload("/tools", "schemas")
+					_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			default:
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools [list|show <name>|schemas]", event.MessageID, tools.BuildSlashPayload("/tools"))

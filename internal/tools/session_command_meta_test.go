@@ -16,6 +16,13 @@ func TestBuildSlashModePayload(t *testing.T) {
 	}
 }
 
+func TestBuildSlashSubcommandPayload(t *testing.T) {
+	got := BuildSlashSubcommandPayload(" /tools ", " show ")
+	if got["slash"] != "/tools" || got["subcommand"] != "show" {
+		t.Fatalf("unexpected slash subcommand payload: %+v", got)
+	}
+}
+
 func TestAttachSlashPayload(t *testing.T) {
 	got := AttachSlashPayload(map[string]any{"mode": "show", "name": "abc"}, " /skills ")
 	if got["slash"] != "/skills" {
