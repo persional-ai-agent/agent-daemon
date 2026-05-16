@@ -1141,18 +1141,18 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := w.confirmApproval(ctx, approvalID, approve)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head, "approval_id": approvalID})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload(parsed.head, approvalID))
 			return
 		case "/approvals":
 			reply := w.approvalStatus(ctx)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": parsed.head})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload(parsed.head, ""))
 			return
 		case "/pending":
 			reply := w.pendingApprovalStatus()
 			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
 				reply += "\nquick_reply: 批准 / 拒绝"
 			}
-			meta := map[string]any{"slash": "/pending"}
+			meta := tools.BuildApprovalCommandPayload("/pending", "")
 			if approvalID := w.resolveApprovalID(nil); strings.TrimSpace(approvalID) != "" {
 				meta["approval_id"] = approvalID
 			}
@@ -1160,11 +1160,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/grant":
 			reply := w.grantApproval(ctx, parsed)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/grant"})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload("/grant", ""))
 			return
 		case "/revoke":
 			reply := w.revokeApproval(ctx, parsed)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/revoke"})
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload("/revoke", ""))
 			return
 		case "/help":
 			helpText := GatewayHelpText(w.adapter.Name() == "yuanbao")
