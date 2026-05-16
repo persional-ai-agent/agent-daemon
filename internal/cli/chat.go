@@ -487,7 +487,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			return true, nil
 		}
 		items := eng.TodoStore.List(state.SessionID)
-		printCLIEnvelope(true, map[string]any{"count": len(items), "todos": items}, "", "")
+		printCLIEnvelope(true, clitools.BuildCollectionPayload("todos", len(items), items), "", "")
 		return true, nil
 	case "/memory":
 		if eng.MemoryStore == nil {
@@ -500,10 +500,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		if len(fields) > 1 {
 			target := strings.ToLower(strings.TrimSpace(fields[1]))
-			printCLIEnvelope(true, map[string]any{"target": target, "content": snapshot[target]}, "", "")
+			printCLIEnvelope(true, clitools.BuildMemoryContentPayload(target, snapshot[target]), "", "")
 			return true, nil
 		}
-		printCLIEnvelope(true, map[string]any{"memory": snapshot}, "", "")
+		printCLIEnvelope(true, clitools.BuildMemorySnapshotPayload(snapshot), "", "")
 		return true, nil
 	case "/model":
 		if len(fields) > 3 {
@@ -531,16 +531,16 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/personality":
 		if len(fields) == 1 || strings.EqualFold(strings.TrimSpace(fields[1]), "show") {
-			printCLIEnvelope(true, map[string]any{"system_prompt": state.SystemPrompt}, "", "")
+			printCLIEnvelope(true, clitools.BuildPersonalityPayload("show", state.SystemPrompt), "", "")
 			return true, nil
 		}
 		if strings.EqualFold(strings.TrimSpace(fields[1]), "reset") {
 			state.SystemPrompt = agent.DefaultSystemPrompt()
-			printCLIEnvelope(true, map[string]any{"reset": true, "system_prompt": state.SystemPrompt}, "", "")
+			printCLIEnvelope(true, clitools.BuildPersonalityPayload("reset", state.SystemPrompt), "", "")
 			return true, nil
 		}
 		state.SystemPrompt = strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
-		printCLIEnvelope(true, map[string]any{"updated": true, "system_prompt": state.SystemPrompt}, "", "")
+		printCLIEnvelope(true, clitools.BuildPersonalityPayload("set", state.SystemPrompt), "", "")
 		return true, nil
 	case "/cancel", "/stop":
 		// Interactive CLI currently has no async running task handle to cancel.
@@ -611,7 +611,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 	switch sub {
 	case "list":
 		names := eng.Registry.Names()
-		printCLIEnvelope(true, map[string]any{"count": len(names), "tools": names}, "", "")
+		printCLIEnvelope(true, clitools.BuildCollectionPayload("tools", len(names), names), "", "")
 	case "show":
 		if len(fields) != 3 {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /tools show <tool_name>")
@@ -626,7 +626,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 		printCLIEnvelope(false, nil, "not_found", "tool not found: "+fields[2])
 	case "schemas":
 		schemas := eng.Registry.Schemas()
-		printCLIEnvelope(true, map[string]any{"count": len(schemas), "schemas": schemas}, "", "")
+		printCLIEnvelope(true, clitools.BuildCollectionPayload("schemas", len(schemas), schemas), "", "")
 	default:
 		printCLIEnvelope(false, nil, "invalid_argument", "用法: /tools [list|show <tool>|schemas]")
 	}
@@ -641,7 +641,7 @@ func handleToolsetsSlash(fields []string) bool {
 	switch sub {
 	case "list":
 		items := clitools.ListToolsets()
-		printCLIEnvelope(true, map[string]any{"count": len(items), "toolsets": items}, "", "")
+		printCLIEnvelope(true, clitools.BuildCollectionPayload("toolsets", len(items), items), "", "")
 	case "show":
 		if len(fields) != 3 {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets show <name>")
@@ -668,7 +668,7 @@ func handleToolsetsSlash(fields []string) bool {
 			names = append(names, name)
 		}
 		sort.Strings(names)
-		printCLIEnvelope(true, map[string]any{"count": len(names), "tools": names}, "", "")
+		printCLIEnvelope(true, clitools.BuildCollectionPayload("tools", len(names), names), "", "")
 	default:
 		printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets [list|show <name>|resolve <name[,name]>]")
 	}

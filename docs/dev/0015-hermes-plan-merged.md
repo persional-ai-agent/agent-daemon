@@ -180,6 +180,7 @@
 - 已新增 `BuildApprovalCommandPayload` 并批量接入 Gateway 审批命令元数据（`/approve` `/deny` `/approvals` `/pending` `/grant` `/revoke`），统一审批命令返回字段语义。
 - 已新增通用命令元数据 helper（`BuildSlashPayload` / `BuildSlashModePayload`），并批量接入 Gateway 管理命令成功路径（`/skills` `/tools` `/personality` `/queue` `/help`），统一 `slash/mode/subcommand` 字段构造方式。
 - 已将 Gateway 命令分发中大量仅含 `slash` 的手写元数据 map（覆盖会话、投递、模型、审批、导航等 usage/error 分支）批量替换为 `BuildSlashPayload(...)`，进一步减少命令元数据构造漂移面。
+- 已新增 CLI 管理命令共享 payload helper（`BuildCollectionPayload` / `BuildMemoryContentPayload` / `BuildMemorySnapshotPayload` / `BuildPersonalityPayload`），并批量接入 CLI `/todo` `/memory` `/personality` `/tools` `/toolsets` 等成功路径，减少 CLI 侧手写响应 map 漂移。
 
 范围：
 
