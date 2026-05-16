@@ -211,6 +211,7 @@
 - 已新增 Gateway 失败结果文案共享 helper（`FailedWithEscapedErrorEN` / `FailedFromSlashWithEscapedErrorEN`）并批量接入 `runner` 命令分发失败分支，清理 `_<cmd> failed: ..._` 手写拼接，进一步统一跨命令失败回包格式。
 - 已补充通用失败文案 helper（`FailedEN` / `MarshalFailedEN`）并接入 Gateway `/pair` 失败与 tool schema 序列化失败分支，继续减少 `runner` 内零散 `failed` 文案拼接点。
 - 已新增 Gateway 固定状态文案共享 helper（如 `AccessDeniedEN`、`IdentityStoreUnavailableEN`、`NoActiveTaskEN`、`NoTurnToUndoEN`、`PickIndexOutOfRangeEN` 等）并批量替换 `runner` 对应硬编码回复，同时将 `/compress` usage 残留切至 `CommandCompressUsage` 共享入口，进一步收敛命令回包文本与 usage 来源。
+- 已新增 `session cancel` 共享 payload helper（`BuildSessionCancelPayload`），并接入 API `/v1/chat/cancel` 成功返回、Gateway `/cancel` 命令元数据、CLI `/cancel|/stop` 输出，统一 `session_id/cancelled[/reason]` 字段语义；其中 Gateway 继续支持 `/stop` 归一到 `/cancel` 的跨平台取消行为。
 
 范围：
 

@@ -543,8 +543,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(true, clitools.BuildPersonalityPayload("set", state.SystemPrompt), "", "")
 		return true, nil
 	case "/cancel", "/stop":
-		// Interactive CLI currently has no async running task handle to cancel.
-		printCLIEnvelope(false, nil, "not_supported", clitools.CLICancelNotSupportedZH())
+		printCLIEnvelope(true, clitools.BuildSessionCancelPayload(state.SessionID, false, "no_active_task"), "", "")
 		return true, nil
 	case "/tui":
 		printTUIStatus(eng)

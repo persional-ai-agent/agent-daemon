@@ -2845,12 +2845,11 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "not_found", "active session not found")
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":         true,
-		"result":     map[string]any{"session_id": req.SessionID, "cancelled": true},
-		"session_id": req.SessionID,
-		"cancelled":  true, // backward-compat
-	})
+	result := tools.BuildSessionCancelPayload(req.SessionID, true, "")
+	resp := tools.BuildUIResultEnvelope(result)
+	resp["session_id"] = result["session_id"]
+	resp["cancelled"] = result["cancelled"] // backward-compat
+	writeUIJSON(w, http.StatusOK, resp)
 }
 
 var wsUpgrader = websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}

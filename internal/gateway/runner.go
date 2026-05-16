@@ -744,9 +744,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			w.mu.Unlock()
 			if cancel != nil && running {
 				cancel()
-				w.sendSlashText(ctx, event, tools.CancelledEN(), "/cancel")
+				meta := tools.AttachSlashPayload(tools.BuildSessionCancelPayload(w.currentSessionID(), true, "cancelled"), "/cancel")
+				w.sendMetaText(ctx, event, tools.CancelledEN(), meta)
 			} else {
-				w.sendSlashText(ctx, event, tools.NoActiveTaskEN(), "/cancel")
+				meta := tools.AttachSlashPayload(tools.BuildSessionCancelPayload(w.currentSessionID(), false, "no_active_task"), "/cancel")
+				w.sendMetaText(ctx, event, tools.NoActiveTaskEN(), meta)
 			}
 			return
 		case "/new", "/reset":
