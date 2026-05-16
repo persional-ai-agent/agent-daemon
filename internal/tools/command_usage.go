@@ -1,5 +1,7 @@
 package tools
 
+import "fmt"
+
 const (
 	CommandSessionUsage          = "/session [session_id]"
 	CommandShowUsage             = "/show [session_id] [offset] [limit]"
@@ -73,4 +75,24 @@ func UnknownCommandHintZH() string {
 
 func UnknownCommandMessageZH(cmd string) string {
 	return "未知命令: " + cmd + "（" + UnknownCommandHintZH() + "）"
+}
+
+func UsageZHOptionalN(prefix string) string {
+	return UsageZH(prefix + " [n]")
+}
+
+func UsageZHOptionalNPositive(prefix string) string {
+	return UsageZH(prefix+" [n]") + "（n 必须是正整数）"
+}
+
+func UsageZHRequiredIndex(prefix string) string {
+	return UsageZH(prefix + " <index>")
+}
+
+func UsageZHRequiredIndexPositive(prefix string) string {
+	return UsageZH(prefix+" <index>") + "（index 必须是正整数）"
+}
+
+func UsageZHActionIndexRange(max int) string {
+	return fmt.Sprintf("%s (1..%d)", UsageZH("/actions <index>"), max)
 }

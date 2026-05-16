@@ -200,6 +200,7 @@
 - 已补齐共享提示文案 helper（`CLIWelcomeHintZH`/`UnknownCommandMessageZH`）并接入 CLI，同时将 TUI 中 `/new`、`/resume`、`/personality` 的用法错误提示切到共享 usage 常量，继续收敛 CLI/TUI/Gateway 命令提示来源。
 - 已补齐 TUI 侧 session/approval/show 命令的共享 usage 常量接入（`/recover` `/reset` `/save` `/pick` `/usage` `/compress` `/targets` `/pending` `/sessions` `/show` `/stats` `/open`），并同步替换 Gateway `/compress` 的残留 usage 硬编码，进一步减少多入口命令提示漂移。
 - 已进一步批量替换 TUI 命令分发中的固定 `用法:` 提示（覆盖 panel/view/fullscreen/diag/reconnect/rerun/bookmark/workbench/workflow/gateway/config 及审批提示），统一接入 `internal/tools/command_usage.go` 常量与 `UsageZH`；保留仅少量依赖动态参数占位的提示为运行时格式化。
+- 已新增动态 usage helper（`UsageZHOptionalN` / `UsageZHOptionalNPositive` / `UsageZHRequiredIndex` / `UsageZHRequiredIndexPositive` / `UsageZHActionIndexRange`）并接入 TUI 剩余动态提示分支（`/actions` 与通用数字参数解析函数），进一步收敛命令提示来源到 `internal/tools/command_usage.go`。
 
 范围：
 

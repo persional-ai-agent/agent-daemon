@@ -78,7 +78,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			idx, pErr := strconv.Atoi(parts[1])
 			if pErr != nil || idx <= 0 || idx > len(items) {
-				return lines, fmt.Errorf("用法: /actions <index> (1..%d)", len(items)), false
+				return lines, errors.New(tools.UsageZHActionIndexRange(len(items))), false
 			}
 			next, ok := actionCommandByIndex(s, idx)
 			if !ok {
@@ -1460,11 +1460,11 @@ func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
 		return def, nil
 	}
 	if len(parts) > 2 {
-		return 0, fmt.Errorf("用法: %s [n]", prefix)
+		return 0, errors.New(tools.UsageZHOptionalN(prefix))
 	}
 	v, err := strconv.Atoi(parts[1])
 	if err != nil || v <= 0 {
-		return 0, fmt.Errorf("用法: %s [n]（n 必须是正整数）", prefix)
+		return 0, errors.New(tools.UsageZHOptionalNPositive(prefix))
 	}
 	return v, nil
 }
@@ -1472,11 +1472,11 @@ func parseOptionalPositiveIntArg(input, prefix string, def int) (int, error) {
 func parseRequiredPositiveIntArg(input, prefix string) (int, error) {
 	parts := strings.Fields(strings.TrimSpace(input))
 	if len(parts) != 2 {
-		return 0, fmt.Errorf("用法: %s <index>", prefix)
+		return 0, errors.New(tools.UsageZHRequiredIndex(prefix))
 	}
 	v, err := strconv.Atoi(parts[1])
 	if err != nil || v <= 0 {
-		return 0, fmt.Errorf("用法: %s <index>（index 必须是正整数）", prefix)
+		return 0, errors.New(tools.UsageZHRequiredIndexPositive(prefix))
 	}
 	return v, nil
 }
