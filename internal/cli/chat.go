@@ -132,7 +132,7 @@ func RunChat(ctx context.Context, eng *agent.Engine, sessionID, firstMessage, pr
 
 func printChatWelcome(sessionID string) {
 	fmt.Printf("session: %s\n", sessionID)
-	fmt.Println("输入 /help 查看可用命令，/quit 退出。")
+	fmt.Println(clitools.CLIWelcomeHintZH())
 }
 
 func handleSlashCommand(line, sessionID, systemPrompt string, history []core.Message, eng *agent.Engine) ([]core.Message, string, bool, error) {
@@ -550,7 +550,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printTUIStatus(eng)
 		return true, nil
 	default:
-		printCLIEnvelope(false, nil, "unknown_command", fmt.Sprintf("未知命令: %s（输入 /help 查看命令）", fields[0]))
+		printCLIEnvelope(false, nil, "unknown_command", clitools.UnknownCommandMessageZH(fields[0]))
 		return true, nil
 	}
 }

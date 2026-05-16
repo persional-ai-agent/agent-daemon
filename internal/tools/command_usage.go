@@ -29,3 +29,15 @@ const (
 
 func UsageEN(usage string) string { return "Usage: " + usage }
 func UsageZH(usage string) string { return "用法: " + usage }
+
+func CLIWelcomeHintZH() string {
+	return "输入 /help 查看可用命令，/quit 退出。"
+}
+
+func UnknownCommandHintZH() string {
+	return "输入 /help 查看命令"
+}
+
+func UnknownCommandMessageZH(cmd string) string {
+	return "未知命令: " + cmd + "（" + UnknownCommandHintZH() + "）"
+}

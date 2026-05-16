@@ -653,12 +653,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			nextID := uuid.NewString()
 			if len(parts) > 2 {
-				return lines, fmt.Errorf("用法: /new [session_id]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandNewResetUsage)), false
 			}
 			if len(parts) == 2 {
 				nextID = strings.TrimSpace(parts[1])
 				if nextID == "" {
-					return lines, fmt.Errorf("用法: /new [session_id]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandNewResetUsage)), false
 				}
 			}
 			s.session = nextID
@@ -682,7 +682,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/resume" || strings.HasPrefix(current, "/resume "):
 			parts := strings.Fields(current)
 			if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
-				return lines, fmt.Errorf("用法: /resume <session_id>"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandResumeUsage)), false
 			}
 			sid := strings.TrimSpace(parts[1])
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
@@ -1321,10 +1321,10 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/personality "):
 			next := strings.TrimSpace(strings.TrimPrefix(current, "/personality "))
 			if next == "" {
-				return lines, fmt.Errorf("用法: /personality [show|reset|<text>]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandPersonalityUsage)), false
 			}
 			if strings.EqualFold(next, "show") || strings.EqualFold(next, "reset") {
-				return lines, fmt.Errorf("用法: /personality [show|reset|<text>]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandPersonalityUsage)), false
 			}
 			s.systemPrompt = next
 			emitData(map[string]any{"updated": true, "system_prompt": s.systemPrompt})
