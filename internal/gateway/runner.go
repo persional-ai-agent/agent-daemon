@@ -824,7 +824,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": "/clear", "session_id": next})
+			meta := tools.BuildSessionClearPayload(prev, next, true)
+			meta["slash"] = "/clear"
+			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, meta)
 			return
 		case "/reload":
 			if len(parsed.args) > 0 {

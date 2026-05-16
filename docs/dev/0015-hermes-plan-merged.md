@@ -168,6 +168,7 @@
 - 已新增 `session save` 共享响应 helper（`BuildSessionSavePayload`），并接入 CLI `/save` 与 Gateway `/save` 元数据，统一 `session_id/path/messages` 字段语义。
 - 已新增 `session reload` 共享响应 helper（`BuildSessionReloadPayload`），并接入 CLI `/reload` 与 Gateway `/reload` 元数据，统一 `session_id/count/messages` 字段语义。
 - 已新增 `session undo` 共享响应 helper（`BuildSessionUndoPayload`），并接入 CLI `/undo` 与 Gateway `/undo` 元数据，统一 `session_id/removed_messages/messages_in_context` 字段语义。
+- 已新增 `session clear` 共享响应 helper（`BuildSessionClearPayload`），并接入 CLI `/clear` 与 Gateway `/clear` 元数据，统一 `previous_session_id/session_id/cleared` 字段语义（行为保持各入口原语义）。
 
 范围：
 

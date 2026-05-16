@@ -307,7 +307,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/clear":
 		// 仅清空当前进程内上下文；不会删除持久化会话。
-		printCLIEnvelope(true, map[string]any{"cleared": true}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionClearPayload(state.SessionID, state.SessionID, true), "", "")
 		state.History = nil
 		return true, nil
 	case "/undo":
