@@ -716,7 +716,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayStats(target, stats)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/stats", "session_id": target})
+			meta := tools.BuildSessionStatsPayload(target, stats)
+			meta["slash"] = "/stats"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/cancel":
 			w.mu.Lock()
