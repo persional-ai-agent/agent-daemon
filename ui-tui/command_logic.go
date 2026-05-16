@@ -82,7 +82,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			next, ok := actionCommandByIndex(s, idx)
 			if !ok {
-				return lines, fmt.Errorf("无效的动作索引"), false
+				return lines, errors.New(tools.InvalidActionIndexZH()), false
 			}
 			emit("run action: " + next)
 			queue = append([]string{next}, queue...)
@@ -599,7 +599,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				raw := strings.TrimSpace(strings.TrimPrefix(current, "/workflow save "+name))
 				cmds := parseWorkflowCommands(raw)
 				if len(cmds) == 0 {
-					return lines, fmt.Errorf("workflow commands empty"), false
+					return lines, errors.New(tools.WorkflowCommandsEmptyEN()), false
 				}
 				if wErr := s.saveWorkflow(name, cmds); wErr != nil {
 					s.setErrStatus(wErr)

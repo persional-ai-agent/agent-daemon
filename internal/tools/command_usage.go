@@ -109,6 +109,14 @@ func SkillsDirectoryNotFoundEN() string {
 	return "skills directory not found"
 }
 
+func InvalidActionIndexZH() string {
+	return "无效的动作索引"
+}
+
+func WorkflowCommandsEmptyEN() string {
+	return "workflow commands empty"
+}
+
 func UsageZHOptionalN(prefix string) string {
 	return UsageZH(prefix + " [n]")
 }

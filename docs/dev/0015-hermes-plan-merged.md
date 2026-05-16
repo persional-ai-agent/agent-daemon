@@ -205,6 +205,7 @@
 - 已新增 CLI 错误提示共享 helper（`SessionStoreUnavailableEN` / `SessionStoreNotSupportedZH` / `CLICancelNotSupportedZH`），并批量替换 CLI slash 命令中会话存储不可用/能力不支持/`/cancel` 不支持等硬编码文案，继续降低 CLI/TUI/Gateway 提示语义漂移。
 - 已新增“未找到”共享提示 helper（`NotFoundEN` / `PendingApprovalNotFoundZH`），并批量接入 CLI `tools/toolset`、Gateway `skill/tool`、TUI 审批提示分支，收敛跨入口 not-found 文案来源。
 - 已补充 `SkillsDirectoryNotFoundEN` 并接入 Gateway skills 列表 fallback，同时将审批 pattern 分支与 grant pattern usage 残留改为复用 `NotFoundEN`/`UsageEN`，进一步清理 Gateway 内零散提示拼装。
+- 已新增 `InvalidActionIndexZH` 与 `WorkflowCommandsEmptyEN`，并接入 TUI `/actions` 与 `/workflow save` 分支，继续收敛分散错误文案到 `internal/tools/command_usage.go`。
 
 范围：
 

@@ -51,4 +51,10 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := SkillsDirectoryNotFoundEN(); got != "skills directory not found" {
 		t.Fatalf("unexpected skills directory not found: %s", got)
 	}
+	if got := InvalidActionIndexZH(); got != "无效的动作索引" {
+		t.Fatalf("unexpected invalid action index zh: %s", got)
+	}
+	if got := WorkflowCommandsEmptyEN(); got != "workflow commands empty" {
+		t.Fatalf("unexpected workflow commands empty: %s", got)
+	}
 }
