@@ -405,7 +405,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, errors.New("未找到待处理审批；" + tools.UsageZH(tools.CommandApproveUsage)), false
+					return lines, errors.New(tools.PendingApprovalNotFoundZH() + "；" + tools.UsageZH(tools.CommandApproveUsage)), false
 				}
 				id = lastID
 			}
@@ -429,7 +429,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, errors.New("未找到待处理审批；" + tools.UsageZH(tools.CommandDenyUsage)), false
+					return lines, errors.New(tools.PendingApprovalNotFoundZH() + "；" + tools.UsageZH(tools.CommandDenyUsage)), false
 				}
 				id = lastID
 			}
@@ -454,7 +454,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			msgs, _ := out["messages"].([]any)
 			items := findPendingApprovals(msgs, limit)
 			if len(items) == 0 {
-				return lines, fmt.Errorf("未找到待处理审批"), false
+				return lines, errors.New(tools.PendingApprovalNotFoundZH()), false
 			}
 			s.pendingCache = items
 			if limit <= 1 {
@@ -619,7 +619,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 					return lines, wErr, false
 				}
 				if !ok {
-					return lines, fmt.Errorf("workflow not found: %s", name), false
+					return lines, errors.New(tools.NotFoundEN("workflow", name)), false
 				}
 				dry := len(parts) > 3 && strings.EqualFold(strings.TrimSpace(parts[3]), "dry")
 				if dry {

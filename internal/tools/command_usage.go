@@ -97,6 +97,14 @@ func CLICancelNotSupportedZH() string {
 	return "当前 CLI 模式不支持 /cancel；请使用 Ctrl+C 中断当前轮。"
 }
 
+func NotFoundEN(kind, name string) string {
+	return kind + " not found: " + name
+}
+
+func PendingApprovalNotFoundZH() string {
+	return "未找到待处理审批"
+}
+
 func UsageZHOptionalN(prefix string) string {
 	return UsageZH(prefix + " [n]")
 }

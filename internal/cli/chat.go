@@ -623,7 +623,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 				return true
 			}
 		}
-		printCLIEnvelope(false, nil, "not_found", "tool not found: "+fields[2])
+		printCLIEnvelope(false, nil, "not_found", clitools.NotFoundEN("tool", fields[2]))
 	case "schemas":
 		schemas := eng.Registry.Schemas()
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("schemas", len(schemas), schemas), "", "")
@@ -649,7 +649,7 @@ func handleToolsetsSlash(fields []string) bool {
 		}
 		ts, ok := clitools.GetToolset(fields[2])
 		if !ok {
-			printCLIEnvelope(false, nil, "not_found", "toolset not found: "+fields[2])
+			printCLIEnvelope(false, nil, "not_found", clitools.NotFoundEN("toolset", fields[2]))
 			return true
 		}
 		printCLIEnvelope(true, clitools.BuildObjectPayload("toolset", ts), "", "")

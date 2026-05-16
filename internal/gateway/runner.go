@@ -961,7 +961,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				reply, err := renderGatewaySkillView(root, name)
 				if err != nil {
 					meta := tools.BuildSlashModePayloadWithExtra("/skills", "show", map[string]any{"name": name})
-					w.sendMetaText(ctx, event, "_Skill not found: "+escapeMarkdown(name)+"_", meta)
+					w.sendMetaText(ctx, event, "_"+escapeMarkdown(tools.NotFoundEN("skill", name))+"_", meta)
 					return
 				}
 				meta := tools.BuildSlashSubcommandPayloadWithExtra("/skills", "show", map[string]any{"name": name})
@@ -999,7 +999,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					}
 				}
 				meta := tools.BuildSlashModePayloadWithExtra("/tools", "show", map[string]any{"tool": name})
-				w.sendMetaText(ctx, event, "_Tool not found: "+escapeMarkdown(name)+"_", meta)
+				w.sendMetaText(ctx, event, "_"+escapeMarkdown(tools.NotFoundEN("tool", name))+"_", meta)
 				return
 			case "schemas":
 				if len(parsed.args) > 1 {

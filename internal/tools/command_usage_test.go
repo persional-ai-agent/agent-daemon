@@ -40,3 +40,12 @@ func TestCLIMessageHelpers(t *testing.T) {
 		t.Fatalf("unexpected cancel not supported zh: %s", got)
 	}
 }
+
+func TestNotFoundHelpers(t *testing.T) {
+	if got := NotFoundEN("tool", "send_message"); got != "tool not found: send_message" {
+		t.Fatalf("unexpected not found en: %s", got)
+	}
+	if got := PendingApprovalNotFoundZH(); got != "未找到待处理审批" {
+		t.Fatalf("unexpected pending approval zh: %s", got)
+	}
+}
