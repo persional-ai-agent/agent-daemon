@@ -42,3 +42,24 @@ func TestBuildUISessionReplayPayload(t *testing.T) {
 	}
 }
 
+func TestBuildUISessionRenamePayload(t *testing.T) {
+	got := BuildUISessionRenamePayload("s1", "s2", 9)
+	if got["renamed"] != true || got["new_session_id"] != "s2" || got["copied_messages"] != 9 {
+		t.Fatalf("unexpected rename payload: %+v", got)
+	}
+}
+
+func TestBuildUISessionDeletePayload(t *testing.T) {
+	got := BuildUISessionDeletePayload("s1", true)
+	if got["session_id"] != "s1" || got["deleted"] != true {
+		t.Fatalf("unexpected delete payload: %+v", got)
+	}
+}
+
+func TestBuildUISessionExportPayload(t *testing.T) {
+	msgs := []core.Message{{Role: "assistant", Content: "ok"}}
+	got := BuildUISessionExportPayload("s1", "jsonl", msgs, `{"role":"assistant"}`)
+	if got["exported"] != true || got["count"] != 1 || got["format"] != "jsonl" {
+		t.Fatalf("unexpected export payload: %+v", got)
+	}
+}

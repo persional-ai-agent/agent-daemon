@@ -59,3 +59,29 @@ func BuildUISessionReplayPayload(sessionID string, offset, limit int, messages [
 	}
 }
 
+func BuildUISessionRenamePayload(sourceSessionID, newSessionID string, copiedMessages int) map[string]any {
+	return map[string]any{
+		"source_session_id": strings.TrimSpace(sourceSessionID),
+		"new_session_id":    strings.TrimSpace(newSessionID),
+		"copied_messages":   copiedMessages,
+		"renamed":           true,
+	}
+}
+
+func BuildUISessionDeletePayload(sessionID string, deleted bool) map[string]any {
+	return map[string]any{
+		"session_id": strings.TrimSpace(sessionID),
+		"deleted":    deleted,
+	}
+}
+
+func BuildUISessionExportPayload(sessionID string, format string, messages []core.Message, content string) map[string]any {
+	return map[string]any{
+		"session_id": strings.TrimSpace(sessionID),
+		"format":     strings.TrimSpace(format),
+		"count":      len(messages),
+		"messages":   messages,
+		"content":    content,
+		"exported":   true,
+	}
+}

@@ -791,8 +791,8 @@ func TestUIEndpoints(t *testing.T) {
 
 		localSrv := &Server{
 			Engine: &agent.Engine{
-				Client:   fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
-				Registry: reg,
+				Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+				Registry:     reg,
 				SessionStore: ss,
 				SystemPrompt: agent.DefaultSystemPrompt(),
 			},
@@ -818,6 +818,53 @@ func TestUIEndpoints(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), `"replayed":true`) || !strings.Contains(rec.Body.String(), `"messages"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("session_rename_delete_export", func(t *testing.T) {
+		delStore := &stubSessionStoreWithDelete{}
+		local := *srv
+		local.Engine = &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     reg,
+			SessionStore: delStore,
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		}
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ui/sessions/rename", bytes.NewBufferString(`{"session_id":"s1","new_session_id":"s1-renamed"}`))
+		req.Header.Set("Content-Type", "application/json")
+		local.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"renamed":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+		if len(delStore.deleted) == 0 || delStore.deleted[0] != "s1" {
+			t.Fatalf("rename should delete old session: %+v", delStore.deleted)
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/sessions/delete", bytes.NewBufferString(`{"session_id":"s2"}`))
+		req.Header.Set("Content-Type", "application/json")
+		local.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"deleted":true`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/v1/ui/sessions/export", bytes.NewBufferString(`{"session_id":"s1-renamed","format":"jsonl"}`))
+		req.Header.Set("Content-Type", "application/json")
+		local.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"exported":true`) || !strings.Contains(rec.Body.String(), `"content":"`) {
 			t.Fatalf("unexpected body: %s", rec.Body.String())
 		}
 	})

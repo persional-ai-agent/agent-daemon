@@ -71,6 +71,10 @@ type acpSessionDeleteStore interface {
 	DeleteSession(sessionID string) error
 }
 
+type sessionDeleteStore interface {
+	DeleteSession(sessionID string) error
+}
+
 type acpMessageRequest struct {
 	SessionID string `json:"session_id"`
 	Input     string `json:"input"`
@@ -130,6 +134,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/ui/sessions/compress", s.handleUISessionCompress)
 	mux.HandleFunc("/v1/ui/sessions/undo", s.handleUISessionUndo)
 	mux.HandleFunc("/v1/ui/sessions/replay", s.handleUISessionReplay)
+	mux.HandleFunc("/v1/ui/sessions/rename", s.handleUISessionRename)
+	mux.HandleFunc("/v1/ui/sessions/delete", s.handleUISessionDelete)
+	mux.HandleFunc("/v1/ui/sessions/export", s.handleUISessionExport)
 	mux.HandleFunc("/v1/ui/config", s.handleUIConfig)
 	mux.HandleFunc("/v1/ui/config/set", s.handleUIConfigSet)
 	mux.HandleFunc("/v1/ui/model", s.handleUIModel)
@@ -482,7 +489,7 @@ func (s *Server) handleACPCapabilities(w http.ResponseWriter, r *http.Request) {
 			},
 			"event_mapping": map[string]any{
 				"tool_started/tool_finished/mcp_stream_event": "tool_event",
-				"model_stream_event/assistant_message":         "model_event",
+				"model_stream_event/assistant_message":        "model_event",
 				"approval*":                                   "approval_event",
 			},
 		},
@@ -901,6 +908,20 @@ type uiSessionReplayRequest struct {
 	SessionID string `json:"session_id"`
 	Offset    int    `json:"offset,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+}
+
+type uiSessionRenameRequest struct {
+	SessionID    string `json:"session_id"`
+	NewSessionID string `json:"new_session_id"`
+}
+
+type uiSessionDeleteRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+type uiSessionExportRequest struct {
+	SessionID string `json:"session_id"`
+	Format    string `json:"format,omitempty"`
 }
 
 type uiTargetsSetHomeRequest struct {
@@ -2537,6 +2558,142 @@ func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
+}
+
+func (s *Server) handleUISessionRename(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionRenameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	src := strings.TrimSpace(req.SessionID)
+	dst := strings.TrimSpace(req.NewSessionID)
+	if src == "" || dst == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id and new_session_id required")
+		return
+	}
+	if src == dst {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "new_session_id must differ from session_id")
+		return
+	}
+	brancher, ok := s.Engine.SessionStore.(sessionBranchStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session branching not supported")
+		return
+	}
+	deleter, ok := s.Engine.SessionStore.(sessionDeleteStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session delete not supported")
+		return
+	}
+	msgs, err := brancher.LoadMessages(src, 100000)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	for _, msg := range msgs {
+		if err := brancher.AppendMessage(dst, msg); err != nil {
+			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+	}
+	if err := deleter.DeleteSession(src); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionRenamePayload(src, dst, len(msgs))))
+}
+
+func (s *Server) handleUISessionDelete(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionDeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	deleter, ok := s.Engine.SessionStore.(sessionDeleteStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session delete not supported")
+		return
+	}
+	if err := deleter.DeleteSession(sessionID); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionDeletePayload(sessionID, true)))
+}
+
+func (s *Server) handleUISessionExport(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil || s.Engine.SessionStore == nil {
+		writeUIError(w, http.StatusInternalServerError, "session_store_unavailable", "session store unavailable")
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var req uiSessionExportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeUIError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "session_id required")
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(req.Format))
+	if format == "" {
+		format = "jsonl"
+	}
+	if format != "jsonl" && format != "json" {
+		writeUIError(w, http.StatusBadRequest, "invalid_argument", "format must be jsonl or json")
+		return
+	}
+	brancher, ok := s.Engine.SessionStore.(sessionBranchStore)
+	if !ok {
+		writeUIError(w, http.StatusNotImplemented, "not_supported", "session export not supported")
+		return
+	}
+	msgs, err := brancher.LoadMessages(sessionID, 100000)
+	if err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	content := ""
+	if format == "json" {
+		bs, _ := json.Marshal(msgs)
+		content = string(bs)
+	} else {
+		var b strings.Builder
+		for _, msg := range msgs {
+			bs, _ := json.Marshal(msg)
+			b.Write(bs)
+			b.WriteByte('\n')
+		}
+		content = b.String()
+	}
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionExportPayload(sessionID, format, msgs, content)))
 }
 
 func (s *Server) handleUISkillsSearch(w http.ResponseWriter, r *http.Request) {

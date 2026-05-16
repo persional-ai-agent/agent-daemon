@@ -85,7 +85,7 @@
 | `TODO-013` | `done` | 已补 ACP capability declaration、session create/list/get/delete、message send/stream/cancel/resume、ACP 鉴权边界（Bearer/X-ACP-Token）与事件细分映射（tool/model/approval/result/error/cancelled）。 | `internal/api/server.go`、`internal/api/server_test.go`、`internal/store/session_store.go` |
 | `TODO-014` | `done` | 已补 batch runner 并发与失败策略、trajectory reward/outcome schema、stats/export 过滤与 RL/Atropos 兼容 JSONL 导出，形成 run/compress/stats/export 闭环。 | `internal/research/batch.go`、`cmd/agentd/main.go`、`internal/research/batch_test.go` |
 | `TODO-015` | `done` | 已补 setup migration（dry-run/preset/overwrite）与 checkpoint rollback，补 shell completion install/status/uninstall，结合既有 update bundle backup/snapshot/rollback 完成 install/setup/update/migration 运维闭环。 | `cmd/agentd/setup_ops.go`、`cmd/agentd/main.go` |
-| `TODO-016` | `partial` | Web 管理面已补 dashboard/cron/model-provider，距“日常可完全替代 CLI”仍有缺口。 | `docs/dev/0036-summary-summary-merged.md`（`# 277`~`# 279`） |
+| `TODO-016` | `done` | Web 管理面已补会话 rename/delete/export 与既有 sessions/gateway/cron/skills/tools/models/diagnostics 组合，主路径可覆盖日常管理操作；plugin dashboard slot API 可真实挂载。 | `internal/api/server.go`、`internal/api/server_test.go` |
 
 ## 下一迭代优先级（先做功能）
 
@@ -647,6 +647,13 @@
 
 - Web 中可完成主要日常操作，不依赖 CLI。
 - Dashboard slot 插件可真实挂载。
+
+最新进展（2026-05-16）：
+
+- 已新增 Web session 管理 API：`/v1/ui/sessions/rename`、`/v1/ui/sessions/delete`、`/v1/ui/sessions/export`，补齐会话重命名、删除、导出能力。
+- session export 支持 `jsonl/json` 两种格式，返回统一 `result envelope`，便于 Web 直接渲染或下载。
+- 结合既有 `/v1/ui/sessions*`、`/v1/ui/gateway/*`、`/v1/ui/cron/jobs*`、`/v1/ui/skills*`、`/v1/ui/tools*`、`/v1/ui/model*`、`/v1/ui/gateway/diagnostics`，Web 侧已可覆盖主要日常管理链路。
+- `plugin dashboards` 入口保持可用（`/v1/ui/plugins/dashboards`），支持 dashboard slot 挂载。
 
 ## 推荐执行顺序
 
