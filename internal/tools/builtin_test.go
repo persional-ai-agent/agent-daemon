@@ -725,6 +725,9 @@ func TestSkillManageCreateEditPatchDelete(t *testing.T) {
 	if patchRes["replacements"] != 1 {
 		t.Fatalf("expected one replacement, got %+v", patchRes)
 	}
+	if patchRes["version"] == nil {
+		t.Fatalf("expected version in patch result: %+v", patchRes)
+	}
 
 	viewRes, err := b.skillView(context.Background(), map[string]any{"name": name}, tc)
 	if err != nil {
@@ -744,6 +747,47 @@ func TestSkillManageCreateEditPatchDelete(t *testing.T) {
 	_, err = b.skillView(context.Background(), map[string]any{"name": name}, tc)
 	if err == nil || !os.IsNotExist(err) {
 		t.Fatalf("expected missing skill after delete, got %v", err)
+	}
+}
+
+func TestSkillManageRollbackFromSnapshot(t *testing.T) {
+	workdir := t.TempDir()
+	b := &BuiltinTools{}
+	tc := ToolContext{Workdir: workdir, SessionID: "s-rollback"}
+	name := "rollback-skill"
+
+	if _, err := b.skillManage(context.Background(), map[string]any{
+		"action":  "create",
+		"name":    name,
+		"content": "# Rollback Skill\nline-a\n",
+	}, tc); err != nil {
+		t.Fatal(err)
+	}
+	res, err := b.skillManage(context.Background(), map[string]any{
+		"action":  "edit",
+		"name":    name,
+		"content": "# Rollback Skill\nline-b\n",
+	}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	versionID, _ := res["version_id"].(string)
+	if strings.TrimSpace(versionID) == "" {
+		t.Fatalf("missing version_id in edit result: %+v", res)
+	}
+	if _, err := b.skillManage(context.Background(), map[string]any{
+		"action":     "rollback",
+		"name":       name,
+		"version_id": versionID,
+	}, tc); err != nil {
+		t.Fatal(err)
+	}
+	viewRes, err := b.skillView(context.Background(), map[string]any{"name": name}, tc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(viewRes["content"].(string), "line-a") {
+		t.Fatalf("expected rollback content line-a, got: %+v", viewRes)
 	}
 }
 

@@ -1590,12 +1590,20 @@ type uiSkillDetailRequest struct {
 }
 
 type uiSkillManageRequest struct {
-	Action     string `json:"action"`
-	Name       string `json:"name"`
-	Content    string `json:"content,omitempty"`
-	OldString  string `json:"old_string,omitempty"`
-	NewString  string `json:"new_string,omitempty"`
-	ReplaceAll bool   `json:"replace_all,omitempty"`
+	Action      string `json:"action"`
+	Name        string `json:"name"`
+	Content     string `json:"content,omitempty"`
+	OldString   string `json:"old_string,omitempty"`
+	NewString   string `json:"new_string,omitempty"`
+	ReplaceAll  bool   `json:"replace_all,omitempty"`
+	FilePath    string `json:"file_path,omitempty"`
+	FileContent string `json:"file_content,omitempty"`
+	VersionID   string `json:"version_id,omitempty"`
+	Source      string `json:"source,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Repo        string `json:"repo,omitempty"`
+	Path        string `json:"path,omitempty"`
+	OnConflict  string `json:"on_conflict,omitempty"`
 }
 
 type uiSkillsSearchRequest struct {
@@ -2113,13 +2121,23 @@ func (s *Server) handleUISkillDetail(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
+	skill := map[string]any{
+		"name":    name,
+		"path":    path,
+		"content": string(bs),
+	}
+	if meta, mErr := tools.LoadSkillMetadata(workdir, name); mErr == nil {
+		skill["source"] = meta.Source
+		skill["version"] = meta.Version
+		skill["usage_count"] = meta.UsageCount
+		skill["updated_at"] = meta.UpdatedAt
+	}
+	if history, hErr := tools.ListSkillSnapshots(workdir, name, 20); hErr == nil {
+		skill["history"] = history
+	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"skill": map[string]any{
-			"name":    name,
-			"path":    path,
-			"content": string(bs),
-		},
+		"ok":    true,
+		"skill": skill,
 	})
 }
 
@@ -2139,10 +2157,7 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", "invalid skill name")
 		return
 	}
-	workdir := "."
-	if s.Engine != nil && strings.TrimSpace(s.Engine.Workdir) != "" {
-		workdir = s.Engine.Workdir
-	}
+	workdir := s.engineWorkdir()
 	skillDir := filepath.Join(workdir, "skills", name)
 	skillMD := filepath.Join(skillDir, "SKILL.md")
 	result := map[string]any{"action": action, "name": name}
@@ -2164,7 +2179,14 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
+		meta, _ := tools.UpsertSkillMetadata(workdir, name, action, "local", "ui-skill-manage", true)
 		result["path"] = skillMD
+		result["source"] = meta.Source
+		result["version"] = meta.Version
+		result["usage_count"] = meta.UsageCount
+		result["success"] = true
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
+		return
 	case "edit":
 		if strings.TrimSpace(req.Content) == "" {
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "content required")
@@ -2174,11 +2196,21 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
 			return
 		}
+		before, _ := os.ReadFile(skillMD)
+		snap, _ := tools.SaveSkillSnapshot(workdir, name, action, skillMD, string(before), "ui-skill-manage")
 		if err := os.WriteFile(skillMD, []byte(req.Content), 0o644); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
+		meta, _ := tools.UpsertSkillMetadata(workdir, name, action, "", "ui-skill-manage", true)
 		result["path"] = skillMD
+		result["version_id"] = snap.VersionID
+		result["source"] = meta.Source
+		result["version"] = meta.Version
+		result["usage_count"] = meta.UsageCount
+		result["success"] = true
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
+		return
 	case "patch":
 		if req.OldString == "" {
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "old_string required")
@@ -2199,6 +2231,7 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 			writeUIError(w, http.StatusBadRequest, "invalid_argument", "old_string matched multiple times; set replace_all=true")
 			return
 		}
+		snap, _ := tools.SaveSkillSnapshot(workdir, name, action, skillMD, content, "ui-skill-manage")
 		replacements := 1
 		updated := strings.Replace(content, req.OldString, req.NewString, 1)
 		if req.ReplaceAll {
@@ -2209,24 +2242,95 @@ func (s *Server) handleUISkillManage(w http.ResponseWriter, r *http.Request) {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
+		meta, _ := tools.UpsertSkillMetadata(workdir, name, action, "", "ui-skill-manage", true)
 		result["path"] = skillMD
 		result["replacements"] = replacements
+		result["version_id"] = snap.VersionID
+		result["source"] = meta.Source
+		result["version"] = meta.Version
+		result["usage_count"] = meta.UsageCount
+		result["success"] = true
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
+		return
 	case "delete":
 		if _, err := os.Stat(skillDir); err != nil {
 			writeUIError(w, http.StatusNotFound, "not_found", "skill not found")
 			return
 		}
+		before, _ := os.ReadFile(skillMD)
+		snap, _ := tools.SaveSkillSnapshot(workdir, name, action, skillMD, string(before), "ui-skill-manage")
 		if err := os.RemoveAll(skillDir); err != nil {
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
+		meta, _ := tools.UpsertSkillMetadata(workdir, name, action, "", "ui-skill-manage", true)
 		result["path"] = skillDir
-	default:
-		writeUIError(w, http.StatusBadRequest, "invalid_argument", "unsupported action")
+		result["version_id"] = snap.VersionID
+		result["source"] = meta.Source
+		result["version"] = meta.Version
+		result["usage_count"] = meta.UsageCount
+		result["success"] = true
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 		return
 	}
-	result["success"] = true
-	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
+	if s.Engine == nil || s.Engine.Registry == nil {
+		writeUIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
+		return
+	}
+	args := map[string]any{
+		"action": action,
+		"name":   name,
+	}
+	if strings.TrimSpace(req.Content) != "" {
+		args["content"] = req.Content
+	}
+	if strings.TrimSpace(req.OldString) != "" {
+		args["old_string"] = req.OldString
+	}
+	if strings.TrimSpace(req.NewString) != "" {
+		args["new_string"] = req.NewString
+	}
+	if req.ReplaceAll {
+		args["replace_all"] = true
+	}
+	if strings.TrimSpace(req.FilePath) != "" {
+		args["file_path"] = req.FilePath
+	}
+	if strings.TrimSpace(req.FileContent) != "" {
+		args["file_content"] = req.FileContent
+	}
+	if strings.TrimSpace(req.VersionID) != "" {
+		args["version_id"] = req.VersionID
+	}
+	if strings.TrimSpace(req.Source) != "" {
+		args["source"] = req.Source
+	}
+	if strings.TrimSpace(req.URL) != "" {
+		args["url"] = req.URL
+	}
+	if strings.TrimSpace(req.Repo) != "" {
+		args["repo"] = req.Repo
+	}
+	if strings.TrimSpace(req.Path) != "" {
+		args["path"] = req.Path
+	}
+	if strings.TrimSpace(req.OnConflict) != "" {
+		args["on_conflict"] = req.OnConflict
+	}
+	raw := s.Engine.Registry.Dispatch(r.Context(), "skill_manage", args, tools.ToolContext{
+		SessionID: "ui-skill-manage",
+		Workdir:   workdir,
+	})
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+	if e, ok := out["error"].(string); ok && strings.TrimSpace(e) != "" {
+		writeUIError(w, http.StatusBadRequest, "tool_error", e)
+		return
+	}
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
@@ -2346,7 +2450,7 @@ func (s *Server) handleUISkillsSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args["repo"] = req.Repo
-		args["sub_path"] = req.Path
+		args["path"] = req.Path
 	default:
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", "unsupported source")
 		return
@@ -2399,6 +2503,12 @@ func listLocalSkills(workdir string) ([]map[string]any, error) {
 			"name": name,
 			"path": skillMD,
 		})
+		if meta, mErr := tools.LoadSkillMetadata(workdir, name); mErr == nil {
+			skills[len(skills)-1]["source"] = meta.Source
+			skills[len(skills)-1]["version"] = meta.Version
+			skills[len(skills)-1]["usage_count"] = meta.UsageCount
+			skills[len(skills)-1]["updated_at"] = meta.UpdatedAt
+		}
 	}
 	sort.Slice(skills, func(i, j int) bool {
 		li, _ := skills[i]["name"].(string)
@@ -3027,7 +3137,7 @@ func summarizeRunResult(res *core.RunResult) map[string]any {
 	if !res.FinishedNaturally {
 		status = "max_iterations_reached"
 	}
-	return map[string]any{
+	out := map[string]any{
 		"status":                  status,
 		"message_count":           len(res.Messages),
 		"assistant_message_count": assistantCount,
@@ -3035,6 +3145,51 @@ func summarizeRunResult(res *core.RunResult) map[string]any {
 		"delegate_count":          delegateCount,
 		"tool_names":              toolNames,
 	}
+	if draft, ok := suggestSkillDraft(res, toolNames, assistantCount, toolCount); ok {
+		out["skill_draft"] = draft
+	}
+	return out
+}
+
+func suggestSkillDraft(res *core.RunResult, toolNames []string, assistantCount, toolCount int) (map[string]any, bool) {
+	if res == nil {
+		return nil, false
+	}
+	if res.TurnsUsed < 8 && toolCount < 6 {
+		return nil, false
+	}
+	avoid := map[string]struct{}{"skill_manage": {}, "skill_view": {}, "skill_list": {}, "skills_list": {}}
+	for _, n := range toolNames {
+		if _, ok := avoid[n]; ok {
+			return nil, false
+		}
+	}
+	lastUser := ""
+	for i := len(res.Messages) - 1; i >= 0; i-- {
+		if res.Messages[i].Role == "user" {
+			lastUser = strings.TrimSpace(res.Messages[i].Content)
+			break
+		}
+	}
+	if len(lastUser) > 80 {
+		lastUser = lastUser[:80]
+	}
+	if lastUser == "" {
+		lastUser = "long-task"
+	}
+	name := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(lastUser, " ", "-"), "_", "-"))
+	name = regexp.MustCompile(`[^a-z0-9.-]`).ReplaceAllString(name, "")
+	name = strings.Trim(name, "-.")
+	if name == "" {
+		name = "long-task"
+	}
+	content := fmt.Sprintf("# %s\n## Intent\n- Auto draft from long run\n## Trigger\n- turns_used=%d\n- assistant_messages=%d\n- tool_calls=%d\n## Steps\n1. Summarize the target outcome.\n2. List deterministic steps.\n3. Add failure checks.\n", name, res.TurnsUsed, assistantCount, toolCount)
+	return map[string]any{
+		"suggested": true,
+		"name":      name + "-draft",
+		"content":   content,
+		"reason":    "long task detected",
+	}, true
 }
 
 func namesCount(items []string) int {

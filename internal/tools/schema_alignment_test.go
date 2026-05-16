@@ -160,8 +160,8 @@ func TestDelegateTaskSchemaDocumentsConditionalRequiredAndDefaults(t *testing.T)
 
 func TestSkillManageSchemaDocumentsActionConditionalRequired(t *testing.T) {
 	oneOf, _ := skillManageParams()["oneOf"].([]any)
-	if len(oneOf) != 7 {
-		t.Fatalf("skill_manage.oneOf len=%d, want 7", len(oneOf))
+	if len(oneOf) != 8 {
+		t.Fatalf("skill_manage.oneOf len=%d, want 8", len(oneOf))
 	}
 	var syncBranch map[string]any
 	for _, raw := range oneOf {

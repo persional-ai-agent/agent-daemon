@@ -1564,6 +1564,13 @@ func (b *BuiltinTools) skillList(_ context.Context, args map[string]any, tc Tool
 			"description": desc,
 			"path":        skillPath,
 		})
+		meta, mErr := LoadSkillMetadata(tc.Workdir, name)
+		if mErr == nil {
+			skills[len(skills)-1]["source"] = meta.Source
+			skills[len(skills)-1]["version"] = meta.Version
+			skills[len(skills)-1]["usage_count"] = meta.UsageCount
+			skills[len(skills)-1]["updated_at"] = meta.UpdatedAt
+		}
 	}
 	return map[string]any{"success": true, "path": root, "skills": skills, "count": len(skills)}, nil
 }
@@ -1585,11 +1592,17 @@ func (b *BuiltinTools) skillView(_ context.Context, args map[string]any, tc Tool
 	if err != nil {
 		return nil, err
 	}
+	meta, _ := TrackSkillUsage(tc.Workdir, name, tc.SessionID)
+	snapshots, _ := ListSkillSnapshots(tc.Workdir, name, 10)
 	return map[string]any{
-		"success": true,
-		"name":    name,
-		"path":    path,
-		"content": string(bs),
+		"success":     true,
+		"name":        name,
+		"path":        path,
+		"content":     string(bs),
+		"source":      meta.Source,
+		"version":     meta.Version,
+		"usage_count": meta.UsageCount,
+		"history":     snapshots,
 	}, nil
 }
 
@@ -1690,7 +1703,9 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 		if err := os.WriteFile(skillMD, []byte(content), 0o644); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "local", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": skillMD, "session_id": tc.SessionID})
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	case "edit":
 		content := strArg(args, "content")
 		if strings.TrimSpace(content) == "" {
@@ -1702,10 +1717,14 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 			}
 			return nil, err
 		}
+		before, _ := os.ReadFile(skillMD)
+		snap, _ := SaveSkillSnapshot(tc.Workdir, name, action, skillMD, string(before), tc.SessionID)
 		if err := os.WriteFile(skillMD, []byte(content), 0o644); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": skillMD, "version_id": snap.VersionID, "session_id": tc.SessionID})
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true, "version_id": snap.VersionID, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	case "patch":
 		oldString := strArg(args, "old_string")
 		if oldString == "" {
@@ -1727,6 +1746,7 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 			return nil, err
 		}
 		content := string(bs)
+		snap, _ := SaveSkillSnapshot(tc.Workdir, name, action, skillMD, content, tc.SessionID)
 		replaceAll := boolArg(args, "replace_all", false)
 		matchCount := strings.Count(content, oldString)
 		if matchCount == 0 {
@@ -1746,8 +1766,12 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 		if err := os.WriteFile(skillMD, []byte(updated), 0o644); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true, "replacements": replacements}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": skillMD, "version_id": snap.VersionID, "session_id": tc.SessionID, "replacements": replacements})
+		return map[string]any{"action": action, "name": name, "path": skillMD, "success": true, "replacements": replacements, "version_id": snap.VersionID, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	case "delete":
+		before, _ := os.ReadFile(skillMD)
+		snap, _ := SaveSkillSnapshot(tc.Workdir, name, action, skillMD, string(before), tc.SessionID)
 		if _, err := os.Stat(skillDir); err != nil {
 			if os.IsNotExist(err) {
 				return nil, fmt.Errorf("skill not found: %s", name)
@@ -1757,7 +1781,9 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 		if err := os.RemoveAll(skillDir); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": skillDir, "success": true}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": skillDir, "version_id": snap.VersionID, "session_id": tc.SessionID})
+		return map[string]any{"action": action, "name": name, "path": skillDir, "success": true, "version_id": snap.VersionID, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	case "write_file":
 		filePath := strArg(args, "file_path")
 		if strings.TrimSpace(filePath) == "" {
@@ -1788,10 +1814,20 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 			return nil, err
 		}
+		var snap SkillSnapshot
+		if old, err := os.ReadFile(targetPath); err == nil {
+			snap, _ = SaveSkillSnapshot(tc.Workdir, name, action, targetPath, string(old), tc.SessionID)
+		}
 		if err := os.WriteFile(targetPath, []byte(content), 0o644); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "", tc.SessionID, true)
+		out := map[string]any{"action": action, "name": name, "path": targetPath, "success": true, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}
+		if strings.TrimSpace(snap.VersionID) != "" {
+			out["version_id"] = snap.VersionID
+		}
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": targetPath, "version_id": snap.VersionID, "session_id": tc.SessionID})
+		return out, nil
 	case "remove_file":
 		filePath := strArg(args, "file_path")
 		if strings.TrimSpace(filePath) == "" {
@@ -1811,12 +1847,25 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 		if err != nil {
 			return nil, err
 		}
+		before, err := os.ReadFile(targetPath)
+		if err == nil {
+			_, _ = SaveSkillSnapshot(tc.Workdir, name, action, targetPath, string(before), tc.SessionID)
+		}
 		if err := os.Remove(targetPath); err != nil {
 			return nil, err
 		}
-		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true}, nil
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, action, "", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": action, "path": targetPath, "session_id": tc.SessionID})
+		return map[string]any{"action": action, "name": name, "path": targetPath, "success": true, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	case "sync":
 		source := strings.ToLower(strings.TrimSpace(strArg(args, "source")))
+		onConflict := strings.ToLower(strings.TrimSpace(strArg(args, "on_conflict")))
+		if onConflict == "" {
+			onConflict = "overwrite"
+		}
+		if onConflict != "overwrite" && onConflict != "reject" {
+			return nil, fmt.Errorf("unsupported on_conflict: %s (use overwrite or reject)", onConflict)
+		}
 		if source == "" {
 			return nil, errors.New("source required for sync (github or url)")
 		}
@@ -1830,13 +1879,23 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 			if err != nil {
 				return nil, fmt.Errorf("fetch skill: %w", err)
 			}
+			if onConflict == "reject" {
+				if _, err := os.Stat(skillMD); err == nil {
+					return nil, fmt.Errorf("skill already exists: %s", name)
+				}
+			}
+			if old, err := os.ReadFile(skillMD); err == nil {
+				_, _ = SaveSkillSnapshot(tc.Workdir, name, action, skillMD, string(old), tc.SessionID)
+			}
 			if err := os.MkdirAll(skillDir, 0o755); err != nil {
 				return nil, err
 			}
 			if err := os.WriteFile(skillMD, bs, 0o644); err != nil {
 				return nil, err
 			}
-			return map[string]any{"action": "sync", "source": "url", "name": name, "path": skillMD, "success": true}, nil
+			meta, _ := UpsertSkillMetadata(tc.Workdir, name, "sync", "url", tc.SessionID, true)
+			_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": "sync", "source": "url", "path": skillMD, "session_id": tc.SessionID, "on_conflict": onConflict})
+			return map[string]any{"action": "sync", "source": "url", "name": name, "path": skillMD, "success": true, "source_meta": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 		case "github":
 			repo := strings.TrimSpace(strArg(args, "repo"))
 			if repo == "" {
@@ -1847,10 +1906,36 @@ func (b *BuiltinTools) skillManage(ctx context.Context, args map[string]any, tc 
 			if err != nil {
 				return nil, fmt.Errorf("sync github: %w", err)
 			}
+			for _, n := range synced {
+				_, _ = UpsertSkillMetadata(tc.Workdir, n, "sync", "github:"+repo, tc.SessionID, true)
+			}
+			_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": "sync", "source": "github", "repo": repo, "path": subPath, "synced_skills": synced, "session_id": tc.SessionID})
 			return map[string]any{"action": "sync", "source": "github", "repo": repo, "path": subPath, "synced_skills": synced, "success": true}, nil
 		default:
 			return nil, fmt.Errorf("unsupported sync source: %s (use github or url)", source)
 		}
+	case "rollback":
+		versionID := strings.TrimSpace(strArg(args, "version_id"))
+		if versionID == "" {
+			return nil, errors.New("version_id required for rollback")
+		}
+		snap, err := LoadSkillSnapshot(tc.Workdir, name, versionID)
+		if err != nil {
+			return nil, err
+		}
+		targetPath := snap.FilePath
+		if strings.TrimSpace(targetPath) == "" {
+			targetPath = skillMD
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(targetPath, []byte(snap.Content), 0o644); err != nil {
+			return nil, err
+		}
+		meta, _ := UpsertSkillMetadata(tc.Workdir, name, "rollback", "", tc.SessionID, true)
+		_ = AppendSkillAudit(tc.Workdir, map[string]any{"name": name, "action": "rollback", "version_id": versionID, "path": targetPath, "session_id": tc.SessionID})
+		return map[string]any{"action": "rollback", "name": name, "path": targetPath, "success": true, "rolled_back_version_id": versionID, "source": meta.Source, "version": meta.Version, "usage_count": meta.UsageCount}, nil
 	default:
 		return nil, fmt.Errorf("unsupported skill_manage action: %s", action)
 	}
@@ -2196,7 +2281,7 @@ func skillManageParams() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file", "sync"}, "description": "Skill management action."},
+			"action":       map[string]any{"type": "string", "enum": []string{"create", "edit", "patch", "delete", "write_file", "remove_file", "sync", "rollback"}, "description": "Skill management action."},
 			"name":         map[string]any{"type": "string"},
 			"content":      map[string]any{"type": "string"},
 			"old_string":   map[string]any{"type": "string"},
@@ -2208,6 +2293,8 @@ func skillManageParams() map[string]any {
 			"source":       map[string]any{"type": "string", "enum": []string{"github", "url"}, "description": "Sync source: github (GitHub repo) or url (direct URL)"},
 			"url":          map[string]any{"type": "string", "description": "URL for source=url sync"},
 			"repo":         map[string]any{"type": "string", "description": "GitHub repo (owner/name) for source=github sync"},
+			"version_id":   map[string]any{"type": "string", "description": "History version id for rollback action."},
+			"on_conflict":  map[string]any{"type": "string", "enum": []string{"overwrite", "reject"}, "description": "Conflict strategy for sync action."},
 		},
 		"required": []string{"action", "name"},
 		"oneOf": []any{
@@ -2225,6 +2312,7 @@ func skillManageParams() map[string]any {
 					map[string]any{"properties": map[string]any{"source": map[string]any{"const": "github"}}, "required": []string{"repo"}},
 				},
 			},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "rollback"}}, "required": []string{"version_id"}},
 		},
 	}
 }

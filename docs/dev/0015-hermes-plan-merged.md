@@ -79,7 +79,7 @@
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
 | `TODO-008` | `partial` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；TUI/Web 启停管理仍待补齐。 | `internal/tools/toolsets.go`、`cmd/agentd/main.go`、`internal/cli/chat.go` |
 | `TODO-009` | `done` | 已补主流 provider profile（OpenRouter/Nous/NVIDIA NIM/MiMo/GLM/Kimi/MiniMax/HuggingFace/custom_openai）接入、`model providers` 能力与配置状态输出，且 TUI/Web 通过既有 `/model providers` + `/model set` 路径可查看并切换 profile。 | `cmd/agentd/main.go`、`cmd/agentd/main_test.go`、`internal/api/server.go`、`ui-tui/command_logic.go` |
-| `TODO-010` | `partial` | skills 多源与管理能力已补，自动学习与审计回滚未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 051`、`# 052`、`# 275`） |
+| `TODO-010` | `done` | 已补 skills provenance（source/version/trigger task）、usage 计数、审计日志、历史快照与 rollback；并在长任务摘要中输出 skill draft 建议，覆盖 create/edit/patch/delete/sync/rollback 闭环。 | `internal/tools/builtin.go`、`internal/tools/skills_meta.go`、`internal/api/server.go` |
 | `TODO-011` | `partial` | memory 学习闭环有阶段成果，insights/外部 provider 仍待补。 | `docs/dev/0036-summary-summary-merged.md`（`# 275`） |
 | `TODO-012` | `partial` | cron 表达式、投递、链式、脚本已补，重试/并发/审计还需补完。 | `docs/dev/0036-summary-summary-merged.md`（`# 280`~`# 283`） |
 | `TODO-013` | `partial` | ACP/IDE 最小适配已完成，完整协议层能力未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 258`） |
