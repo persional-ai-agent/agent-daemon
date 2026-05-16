@@ -2,6 +2,7 @@ package main
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -574,5 +575,50 @@ func TestRuntimeMultiTurnKeepsAssistantBoundaries(t *testing.T) {
 	}
 	if !(idxU1 < idxA1 && idxA1 < idxU2 && idxU2 < idxA2) {
 		t.Fatalf("expected chronological turn ordering, got: %q", out)
+	}
+}
+
+func TestRuntimeFiveTurnsKeepChronologicalOrder(t *testing.T) {
+	rt := newTerminalRuntime(80)
+	for i := 1; i <= 5; i++ {
+		user := "turn-user-" + strconv.Itoa(i)
+		reply := "turn-assistant-" + strconv.Itoa(i)
+		rt.startTurn(user)
+		rt.publishTurnEvent(map[string]any{
+			"type": "model_stream_event",
+			"data": map[string]any{
+				"event_type": "text_delta",
+				"event_data": map[string]any{"text": reply},
+			},
+		})
+		rt.publishTurnEvent(map[string]any{
+			"type":    "completed",
+			"content": reply,
+		})
+		rt.consumePendingEvents()
+		rt.endTurn()
+	}
+
+	out, changed := rt.render(true)
+	if !changed {
+		t.Fatal("expected changed render")
+	}
+	plain := ansiEscapePattern.ReplaceAllString(out, "")
+	last := -1
+	for i := 1; i <= 5; i++ {
+		user := "turn-user-" + strconv.Itoa(i)
+		reply := "turn-assistant-" + strconv.Itoa(i)
+		ui := strings.Index(plain, user)
+		ai := strings.Index(plain, reply)
+		if ui < 0 || ai < 0 {
+			t.Fatalf("missing turn markers for turn %d, output=%q", i, out)
+		}
+		if !(ui < ai) {
+			t.Fatalf("expected user before assistant in turn %d, output=%q", i, out)
+		}
+		if ui <= last || ai <= last {
+			t.Fatalf("expected strict chronological order at turn %d, output=%q", i, out)
+		}
+		last = ai
 	}
 }

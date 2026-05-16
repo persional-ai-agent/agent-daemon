@@ -70,7 +70,7 @@
 
 | TODO | 状态 | 当前结论 | 证据 |
 |---|---|---|---|
-| `TODO-001` | `partial` | TUI/CLI 已完成多轮重构与流式链路收口，但仍有交互与渲染边角待稳定。 | `docs/dev/0036-summary-summary-merged.md`（`# 274`） |
+| `TODO-001` | `done` | TUI/CLI 多行输入、slash 补全、历史浏览、Ctrl+C 取消、流式/最终态渲染与多轮顺序稳定性已完成收口，验收回归覆盖通过。 | `ui-tui/bubbletea_app.go`、`ui-tui/tui_runtime.go`、`ui-tui/*test.go` |
 | `TODO-002` | `done` | CLI/TUI/Gateway 命令分发、参数校验、核心回包 payload 与 usage 文案已统一到 shared helper 路径，`/stop` 语义已归一到取消当前平台会话活动 turn。 | `internal/gateway/runner.go`、`internal/cli/chat.go`、`ui-tui/command_logic.go`、`internal/tools/` |
 | `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
 | `TODO-004` | `done` | `signal`、`email`、`webhook`、`homeassistant` 已具备最小 inbound/outbound 闭环，并接入 gateway setup/status/platforms 与运行时适配器装配。 | `internal/gateway/platforms/signal.go`、`internal/gateway/platforms/email.go`、`internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/homeassistant_adapter.go`、`cmd/agentd/main.go` |
@@ -89,10 +89,9 @@
 
 ## 下一迭代优先级（先做功能）
 
-1. `TODO-001`：收口 TUI/CLI 流式渲染与输入稳定性残留问题。
-2. `TODO-006`：补平台原生命令与审批交互深度。
-3. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
-4. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
+1. `TODO-006`：补平台原生命令与审批交互深度。
+2. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
+3. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
 
 ## P0：先稳定用户入口与会话体验
 
