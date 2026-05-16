@@ -155,13 +155,14 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printCLIEnvelope(true, map[string]any{"session_id": state.SessionID, "messages_in_context": len(state.History), "tools": len(eng.Registry.Names())}, "", "")
 		return true, nil
 	case "/new", "/reset":
+		prev := state.SessionID
 		nextID := uuid.NewString()
 		if len(fields) > 1 {
 			nextID = strings.TrimSpace(fields[1])
 		}
 		state.SessionID = nextID
 		state.History = nil
-		printCLIEnvelope(true, map[string]any{"session_id": state.SessionID, "reset": true}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionSwitchPayload(prev, state.SessionID, true, 0), "", "")
 		return true, nil
 	case "/resume":
 		if len(fields) != 2 {
@@ -176,9 +177,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
+		prev := state.SessionID
 		state.SessionID = fields[1]
 		state.History = loaded
-		printCLIEnvelope(true, map[string]any{"session_id": state.SessionID, "loaded_messages": len(loaded)}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionSwitchPayload(prev, state.SessionID, false, len(loaded)), "", "")
 		return true, nil
 	case "/tools":
 		return handleToolsSlash(fields, eng), nil

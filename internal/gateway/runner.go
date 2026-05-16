@@ -733,7 +733,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			prev := w.currentSessionID()
 			w.activateSession(next, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, map[string]any{"slash": parsed.head, "session_id": next})
+			meta := tools.BuildSessionSwitchPayload(prev, next, true, 0)
+			meta["slash"] = parsed.head
+			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, meta)
 			return
 		case "/resume":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
@@ -747,7 +749,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/resume", "session_id": target})
+			meta := tools.BuildSessionSwitchPayload(prev, target, false, -1)
+			meta["slash"] = "/resume"
+			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
