@@ -21,6 +21,7 @@ func TestBuiltInGatewaySlashCommandsContainsCoreSet(t *testing.T) {
 	list := BuiltInGatewaySlashCommands()
 	want := map[string]bool{
 		"/pair": true, "/unpair": true, "/session": true, "/whoami": true, "/resolve": true, "/continuity": true, "/setid": true, "/unsetid": true, "/history": true, "/show": true, "/next": true, "/prev": true, "/sessions": true, "/pick": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/clear": true, "/reload": true, "/save": true, "/sethome": true, "/targets": true, "/model": true, "/personality": true, "/skills": true, "/tools": true, "/cancel": true, "/compress": true, "/usage": true, "/queue": true,
+		"/policy": true,
 		"/status": true, "/pending": true, "/approvals": true, "/grant": true,
 		"/revoke": true, "/approve": true, "/deny": true, "/help": true,
 	}
@@ -195,7 +196,7 @@ func TestGatewayCommandRequiresAuthorization(t *testing.T) {
 		t.Fatal("expected non-empty auth-required command set")
 	}
 	want := map[string]bool{
-		"/session": true, "/whoami": true, "/resolve": true, "/continuity": true, "/setid": true, "/unsetid": true, "/history": true, "/show": true, "/next": true, "/prev": true, "/sessions": true, "/pick": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/clear": true, "/reload": true, "/save": true, "/sethome": true, "/targets": true, "/model": true, "/personality": true, "/skills": true, "/tools": true, "/cancel": true, "/compress": true, "/usage": true, "/queue": true, "/status": true, "/approve": true, "/deny": true,
+		"/session": true, "/whoami": true, "/resolve": true, "/continuity": true, "/setid": true, "/unsetid": true, "/history": true, "/show": true, "/next": true, "/prev": true, "/sessions": true, "/pick": true, "/stats": true, "/new": true, "/reset": true, "/resume": true, "/recover": true, "/retry": true, "/undo": true, "/clear": true, "/reload": true, "/save": true, "/sethome": true, "/targets": true, "/model": true, "/personality": true, "/skills": true, "/tools": true, "/cancel": true, "/compress": true, "/usage": true, "/policy": true, "/queue": true, "/status": true, "/approve": true, "/deny": true,
 		"/approvals": true, "/pending": true, "/grant": true, "/revoke": true,
 	}
 	if len(authRequired) != len(want) {

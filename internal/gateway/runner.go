@@ -383,6 +383,7 @@ func (w *sessionWorker) run(parent context.Context) {
 
 func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 	w.setLastUserID(event.UserID)
+	policy, _ := tools.ResolveGatewayInteractionPolicy(w.engine.Workdir)
 	globalID := ""
 	if w.runner != nil && w.runner.identityStore != nil {
 		if v, err := w.runner.identityStore.resolve(w.adapter.Name(), event.UserID); err == nil {
@@ -412,6 +413,49 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		}
 		switch parsed.head {
+		case "/policy":
+			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {
+				reply := "mention_required: " + map[bool]string{true: "on", false: "off"}[policy.MentionRequired] +
+					"\ngroup_dm_policy: " + policy.GroupDMPolicy +
+					"\nignored_channels: " + strings.Join(policy.IgnoredChannels, ",") +
+					"\nfree_response_channels: " + strings.Join(policy.FreeResponseChannels, ",") +
+					"\nmention_keywords: " + strings.Join(policy.MentionKeywords, ",")
+				meta := tools.AttachSlashPayload(map[string]any{
+					"mention_required":       policy.MentionRequired,
+					"group_dm_policy":        policy.GroupDMPolicy,
+					"ignored_channels":       policy.IgnoredChannels,
+					"free_response_channels": policy.FreeResponseChannels,
+					"mention_keywords":       policy.MentionKeywords,
+				}, "/policy")
+				w.sendMetaText(ctx, event, escapeMarkdown(reply), meta)
+				return
+			}
+			if len(parsed.args) >= 2 && strings.EqualFold(strings.TrimSpace(parsed.args[0]), "mention") {
+				mode := strings.ToLower(strings.TrimSpace(parsed.args[1]))
+				if mode != "on" && mode != "off" {
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandPolicyUsage), "/policy")
+					return
+				}
+				policy.MentionRequired = mode == "on"
+				if err := tools.UpdateGatewayInteractionPolicy(w.engine.Workdir, policy); err != nil {
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Policy update", escapeMarkdown(err.Error())), "/policy")
+					return
+				}
+				w.sendSlashText(ctx, event, "_Policy updated: mention_required="+mode+"_", "/policy")
+				return
+			}
+			if len(parsed.args) >= 2 && strings.EqualFold(strings.TrimSpace(parsed.args[0]), "groupdm") {
+				next := tools.NormalizeGatewayGroupDMPolicy(parsed.args[1])
+				policy.GroupDMPolicy = next
+				if err := tools.UpdateGatewayInteractionPolicy(w.engine.Workdir, policy); err != nil {
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Policy update", escapeMarkdown(err.Error())), "/policy")
+					return
+				}
+				w.sendSlashText(ctx, event, "_Policy updated: group_dm_policy="+escapeMarkdown(next)+"_", "/policy")
+				return
+			}
+			w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandPolicyUsage), "/policy")
+			return
 		case "/pair":
 			if w.runner == nil {
 				_, _ = w.adapter.Send(ctx, event.ChatID, tools.PairingUnavailableEN(), event.MessageID)
@@ -1168,6 +1212,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		}
 	}
 
+	if !w.allowByInteractionPolicy(policy, event) {
+		return
+	}
+
 	if !authorized {
 		if w.runner != nil && w.runner.isPaired(w.adapter.Name(), event.UserID) {
 			authorized = true
@@ -1426,6 +1474,35 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			"at":          time.Now().Format(time.RFC3339Nano),
 		})
 	}
+}
+
+func (w *sessionWorker) allowByInteractionPolicy(policy tools.GatewayInteractionPolicy, event MessageEvent) bool {
+	platformName := strings.ToLower(strings.TrimSpace(w.adapter.Name()))
+	if tools.MatchPolicyChannel(policy.IgnoredChannels, platformName, event.ChatID) {
+		return false
+	}
+	if strings.EqualFold(policy.GroupDMPolicy, "group_only") && strings.EqualFold(strings.TrimSpace(event.ChatType), "dm") {
+		return false
+	}
+	if strings.EqualFold(policy.GroupDMPolicy, "dm_only") && !strings.EqualFold(strings.TrimSpace(event.ChatType), "dm") {
+		return false
+	}
+	if event.IsCommand {
+		return true
+	}
+	if tools.MatchPolicyChannel(policy.FreeResponseChannels, platformName, event.ChatID) {
+		return true
+	}
+	if policy.MentionRequired && strings.EqualFold(strings.TrimSpace(event.ChatType), "group") {
+		text := strings.ToLower(strings.TrimSpace(event.Text))
+		for _, kw := range policy.MentionKeywords {
+			if strings.Contains(text, strings.ToLower(strings.TrimSpace(kw))) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 func gatewayUserInput(event MessageEvent) string {
@@ -1947,12 +2024,15 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 func (w *sessionWorker) gatewayStatusSnapshot() tools.GatewayStatusSnapshot {
 	activeSessionID := w.currentSessionID()
 	lastUserID := w.getLastUserID()
+	policy, _ := tools.ResolveGatewayInteractionPolicy(w.engine.Workdir)
 	snapshot := tools.GatewayStatusSnapshot{
-		Platform:      w.adapter.Name(),
-		RouteSession:  w.key,
-		ActiveSession: activeSessionID,
-		QueueLen:      len(w.queue),
-		Running:       w.isRunning(),
+		Platform:        w.adapter.Name(),
+		RouteSession:    w.key,
+		ActiveSession:   activeSessionID,
+		QueueLen:        len(w.queue),
+		Running:         w.isRunning(),
+		MentionRequired: policy.MentionRequired,
+		GroupDMPolicy:   policy.GroupDMPolicy,
 	}
 	if w.runner != nil {
 		paired := w.runner.isPaired(w.adapter.Name(), lastUserID)

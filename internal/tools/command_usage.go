@@ -26,6 +26,7 @@ const (
 	CommandPersonalityUsage      = "/personality [show|reset|<text>]"
 	CommandSkillsUsage           = "/skills [name]"
 	CommandUsageUsage            = "/usage [session_id]"
+	CommandPolicyUsage           = "/policy [show|mention on|mention off|groupdm both|groupdm group_only|groupdm dm_only]"
 	CommandCompressUsage         = "/compress [tail_messages]"
 	CommandToolsetsShowUsage     = "/toolsets show <name>"
 	CommandToolsetsResolveUsage  = "/toolsets resolve <name[,name]>"

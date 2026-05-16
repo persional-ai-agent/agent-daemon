@@ -4812,6 +4812,20 @@ func runGateway(cfg config.Config, args []string) {
 			fmt.Println("configured_platforms=" + strings.Join(status.ConfiguredPlatforms, ","))
 		}
 		fmt.Println("supported_platforms=" + strings.Join(status.SupportedPlatforms, ","))
+		if len(status.NativeCommandInstall) == 0 {
+			fmt.Println("native_command_install=")
+		} else {
+			keys := make([]string, 0, len(status.NativeCommandInstall))
+			for k := range status.NativeCommandInstall {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			lines := make([]string, 0, len(keys))
+			for _, k := range keys {
+				lines = append(lines, k+":"+status.NativeCommandInstall[k])
+			}
+			fmt.Println("native_command_install=" + strings.Join(lines, " | "))
+		}
 	case "platforms":
 		for _, platform := range supportedGatewayPlatforms() {
 			fmt.Println(platform)
@@ -6158,17 +6172,22 @@ func runGatewaySetup(args []string) {
 		log.Fatal(err)
 	}
 	if *jsonOutput {
+		hints := gatewayNativeCommandInstallHints([]string{platformKey})
 		printJSON(map[string]any{
-			"success":  true,
-			"path":     targetPath,
-			"platform": platformKey,
-			"enabled":  true,
-			"written":  written,
+			"success":                true,
+			"path":                   targetPath,
+			"platform":               platformKey,
+			"enabled":                true,
+			"written":                written,
+			"native_command_install": hints[platformKey],
 		})
 		return
 	}
 	fmt.Printf("configured gateway platform %s in %s\n", platformKey, targetPath)
 	fmt.Printf("written=%s\n", strings.Join(written, ","))
+	if hint := gatewayNativeCommandInstallHints([]string{platformKey})[platformKey]; strings.TrimSpace(hint) != "" {
+		fmt.Printf("native_command_install=%s\n", hint)
+	}
 }
 
 func setupGatewayConfig(path, platformKey, matrixBaseURL, matrixToken, matrixSecret, feishuWebhookURL, feishuSecret, dingtalkWebhookURL, dingtalkSecret, wecomWebhookURL, wecomSecret, mattermostWebhookURL, mattermostSecret, signalBaseURL, signalAccount, signalSecret, emailSMTPHost, emailSMTPPort, emailSMTPUsername, emailSMTPPassword, emailFromAddress, emailInboundSecret, haBaseURL, haToken, haSecret, token, botToken, appToken, accessToken, phoneNumberID, verifyToken, webhookSecret, webhookOutboundURL, webhookInboundSecret, appID, appSecret, allowedUsers string) ([]string, error) {
@@ -6736,24 +6755,25 @@ func printGatewayHookSpoolUsage() {
 }
 
 type gatewayStatusInfo struct {
-	Enabled             bool     `json:"enabled"`
-	ConfiguredPlatforms []string `json:"configured_platforms"`
-	SupportedPlatforms  []string `json:"supported_platforms"`
-	Running             bool     `json:"running"`
-	PID                 int      `json:"pid,omitempty"`
-	PIDPath             string   `json:"pid_path,omitempty"`
-	LogPath             string   `json:"log_path,omitempty"`
-	Locked              bool     `json:"locked"`
-	LockPID             int      `json:"lock_pid,omitempty"`
-	LockPath            string   `json:"lock_path,omitempty"`
-	TokenLocked         bool     `json:"token_locked"`
-	TokenLockPID        int      `json:"token_lock_pid,omitempty"`
-	TokenLockPath       string   `json:"token_lock_path,omitempty"`
-	StaleLock           bool     `json:"stale_lock,omitempty"`
-	StaleTokenLock      bool     `json:"stale_token_lock,omitempty"`
-	Installed           bool     `json:"installed"`
-	InstallDir          string   `json:"install_dir,omitempty"`
-	ManifestPath        string   `json:"manifest_path,omitempty"`
+	Enabled              bool              `json:"enabled"`
+	ConfiguredPlatforms  []string          `json:"configured_platforms"`
+	SupportedPlatforms   []string          `json:"supported_platforms"`
+	Running              bool              `json:"running"`
+	PID                  int               `json:"pid,omitempty"`
+	PIDPath              string            `json:"pid_path,omitempty"`
+	LogPath              string            `json:"log_path,omitempty"`
+	Locked               bool              `json:"locked"`
+	LockPID              int               `json:"lock_pid,omitempty"`
+	LockPath             string            `json:"lock_path,omitempty"`
+	TokenLocked          bool              `json:"token_locked"`
+	TokenLockPID         int               `json:"token_lock_pid,omitempty"`
+	TokenLockPath        string            `json:"token_lock_path,omitempty"`
+	StaleLock            bool              `json:"stale_lock,omitempty"`
+	StaleTokenLock       bool              `json:"stale_token_lock,omitempty"`
+	Installed            bool              `json:"installed"`
+	InstallDir           string            `json:"install_dir,omitempty"`
+	ManifestPath         string            `json:"manifest_path,omitempty"`
+	NativeCommandInstall map[string]string `json:"native_command_install,omitempty"`
 }
 
 func gatewayStatus(cfg config.Config) gatewayStatusInfo {
@@ -6762,25 +6782,45 @@ func gatewayStatus(cfg config.Config) gatewayStatusInfo {
 	tokenLockPath := gatewayTokenLockPath(cfg)
 	tokenLockState := readGatewayLockState(tokenLockPath)
 	return gatewayStatusInfo{
-		Enabled:             cfg.GatewayEnabled,
-		ConfiguredPlatforms: configuredGatewayPlatforms(cfg),
-		SupportedPlatforms:  supportedGatewayPlatforms(),
-		Running:             running,
-		PID:                 pid,
-		PIDPath:             gatewayPIDPath(cfg),
-		LogPath:             gatewayLogPath(cfg),
-		Locked:              lockState.Alive,
-		LockPID:             lockState.PID,
-		LockPath:            gatewayLockPath(cfg),
-		TokenLocked:         tokenLockState.Alive,
-		TokenLockPID:        tokenLockState.PID,
-		TokenLockPath:       tokenLockPath,
-		StaleLock:           lockState.Stale,
-		StaleTokenLock:      tokenLockState.Stale,
-		Installed:           fileExists(gatewayManifestPath(cfg)),
-		InstallDir:          gatewayInstallDir(cfg),
-		ManifestPath:        gatewayManifestPath(cfg),
+		Enabled:              cfg.GatewayEnabled,
+		ConfiguredPlatforms:  configuredGatewayPlatforms(cfg),
+		SupportedPlatforms:   supportedGatewayPlatforms(),
+		Running:              running,
+		PID:                  pid,
+		PIDPath:              gatewayPIDPath(cfg),
+		LogPath:              gatewayLogPath(cfg),
+		Locked:               lockState.Alive,
+		LockPID:              lockState.PID,
+		LockPath:             gatewayLockPath(cfg),
+		TokenLocked:          tokenLockState.Alive,
+		TokenLockPID:         tokenLockState.PID,
+		TokenLockPath:        tokenLockPath,
+		StaleLock:            lockState.Stale,
+		StaleTokenLock:       tokenLockState.Stale,
+		Installed:            fileExists(gatewayManifestPath(cfg)),
+		InstallDir:           gatewayInstallDir(cfg),
+		ManifestPath:         gatewayManifestPath(cfg),
+		NativeCommandInstall: gatewayNativeCommandInstallHints(configuredGatewayPlatforms(cfg)),
 	}
+}
+
+func gatewayNativeCommandInstallHints(platforms []string) map[string]string {
+	out := map[string]string{}
+	for _, p := range platforms {
+		switch strings.ToLower(strings.TrimSpace(p)) {
+		case "telegram":
+			out[p] = "run `agentd gateway manifest -platform telegram` and sync commands with BotFather"
+		case "discord":
+			out[p] = "run `agentd gateway manifest -platform discord` and install application commands"
+		case "slack":
+			out[p] = "run `agentd gateway manifest -platform slack` and install slash command/app manifest"
+		case "yuanbao":
+			out[p] = "run `agentd gateway manifest -platform yuanbao` and sync bot command list"
+		default:
+			out[p] = "platform uses gateway text-command normalization; no separate native command installer"
+		}
+	}
+	return out
 }
 
 type gatewayLockState struct {
@@ -7318,15 +7358,16 @@ func runServe(cfg config.Config) {
 		GatewayStatusFn: func() map[string]any {
 			status := gatewayStatus(cfg)
 			return map[string]any{
-				"enabled":              status.Enabled,
-				"configured_platforms": status.ConfiguredPlatforms,
-				"supported_platforms":  status.SupportedPlatforms,
-				"running":              status.Running,
-				"pid":                  status.PID,
-				"log_path":             status.LogPath,
-				"locked":               status.Locked,
-				"token_locked":         status.TokenLocked,
-				"installed":            status.Installed,
+				"enabled":                status.Enabled,
+				"configured_platforms":   status.ConfiguredPlatforms,
+				"supported_platforms":    status.SupportedPlatforms,
+				"running":                status.Running,
+				"pid":                    status.PID,
+				"log_path":               status.LogPath,
+				"locked":                 status.Locked,
+				"token_locked":           status.TokenLocked,
+				"installed":              status.Installed,
+				"native_command_install": status.NativeCommandInstall,
 			}
 		},
 		PluginDashboardsFn: func() ([]map[string]any, error) {
@@ -7373,12 +7414,13 @@ func runServe(cfg config.Config) {
 				"success": true,
 				"action":  action,
 				"status": map[string]any{
-					"enabled":              status.Enabled,
-					"configured_platforms": status.ConfiguredPlatforms,
-					"supported_platforms":  status.SupportedPlatforms,
-					"running":              status.Running,
-					"pid":                  status.PID,
-					"log_path":             status.LogPath,
+					"enabled":                status.Enabled,
+					"configured_platforms":   status.ConfiguredPlatforms,
+					"supported_platforms":    status.SupportedPlatforms,
+					"running":                status.Running,
+					"pid":                    status.PID,
+					"log_path":               status.LogPath,
+					"native_command_install": status.NativeCommandInstall,
 				},
 			}, nil
 		},

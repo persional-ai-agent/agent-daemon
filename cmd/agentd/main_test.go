@@ -324,6 +324,12 @@ func TestGatewayStatus(t *testing.T) {
 	if len(status.SupportedPlatforms) != 16 {
 		t.Fatalf("supported platforms = %#v", status.SupportedPlatforms)
 	}
+	if len(status.NativeCommandInstall) == 0 {
+		t.Fatalf("native command install hints should not be empty: %#v", status.NativeCommandInstall)
+	}
+	if strings.TrimSpace(status.NativeCommandInstall["telegram"]) == "" {
+		t.Fatalf("missing telegram native command install hint: %#v", status.NativeCommandInstall)
+	}
 }
 
 func TestGatewayStatusLockFields(t *testing.T) {

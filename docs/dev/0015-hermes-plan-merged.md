@@ -75,7 +75,7 @@
 | `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
 | `TODO-004` | `done` | `signal`、`email`、`webhook`、`homeassistant` 已具备最小 inbound/outbound 闭环，并接入 gateway setup/status/platforms 与运行时适配器装配。 | `internal/gateway/platforms/signal.go`、`internal/gateway/platforms/email.go`、`internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/homeassistant_adapter.go`、`cmd/agentd/main.go` |
 | `TODO-005` | `done` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` + `mattermost` + `sms` + `bluebubbles` 网关适配器（inbound/outbound 最小闭环），并接入 gateway setup/status/platforms、运行时装配与 webhook API 路由。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`internal/gateway/platforms/mattermost.go`、`internal/gateway/platforms/sms.go`、`internal/gateway/platforms/bluebubbles.go`、`internal/api/server.go`、`cmd/agentd/main.go` |
-| `TODO-006` | `partial` | 审批命令链路已推进，平台原生交互深度仍未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 257`） |
+| `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
 | `TODO-008` | `partial` | toolsets 最小对齐已完成，动态可用性与 UI 管理仍未完全到位。 | `docs/dev/0036-summary-summary-merged.md`（`# 063`、`# 107`） |
 | `TODO-009` | `partial` | provider 运行时与插件闭环有进展，profile/能力矩阵未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 255`、`# 279`） |
@@ -89,9 +89,8 @@
 
 ## 下一迭代优先级（先做功能）
 
-1. `TODO-006`：补平台原生命令与审批交互深度。
-2. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
-3. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
+1. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
+2. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
 
 ## P0：先稳定用户入口与会话体验
 
@@ -344,6 +343,14 @@
 - Telegram、Discord、Slack、WhatsApp、Yuanbao 与新增平台的审批命令行为一致。
 - 群组中可配置必须 mention 才响应。
 - 平台 manifest 或 setup 输出包含原生命令安装信息。
+
+最新进展（2026-05-16）：
+
+- 已新增 gateway 交互策略引擎（`internal/tools/gateway_policy.go`）：支持 `mention_required`、`ignored_channels`、`free_response_channels`、`group_dm_policy` 与 mention 关键字配置，并支持环境变量 + gateway settings 双通道加载。
+- 已将策略接入 Gateway 事件入口（`sessionWorker.handleEvent`）：统一在跨平台消息进入 agent loop 前执行策略门禁，覆盖群聊 mention required、ignored channel、free response channel、group/dm policy。
+- 已新增原生策略命令 `/policy`（show/mention/groupdm）并统一到 Gateway dispatcher，支持运行时查看和更新策略。
+- 已将策略快照字段并入 Gateway `/status`（`mention_required`、`group_dm_policy`），统一状态可观测性。
+- 已将“原生命令安装信息”接入 `agentd gateway status` 与 `gateway setup` 输出（文本/JSON），并补齐 `native_command_install` 提示字段，覆盖 Telegram/Discord/Slack/Yuanbao 与其他平台说明。
 
 ### TODO-007：工具能力级补齐
 

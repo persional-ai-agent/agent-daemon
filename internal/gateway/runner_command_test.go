@@ -344,6 +344,38 @@ func TestParseGatewayModelSpec(t *testing.T) {
 	}
 }
 
+func TestAllowByInteractionPolicy(t *testing.T) {
+	w := &sessionWorker{adapter: &gatewayAdapterStub{name: "telegram"}}
+	policy := tools.GatewayInteractionPolicy{
+		MentionRequired: true,
+		GroupDMPolicy:   "both",
+		MentionKeywords: []string{"@agent"},
+	}
+	if w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "hello", IsCommand: false}) {
+		t.Fatal("group free text without mention should be blocked when mention is required")
+	}
+	if !w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "@agent hello", IsCommand: false}) {
+		t.Fatal("group text with mention should pass")
+	}
+	if !w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "/status", IsCommand: true}) {
+		t.Fatal("slash command should pass policy gate")
+	}
+	policy.GroupDMPolicy = "dm_only"
+	if w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "@agent hello", IsCommand: false}) {
+		t.Fatal("group message should be blocked in dm_only policy")
+	}
+	policy.GroupDMPolicy = "both"
+	policy.IgnoredChannels = []string{"telegram:g1"}
+	if w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "@agent hello", IsCommand: false}) {
+		t.Fatal("ignored channel should be blocked")
+	}
+	policy.IgnoredChannels = nil
+	policy.FreeResponseChannels = []string{"telegram:g1"}
+	if !w.allowByInteractionPolicy(policy, MessageEvent{ChatType: "group", ChatID: "g1", Text: "hello", IsCommand: false}) {
+		t.Fatal("free response channel should bypass mention requirement")
+	}
+}
+
 func TestResolveMappedSessionIDWithAutoMode(t *testing.T) {
 	t.Setenv("AGENT_GATEWAY_CONTINUITY", "user_id")
 	workdir := t.TempDir()

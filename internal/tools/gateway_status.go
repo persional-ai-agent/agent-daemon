@@ -7,16 +7,18 @@ import (
 )
 
 type GatewayStatusSnapshot struct {
-	Platform       string
-	RouteSession   string
-	ActiveSession  string
-	QueueLen       int
-	Paired         bool
-	ContinuityMode string
-	MappedSession  string
-	MessageCount   any
-	Running        bool
-	LastApprovalID string
+	Platform        string
+	RouteSession    string
+	ActiveSession   string
+	QueueLen        int
+	Paired          bool
+	ContinuityMode  string
+	MappedSession   string
+	MessageCount    any
+	Running         bool
+	LastApprovalID  string
+	MentionRequired bool
+	GroupDMPolicy   string
 }
 
 func (s GatewayStatusSnapshot) IsZero() bool {
@@ -29,7 +31,9 @@ func (s GatewayStatusSnapshot) IsZero() bool {
 		strings.TrimSpace(s.MappedSession) == "" &&
 		s.MessageCount == nil &&
 		!s.Running &&
-		strings.TrimSpace(s.LastApprovalID) == ""
+		strings.TrimSpace(s.LastApprovalID) == "" &&
+		!s.MentionRequired &&
+		strings.TrimSpace(s.GroupDMPolicy) == ""
 }
 
 func ExtractGatewayStatusSnapshot(status map[string]any) GatewayStatusSnapshot {
@@ -69,6 +73,12 @@ func ExtractGatewayStatusSnapshot(status map[string]any) GatewayStatusSnapshot {
 	if v, ok := status["last_approval_id"].(string); ok {
 		out.LastApprovalID = strings.TrimSpace(v)
 	}
+	if v, ok := status["mention_required"].(bool); ok {
+		out.MentionRequired = v
+	}
+	if v, ok := status["group_dm_policy"].(string); ok {
+		out.GroupDMPolicy = strings.TrimSpace(v)
+	}
 	return out
 }
 
@@ -90,6 +100,10 @@ func BuildGatewayStatusPayload(s GatewayStatusSnapshot) map[string]any {
 	}
 	if strings.TrimSpace(s.LastApprovalID) != "" {
 		out["last_approval_id"] = s.LastApprovalID
+	}
+	out["mention_required"] = s.MentionRequired
+	if strings.TrimSpace(s.GroupDMPolicy) != "" {
+		out["group_dm_policy"] = s.GroupDMPolicy
 	}
 	return out
 }
@@ -127,6 +141,10 @@ func RenderGatewayStatusText(s GatewayStatusSnapshot) string {
 		lines = append(lines, "message_count: "+fmt.Sprintf("%v", s.MessageCount))
 	}
 	lines = append(lines, "running: "+map[bool]string{true: "yes", false: "no"}[s.Running])
+	lines = append(lines, "mention_required: "+map[bool]string{true: "yes", false: "no"}[s.MentionRequired])
+	if strings.TrimSpace(s.GroupDMPolicy) != "" {
+		lines = append(lines, "group_dm_policy: "+s.GroupDMPolicy)
+	}
 	if strings.TrimSpace(s.LastApprovalID) != "" {
 		lines = append(lines, "last_approval_id: "+s.LastApprovalID)
 	}
