@@ -166,7 +166,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/resume":
 		if len(fields) != 2 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /resume <session_id>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandResumeUsage))
 			return true, nil
 		}
 		if eng.SessionStore == nil {
@@ -191,7 +191,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /history [n]  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandHistoryUsage)+"  (n 必须是正整数)")
 				return true, nil
 			}
 			limit = v
@@ -203,7 +203,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /sessions [n]  (n 必须是正整数)")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandSessionsUsage)+"  (n 必须是正整数)")
 				return true, nil
 			}
 			limit = v
@@ -337,7 +337,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/recover":
 		if len(fields) != 2 || strings.ToLower(strings.TrimSpace(fields[1])) != "context" {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /recover context")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandRecoverUsage))
 			return true, nil
 		}
 		prev := state.SessionID
@@ -350,7 +350,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) > 1 {
 			v, err := strconv.Atoi(fields[1])
 			if err != nil || v <= 0 {
-				printCLIEnvelope(false, nil, "invalid_argument", "用法: /compress [tail_messages]")
+				printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandCompressUsage))
 				return true, nil
 			}
 			tail = v
@@ -393,7 +393,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/targets":
 		filter := ""
 		if len(fields) > 2 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /targets [platform]")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandTargetsUsage))
 			return true, nil
 		}
 		if len(fields) == 2 {
@@ -614,7 +614,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("tools", len(names), names), "", "")
 	case "show":
 		if len(fields) != 3 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /tools show <tool_name>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsShowUsage))
 			return true
 		}
 		for _, schema := range eng.Registry.Schemas() {
@@ -628,7 +628,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 		schemas := eng.Registry.Schemas()
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("schemas", len(schemas), schemas), "", "")
 	default:
-		printCLIEnvelope(false, nil, "invalid_argument", "用法: /tools [list|show <tool>|schemas]")
+		printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsUsage))
 	}
 	return true
 }
@@ -644,7 +644,7 @@ func handleToolsetsSlash(fields []string) bool {
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("toolsets", len(items), items), "", "")
 	case "show":
 		if len(fields) != 3 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets show <name>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsShowUsage))
 			return true
 		}
 		ts, ok := clitools.GetToolset(fields[2])
@@ -655,7 +655,7 @@ func handleToolsetsSlash(fields []string) bool {
 		printCLIEnvelope(true, clitools.BuildObjectPayload("toolset", ts), "", "")
 	case "resolve":
 		if len(fields) != 3 {
-			printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets resolve <name[,name]>")
+			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsResolveUsage))
 			return true
 		}
 		allowed, err := clitools.ResolveToolset(splitCSV(fields[2]))
@@ -670,7 +670,7 @@ func handleToolsetsSlash(fields []string) bool {
 		sort.Strings(names)
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("tools", len(names), names), "", "")
 	default:
-		printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets [list|show <name>|resolve <name[,name]>]")
+		printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsUsage))
 	}
 	return true
 }

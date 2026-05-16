@@ -446,7 +446,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
-				w.sendSlashText(ctx, event, "Usage: /session [session_id]", "/session")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandSessionUsage), "/session")
 				return
 			}
 			target := strings.TrimSpace(parsed.args[0])
@@ -577,13 +577,13 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/history":
 			limit := 10
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /history [n]", "/history")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandHistoryUsage), "/history")
 				return
 			}
 			if len(parsed.args) == 1 {
 				n, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
 				if err != nil || n <= 0 {
-					w.sendSlashText(ctx, event, "Usage: /history [n]", "/history")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandHistoryUsage), "/history")
 					return
 				}
 				limit = n
@@ -601,7 +601,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/show":
 			target, offset, limit, parseErr := parseGatewayShowArgs(parsed.args, w.currentSessionID())
 			if parseErr != nil {
-				w.sendSlashText(ctx, event, "Usage: /show [session_id] [offset] [limit]", "/show")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandShowUsage), "/show")
 				return
 			}
 			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
@@ -621,7 +621,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/next", "/prev":
 			if len(parsed.args) > 0 {
-				w.sendSlashText(ctx, event, "Usage: /next or /prev", parsed.head)
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandNextPrevUsage), parsed.head)
 				return
 			}
 			target, offset, limit := w.showCursor(event.UserID)
@@ -656,13 +656,13 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/sessions":
 			limit := 10
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /sessions [n]", "/sessions")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandSessionsUsage), "/sessions")
 				return
 			}
 			if len(parsed.args) == 1 {
 				v, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
 				if err != nil || v <= 0 {
-					w.sendSlashText(ctx, event, "Usage: /sessions [n]", "/sessions")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandSessionsUsage), "/sessions")
 					return
 				}
 				limit = v
@@ -691,12 +691,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/pick":
 			if len(parsed.args) != 1 {
-				w.sendSlashText(ctx, event, "Usage: /pick <index>", "/pick")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandPickUsage), "/pick")
 				return
 			}
 			idx, err := strconv.Atoi(strings.TrimSpace(parsed.args[0]))
 			if err != nil || idx <= 0 {
-				w.sendSlashText(ctx, event, "Usage: /pick <index>", "/pick")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandPickUsage), "/pick")
 				return
 			}
 			list := w.getLastSessionIDs(event.UserID)
@@ -717,7 +717,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/stats":
 			target := w.currentSessionID()
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /stats [session_id]", "/stats")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandStatsUsage), "/stats")
 				return
 			}
 			if len(parsed.args) == 1 && strings.TrimSpace(parsed.args[0]) != "" {
@@ -754,7 +754,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if parsed.head == "/new" && len(parsed.args) == 1 {
 				next = strings.TrimSpace(parsed.args[0])
 			} else if len(parsed.args) > 0 {
-				w.sendSlashText(ctx, event, "Usage: /new [session_id] or /reset", parsed.head)
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandNewResetUsage), parsed.head)
 				return
 			}
 			if next == "" {
@@ -767,7 +767,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/resume":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
-				w.sendSlashText(ctx, event, "Usage: /resume <session_id>", "/resume")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandResumeUsage), "/resume")
 				return
 			}
 			target := strings.TrimSpace(parsed.args[0])
@@ -782,7 +782,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
-				w.sendSlashText(ctx, event, "Usage: /recover context", "/recover")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandRecoverUsage), "/recover")
 				return
 			}
 			lastInput := w.getLastUserInput(event.UserID)
@@ -849,7 +849,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/clear":
 			if len(parsed.args) > 0 {
-				w.sendSlashText(ctx, event, "Usage: /clear", "/clear")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandClearUsage), "/clear")
 				return
 			}
 			prev := w.currentSessionID()
@@ -860,7 +860,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/reload":
 			if len(parsed.args) > 0 {
-				w.sendSlashText(ctx, event, "Usage: /reload", "/reload")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandReloadUsage), "/reload")
 				return
 			}
 			active := w.currentSessionID()
@@ -875,7 +875,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/save":
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /save [path]", "/save")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandSaveUsage), "/save")
 				return
 			}
 			active := w.currentSessionID()
@@ -929,7 +929,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/targets":
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /targets [platform]", "/targets")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandTargetsUsage), "/targets")
 				return
 			}
 			filter := ""
@@ -968,7 +968,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				w.sendMetaText(ctx, event, escapeMarkdown(reply), meta)
 				return
 			}
-			w.sendSlashText(ctx, event, "Usage: /skills [name]", "/skills")
+			w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandSkillsUsage), "/skills")
 			return
 		case "/tools":
 			sub := "list"
@@ -978,7 +978,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			switch sub {
 			case "list":
 				if len(parsed.args) > 1 {
-					w.sendSlashText(ctx, event, "Usage: /tools [list|show <name>|schemas]", "/tools")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandToolsUsage), "/tools")
 					return
 				}
 				reply := renderGatewayToolsList(w.engine.Registry.Names())
@@ -986,7 +986,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			case "show":
 				if len(parsed.args) != 2 {
-					w.sendSlashText(ctx, event, "Usage: /tools show <name>", "/tools")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandToolsShowUsage), "/tools")
 					return
 				}
 				name := strings.TrimSpace(parsed.args[1])
@@ -1003,14 +1003,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			case "schemas":
 				if len(parsed.args) > 1 {
-					w.sendSlashText(ctx, event, "Usage: /tools schemas", "/tools")
+					w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandToolsSchemasUsage), "/tools")
 					return
 				}
 				reply := renderGatewayToolSchemas(w.engine.Registry.Schemas())
 				w.sendSlashSubcommandText(ctx, event, escapeMarkdown(reply), "/tools", "schemas")
 				return
 			default:
-				w.sendSlashText(ctx, event, "Usage: /tools [list|show <name>|schemas]", "/tools")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandToolsUsage), "/tools")
 				return
 			}
 		case "/compress":
@@ -1042,7 +1042,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/usage":
 			if len(parsed.args) > 1 {
-				w.sendSlashText(ctx, event, "Usage: /usage [session_id]", "/usage")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandUsageUsage), "/usage")
 				return
 			}
 			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
@@ -1114,7 +1114,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			next := strings.TrimSpace(strings.TrimPrefix(parsed.raw, parsed.head))
 			if next == "" {
-				w.sendSlashText(ctx, event, "Usage: /personality [show|reset|<text>]", "/personality")
+				w.sendSlashText(ctx, event, tools.UsageEN(tools.CommandPersonalityUsage), "/personality")
 				return
 			}
 			w.setSystemPrompt(next)
