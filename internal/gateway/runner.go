@@ -418,8 +418,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/session":
 			if len(parsed.args) == 0 {
 				active := w.currentSessionID()
-				meta := tools.BuildSessionOverviewPayload(active, w.key, -1, -1)
-				meta["slash"] = "/session"
+				meta := tools.AttachSlashPayload(tools.BuildSessionOverviewPayload(active, w.key, -1, -1), "/session")
 				_, _ = w.sendText(ctx, event.ChatID, "_Route session: "+escapeMarkdown(w.key)+"\\nActive session: "+escapeMarkdown(active)+"_", event.MessageID, meta)
 				return
 			}
@@ -430,8 +429,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			target := strings.TrimSpace(parsed.args[0])
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			meta := tools.BuildSessionSwitchPayload(prev, target, false, -1)
-			meta["slash"] = "/session"
+				meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, target, false, -1), "/session")
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/whoami":
@@ -456,8 +454,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				AutoGlobalID:   autoID,
 			}
 			reply := tools.RenderGatewayWhoamiText(whoami)
-			meta := tools.BuildGatewayWhoamiPayload(whoami)
-			meta["slash"] = "/whoami"
+			meta := tools.AttachSlashPayload(tools.BuildGatewayWhoamiPayload(whoami), "/whoami")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/resolve":
@@ -478,8 +475,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := tools.RenderGatewaySessionResolveText(resolved)
-			meta := tools.BuildGatewaySessionResolvePayload(resolved)
-			meta["slash"] = "/resolve"
+			meta := tools.AttachSlashPayload(tools.BuildGatewaySessionResolvePayload(resolved), "/resolve")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/continuity":
@@ -492,8 +488,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				if w.runner != nil {
 					mode = w.runner.continuityMode()
 				}
-				meta := tools.BuildGatewayContinuityPayload(mode)
-				meta["slash"] = "/continuity"
+					meta := tools.AttachSlashPayload(tools.BuildGatewayContinuityPayload(mode), "/continuity")
 				_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode: "+escapeMarkdown(mode)+"_", event.MessageID, meta)
 				return
 			}
@@ -507,8 +502,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Continuity update failed: "+escapeMarkdown(uErr.Error())+"_", event.MessageID, tools.BuildSlashPayload("/continuity"))
 				return
 			}
-			meta := tools.BuildGatewayContinuityPayload(updatedMode)
-			meta["slash"] = "/continuity"
+				meta := tools.AttachSlashPayload(tools.BuildGatewayContinuityPayload(updatedMode), "/continuity")
 			_, _ = w.sendText(ctx, event.ChatID, "_Continuity mode updated: "+escapeMarkdown(updatedMode)+"_", event.MessageID, meta)
 			return
 		case "/setid":
@@ -537,8 +531,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				GlobalID:   globalID,
 				HomeTarget: tools.ResolveHomeTarget(w.engine.Workdir, w.adapter.Name()),
 			})
-			meta := tools.BuildGatewayIdentityBindPayload(w.adapter.Name(), event.UserID, globalID, prev, targetSession)
-			meta["slash"] = "/setid"
+				meta := tools.AttachSlashPayload(tools.BuildGatewayIdentityBindPayload(w.adapter.Name(), event.UserID, globalID, prev, targetSession), "/setid")
 			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, meta)
 			return
 		case "/unsetid":
@@ -555,8 +548,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			_ = tools.ClearChannelDirectoryGlobalID(w.engine.Workdir, w.adapter.Name(), event.ChatID)
-			meta := tools.BuildGatewayIdentityPayload(w.adapter.Name(), event.UserID, "", false, true)
-			meta["slash"] = "/unsetid"
+				meta := tools.AttachSlashPayload(tools.BuildGatewayIdentityPayload(w.adapter.Name(), event.UserID, "", false, true), "/unsetid")
 			_, _ = w.sendText(ctx, event.ChatID, "_Identity unbound for user: "+escapeMarkdown(event.UserID)+"_", event.MessageID, meta)
 			return
 		case "/history":
@@ -580,8 +572,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayHistory(msgs, limit)
-			meta := tools.BuildSessionHistoryPayload(active, len(msgs), limit)
-			meta["slash"] = "/history"
+				meta := tools.AttachSlashPayload(tools.BuildSessionHistoryPayload(active, len(msgs), limit), "/history")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/show":
@@ -602,8 +593,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
-			meta := tools.BuildSessionShowPayload(target, offset, limit, msgs)
-			meta["slash"] = "/show"
+				meta := tools.AttachSlashPayload(tools.BuildSessionShowPayload(target, offset, limit, msgs), "/show")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/next", "/prev":
@@ -637,8 +627,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
 			reply := renderGatewayShow(target, offset, limit, msgs)
-			meta := tools.BuildSessionShowPayload(target, offset, limit, msgs)
-			meta["slash"] = parsed.head
+				meta := tools.AttachSlashPayload(tools.BuildSessionShowPayload(target, offset, limit, msgs), parsed.head)
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/sessions":
@@ -674,8 +663,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setLastSessionIDs(event.UserID, ids)
 			reply := renderGatewaySessions(w.currentSessionID(), items)
-			meta := tools.BuildSessionListPayload(limit, items)
-			meta["slash"] = "/sessions"
+				meta := tools.AttachSlashPayload(tools.BuildSessionListPayload(limit, items), "/sessions")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/pick":
@@ -700,8 +688,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			target := list[idx-1]
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			meta := tools.BuildSessionPickPayload(prev, target, idx)
-			meta["slash"] = "/pick"
+				meta := tools.AttachSlashPayload(tools.BuildSessionPickPayload(prev, target, idx), "/pick")
 			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/stats":
@@ -724,8 +711,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayStats(target, stats)
-			meta := tools.BuildSessionStatsPayload(target, stats)
-			meta["slash"] = "/stats"
+				meta := tools.AttachSlashPayload(tools.BuildSessionStatsPayload(target, stats), "/stats")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/cancel":
@@ -753,8 +739,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			prev := w.currentSessionID()
 			w.activateSession(next, event.UserID)
-			meta := tools.BuildSessionSwitchPayload(prev, next, true, 0)
-			meta["slash"] = parsed.head
+				meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, next, true, 0), parsed.head)
 			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, meta)
 			return
 		case "/resume":
@@ -769,8 +754,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			meta := tools.BuildSessionSwitchPayload(prev, target, false, -1)
-			meta["slash"] = "/resume"
+				meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, target, false, -1), "/resume")
 			_, _ = w.sendText(ctx, event.ChatID, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/recover":
@@ -786,8 +770,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
-			meta := tools.BuildSessionRecoverPayload(prev, next, true)
-			meta["slash"] = "/recover"
+				meta := tools.AttachSlashPayload(tools.BuildSessionRecoverPayload(prev, next, true), "/recover")
 			_, _ = w.sendText(ctx, event.ChatID, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", event.MessageID, meta)
 			replay := event
 			replay.Text = lastInput
@@ -838,8 +821,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				}
 			}
 			w.activateSession(nextSession, event.UserID)
-			meta := tools.BuildSessionUndoPayload(nextSession, removed, len(nextMsgs))
-			meta["slash"] = "/undo"
+				meta := tools.AttachSlashPayload(tools.BuildSessionUndoPayload(nextSession, removed, len(nextMsgs)), "/undo")
 			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, meta)
 			return
 		case "/clear":
@@ -850,8 +832,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
-			meta := tools.BuildSessionClearPayload(prev, next, true)
-			meta["slash"] = "/clear"
+				meta := tools.AttachSlashPayload(tools.BuildSessionClearPayload(prev, next, true), "/clear")
 			_, _ = w.sendText(ctx, event.ChatID, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", event.MessageID, meta)
 			return
 		case "/reload":
@@ -866,8 +847,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			w.setLastUserInput(event.UserID, latestUserInputFromMessages(msgs))
-			meta := tools.BuildSessionReloadPayload(active, msgs)
-			meta["slash"] = "/reload"
+				meta := tools.AttachSlashPayload(tools.BuildSessionReloadPayload(active, msgs), "/reload")
 			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, meta)
 			return
 		case "/save":
@@ -890,8 +870,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Save failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, tools.BuildSlashPayload("/save"))
 				return
 			}
-			meta := tools.BuildSessionSavePayload(active, path, len(msgs))
-			meta["slash"] = "/save"
+				meta := tools.AttachSlashPayload(tools.BuildSessionSavePayload(active, path, len(msgs)), "/save")
 			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, meta)
 			return
 		case "/sethome":
@@ -916,8 +895,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				GlobalID:   globalID,
 				HomeTarget: homeChatID,
 			})
-			meta := tools.BuildSetHomePayload(homePlatform, homeChatID)
-			meta["slash"] = "/sethome"
+				meta := tools.AttachSlashPayload(tools.BuildSetHomePayload(homePlatform, homeChatID), "/sethome")
 			_, _ = w.sendText(
 				ctx,
 				event.ChatID,
@@ -941,8 +919,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayTargets(items, filter)
-			meta := tools.BuildTargetsPayload(filter, platforms, items)
-			meta["slash"] = "/targets"
+				meta := tools.AttachSlashPayload(tools.BuildTargetsPayload(filter, platforms, items), "/targets")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/skills":
@@ -1046,8 +1023,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Compress failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, tools.BuildSlashPayload("/compress"))
 					return
 				}
-				meta := tools.BuildSessionCompressPayload(activeSessionID, before, after, keepLastN, before-after, true, "")
-				meta["slash"] = "/compress"
+					meta := tools.AttachSlashPayload(tools.BuildSessionCompressPayload(activeSessionID, before, after, keepLastN, before-after, true, ""), "/compress")
 				_, _ = w.sendText(ctx, event.ChatID, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", event.MessageID, meta)
 				return
 			}
@@ -1073,8 +1049,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayStats(target, stats)
-			meta := tools.BuildSessionUsagePayload(target, stats)
-			meta["slash"] = "/usage"
+				meta := tools.AttachSlashPayload(tools.BuildSessionUsagePayload(target, stats), "/usage")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/model":
@@ -1103,8 +1078,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				provider = next.Provider
 				modelName = next.Model
 				reply := "_Model preference updated: " + escapeMarkdown(provider) + ":" + escapeMarkdown(modelName) + "_\nTakes effect for newly started daemon/model client."
-				meta := tools.BuildGatewayModelUpdatePayload(tools.GatewayModelSpec{Provider: provider, Model: modelName})
-				meta["slash"] = "/model"
+					meta := tools.AttachSlashPayload(tools.BuildGatewayModelUpdatePayload(tools.GatewayModelSpec{Provider: provider, Model: modelName}), "/model")
 				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, meta)
 				return
 			}
@@ -1113,8 +1087,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				"\nProvider: " + displayPref.Provider +
 				"\nModel: " + displayPref.Model +
 				"\nBase URL: " + displayPref.BaseURL
-			meta := tools.BuildGatewayModelPayload(fmt.Sprintf("%T", w.engine.Client), displayPref)
-			meta["slash"] = "/model"
+				meta := tools.AttachSlashPayload(tools.BuildGatewayModelPayload(fmt.Sprintf("%T", w.engine.Client), displayPref), "/model")
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/personality":

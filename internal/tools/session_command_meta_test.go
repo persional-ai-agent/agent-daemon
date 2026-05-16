@@ -16,3 +16,12 @@ func TestBuildSlashModePayload(t *testing.T) {
 	}
 }
 
+func TestAttachSlashPayload(t *testing.T) {
+	got := AttachSlashPayload(map[string]any{"mode": "show", "name": "abc"}, " /skills ")
+	if got["slash"] != "/skills" {
+		t.Fatalf("unexpected slash: %+v", got)
+	}
+	if got["mode"] != "show" || got["name"] != "abc" {
+		t.Fatalf("unexpected payload: %+v", got)
+	}
+}

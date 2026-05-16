@@ -187,6 +187,7 @@
 - 已新增 UI API 成功封装 helper（`BuildUIResultEnvelope`），并批量替换多处 `ok+result` 直写返回（如 model set、gateway identity、approval confirm、cron action 等路径），进一步收敛 API 响应封装入口。
 - 已进一步批量替换 UI API 侧剩余纯 `ok+result` 成功响应（覆盖 config set、targets home、session branch/resume/compress/undo/replay、gateway continuity/identity/session-resolve、gateway action、skills reload/search/sync 等），统一复用 `BuildUIResultEnvelope`，并保留含兼容字段的接口返回不变。
 - 已将 Gateway 命令分发中最后两处手写 `slash` 元数据 map（`/skills show` 与 `/tools show` 的 not-found 分支）改为复用 `BuildSlashModePayload`，进一步消除命令元数据构造漂移点。
+- 已新增 `AttachSlashPayload` 并批量接入 Gateway `runner` 成功元数据构造路径（session/whoami/resolve/continuity/setid/unsetid/history/show/sessions/pick/stats/new/reset/resume/recover/undo/clear/reload/save/sethome/targets/compress/usage/model），清理全部 `meta["slash"]=...` 手写赋值分支，进一步收敛 command dispatcher 元数据语义。
 
 范围：
 

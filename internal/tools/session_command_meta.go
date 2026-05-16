@@ -16,3 +16,10 @@ func BuildSlashModePayload(slash, mode string) map[string]any {
 	return payload
 }
 
+func AttachSlashPayload(payload map[string]any, slash string) map[string]any {
+	out := BuildSlashPayload(slash)
+	for k, v := range payload {
+		out[k] = v
+	}
+	return out
+}
