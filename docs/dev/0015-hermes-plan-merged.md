@@ -126,6 +126,12 @@
 - 工具执行过程中能实时显示开始、参数摘要、完成/失败状态。
 - 运行 `go test ./ui-tui` 与相关 CLI 测试通过。
 
+最新进展（2026-05-16）：
+
+- 已将 Bubble Tea 提交流程统一到单一路径（`submitCurrentInput`），消除 `Enter` 与 `Ctrl+S` 分支重复逻辑，降低输入路径行为漂移与维护风险。
+- 已将 TUI turn 流通道缓冲提升为常量化配置（`turnStreamBufferSize=256`），改善高频事件/大段输出场景下的消费抖动风险。
+- 已补充 `ui-tui/bubbletea_app_test.go` 覆盖：`Enter/Ctrl+S` 共用提交流程与 `/clear` 命令提交行为，确保重构后交互语义保持稳定。
+
 ### TODO-002：CLI 与消息平台命令语义统一
 
 目标：

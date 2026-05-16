@@ -77,6 +77,65 @@ func TestCtrlJInsertNewline(t *testing.T) {
 	}
 }
 
+func TestEnterAndCtrlSShareSubmitPath(t *testing.T) {
+	s := newState()
+	m := newTUIModel(s, true)
+	m.inputValue = "hello"
+	m.cursorPos = len([]rune(m.inputValue))
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next := updated.(tuiModel)
+	if !next.processing {
+		t.Fatal("expected enter to start turn processing")
+	}
+	if cmd == nil {
+		t.Fatal("expected enter to return async command")
+	}
+	if next.turnStream == nil {
+		t.Fatal("expected turn stream to be created")
+	}
+	if cap(next.turnStream) != turnStreamBufferSize {
+		t.Fatalf("unexpected turn stream buffer size: %d", cap(next.turnStream))
+	}
+
+	m2 := newTUIModel(newState(), true)
+	m2.inputValue = "hello"
+	m2.cursorPos = len([]rune(m2.inputValue))
+	updated, cmd = m2.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	next2 := updated.(tuiModel)
+	if !next2.processing {
+		t.Fatal("expected ctrl+s to start turn processing")
+	}
+	if cmd == nil {
+		t.Fatal("expected ctrl+s to return async command")
+	}
+	if next2.turnStream == nil {
+		t.Fatal("expected ctrl+s turn stream to be created")
+	}
+	if cap(next2.turnStream) != turnStreamBufferSize {
+		t.Fatalf("unexpected ctrl+s turn stream buffer size: %d", cap(next2.turnStream))
+	}
+}
+
+func TestSubmitClearCommandResetsRuntimeWithoutProcessing(t *testing.T) {
+	s := newState()
+	m := newTUIModel(s, true)
+	m.inputValue = "/clear"
+	m.cursorPos = len([]rune(m.inputValue))
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next := updated.(tuiModel)
+	if next.processing {
+		t.Fatal("clear should not start processing")
+	}
+	if cmd != nil {
+		t.Fatal("clear should not return async command")
+	}
+	if next.turnStream != nil {
+		t.Fatal("clear should not create turn stream")
+	}
+}
+
 func TestRenderInputWithCursor(t *testing.T) {
 	out := renderInputWithCursor("ab\ncd", 2)
 	if out == "" {

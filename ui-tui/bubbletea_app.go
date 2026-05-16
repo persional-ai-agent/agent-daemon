@@ -44,6 +44,7 @@ type tuiModel struct {
 }
 
 const streamRenderInterval = 80 * time.Millisecond
+const turnStreamBufferSize = 256
 
 func newTUIModel(state *appState, noDoctor bool) tuiModel {
 	_ = noDoctor
@@ -173,34 +174,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.processing {
 				return m, nil
 			}
-			raw := strings.TrimSpace(m.inputValue)
-			if raw == "" {
-				return m, nil
-			}
-			m.commitInputHistory(raw)
-			m.inputValue = ""
-			m.cursorPos = 0
-			m.draftInput = ""
-			m.historyPos = len(m.history)
-			m.resetCompletion()
-			if raw == "/quit" || raw == "/exit" {
-				return m, tea.Quit
-			}
-			if raw == "/clear" {
-				m.runtime.resetContent("欢迎使用 ui-tui（Bubble Tea 模式）")
-				m.syncViewport(true)
-				return m, nil
-			}
-
-			m.runtime.startTurn(raw)
-			m.processing = true
-			m.turnStream = make(chan tea.Msg, 64)
-			m.syncViewport(true)
-			return m, tea.Batch(
-				startTurnCmd(m.turnStream, m.state, raw),
-				waitTurnStreamCmd(m.turnStream),
-				streamRenderTickCmd(streamRenderInterval),
-			)
+			return m.submitCurrentInput()
 		case "backspace", "ctrl+h":
 			if !m.processing && len([]rune(m.inputValue)) > 0 && m.cursorPos > 0 {
 				runes := []rune(m.inputValue)
@@ -241,25 +215,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.processing {
 				return m, nil
 			}
-			raw := strings.TrimSpace(m.inputValue)
-			if raw == "" {
-				return m, nil
-			}
-			m.commitInputHistory(raw)
-			m.inputValue = ""
-			m.cursorPos = 0
-			m.draftInput = ""
-			m.historyPos = len(m.history)
-			m.resetCompletion()
-			m.runtime.startTurn(raw)
-			m.processing = true
-			m.turnStream = make(chan tea.Msg, 64)
-			m.syncViewport(true)
-			return m, tea.Batch(
-				startTurnCmd(m.turnStream, m.state, raw),
-				waitTurnStreamCmd(m.turnStream),
-				streamRenderTickCmd(streamRenderInterval),
-			)
+			return m.submitCurrentInput()
 		case "tab":
 			if m.processing {
 				return m, nil
@@ -371,6 +327,37 @@ func (m *tuiModel) commitInputHistory(raw string) {
 	if len(m.history) > 200 {
 		m.history = append([]string(nil), m.history[len(m.history)-200:]...)
 	}
+}
+
+func (m tuiModel) submitCurrentInput() (tea.Model, tea.Cmd) {
+	raw := strings.TrimSpace(m.inputValue)
+	if raw == "" {
+		return m, nil
+	}
+	m.commitInputHistory(raw)
+	m.inputValue = ""
+	m.cursorPos = 0
+	m.draftInput = ""
+	m.historyPos = len(m.history)
+	m.resetCompletion()
+	if raw == "/quit" || raw == "/exit" {
+		return m, tea.Quit
+	}
+	if raw == "/clear" {
+		m.runtime.resetContent("欢迎使用 ui-tui（Bubble Tea 模式）")
+		m.syncViewport(true)
+		return m, nil
+	}
+
+	m.runtime.startTurn(raw)
+	m.processing = true
+	m.turnStream = make(chan tea.Msg, turnStreamBufferSize)
+	m.syncViewport(true)
+	return m, tea.Batch(
+		startTurnCmd(m.turnStream, m.state, raw),
+		waitTurnStreamCmd(m.turnStream),
+		streamRenderTickCmd(streamRenderInterval),
+	)
 }
 
 func (m *tuiModel) historyPrev() {
