@@ -19,6 +19,8 @@ type GatewayModelPreference struct {
 	BaseURL  string
 }
 
+const GatewayModelUpdateNote = "model preference updated; takes effect for newly started daemon/model client"
+
 var gatewaySettingsMu sync.Mutex
 
 func gatewaySettingsPath(workdir string) string {
@@ -162,4 +164,26 @@ func DisplayGatewayModelPreference(pref GatewayModelPreference) GatewayModelPref
 		out.BaseURL = "(default)"
 	}
 	return out
+}
+
+func BuildGatewayModelPayload(client string, pref GatewayModelPreference) map[string]any {
+	display := DisplayGatewayModelPreference(pref)
+	payload := map[string]any{
+		"provider": display.Provider,
+		"model":    display.Model,
+		"base_url": display.BaseURL,
+	}
+	if strings.TrimSpace(client) != "" {
+		payload["client"] = strings.TrimSpace(client)
+	}
+	return payload
+}
+
+func BuildGatewayModelUpdatePayload(spec GatewayModelSpec) map[string]any {
+	return map[string]any{
+		"updated":  true,
+		"provider": strings.TrimSpace(spec.Provider),
+		"model":    strings.TrimSpace(spec.Model),
+		"note":     GatewayModelUpdateNote,
+	}
 }

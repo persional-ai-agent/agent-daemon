@@ -1045,7 +1045,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				provider = next.Provider
 				modelName = next.Model
 				reply := "_Model preference updated: " + escapeMarkdown(provider) + ":" + escapeMarkdown(modelName) + "_\nTakes effect for newly started daemon/model client."
-				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, map[string]any{"slash": "/model", "provider": provider, "model": modelName, "updated": true})
+				meta := tools.BuildGatewayModelUpdatePayload(tools.GatewayModelSpec{Provider: provider, Model: modelName})
+				meta["slash"] = "/model"
+				_, _ = w.sendText(ctx, event.ChatID, reply, event.MessageID, meta)
 				return
 			}
 			displayPref := tools.DisplayGatewayModelPreference(tools.GatewayModelPreference{Provider: provider, Model: modelName, BaseURL: baseURL})
@@ -1053,7 +1055,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				"\nProvider: " + displayPref.Provider +
 				"\nModel: " + displayPref.Model +
 				"\nBase URL: " + displayPref.BaseURL
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/model", "provider": displayPref.Provider, "model": displayPref.Model, "base_url": displayPref.BaseURL})
+			meta := tools.BuildGatewayModelPayload(fmt.Sprintf("%T", w.engine.Client), displayPref)
+			meta["slash"] = "/model"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/personality":
 			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {

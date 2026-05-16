@@ -888,11 +888,7 @@ func (s *Server) handleUIModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	displayPref := tools.DisplayGatewayModelPreference(pref)
-	model := map[string]any{
-		"provider": displayPref.Provider,
-		"model":    displayPref.Model,
-		"base_url": displayPref.BaseURL,
-	}
+	model := tools.BuildGatewayModelPayload("", displayPref)
 	if s.ModelInfoFn != nil {
 		for k, v := range s.ModelInfoFn() {
 			model[k] = v
@@ -957,10 +953,14 @@ func (s *Server) handleUIModelSet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": result,
-	})
+	payload := tools.BuildGatewayModelUpdatePayload(spec)
+	if req.BaseURL != "" {
+		payload["base_url"] = req.BaseURL
+	}
+	if len(result) > 0 {
+		payload["backend_result"] = result
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{"ok": true, "result": payload})
 }
 
 func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {

@@ -517,15 +517,10 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			if err := clitools.UpdateGatewayModelPreference(eng.Workdir, next); err != nil {
 				return true, err
 			}
-			printCLIEnvelope(true, map[string]any{
-				"updated":  true,
-				"provider": next.Provider,
-				"model":    next.Model,
-				"note":     "model preference updated; takes effect for newly started daemon/model client",
-			}, "", "")
+			printCLIEnvelope(true, clitools.BuildGatewayModelUpdatePayload(next), "", "")
 			return true, nil
 		}
-		printCLIEnvelope(true, map[string]any{"client": fmt.Sprintf("%T", eng.Client), "provider": displayPref.Provider, "model": displayPref.Model, "base_url": displayPref.BaseURL}, "", "")
+		printCLIEnvelope(true, clitools.BuildGatewayModelPayload(fmt.Sprintf("%T", eng.Client), displayPref), "", "")
 		return true, nil
 	case "/personality":
 		if len(fields) == 1 || strings.EqualFold(strings.TrimSpace(fields[1]), "show") {

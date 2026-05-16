@@ -103,3 +103,17 @@ func TestUpdateGatewayModelBaseURL(t *testing.T) {
 		t.Fatalf("base_url=%q", got)
 	}
 }
+
+func TestBuildGatewayModelPayload(t *testing.T) {
+	got := BuildGatewayModelPayload("*mock.Client", GatewayModelPreference{})
+	if got["client"] != "*mock.Client" || got["provider"] != "openai" || got["model"] != "(default)" || got["base_url"] != "(default)" {
+		t.Fatalf("unexpected model payload: %+v", got)
+	}
+}
+
+func TestBuildGatewayModelUpdatePayload(t *testing.T) {
+	got := BuildGatewayModelUpdatePayload(GatewayModelSpec{Provider: "openai", Model: "gpt-5"})
+	if got["updated"] != true || got["provider"] != "openai" || got["model"] != "gpt-5" || got["note"] != GatewayModelUpdateNote {
+		t.Fatalf("unexpected model update payload: %+v", got)
+	}
+}
