@@ -207,6 +207,7 @@
 - 已补充 `SkillsDirectoryNotFoundEN` 并接入 Gateway skills 列表 fallback，同时将审批 pattern 分支与 grant pattern usage 残留改为复用 `NotFoundEN`/`UsageEN`，进一步清理 Gateway 内零散提示拼装。
 - 已新增 `InvalidActionIndexZH` 与 `WorkflowCommandsEmptyEN`，并接入 TUI `/actions` 与 `/workflow save` 分支，继续收敛分散错误文案到 `internal/tools/command_usage.go`。
 - 已将 Gateway 审批命令结果文案（confirm/status/grant/revoke/pending）批量收口到 `internal/tools/session_approval.go` helper，替换 runner 中分散硬编码（含 denied/approved/granted/revoked/no-active 等分支），进一步降低命令分发表达漂移。
+- 已新增 `internal/tools/session_message_text.go` 并批量接入 Gateway 会话操作结果文案（switch/resume/recover/retry/undo/clear/reload/save/compress），替换 runner 分发中的同类硬编码字符串，继续收敛命令回包文本来源。
 
 范围：
 

@@ -453,7 +453,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, target, false, -1), "/session")
-			w.sendMetaText(ctx, event, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", meta)
+			w.sendMetaText(ctx, event, tools.SessionSwitchedEN(escapeMarkdown(prev), escapeMarkdown(target)), meta)
 			return
 		case "/whoami":
 			globalID := ""
@@ -763,7 +763,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			w.activateSession(next, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, next, true, 0), parsed.head)
-			w.sendMetaText(ctx, event, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", meta)
+			w.sendMetaText(ctx, event, tools.SessionSwitchedEN(escapeMarkdown(prev), escapeMarkdown(next)), meta)
 			return
 		case "/resume":
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
@@ -778,7 +778,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionSwitchPayload(prev, target, false, -1), "/resume")
-			w.sendMetaText(ctx, event, "_Session resumed: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", meta)
+			w.sendMetaText(ctx, event, tools.SessionResumedEN(escapeMarkdown(prev), escapeMarkdown(target)), meta)
 			return
 		case "/recover":
 			if len(parsed.args) != 1 || !strings.EqualFold(strings.TrimSpace(parsed.args[0]), "context") {
@@ -794,7 +794,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionRecoverPayload(prev, next, true), "/recover")
-			w.sendMetaText(ctx, event, "_Context recovered: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"; replaying last input._", meta)
+			w.sendMetaText(ctx, event, tools.ContextRecoveredEN(escapeMarkdown(prev), escapeMarkdown(next)), meta)
 			replay := event
 			replay.Text = lastInput
 			select {
@@ -815,7 +815,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				w.sendSlashText(ctx, event, "_No recent user input to replay._", "/retry")
 				return
 			}
-			w.sendSlashText(ctx, event, "_Replaying latest input..._", "/retry")
+			w.sendSlashText(ctx, event, tools.RetryReplayingEN(), "/retry")
 			replay := event
 			replay.Text = lastInput
 			select {
@@ -845,7 +845,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.activateSession(nextSession, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionUndoPayload(nextSession, removed, len(nextMsgs)), "/undo")
-			w.sendMetaText(ctx, event, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", meta)
+			w.sendMetaText(ctx, event, tools.UndoCompleteEN(removed, escapeMarkdown(nextSession)), meta)
 			return
 		case "/clear":
 			if len(parsed.args) > 0 {
@@ -856,7 +856,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			next := uuid.NewString()
 			w.activateSession(next, event.UserID)
 			meta := tools.AttachSlashPayload(tools.BuildSessionClearPayload(prev, next, true), "/clear")
-			w.sendMetaText(ctx, event, "_Context cleared: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(next)+"_", meta)
+			w.sendMetaText(ctx, event, tools.ContextClearedEN(escapeMarkdown(prev), escapeMarkdown(next)), meta)
 			return
 		case "/reload":
 			if len(parsed.args) > 0 {
@@ -871,7 +871,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setLastUserInput(event.UserID, latestUserInputFromMessages(msgs))
 			meta := tools.AttachSlashPayload(tools.BuildSessionReloadPayload(active, msgs), "/reload")
-			w.sendMetaText(ctx, event, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", meta)
+			w.sendMetaText(ctx, event, tools.SessionReloadedEN(escapeMarkdown(active), len(msgs)), meta)
 			return
 		case "/save":
 			if len(parsed.args) > 1 {
@@ -894,7 +894,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			meta := tools.AttachSlashPayload(tools.BuildSessionSavePayload(active, path, len(msgs)), "/save")
-			w.sendMetaText(ctx, event, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", meta)
+			w.sendMetaText(ctx, event, tools.SessionSavedEN(escapeMarkdown(active), escapeMarkdown(path)), meta)
 			return
 		case "/sethome":
 			if len(parsed.args) == 0 || len(parsed.args) > 2 {
@@ -1035,7 +1035,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				meta := tools.AttachSlashPayload(tools.BuildSessionCompressPayload(activeSessionID, before, after, keepLastN, before-after, true, ""), "/compress")
-				w.sendMetaText(ctx, event, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", meta)
+				w.sendMetaText(ctx, event, tools.SessionCompressedEN(before, after), meta)
 				return
 			}
 			w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Compress"), "/compress")
