@@ -694,9 +694,12 @@ func runResearch(cfg config.Config, args []string) {
 		fs := flag.NewFlagSet("research run", flag.ExitOnError)
 		tasksFile := fs.String("tasks", "", "tasks jsonl file (each line: {input,session_id?,id?,metadata?})")
 		outFile := fs.String("out", "", "trajectory output jsonl file")
+		concurrency := fs.Int("concurrency", 1, "worker concurrency")
+		stopOnError := fs.Bool("stop-on-error", false, "stop once first task fails")
+		timeoutSec := fs.Int("timeout-sec", 0, "per-task timeout seconds (0 means disabled)")
 		_ = fs.Parse(args[1:])
 		if strings.TrimSpace(*tasksFile) == "" {
-			log.Fatal("usage: agentd research run -tasks file.jsonl [-out trajectories.jsonl]")
+			log.Fatal("usage: agentd research run -tasks file.jsonl [-out trajectories.jsonl] [-concurrency 1] [-stop-on-error=false] [-timeout-sec 0]")
 		}
 		tasks, err := research.LoadTasks(strings.TrimSpace(*tasksFile))
 		if err != nil {
@@ -707,7 +710,11 @@ func runResearch(cfg config.Config, args []string) {
 			outputPath = filepath.Join(cfg.DataDir, "research", "trajectories-"+time.Now().Format("20060102-150405")+".jsonl")
 		}
 		eng, _ := mustBuildEngine(cfg)
-		report, err := research.RunBatch(context.Background(), eng, tasks, outputPath)
+		report, err := research.RunBatchWithOptions(context.Background(), eng, tasks, outputPath, research.RunOptions{
+			Concurrency: *concurrency,
+			StopOnError: *stopOnError,
+			TimeoutSec:  *timeoutSec,
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -729,15 +736,54 @@ func runResearch(cfg config.Config, args []string) {
 	case "stats":
 		fs := flag.NewFlagSet("research stats", flag.ExitOnError)
 		inFile := fs.String("in", "", "input trajectory jsonl")
+		successFilter := fs.String("success", "all", "success filter: all|true|false")
+		toolFilter := fs.String("tool", "", "only include trajectories using this tool")
+		modelFilter := fs.String("model", "", "only include trajectories using this model")
+		limit := fs.Int("limit", 0, "max matched trajectories to aggregate (0 means all)")
 		_ = fs.Parse(args[1:])
 		if strings.TrimSpace(*inFile) == "" {
-			log.Fatal("usage: agentd research stats -in trajectories.jsonl")
+			log.Fatal("usage: agentd research stats -in trajectories.jsonl [-success all|true|false] [-tool name] [-model name] [-limit 0]")
 		}
-		stats, err := research.StatsTrajectories(strings.TrimSpace(*inFile))
+		success, err := research.ParseSuccessFilter(*successFilter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		stats, err := research.StatsTrajectoriesWithFilter(strings.TrimSpace(*inFile), research.FilterOptions{
+			Success: success,
+			Tool:    strings.TrimSpace(*toolFilter),
+			Model:   strings.TrimSpace(*modelFilter),
+			Limit:   *limit,
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
 		printJSON(stats)
+	case "export":
+		fs := flag.NewFlagSet("research export", flag.ExitOnError)
+		inFile := fs.String("in", "", "input trajectory jsonl")
+		outFile := fs.String("out", "", "output exported jsonl")
+		successFilter := fs.String("success", "all", "success filter: all|true|false")
+		toolFilter := fs.String("tool", "", "only include trajectories using this tool")
+		modelFilter := fs.String("model", "", "only include trajectories using this model")
+		limit := fs.Int("limit", 0, "max matched trajectories to export (0 means all)")
+		_ = fs.Parse(args[1:])
+		if strings.TrimSpace(*inFile) == "" || strings.TrimSpace(*outFile) == "" {
+			log.Fatal("usage: agentd research export -in trajectories.jsonl -out trajectories.export.jsonl [-success all|true|false] [-tool name] [-model name] [-limit 0]")
+		}
+		success, err := research.ParseSuccessFilter(*successFilter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		meta, err := research.ExportTrajectories(strings.TrimSpace(*inFile), strings.TrimSpace(*outFile), research.FilterOptions{
+			Success: success,
+			Tool:    strings.TrimSpace(*toolFilter),
+			Model:   strings.TrimSpace(*modelFilter),
+			Limit:   *limit,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		printJSON(meta)
 	default:
 		printResearchUsage()
 		os.Exit(2)
@@ -746,9 +792,10 @@ func runResearch(cfg config.Config, args []string) {
 
 func printResearchUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  agentd research run -tasks file.jsonl [-out trajectories.jsonl]")
+	fmt.Fprintln(os.Stderr, "  agentd research run -tasks file.jsonl [-out trajectories.jsonl] [-concurrency 1] [-stop-on-error=false] [-timeout-sec 0]")
 	fmt.Fprintln(os.Stderr, "  agentd research compress -in trajectories.jsonl -out trajectories.compact.jsonl.gz [-max-chars 4000]")
-	fmt.Fprintln(os.Stderr, "  agentd research stats -in trajectories.jsonl")
+	fmt.Fprintln(os.Stderr, "  agentd research stats -in trajectories.jsonl [-success all|true|false] [-tool name] [-model name] [-limit 0]")
+	fmt.Fprintln(os.Stderr, "  agentd research export -in trajectories.jsonl -out trajectories.export.jsonl [-success all|true|false] [-tool name] [-model name] [-limit 0]")
 }
 
 func runTUI(cfg config.Config, first, mode string, fullscreen bool, sessionID ...string) {

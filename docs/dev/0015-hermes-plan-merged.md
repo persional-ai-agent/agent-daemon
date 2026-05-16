@@ -83,7 +83,7 @@
 | `TODO-011` | `done` | 已补 memory 来源追踪与可信度、外部 provider 状态开关（status/off/on）、记忆 reset/list/revoke/insights 与周期性记忆洞察入口，支持用户查看、撤销、禁用并保留 session/turn provenance。 | `internal/memory/store.go`、`internal/tools/builtin.go`、`internal/cli/chat.go` |
 | `TODO-012` | `done` | 已补 `no_agent`(script) 动作、失败自动重试（retry_max/retry_delay_sec）、run timeout、单任务并发上限（max_concurrency）、run replay 审计回放与 API 透传字段，CLI/Web/cronjob 工具语义一致。 | `internal/tools/cronjob.go`、`internal/store/cron_store.go`、`internal/cronrunner/scheduler.go`、`internal/api/server.go` |
 | `TODO-013` | `done` | 已补 ACP capability declaration、session create/list/get/delete、message send/stream/cancel/resume、ACP 鉴权边界（Bearer/X-ACP-Token）与事件细分映射（tool/model/approval/result/error/cancelled）。 | `internal/api/server.go`、`internal/api/server_test.go`、`internal/store/session_store.go` |
-| `TODO-014` | `partial` | research/trajectory 最小运行闭环已完成，策略评估与导出体系需增强。 | `docs/dev/0036-summary-summary-merged.md`（`# 259`） |
+| `TODO-014` | `done` | 已补 batch runner 并发与失败策略、trajectory reward/outcome schema、stats/export 过滤与 RL/Atropos 兼容 JSONL 导出，形成 run/compress/stats/export 闭环。 | `internal/research/batch.go`、`cmd/agentd/main.go`、`internal/research/batch_test.go` |
 | `TODO-015` | `partial` | setup/install/update 等有进展，迁移与可回滚备份恢复未闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 054`~`# 058` 及后续安装相关总结） |
 | `TODO-016` | `partial` | Web 管理面已补 dashboard/cron/model-provider，距“日常可完全替代 CLI”仍有缺口。 | `docs/dev/0036-summary-summary-merged.md`（`# 277`~`# 279`） |
 
@@ -590,6 +590,14 @@
 - `agentd research run/compress/stats/export` 可跑完整闭环。
 - 生成 JSONL 轨迹可复放。
 - 支持按成功/失败/工具/模型过滤。
+
+最新进展（2026-05-16）：
+
+- `research run` 已支持 `-concurrency`、`-stop-on-error`、`-timeout-sec`，补齐 batch runner 并发度与失败策略控制。
+- trajectory schema 已补 `reward` 与 `outcome` 字段，记录最小策略评估结果。
+- `research stats` 已支持过滤参数：`-success all|true|false`、`-tool`、`-model`、`-limit`。
+- 新增 `research export`，输出 RL/Atropos 兼容训练 JSONL（messages/events/reward/outcome/label/provider）。
+- 已补测试覆盖 run/export/filter 关键路径，`go test ./internal/research ./cmd/agentd` 通过。
 
 ## P3：补运维、安装、Web 管理面完整度
 

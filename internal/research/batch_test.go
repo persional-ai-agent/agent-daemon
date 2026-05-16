@@ -1,9 +1,16 @@
 package research
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/dingjingmaster/agent-daemon/internal/agent"
+	"github.com/dingjingmaster/agent-daemon/internal/core"
+	"github.com/dingjingmaster/agent-daemon/internal/tools"
 )
 
 func TestLoadTasks(t *testing.T) {
@@ -49,4 +56,74 @@ func TestCompressAndStatsTrajectories(t *testing.T) {
 	if stats["total"].(int) != 2 {
 		t.Fatalf("stats=%#v", stats)
 	}
+}
+
+type staticResearchClient struct{}
+
+func (staticResearchClient) ChatCompletion(_ context.Context, _ []core.Message, _ []core.ToolSchema) (core.Message, error) {
+	return core.Message{Role: "assistant", Content: "ok"}, nil
+}
+
+func TestRunBatchWithOptionsAndExportFilter(t *testing.T) {
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "traj.jsonl")
+	eng := &agent.Engine{
+		Client:       staticResearchClient{},
+		Registry:     tools.NewRegistry(),
+		SystemPrompt: agent.DefaultSystemPrompt(),
+	}
+	tasks := []Task{
+		{ID: "t1", SessionID: "s1", Input: "hello", Metadata: map[string]any{"env": "bench-a"}},
+		{ID: "t2", SessionID: "s2", Input: "world", Metadata: map[string]any{"env": "bench-b"}},
+	}
+	report, err := RunBatchWithOptions(context.Background(), eng, tasks, out, RunOptions{Concurrency: 2, TimeoutSec: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Total != 2 || report.Succeeded != 2 {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"reward"`) || !strings.Contains(string(raw), `"outcome"`) {
+		t.Fatalf("trajectory missing reward/outcome: %s", string(raw))
+	}
+
+	stats, err := StatsTrajectoriesWithFilter(out, FilterOptions{Success: boolPtr(true), Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats["total"].(int) < 1 {
+		t.Fatalf("unexpected stats: %#v", stats)
+	}
+
+	exportOut := filepath.Join(tmp, "export.jsonl")
+	meta, err := ExportTrajectories(out, exportOut, FilterOptions{Success: boolPtr(true), Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta["exported"].(int) != 1 {
+		t.Fatalf("unexpected export meta: %#v", meta)
+	}
+	bs, err := os.ReadFile(exportOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := strings.TrimSpace(string(bs))
+	var row map[string]any
+	if err := json.Unmarshal([]byte(line), &row); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(anyToString(row["label"])) != "success" {
+		t.Fatalf("unexpected row: %#v", row)
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+func anyToString(v any) string {
+	s, _ := v.(string)
+	return s
 }
