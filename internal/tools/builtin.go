@@ -1191,7 +1191,13 @@ func (b *BuiltinTools) memory(_ context.Context, args map[string]any, tc ToolCon
 	if tc.MemoryStore == nil {
 		return nil, errors.New("memory store unavailable")
 	}
-	res, err := tc.MemoryStore.Manage(strArg(args, "action"), strArg(args, "target"), strArg(args, "content"), strArg(args, "old_text"))
+	extra := map[string]any{
+		"session_id": tc.SessionID,
+		"turn_id":    strArg(args, "source_turn_id"),
+		"provider":   strArg(args, "provider"),
+		"confidence": args["confidence"],
+	}
+	res, err := tc.MemoryStore.ManageWithContext(strArg(args, "action"), strArg(args, "target"), strArg(args, "content"), strArg(args, "old_text"), extra)
 	if err != nil {
 		return nil, err
 	}
@@ -2069,9 +2075,10 @@ func todoParams() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"todos": map[string]any{"type": "array"}, "merge": map[string]any{"type": "boolean"}}}
 }
 func memoryParams() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove", "extract"}, "description": "Memory operation action. Use extract to distill durable facts/preferences from conversation text and skip duplicates."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove/extract; replacement text for replace/update."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}}, "required": []string{"action", "target"}, "oneOf": []any{
+	return map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"add", "replace", "update", "delete", "remove", "extract", "status", "off", "on", "reset", "list", "revoke", "insights"}, "description": "Memory operation action. Use extract to distill durable facts/preferences from conversation text and skip duplicates."}, "target": map[string]any{"type": "string", "enum": []string{"memory", "memory.md", "user", "user.md"}}, "content": map[string]any{"type": "string", "description": "Required for add/delete/remove/extract; replacement text for replace/update; entry id for revoke."}, "old_text": map[string]any{"type": "string", "description": "Required for replace/update actions."}, "confidence": map[string]any{"type": "number", "minimum": 0, "maximum": 1, "description": "Confidence score for new/updated memory entries."}, "provider": map[string]any{"type": "string", "description": "Provider tag for provenance."}, "source_turn_id": map[string]any{"type": "string", "description": "Optional source turn id for provenance."}}, "required": []string{"action", "target"}, "oneOf": []any{
 		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"add", "delete", "remove", "extract"}}}, "required": []string{"content"}},
 		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"replace", "update"}}}, "required": []string{"content", "old_text"}},
+		map[string]any{"properties": map[string]any{"action": map[string]any{"enum": []string{"revoke"}}}, "required": []string{"content"}},
 	}}
 }
 func sessionSearchParams() map[string]any {

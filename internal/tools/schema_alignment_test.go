@@ -106,15 +106,15 @@ func TestMemorySchemaActionTargetEnums(t *testing.T) {
 	target, _ := props["target"].(map[string]any)
 	actionEnum, _ := action["enum"].([]string)
 	targetEnum, _ := target["enum"].([]string)
-	if !reflect.DeepEqual(actionEnum, []string{"add", "replace", "update", "delete", "remove", "extract"}) {
+	if !reflect.DeepEqual(actionEnum, []string{"add", "replace", "update", "delete", "remove", "extract", "status", "off", "on", "reset", "list", "revoke", "insights"}) {
 		t.Fatalf("memory.action enum=%v", actionEnum)
 	}
 	if !reflect.DeepEqual(targetEnum, []string{"memory", "memory.md", "user", "user.md"}) {
 		t.Fatalf("memory.target enum=%v", targetEnum)
 	}
 	oneOf, _ := memoryParams()["oneOf"].([]any)
-	if len(oneOf) != 2 {
-		t.Fatalf("memory.oneOf len=%d, want 2", len(oneOf))
+	if len(oneOf) != 3 {
+		t.Fatalf("memory.oneOf len=%d, want 3", len(oneOf))
 	}
 }
 

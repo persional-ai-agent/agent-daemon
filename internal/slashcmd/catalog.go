@@ -27,6 +27,7 @@ func TUIHelpEntries() []HelpEntry {
 		{"/prev", "show previous page (based on last /show)"},
 		{"/stats [sid]", "show session stats"},
 		{"/usage [sid]", "show session usage/stats"},
+		{"/insights [memory|user]", "show memory insights"},
 		{"/undo", "undo last user turn by branching to a new session"},
 		{"/retry", "undo last user turn then resend it"},
 		{"/compress [n]", "compress current session context"},
@@ -101,7 +102,7 @@ func TUIHelpEntries() []HelpEntry {
 func TUIRootCommands() []string {
 	return []string{
 		"/help", "/session", "/new", "/reset", "/resume", "/reload", "/api", "/http", "/tools", "/tool", "/sessions", "/pick", "/show", "/next", "/prev",
-		"/stats", "/usage", "/undo", "/retry", "/compress", "/targets", "/sethome", "/whoami", "/continuity", "/setid", "/unsetid", "/resolve", "/skills", "/model", "/personality", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
+		"/stats", "/usage", "/insights", "/undo", "/retry", "/compress", "/targets", "/sethome", "/whoami", "/continuity", "/setid", "/unsetid", "/resolve", "/skills", "/model", "/personality", "/gateway", "/config", "/pretty", "/view", "/last", "/save", "/status", "/health", "/cancel",
 		"/history", "/timeline", "/rerun", "/events", "/bookmark", "/workbench", "/workflow", "/pending",
 		"/approve", "/deny", "/reload-config", "/doctor", "/actions", "/panel", "/open", "/refresh", "/version",
 		"/reconnect", "/recover", "/diag", "/fullscreen", "/quit", "/exit", "/new", "/reset",
@@ -135,7 +136,8 @@ func CLIHelpLines() []string {
 		"/tools [list|show|schemas]    查看工具列表、单个 schema 或全部 schema",
 		"/toolsets [list|show|resolve] 查看工具集",
 		"/todo                         查看当前会话 todo",
-		"/memory [memory|user]         查看持久记忆",
+		"/memory [memory|user|status|off|on|reset|list|revoke] 查看持久记忆与状态",
+		"/insights [memory|user]       查看偏好/事实/近期主题洞察",
 		"/model [provider:model|provider model]  显示或设置模型偏好",
 		"/personality [show|reset|...] 查看或设置会话 system prompt",
 		"/cancel | /stop               取消当前任务（若支持）",

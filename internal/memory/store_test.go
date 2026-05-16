@@ -95,3 +95,75 @@ func TestMemoryExtractDeduplicatesFacts(t *testing.T) {
 		t.Fatalf("missing extracted preference: %s", content)
 	}
 }
+
+func TestMemoryStatusOffOnAndReset(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ManageWithContext("add", "memory", "prefers concise answers", "", map[string]any{"session_id": "s1", "turn_id": "t1", "confidence": 0.9}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := store.ManageWithContext("status", "memory", "", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status["external_enabled"] != true {
+		t.Fatalf("unexpected status: %+v", status)
+	}
+	if _, err := store.ManageWithContext("off", "memory", "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = store.ManageWithContext("status", "memory", "", "", nil)
+	if status["external_enabled"] != false {
+		t.Fatalf("expected external_enabled=false, got %+v", status)
+	}
+	if _, err := store.ManageWithContext("on", "memory", "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ManageWithContext("reset", "memory", "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	list, err := store.ManageWithContext("list", "memory", "", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list["count"] != 0 {
+		t.Fatalf("expected reset memory to be empty: %+v", list)
+	}
+}
+
+func TestMemoryRevokeEntry(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ManageWithContext("add", "memory", "project uses Go", "", map[string]any{"session_id": "s2", "turn_id": "t2", "confidence": 0.8}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := store.ManageWithContext("list", "memory", "", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := list["entries"].([]map[string]any)
+	if len(entries) != 1 {
+		t.Fatalf("unexpected entries: %+v", list)
+	}
+	id, _ := entries[0]["id"].(string)
+	if strings.TrimSpace(id) == "" {
+		t.Fatalf("expected entry id: %+v", entries[0])
+	}
+	res, err := store.ManageWithContext("revoke", "memory", id, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["revoked"] != true {
+		t.Fatalf("expected revoked=true: %+v", res)
+	}
+	list, _ = store.ManageWithContext("list", "memory", "", "", nil)
+	if list["count"] != 0 {
+		t.Fatalf("expected no active entries after revoke: %+v", list)
+	}
+}

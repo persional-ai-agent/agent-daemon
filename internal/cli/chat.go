@@ -516,16 +516,81 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			printCLIEnvelope(false, nil, "not_available", clitools.MemoryStoreUnavailableEN())
 			return true, nil
 		}
+		if len(fields) > 1 {
+			sub := strings.ToLower(strings.TrimSpace(fields[1]))
+			switch sub {
+			case "memory", "user":
+				snapshot, err := eng.MemoryStore.Snapshot()
+				if err != nil {
+					return true, err
+				}
+				printCLIEnvelope(true, clitools.BuildMemoryContentPayload(sub, snapshot[sub]), "", "")
+				return true, nil
+			case "status":
+				out, err := eng.MemoryStore.ManageWithContext("status", "memory", "", "", map[string]any{"session_id": state.SessionID, "provider": "local"})
+				if err != nil {
+					return true, err
+				}
+				printCLIEnvelope(true, clitools.BuildObjectPayload("memory", out), "", "")
+				return true, nil
+			case "off", "on", "reset":
+				out, err := eng.MemoryStore.ManageWithContext(sub, "memory", "", "", map[string]any{"session_id": state.SessionID, "provider": "local"})
+				if err != nil {
+					return true, err
+				}
+				printCLIEnvelope(true, clitools.BuildObjectPayload("memory", out), "", "")
+				return true, nil
+			case "list":
+				target := "memory"
+				if len(fields) > 2 {
+					target = strings.ToLower(strings.TrimSpace(fields[2]))
+				}
+				out, err := eng.MemoryStore.ManageWithContext("list", target, "", "", map[string]any{"session_id": state.SessionID, "provider": "local"})
+				if err != nil {
+					return true, err
+				}
+				printCLIEnvelope(true, clitools.BuildObjectPayload("memory", out), "", "")
+				return true, nil
+			case "revoke":
+				if len(fields) < 3 {
+					printCLIEnvelope(false, nil, "invalid_argument", "用法: /memory revoke <entry_id> [memory|user]")
+					return true, nil
+				}
+				target := "memory"
+				if len(fields) > 3 {
+					target = strings.ToLower(strings.TrimSpace(fields[3]))
+				}
+				out, err := eng.MemoryStore.ManageWithContext("revoke", target, fields[2], "", map[string]any{"session_id": state.SessionID, "provider": "local"})
+				if err != nil {
+					return true, err
+				}
+				printCLIEnvelope(true, clitools.BuildObjectPayload("memory", out), "", "")
+				return true, nil
+			default:
+				printCLIEnvelope(false, nil, "invalid_argument", "用法: /memory [memory|user|status|off|on|reset|list [memory|user]|revoke <id> [memory|user]]")
+				return true, nil
+			}
+		}
 		snapshot, err := eng.MemoryStore.Snapshot()
 		if err != nil {
 			return true, err
 		}
-		if len(fields) > 1 {
-			target := strings.ToLower(strings.TrimSpace(fields[1]))
-			printCLIEnvelope(true, clitools.BuildMemoryContentPayload(target, snapshot[target]), "", "")
+		printCLIEnvelope(true, clitools.BuildMemorySnapshotPayload(snapshot), "", "")
+		return true, nil
+	case "/insights":
+		if eng.MemoryStore == nil {
+			printCLIEnvelope(false, nil, "not_available", clitools.MemoryStoreUnavailableEN())
 			return true, nil
 		}
-		printCLIEnvelope(true, clitools.BuildMemorySnapshotPayload(snapshot), "", "")
+		target := "memory"
+		if len(fields) > 1 {
+			target = strings.ToLower(strings.TrimSpace(fields[1]))
+		}
+		out, err := eng.MemoryStore.ManageWithContext("insights", target, "", "", map[string]any{"session_id": state.SessionID, "provider": "local"})
+		if err != nil {
+			return true, err
+		}
+		printCLIEnvelope(true, clitools.BuildObjectPayload("insights", out), "", "")
 		return true, nil
 	case "/model":
 		if len(fields) > 3 {
