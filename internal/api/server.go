@@ -806,10 +806,7 @@ func (s *Server) handleUIConfigSet(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": res,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(res))
 }
 
 func (s *Server) handleUITargets(w http.ResponseWriter, r *http.Request) {
@@ -861,10 +858,7 @@ func (s *Server) handleUITargetsHome(w http.ResponseWriter, r *http.Request) {
 		ChatID:     chatID,
 		HomeTarget: chatID,
 	})
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildSetHomePayload(platformName, chatID),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildSetHomePayload(platformName, chatID)))
 }
 
 func (s *Server) handleUIModel(w http.ResponseWriter, r *http.Request) {
@@ -999,10 +993,7 @@ func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildUISessionBranchPayload(req.SessionID, req.NewSessionID, len(msgs)),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionBranchPayload(req.SessionID, req.NewSessionID, len(msgs))))
 }
 
 func (s *Server) handleUISessionResume(w http.ResponseWriter, r *http.Request) {
@@ -1030,10 +1021,7 @@ func (s *Server) handleUISessionResume(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildUISessionResumePayload(req.SessionID, req.TurnID, "http"),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionResumePayload(req.SessionID, req.TurnID, "http")))
 }
 
 func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request) {
@@ -1065,10 +1053,7 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok":     true,
-			"result": tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep)))
 		return
 	}
 	msgs, err := s.Engine.SessionStore.LoadMessages(req.SessionID, 500)
@@ -1081,10 +1066,7 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 	if keep < before {
 		after = keep
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep)))
 }
 
 func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
@@ -1132,10 +1114,7 @@ func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if idx < 0 {
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok":     true,
-			"result": tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(msgs), 0, false, "no_user_message"),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(msgs), 0, false, "no_user_message")))
 		return
 	}
 	next := core.CloneMessages(msgs[:idx])
@@ -1145,10 +1124,7 @@ func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(next), len(msgs)-len(next), true, ""),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(next), len(msgs)-len(next), true, "")))
 }
 
 func (s *Server) handleUISessionReplay(w http.ResponseWriter, r *http.Request) {
@@ -1188,10 +1164,7 @@ func (s *Server) handleUISessionReplay(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildUISessionReplayPayload(req.SessionID, offset, limit, msgs),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildUISessionReplayPayload(req.SessionID, offset, limit, msgs)))
 }
 
 func (s *Server) handleUIGatewayStatus(w http.ResponseWriter, r *http.Request) {
@@ -1218,10 +1191,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": tools.BuildGatewayContinuityPayload(mode),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewayContinuityPayload(mode)))
 		return
 	case http.MethodPost:
 		var req uiGatewayContinuityRequest
@@ -1239,10 +1209,7 @@ func (s *Server) handleUIGatewayContinuity(w http.ResponseWriter, r *http.Reques
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": tools.BuildGatewayContinuityPayload(mode),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewayContinuityPayload(mode)))
 		return
 	default:
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -1266,10 +1233,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok":     true,
-			"result": tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, globalID, false, false),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, globalID, false, false)))
 		return
 	case http.MethodPost:
 		var req uiGatewayIdentityRequest
@@ -1286,10 +1250,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok":     true,
-			"result": tools.BuildGatewayIdentityPayload(setArgs.Platform, setArgs.UserID, setArgs.GlobalID, true, false),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewayIdentityPayload(setArgs.Platform, setArgs.UserID, setArgs.GlobalID, true, false)))
 		return
 	case http.MethodDelete:
 		var req uiGatewayIdentityRequest
@@ -1306,10 +1267,7 @@ func (s *Server) handleUIGatewayIdentity(w http.ResponseWriter, r *http.Request)
 			writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 			return
 		}
-		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok":     true,
-			"result": tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, "", false, true),
-		})
+		writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewayIdentityPayload(ref.Platform, ref.UserID, "", false, true)))
 		return
 	default:
 		writeUIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -1338,10 +1296,7 @@ func (s *Server) handleUIGatewaySessionResolve(w http.ResponseWriter, r *http.Re
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": tools.BuildGatewaySessionResolvePayload(resolved),
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(tools.BuildGatewaySessionResolvePayload(resolved)))
 }
 
 func (s *Server) handleUIGatewayDiagnostics(w http.ResponseWriter, r *http.Request) {
@@ -1780,10 +1735,7 @@ func (s *Server) handleUIGatewayAction(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "invalid_argument", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": res,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(res))
 }
 
 func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request) {
@@ -1832,10 +1784,7 @@ func (s *Server) handleUIApprovalConfirm(w http.ResponseWriter, r *http.Request)
 		writeUIError(w, http.StatusBadRequest, "tool_error", e)
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": out,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) handleUIAgents(w http.ResponseWriter, r *http.Request) {
@@ -2310,10 +2259,7 @@ func (s *Server) handleUISkillsReload(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": result,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(result))
 }
 
 func (s *Server) handleUISkillsSearch(w http.ResponseWriter, r *http.Request) {
@@ -2352,10 +2298,7 @@ func (s *Server) handleUISkillsSearch(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "tool_error", e)
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": out,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) handleUISkillsSync(w http.ResponseWriter, r *http.Request) {
@@ -2420,10 +2363,7 @@ func (s *Server) handleUISkillsSync(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusBadRequest, "tool_error", e)
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":     true,
-		"result": out,
-	})
+	writeUIJSON(w, http.StatusOK, tools.BuildUIResultEnvelope(out))
 }
 
 func (s *Server) engineWorkdir() string {
