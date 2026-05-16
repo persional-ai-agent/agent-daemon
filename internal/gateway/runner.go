@@ -1146,7 +1146,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/pending":
 			reply := w.pendingApprovalStatus()
-			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
+			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, tools.NoPendingApprovalEN()) {
 				reply += "\nquick_reply: 批准 / 拒绝"
 			}
 			w.sendApprovalText(ctx, event, escapeMarkdown(reply), "/pending", w.resolveApprovalID(nil))
@@ -1886,27 +1886,21 @@ func (w *sessionWorker) confirmApproval(ctx context.Context, approvalID string, 
 	}, w.approvalToolContext())
 	parsed := tools.ParseJSONArgs(raw)
 	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
-		return "Approval failed: " + errText
+		return tools.ApprovalFailedEN(errText)
 	}
 	approved, _ := parsed["approved"].(bool)
 	command, _ := parsed["command"].(string)
 	if !approved {
 		w.clearApprovalID(approvalID)
-		if strings.TrimSpace(command) == "" {
-			return "Denied."
-		}
-		return "Denied: " + command
+		return tools.ApprovalDeniedEN(command)
 	}
 	w.clearApprovalID(approvalID)
 	output, _ := parsed["output"].(string)
 	output = strings.TrimSpace(output)
 	if output != "" {
-		return "Approved and executed.\n" + truncateString(output, 1500)
+		return tools.ApprovalApprovedExecutedEN(truncateString(output, 1500))
 	}
-	if strings.TrimSpace(command) != "" {
-		return "Approved: " + command
-	}
-	return "Approved."
+	return tools.ApprovalApprovedEN(command)
 }
 
 func (w *sessionWorker) approvalStatus(ctx context.Context) string {
@@ -1915,15 +1909,15 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 	}, w.approvalToolContext())
 	parsed := tools.ParseJSONArgs(raw)
 	if errText, _ := parsed["error"].(string); strings.TrimSpace(errText) != "" {
-		return "Approval status failed: " + errText
+		return tools.ApprovalStatusFailedEN(errText)
 	}
 	approvals, _ := parsed["approvals"].([]any)
 	if len(approvals) == 0 {
-		return "No active approvals."
+		return tools.NoActiveApprovalsEN()
 	}
 	lines := make([]string, 0, len(approvals)+1)
 	if approved, _ := parsed["approved"].(bool); approved {
-		lines = append(lines, "Session approval: active")
+		lines = append(lines, tools.SessionApprovalActiveEN())
 	}
 	for _, item := range approvals {
 		m, _ := item.(map[string]any)
@@ -1943,7 +1937,7 @@ func (w *sessionWorker) approvalStatus(ctx context.Context) string {
 		lines = append(lines, line)
 	}
 	if len(lines) == 0 {
-		return "No active approvals."
+		return tools.NoActiveApprovalsEN()
 	}
 	return strings.Join(lines, "\n")
 }
@@ -1988,7 +1982,7 @@ func (w *sessionWorker) pendingApprovalStatus() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if strings.TrimSpace(w.lastApprovalID) == "" {
-		return "No pending approval."
+		return tools.NoPendingApprovalEN()
 	}
 	lines := []string{"approval_id: " + w.lastApprovalID}
 	if strings.TrimSpace(w.lastApprovalCommand) != "" {
@@ -2166,21 +2160,15 @@ func (w *sessionWorker) grantApproval(ctx context.Context, parsed gatewayCommand
 	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
 	out := tools.ParseJSONArgs(raw)
 	if errText, _ := out["error"].(string); strings.TrimSpace(errText) != "" {
-		return "Grant failed: " + errText
+		return tools.GrantFailedEN(errText)
 	}
 	scope, _ := out["scope"].(string)
 	pattern, _ := out["pattern"].(string)
 	expiresAt, _ := out["expires_at"].(string)
 	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
-		if strings.TrimSpace(expiresAt) != "" {
-			return "Granted pattern approval: " + pattern + " until " + expiresAt
-		}
-		return "Granted pattern approval: " + pattern
+		return tools.GrantedPatternApprovalEN(pattern, expiresAt)
 	}
-	if strings.TrimSpace(expiresAt) != "" {
-		return "Granted session approval until " + expiresAt
-	}
-	return "Granted session approval."
+	return tools.GrantedSessionApprovalEN(expiresAt)
 }
 
 func (w *sessionWorker) revokeApproval(ctx context.Context, parsed gatewayCommand) string {
@@ -2192,21 +2180,21 @@ func (w *sessionWorker) revokeApproval(ctx context.Context, parsed gatewayComman
 	raw := w.engine.Registry.Dispatch(ctx, "approval", args, w.approvalToolContext())
 	out := tools.ParseJSONArgs(raw)
 	if errText, _ := out["error"].(string); strings.TrimSpace(errText) != "" {
-		return "Revoke failed: " + errText
+		return tools.RevokeFailedEN(errText)
 	}
 	scope, _ := out["scope"].(string)
 	pattern, _ := out["pattern"].(string)
 	revoked, _ := out["revoked"].(bool)
 	if strings.TrimSpace(scope) == "pattern" && strings.TrimSpace(pattern) != "" {
 		if revoked {
-			return "Revoked pattern approval: " + pattern
+			return tools.RevokedPatternApprovalEN(pattern)
 		}
 		return tools.NotFoundEN("pattern approval", pattern)
 	}
 	if revoked {
-		return "Revoked session approval."
+		return tools.RevokedSessionApprovalEN()
 	}
-	return "No active session approval."
+	return tools.NoActiveSessionApprovalEN()
 }
 
 func parseApprovalManageCommand(head string, argsIn []string) (map[string]any, string) {
