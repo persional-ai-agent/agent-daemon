@@ -239,7 +239,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"stats": stats}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionStatsPayload(target, stats), "", "")
 		return true, nil
 	case "/usage":
 		target := state.SessionID
@@ -259,7 +259,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"usage": stats}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionUsagePayload(target, stats), "", "")
 		return true, nil
 	case "/show":
 		target := state.SessionID

@@ -1021,7 +1021,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayStats(target, stats)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/usage", "session_id": target})
+			meta := tools.BuildSessionUsagePayload(target, stats)
+			meta["slash"] = "/usage"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/model":
 			if len(parsed.args) > 2 {
