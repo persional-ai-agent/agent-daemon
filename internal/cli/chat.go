@@ -619,7 +619,7 @@ func handleToolsSlash(fields []string, eng *agent.Engine) bool {
 		}
 		for _, schema := range eng.Registry.Schemas() {
 			if schema.Function.Name == fields[2] {
-				printCLIEnvelope(true, map[string]any{"schema": schema}, "", "")
+				printCLIEnvelope(true, clitools.BuildObjectPayload("schema", schema), "", "")
 				return true
 			}
 		}
@@ -652,7 +652,7 @@ func handleToolsetsSlash(fields []string) bool {
 			printCLIEnvelope(false, nil, "not_found", "toolset not found: "+fields[2])
 			return true
 		}
-		printCLIEnvelope(true, map[string]any{"toolset": ts}, "", "")
+		printCLIEnvelope(true, clitools.BuildObjectPayload("toolset", ts), "", "")
 	case "resolve":
 		if len(fields) != 3 {
 			printCLIEnvelope(false, nil, "invalid_argument", "用法: /toolsets resolve <name[,name]>")

@@ -40,3 +40,9 @@ func TestBuildPersonalityPayload(t *testing.T) {
 	}
 }
 
+func TestBuildObjectPayload(t *testing.T) {
+	got := BuildObjectPayload("schema", 123)
+	if got["schema"] != 123 {
+		t.Fatalf("unexpected object payload: %+v", got)
+	}
+}

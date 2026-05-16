@@ -39,3 +39,11 @@ func BuildPersonalityPayload(mode, systemPrompt string) map[string]any {
 	}
 	return payload
 }
+
+func BuildObjectPayload(key string, value any) map[string]any {
+	k := strings.TrimSpace(strings.ToLower(key))
+	if k == "" {
+		k = "data"
+	}
+	return map[string]any{k: value}
+}
