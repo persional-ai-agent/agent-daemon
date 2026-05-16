@@ -72,7 +72,7 @@
 |---|---|---|---|
 | `TODO-001` | `done` | TUI/CLI 多行输入、slash 补全、历史浏览、Ctrl+C 取消、流式/最终态渲染与多轮顺序稳定性已完成收口，验收回归覆盖通过。 | `ui-tui/bubbletea_app.go`、`ui-tui/tui_runtime.go`、`ui-tui/*test.go` |
 | `TODO-002` | `done` | CLI/TUI/Gateway 命令分发、参数校验、核心回包 payload 与 usage 文案已统一到 shared helper 路径，`/stop` 语义已归一到取消当前平台会话活动 turn。 | `internal/gateway/runner.go`、`internal/cli/chat.go`、`ui-tui/command_logic.go`、`internal/tools/` |
-| `TODO-003` | `partial` | `send_message` home target 与目标模型已补一部分，跨平台 continuity 未完全闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 111`、`# 281`） |
+| `TODO-003` | `done` | 已完成 `send_message` target 统一语法、home target + channel directory 回填、continuity/global identity 优先匹配与跨平台会话映射闭环。 | `internal/tools/send_message.go`、`internal/tools/channel_directory.go`、`internal/tools/gateway_identity.go` |
 | `TODO-004` | `done` | `signal`、`email`、`webhook`、`homeassistant` 已具备最小 inbound/outbound 闭环，并接入 gateway setup/status/platforms 与运行时适配器装配。 | `internal/gateway/platforms/signal.go`、`internal/gateway/platforms/email.go`、`internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/homeassistant_adapter.go`、`cmd/agentd/main.go` |
 | `TODO-005` | `done` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` + `mattermost` + `sms` + `bluebubbles` 网关适配器（inbound/outbound 最小闭环），并接入 gateway setup/status/platforms、运行时装配与 webhook API 路由。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`internal/gateway/platforms/mattermost.go`、`internal/gateway/platforms/sms.go`、`internal/gateway/platforms/bluebubbles.go`、`internal/api/server.go`、`cmd/agentd/main.go` |
 | `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
@@ -89,8 +89,7 @@
 
 ## 下一迭代优先级（先做功能）
 
-1. `TODO-003`：补齐 `send_message` continuity 与跨平台会话映射闭环。
-2. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
+1. `TODO-008`：补 toolsets 动态可用性与 UI 管理闭环。
 
 ## P0：先稳定用户入口与会话体验
 
@@ -263,6 +262,15 @@
 - `send_message(action=list)` 能列出可投递平台和 home target。
 - Cron / agent 工具可以投递到 bare platform name 或显式 target。
 - 同一用户从不同平台进入时可按配置恢复同一 session。
+
+最新进展（2026-05-16）：
+
+- 已将 `send_message` bare platform 投递路径补齐到“多级回填”：`target -> platform/chat_id -> gateway context -> home target -> channel directory`。
+- 已新增 continuity/global identity 优先匹配逻辑：当工具上下文来自 gateway 用户时，优先按 identity map（或 continuity auto identity）在目标平台 channel directory 中选取同一用户目标通道。
+- 已补测试覆盖：
+  - bare platform + home target 投递；
+  - bare platform + directory fallback 投递；
+  - 跨平台 global identity 优先匹配目标通道。
 
 ## P1：补齐 Hermes 主要功能面
 

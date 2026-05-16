@@ -99,6 +99,11 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 				chatID = v
 			}
 		}
+		if chatID == "" && p != "" {
+			if v := resolveChannelTargetFromContext(tc, p); v != "" {
+				chatID = v
+			}
+		}
 		if p == "" {
 			return nil, errors.New("platform required (or set target)")
 		}
@@ -150,6 +155,62 @@ func (t *SendMessageTool) Call(ctx context.Context, args map[string]any, tc Tool
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+func resolveChannelTargetFromContext(tc ToolContext, platformName string) string {
+	workdir := strings.TrimSpace(tc.Workdir)
+	platformName = strings.ToLower(strings.TrimSpace(platformName))
+	if workdir == "" || platformName == "" {
+		return ""
+	}
+	rows, err := ListChannelDirectory(workdir)
+	if err != nil || len(rows) == 0 {
+		return ""
+	}
+
+	preferGlobalID := ""
+	preferUserID := ""
+	preferUserName := strings.TrimSpace(tc.GatewayUserName)
+	if strings.TrimSpace(tc.GatewayPlatform) != "" && strings.TrimSpace(tc.GatewayUserID) != "" {
+		preferUserID = strings.TrimSpace(tc.GatewayUserID)
+		if gid, rerr := ResolveGatewayIdentity(workdir, tc.GatewayPlatform, tc.GatewayUserID); rerr == nil {
+			preferGlobalID = strings.TrimSpace(gid)
+		}
+		if preferGlobalID == "" {
+			if mode, merr := ResolveGatewayContinuityMode(workdir); merr == nil {
+				preferGlobalID = AutoGlobalIdentity(mode, tc.GatewayUserID, tc.GatewayUserName)
+			}
+		}
+	}
+
+	// rows are already ordered by last_seen_at desc.
+	if preferGlobalID != "" {
+		for _, row := range rows {
+			if row.Platform == platformName && strings.TrimSpace(row.ChatID) != "" && strings.TrimSpace(row.GlobalID) == preferGlobalID {
+				return strings.TrimSpace(row.ChatID)
+			}
+		}
+	}
+	if preferUserID != "" {
+		for _, row := range rows {
+			if row.Platform == platformName && strings.TrimSpace(row.ChatID) != "" && strings.TrimSpace(row.UserID) == preferUserID {
+				return strings.TrimSpace(row.ChatID)
+			}
+		}
+	}
+	if preferUserName != "" {
+		for _, row := range rows {
+			if row.Platform == platformName && strings.TrimSpace(row.ChatID) != "" && strings.EqualFold(strings.TrimSpace(row.UserName), preferUserName) {
+				return strings.TrimSpace(row.ChatID)
+			}
+		}
+	}
+	for _, row := range rows {
+		if row.Platform == platformName && strings.TrimSpace(row.ChatID) != "" {
+			return strings.TrimSpace(row.ChatID)
+		}
+	}
+	return ""
 }
 
 func ParseDeliveryTarget(target string) (platformName, chatID string, err error) {

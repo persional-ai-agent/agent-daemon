@@ -82,6 +82,76 @@ func TestSendMessageSupportsBarePlatformTargetWithHomeChannel(t *testing.T) {
 	}
 }
 
+func TestSendMessageSupportsBarePlatformTargetWithDirectoryFallback(t *testing.T) {
+	platform.Register(fakeAdapter{name: "telegram"})
+	t.Cleanup(func() { platform.Unregister("telegram") })
+	workdir := t.TempDir()
+	if err := UpsertChannelDirectory(workdir, ChannelDirectoryEntry{
+		Platform:   "telegram",
+		ChatID:     "8888",
+		ChatType:   "group",
+		UserID:     "u-a",
+		UserName:   "alice",
+		GlobalID:   "gid-a",
+		HomeTarget: "",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewSendMessageTool()
+	res, err := tool.Call(context.Background(), map[string]any{
+		"action":  "send",
+		"target":  "telegram",
+		"message": "hi",
+	}, ToolContext{Workdir: workdir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := res["success"].(bool); !v {
+		t.Fatalf("expected success: %v", res)
+	}
+	if got, _ := res["chat_id"].(string); got != "8888" {
+		t.Fatalf("chat_id=%q want=8888", got)
+	}
+}
+
+func TestSendMessageDirectoryFallbackPrefersGlobalIdentity(t *testing.T) {
+	platform.Register(fakeAdapter{name: "slack"})
+	t.Cleanup(func() { platform.Unregister("slack") })
+	workdir := t.TempDir()
+	if err := UpsertGatewayIdentity(workdir, "telegram", "u-1", "gid-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpsertChannelDirectory(workdir, ChannelDirectoryEntry{
+		Platform: "slack", ChatID: "c-old", UserID: "x", UserName: "x", GlobalID: "gid-x",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpsertChannelDirectory(workdir, ChannelDirectoryEntry{
+		Platform: "slack", ChatID: "c-match", UserID: "y", UserName: "y", GlobalID: "gid-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewSendMessageTool()
+	res, err := tool.Call(context.Background(), map[string]any{
+		"action":  "send",
+		"target":  "slack",
+		"message": "hi",
+	}, ToolContext{
+		Workdir:         workdir,
+		GatewayPlatform: "telegram",
+		GatewayUserID:   "u-1",
+		GatewayUserName: "alice",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := res["chat_id"].(string); got != "c-match" {
+		t.Fatalf("chat_id=%q want=c-match (global identity preferred)", got)
+	}
+}
+
 func TestHomeTargetEnvVarIncludesYuanbao(t *testing.T) {
 	if got := homeTargetEnvVar("yuanbao"); got != "YUANBAO_HOME_CHANNEL" {
 		t.Fatalf("homeTargetEnvVar(yuanbao)=%q, want %q", got, "YUANBAO_HOME_CHANNEL")
