@@ -661,14 +661,14 @@ func handleToolsetsSlash(fields []string) bool {
 	}
 	switch sub {
 	case "list":
-		items := clitools.ListToolsets()
+		items := clitools.ListToolsetsWithEnv(nil)
 		printCLIEnvelope(true, clitools.BuildCollectionPayload("toolsets", len(items), items), "", "")
 	case "show":
 		if len(fields) != 3 {
 			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsShowUsage))
 			return true
 		}
-		ts, ok := clitools.GetToolset(fields[2])
+		ts, ok := clitools.GetToolsetWithEnv(fields[2], nil)
 		if !ok {
 			printCLIEnvelope(false, nil, "not_found", clitools.NotFoundEN("toolset", fields[2]))
 			return true
@@ -679,17 +679,12 @@ func handleToolsetsSlash(fields []string) bool {
 			printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsResolveUsage))
 			return true
 		}
-		allowed, err := clitools.ResolveToolset(splitCSV(fields[2]))
+		allowed, err := clitools.ResolveToolsetDetailed(splitCSV(fields[2]), clitools.ToolsetResolveOptions{})
 		if err != nil {
 			printCLIEnvelope(false, nil, "invalid_argument", err.Error())
 			return true
 		}
-		names := make([]string, 0, len(allowed))
-		for name := range allowed {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		printCLIEnvelope(true, clitools.BuildCollectionPayload("tools", len(names), names), "", "")
+		printCLIEnvelope(true, clitools.BuildObjectPayload("resolution", allowed), "", "")
 	default:
 		printCLIEnvelope(false, nil, "invalid_argument", clitools.UsageZH(clitools.CommandToolsetsUsage))
 	}

@@ -77,7 +77,7 @@
 | `TODO-005` | `done` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` + `mattermost` + `sms` + `bluebubbles` 网关适配器（inbound/outbound 最小闭环），并接入 gateway setup/status/platforms、运行时装配与 webhook API 路由。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`internal/gateway/platforms/mattermost.go`、`internal/gateway/platforms/sms.go`、`internal/gateway/platforms/bluebubbles.go`、`internal/api/server.go`、`cmd/agentd/main.go` |
 | `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
-| `TODO-008` | `partial` | toolsets 最小对齐已完成，动态可用性与 UI 管理仍未完全到位。 | `docs/dev/0036-summary-summary-merged.md`（`# 063`、`# 107`） |
+| `TODO-008` | `partial` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；TUI/Web 启停管理仍待补齐。 | `internal/tools/toolsets.go`、`cmd/agentd/main.go`、`internal/cli/chat.go` |
 | `TODO-009` | `partial` | provider 运行时与插件闭环有进展，profile/能力矩阵未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 255`、`# 279`） |
 | `TODO-010` | `partial` | skills 多源与管理能力已补，自动学习与审计回滚未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 051`、`# 052`、`# 275`） |
 | `TODO-011` | `partial` | memory 学习闭环有阶段成果，insights/外部 provider 仍待补。 | `docs/dev/0036-summary-summary-merged.md`（`# 275`） |

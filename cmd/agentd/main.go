@@ -3865,7 +3865,7 @@ func runToolsets(args []string) {
 	}
 	switch args[0] {
 	case "list":
-		printJSON(tools.ListToolsets())
+		printJSON(tools.ListToolsetsWithEnv(nil))
 	case "show":
 		fs := flag.NewFlagSet("toolsets show", flag.ExitOnError)
 		_ = fs.Parse(args[1:])
@@ -3873,7 +3873,7 @@ func runToolsets(args []string) {
 			log.Fatal("usage: agentd toolsets show name")
 		}
 		name := strings.TrimSpace(fs.Arg(0))
-		ts, ok := tools.GetToolset(name)
+		ts, ok := tools.GetToolsetWithEnv(name, nil)
 		if !ok {
 			log.Fatalf("unknown toolset: %s", name)
 		}
@@ -3885,16 +3885,11 @@ func runToolsets(args []string) {
 			log.Fatal("usage: agentd toolsets resolve name[,name...]")
 		}
 		names := parseNameList(fs.Arg(0))
-		allowed, err := tools.ResolveToolset(names)
+		allowed, err := tools.ResolveToolsetDetailed(names, tools.ToolsetResolveOptions{})
 		if err != nil {
 			log.Fatal(err)
 		}
-		out := make([]string, 0, len(allowed))
-		for name := range allowed {
-			out = append(out, name)
-		}
-		sort.Strings(out)
-		printToolNames(out)
+		printJSON(allowed)
 	default:
 		log.Fatal("usage: agentd toolsets list | show | resolve")
 	}
@@ -4654,22 +4649,28 @@ func checkToolsetsConfig(cfg config.Config) doctorCheck {
 	if len(names) == 0 {
 		return doctorCheck{Name: "toolsets", Status: "ok", Detail: "disabled (full tool registry enabled)"}
 	}
-	allowed, err := tools.ResolveToolset(names)
+	allowed, err := tools.ResolveToolsetDetailed(names, tools.ToolsetResolveOptions{})
 	if err != nil {
 		return doctorCheck{Name: "toolsets", Status: "error", Detail: err.Error()}
 	}
-	return doctorCheck{Name: "toolsets", Status: "ok", Detail: fmt.Sprintf("enabled=%s (resolved_tools=%d)", strings.Join(names, ","), len(allowed))}
+	detail := fmt.Sprintf("enabled=%s (resolved_tools=%d)", strings.Join(names, ","), len(allowed.ResolvedTools))
+	if len(allowed.UnavailableToolset) > 0 {
+		detail += fmt.Sprintf(" (unavailable_toolsets=%d)", len(allowed.UnavailableToolset))
+	}
+	return doctorCheck{Name: "toolsets", Status: "ok", Detail: detail}
 }
 
 func checkStubTools(cfg config.Config) doctorCheck {
 	enabledToolsets := parseNameList(cfg.EnabledToolsets)
 	allowed := map[string]struct{}{}
 	if len(enabledToolsets) > 0 {
-		resolved, err := tools.ResolveToolset(enabledToolsets)
+		resolved, err := tools.ResolveToolsetDetailed(enabledToolsets, tools.ToolsetResolveOptions{})
 		if err != nil {
 			return doctorCheck{Name: "stub_tools", Status: "warn", Detail: "cannot resolve toolsets: " + err.Error()}
 		}
-		allowed = resolved
+		for _, n := range resolved.ResolvedTools {
+			allowed[n] = struct{}{}
+		}
 	}
 	// Keep only real interface-alignment stubs here.
 	// Lightweight/minimal implementations should not be listed as "not implemented".
@@ -7668,19 +7669,35 @@ func applyDisabledTools(registry *tools.Registry, disabled string) {
 	registry.Disable(parseNameList(disabled)...)
 }
 
+func applyUnavailableTools(registry *tools.Registry) {
+	unavailable := tools.UnavailableToolsByEnv(nil)
+	if len(unavailable) == 0 {
+		return
+	}
+	names := make([]string, 0, len(unavailable))
+	for name := range unavailable {
+		names = append(names, name)
+	}
+	registry.Disable(names...)
+}
+
 func applyEnabledToolsets(registry *tools.Registry, enabled string) error {
 	names := parseNameList(enabled)
 	if len(names) == 0 {
 		return nil
 	}
-	allowed, err := tools.ResolveToolset(names)
+	allowed, err := tools.ResolveToolsetDetailed(names, tools.ToolsetResolveOptions{})
 	if err != nil {
 		return err
+	}
+	allowSet := make(map[string]struct{}, len(allowed.ResolvedTools))
+	for _, t := range allowed.ResolvedTools {
+		allowSet[t] = struct{}{}
 	}
 	all := registry.Names()
 	disable := make([]string, 0, len(all))
 	for _, toolName := range all {
-		if _, ok := allowed[toolName]; !ok {
+		if _, ok := allowSet[toolName]; !ok {
 			disable = append(disable, toolName)
 		}
 	}
@@ -7771,6 +7788,7 @@ func mustBuildEngine(cfg config.Config) (*agent.Engine, *store.CronStore) {
 	if err := applyEnabledToolsets(registry, cfg.EnabledToolsets); err != nil {
 		log.Printf("enabled_toolsets ignored: %v", err)
 	}
+	applyUnavailableTools(registry)
 	applyDisabledTools(registry, cfg.DisabledTools)
 	pluginManifests, err := loadConfiguredPlugins(cfg)
 	if err != nil {
