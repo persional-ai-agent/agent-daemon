@@ -1381,6 +1381,18 @@ func (s *Server) handleUICronJobs(w http.ResponseWriter, r *http.Request) {
 		if req.ScriptTimeout > 0 {
 			args["script_timeout"] = req.ScriptTimeout
 		}
+		if req.RunTimeoutSec > 0 {
+			args["run_timeout_sec"] = req.RunTimeoutSec
+		}
+		if req.RetryMax > 0 {
+			args["retry_max"] = req.RetryMax
+		}
+		if req.RetryDelaySec > 0 {
+			args["retry_delay_sec"] = req.RetryDelaySec
+		}
+		if req.MaxConcurrency > 0 {
+			args["max_concurrency"] = req.MaxConcurrency
+		}
 		if req.ChainContext != nil {
 			args["chain_context"] = *req.ChainContext
 		}
@@ -1466,6 +1478,18 @@ func (s *Server) handleUICronJobAction(w http.ResponseWriter, r *http.Request) {
 	if req.ScriptTimeout > 0 {
 		args["script_timeout"] = req.ScriptTimeout
 	}
+	if req.RunTimeoutSec > 0 {
+		args["run_timeout_sec"] = req.RunTimeoutSec
+	}
+	if req.RetryMax > 0 {
+		args["retry_max"] = req.RetryMax
+	}
+	if req.RetryDelaySec > 0 {
+		args["retry_delay_sec"] = req.RetryDelaySec
+	}
+	if req.MaxConcurrency > 0 {
+		args["max_concurrency"] = req.MaxConcurrency
+	}
 	if req.ChainContext != nil {
 		args["chain_context"] = *req.ChainContext
 	}
@@ -1547,6 +1571,10 @@ type uiCronJobRequest struct {
 	ScriptCommand  string `json:"script_command,omitempty"`
 	ScriptCWD      string `json:"script_cwd,omitempty"`
 	ScriptTimeout  int    `json:"script_timeout,omitempty"`
+	RunTimeoutSec  int    `json:"run_timeout_sec,omitempty"`
+	RetryMax       int    `json:"retry_max,omitempty"`
+	RetryDelaySec  int    `json:"retry_delay_sec,omitempty"`
+	MaxConcurrency int    `json:"max_concurrency,omitempty"`
 }
 
 type uiCronJobActionRequest struct {
@@ -1565,6 +1593,10 @@ type uiCronJobActionRequest struct {
 	ScriptCommand  string `json:"script_command,omitempty"`
 	ScriptCWD      string `json:"script_cwd,omitempty"`
 	ScriptTimeout  int    `json:"script_timeout,omitempty"`
+	RunTimeoutSec  int    `json:"run_timeout_sec,omitempty"`
+	RetryMax       int    `json:"retry_max,omitempty"`
+	RetryDelaySec  int    `json:"retry_delay_sec,omitempty"`
+	MaxConcurrency int    `json:"max_concurrency,omitempty"`
 	Paused         *bool  `json:"paused,omitempty"`
 	Limit          int    `json:"limit,omitempty"`
 }

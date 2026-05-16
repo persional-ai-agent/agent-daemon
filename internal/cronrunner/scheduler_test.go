@@ -92,6 +92,37 @@ func TestExecuteJobScriptMode(t *testing.T) {
 	}
 }
 
+func TestExecuteJobWithRetry(t *testing.T) {
+	s := &Scheduler{Engine: &agent.Engine{Workdir: t.TempDir()}}
+	out, err := s.executeJobWithRetry(context.Background(), store.CronJob{
+		RunMode:       "script",
+		ScriptCommand: "definitely-not-a-real-command-xyz",
+		ScriptTimeout: 5,
+		RetryMax:      1,
+		RetryDelaySec: 0,
+	}, "cron:job1:run1", &agent.Engine{})
+	if err == nil {
+		t.Fatal("expected retry job to fail")
+	}
+	if !containsAll(out, "retry_attempt=1", "exit_code=1") {
+		t.Fatalf("unexpected retry output: %q", out)
+	}
+}
+
+func TestAcquireJobSlotRespectsMaxConcurrency(t *testing.T) {
+	s := &Scheduler{}
+	if !s.acquireJobSlot("job1", 1) {
+		t.Fatal("first acquire should succeed")
+	}
+	if s.acquireJobSlot("job1", 1) {
+		t.Fatal("second acquire should fail when max_concurrency=1")
+	}
+	s.releaseJobSlot("job1")
+	if !s.acquireJobSlot("job1", 1) {
+		t.Fatal("acquire should succeed after release")
+	}
+}
+
 type fakeDeliveryAdapter struct {
 	name    string
 	chatID  string

@@ -29,14 +29,14 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 		Type: "function",
 		Function: core.ToolSchemaDetail{
 			Name:        t.Name(),
-			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, update, pause, resume, remove, trigger, runs, run_get.",
+			Description: "Manage scheduled agent runs (cron jobs). Actions: create, list, get, update, pause, resume, remove, trigger, runs, run_get, replay.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"action": map[string]any{
 						"type":        "string",
 						"description": "Action to perform (default: list)",
-						"enum":        []string{"create", "list", "get", "update", "pause", "resume", "remove", "trigger", "runs", "run_get"},
+						"enum":        []string{"create", "list", "get", "update", "pause", "resume", "remove", "trigger", "runs", "run_get", "replay"},
 					},
 					"job_id": map[string]any{"type": "string", "description": "Cron job id"},
 					"run_id": map[string]any{"type": "string", "description": "Cron run id (for run_get)"},
@@ -45,7 +45,7 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 					"run_mode": map[string]any{
 						"type":        "string",
 						"description": "Execution mode (default: agent)",
-						"enum":        []string{"agent", "script"},
+						"enum":        []string{"agent", "script", "no_agent"},
 					},
 					"script_command": map[string]any{
 						"type":        "string",
@@ -59,6 +59,26 @@ func (t *CronJobTool) Schema() core.ToolSchema {
 						"type":        "integer",
 						"minimum":     1,
 						"description": "Optional timeout seconds for run_mode=script (default 120)",
+					},
+					"run_timeout_sec": map[string]any{
+						"type":        "integer",
+						"minimum":     1,
+						"description": "Optional run timeout seconds for both agent/script execution.",
+					},
+					"retry_max": map[string]any{
+						"type":        "integer",
+						"minimum":     0,
+						"description": "Automatic retry count on failure (default 0).",
+					},
+					"retry_delay_sec": map[string]any{
+						"type":        "integer",
+						"minimum":     0,
+						"description": "Delay seconds between retry attempts (default 0).",
+					},
+					"max_concurrency": map[string]any{
+						"type":        "integer",
+						"minimum":     1,
+						"description": "Per-job concurrency cap (default 1).",
 					},
 					"schedule": map[string]any{
 						"type":        "string",
@@ -187,6 +207,10 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			ScriptCommand:  scriptCommand,
 			ScriptCWD:      scriptCWD,
 			ScriptTimeout:  scriptTimeout,
+			RunTimeoutSec:  intArg(args, "run_timeout_sec", 0),
+			RetryMax:       intArg(args, "retry_max", 0),
+			RetryDelaySec:  intArg(args, "retry_delay_sec", 0),
+			MaxConcurrency: intArg(args, "max_concurrency", 1),
 		})
 		if err != nil {
 			return nil, err
@@ -249,6 +273,34 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 				v = 0
 			}
 			upd.ScriptTimeout = &v
+		}
+		if _, ok := args["run_timeout_sec"]; ok {
+			v := intArg(args, "run_timeout_sec", 0)
+			if v < 0 {
+				v = 0
+			}
+			upd.RunTimeoutSec = &v
+		}
+		if _, ok := args["retry_max"]; ok {
+			v := intArg(args, "retry_max", 0)
+			if v < 0 {
+				v = 0
+			}
+			upd.RetryMax = &v
+		}
+		if _, ok := args["retry_delay_sec"]; ok {
+			v := intArg(args, "retry_delay_sec", 0)
+			if v < 0 {
+				v = 0
+			}
+			upd.RetryDelaySec = &v
+		}
+		if _, ok := args["max_concurrency"]; ok {
+			v := intArg(args, "max_concurrency", 1)
+			if v <= 0 {
+				v = 1
+			}
+			upd.MaxConcurrency = &v
 		}
 
 		if v, ok := args["paused"]; ok {
@@ -401,6 +453,31 @@ func (t *CronJobTool) Call(ctx context.Context, args map[string]any, _ ToolConte
 			return map[string]any{"success": false, "error": "not_found"}, nil
 		}
 		return map[string]any{"success": true, "run": run}, nil
+	case "replay":
+		runID := strings.TrimSpace(strArg(args, "run_id"))
+		if runID == "" {
+			return map[string]any{"success": false, "error": "run_id required"}, nil
+		}
+		run, ok, err := t.Store.GetRun(ctx, runID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"success": false, "error": "not_found"}, nil
+		}
+		return map[string]any{
+			"success": true,
+			"run_id":  run.ID,
+			"job_id":  run.JobID,
+			"status":  run.Status,
+			"replay": map[string]any{
+				"output":          run.Output,
+				"error":           run.Error,
+				"delivery_target": run.DeliveryTarget,
+				"delivery_status": run.DeliveryStatus,
+				"delivery_error":  run.DeliveryError,
+			},
+		}, nil
 	default:
 		return map[string]any{"success": false, "error": fmt.Sprintf("unknown action: %s", action)}, nil
 	}
@@ -435,7 +512,7 @@ func normalizeCronContextMode(v string, chain bool) (string, bool) {
 
 func normalizeCronRunModeForTool(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "script":
+	case "script", "no_agent":
 		return "script"
 	default:
 		return "agent"

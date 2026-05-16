@@ -27,6 +27,10 @@ type CronJob struct {
 	ScriptCommand  string     `json:"script_command,omitempty"`
 	ScriptCWD      string     `json:"script_cwd,omitempty"`
 	ScriptTimeout  int        `json:"script_timeout,omitempty"` // seconds, 0=default
+	RetryMax       int        `json:"retry_max,omitempty"`
+	RetryDelaySec  int        `json:"retry_delay_sec,omitempty"`
+	RunTimeoutSec  int        `json:"run_timeout_sec,omitempty"`
+	MaxConcurrency int        `json:"max_concurrency,omitempty"`
 	Paused         bool       `json:"paused"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
@@ -82,6 +86,10 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
   script_command TEXT NOT NULL DEFAULT '',
   script_cwd TEXT NOT NULL DEFAULT '',
   script_timeout INTEGER NOT NULL DEFAULT 0,
+  retry_max INTEGER NOT NULL DEFAULT 0,
+  retry_delay_sec INTEGER NOT NULL DEFAULT 0,
+  run_timeout_sec INTEGER NOT NULL DEFAULT 0,
+  max_concurrency INTEGER NOT NULL DEFAULT 1,
   paused INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -121,6 +129,10 @@ CREATE INDEX IF NOT EXISTS idx_cron_runs_started_at ON cron_runs(started_at);
 		{"cron_jobs", "script_command", "TEXT NOT NULL DEFAULT ''"},
 		{"cron_jobs", "script_cwd", "TEXT NOT NULL DEFAULT ''"},
 		{"cron_jobs", "script_timeout", "INTEGER NOT NULL DEFAULT 0"},
+		{"cron_jobs", "retry_max", "INTEGER NOT NULL DEFAULT 0"},
+		{"cron_jobs", "retry_delay_sec", "INTEGER NOT NULL DEFAULT 0"},
+		{"cron_jobs", "run_timeout_sec", "INTEGER NOT NULL DEFAULT 0"},
+		{"cron_jobs", "max_concurrency", "INTEGER NOT NULL DEFAULT 1"},
 		{"cron_runs", "delivery_target", "TEXT NOT NULL DEFAULT ''"},
 		{"cron_runs", "delivery_status", "TEXT NOT NULL DEFAULT ''"},
 		{"cron_runs", "delivery_message_id", "TEXT NOT NULL DEFAULT ''"},
@@ -151,6 +163,10 @@ type CreateCronJobParams struct {
 	ScriptCommand  string
 	ScriptCWD      string
 	ScriptTimeout  int
+	RetryMax       int
+	RetryDelaySec  int
+	RunTimeoutSec  int
+	MaxConcurrency int
 }
 
 type UpdateCronJobParams struct {
@@ -169,6 +185,10 @@ type UpdateCronJobParams struct {
 	ScriptCommand   *string
 	ScriptCWD       *string
 	ScriptTimeout   *int
+	RetryMax        *int
+	RetryDelaySec   *int
+	RunTimeoutSec   *int
+	MaxConcurrency  *int
 	Paused          *bool
 	RepeatCompleted *int
 }
@@ -198,6 +218,10 @@ func (s *CronStore) CreateJob(ctx context.Context, p CreateCronJobParams) (CronJ
 		ScriptCommand:  strings.TrimSpace(p.ScriptCommand),
 		ScriptCWD:      strings.TrimSpace(p.ScriptCWD),
 		ScriptTimeout:  p.ScriptTimeout,
+		RetryMax:       p.RetryMax,
+		RetryDelaySec:  p.RetryDelaySec,
+		RunTimeoutSec:  p.RunTimeoutSec,
+		MaxConcurrency: p.MaxConcurrency,
 		Paused:         false,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -215,11 +239,23 @@ func (s *CronStore) CreateJob(ctx context.Context, p CreateCronJobParams) (CronJ
 	if job.NextRunAt == nil {
 		return CronJob{}, errors.New("next_run_at required")
 	}
+	if job.RetryMax < 0 {
+		job.RetryMax = 0
+	}
+	if job.RetryDelaySec < 0 {
+		job.RetryDelaySec = 0
+	}
+	if job.RunTimeoutSec < 0 {
+		job.RunTimeoutSec = 0
+	}
+	if job.MaxConcurrency <= 0 {
+		job.MaxConcurrency = 1
+	}
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO cron_jobs(
   id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at,
-  repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, paused, created_at, updated_at
-) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+  repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, retry_max, retry_delay_sec, run_timeout_sec, max_concurrency, paused, created_at, updated_at
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
 `,
 		job.ID,
 		job.Name,
@@ -237,6 +273,10 @@ INSERT INTO cron_jobs(
 		job.ScriptCommand,
 		job.ScriptCWD,
 		job.ScriptTimeout,
+		job.RetryMax,
+		job.RetryDelaySec,
+		job.RunTimeoutSec,
+		job.MaxConcurrency,
 		job.CreatedAt.Format(time.RFC3339),
 		job.UpdatedAt.Format(time.RFC3339),
 	)
@@ -302,6 +342,18 @@ func (s *CronStore) UpdateJob(ctx context.Context, id string, p UpdateCronJobPar
 	if p.ScriptTimeout != nil {
 		next.ScriptTimeout = *p.ScriptTimeout
 	}
+	if p.RetryMax != nil {
+		next.RetryMax = *p.RetryMax
+	}
+	if p.RetryDelaySec != nil {
+		next.RetryDelaySec = *p.RetryDelaySec
+	}
+	if p.RunTimeoutSec != nil {
+		next.RunTimeoutSec = *p.RunTimeoutSec
+	}
+	if p.MaxConcurrency != nil {
+		next.MaxConcurrency = *p.MaxConcurrency
+	}
 	if p.Paused != nil {
 		next.Paused = *p.Paused
 	}
@@ -322,12 +374,24 @@ func (s *CronStore) UpdateJob(ctx context.Context, id string, p UpdateCronJobPar
 	if strings.TrimSpace(next.ScheduleKind) == "" {
 		return CronJob{}, true, errors.New("schedule_kind required")
 	}
+	if next.RetryMax < 0 {
+		next.RetryMax = 0
+	}
+	if next.RetryDelaySec < 0 {
+		next.RetryDelaySec = 0
+	}
+	if next.RunTimeoutSec < 0 {
+		next.RunTimeoutSec = 0
+	}
+	if next.MaxConcurrency <= 0 {
+		next.MaxConcurrency = 1
+	}
 
 	now := time.Now().UTC()
 	_, err = s.db.ExecContext(ctx, `
 UPDATE cron_jobs
 SET name = ?, prompt = ?, schedule_kind = ?, schedule_expr = ?, interval_mins = ?, run_at = ?, next_run_at = ?,
-    repeat_times = ?, repeat_completed = ?, delivery_target = ?, deliver_on = ?, context_mode = ?, run_mode = ?, script_command = ?, script_cwd = ?, script_timeout = ?, paused = ?, updated_at = ?
+    repeat_times = ?, repeat_completed = ?, delivery_target = ?, deliver_on = ?, context_mode = ?, run_mode = ?, script_command = ?, script_cwd = ?, script_timeout = ?, retry_max = ?, retry_delay_sec = ?, run_timeout_sec = ?, max_concurrency = ?, paused = ?, updated_at = ?
 WHERE id = ?
 `,
 		next.Name,
@@ -346,6 +410,10 @@ WHERE id = ?
 		next.ScriptCommand,
 		next.ScriptCWD,
 		next.ScriptTimeout,
+		next.RetryMax,
+		next.RetryDelaySec,
+		next.RunTimeoutSec,
+		next.MaxConcurrency,
 		boolToInt(next.Paused),
 		now.Format(time.RFC3339),
 		next.ID,
@@ -359,7 +427,7 @@ WHERE id = ?
 
 func (s *CronStore) ListJobs(ctx context.Context) ([]CronJob, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, paused, created_at, updated_at
+SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, retry_max, retry_delay_sec, run_timeout_sec, max_concurrency, paused, created_at, updated_at
 FROM cron_jobs
 ORDER BY created_at DESC
 `)
@@ -380,7 +448,7 @@ ORDER BY created_at DESC
 
 func (s *CronStore) GetJob(ctx context.Context, id string) (CronJob, bool, error) {
 	row := s.db.QueryRowContext(ctx, `
-SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, paused, created_at, updated_at
+SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, retry_max, retry_delay_sec, run_timeout_sec, max_concurrency, paused, created_at, updated_at
 FROM cron_jobs WHERE id = ?`, strings.TrimSpace(id))
 	j, err := scanCronJob(row)
 	if err != nil {
@@ -413,7 +481,7 @@ func (s *CronStore) DueJobs(ctx context.Context, now time.Time, limit int) ([]Cr
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, paused, created_at, updated_at
+SELECT id, name, prompt, schedule_kind, schedule_expr, interval_mins, run_at, next_run_at, repeat_times, repeat_completed, delivery_target, deliver_on, context_mode, run_mode, script_command, script_cwd, script_timeout, retry_max, retry_delay_sec, run_timeout_sec, max_concurrency, paused, created_at, updated_at
 FROM cron_jobs
 WHERE paused = 0 AND next_run_at != '' AND next_run_at <= ?
 ORDER BY next_run_at ASC
@@ -585,7 +653,7 @@ func scanCronJob(scn scanner) (CronJob, error) {
 		&j.ScheduleKind, &j.ScheduleExpr, &j.IntervalMins,
 		&runAt, &nextRunAt,
 		&repeat, &j.RepeatComplete,
-		&j.DeliveryTarget, &j.DeliverOn, &j.ContextMode, &j.RunMode, &j.ScriptCommand, &j.ScriptCWD, &j.ScriptTimeout,
+		&j.DeliveryTarget, &j.DeliverOn, &j.ContextMode, &j.RunMode, &j.ScriptCommand, &j.ScriptCWD, &j.ScriptTimeout, &j.RetryMax, &j.RetryDelaySec, &j.RunTimeoutSec, &j.MaxConcurrency,
 		&paused, &createdAt, &updatedAt,
 	); err != nil {
 		return CronJob{}, err
@@ -608,6 +676,9 @@ func scanCronJob(scn scanner) (CronJob, error) {
 	j.DeliverOn = normalizeDeliverOn(j.DeliverOn)
 	j.ContextMode = normalizeCronContextMode(j.ContextMode)
 	j.RunMode = normalizeCronRunMode(j.RunMode)
+	if j.MaxConcurrency <= 0 {
+		j.MaxConcurrency = 1
+	}
 	ct, err := time.Parse(time.RFC3339, createdAt)
 	if err != nil {
 		return CronJob{}, fmt.Errorf("parse created_at: %w", err)
@@ -678,7 +749,7 @@ func normalizeCronContextMode(v string) string {
 
 func normalizeCronRunMode(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "script":
+	case "script", "no_agent":
 		return "script"
 	default:
 		return "agent"

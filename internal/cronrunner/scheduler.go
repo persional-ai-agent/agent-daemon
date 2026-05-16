@@ -26,8 +26,10 @@ type Scheduler struct {
 	Tick           time.Duration
 	MaxConcurrency int
 
-	sem  chan struct{}
-	once sync.Once
+	sem   chan struct{}
+	once  sync.Once
+	mu    sync.Mutex
+	byJob map[string]int
 }
 
 func (s *Scheduler) Start(ctx context.Context) error {
@@ -45,6 +47,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	}
 	s.once.Do(func() {
 		s.sem = make(chan struct{}, s.MaxConcurrency)
+		s.byJob = map[string]int{}
 	})
 
 	go func() {
@@ -74,6 +77,10 @@ func (s *Scheduler) tick(ctx context.Context) {
 		case s.sem <- struct{}{}:
 			go func(j store.CronJob) {
 				defer func() { <-s.sem }()
+				if !s.acquireJobSlot(j.ID, j.MaxConcurrency) {
+					return
+				}
+				defer s.releaseJobSlot(j.ID)
 				s.runJob(ctx, j)
 			}(job)
 		default:
@@ -115,7 +122,7 @@ func (s *Scheduler) runJob(ctx context.Context, job store.CronJob) {
 	}
 
 	eng := *s.Engine
-	out, runErr := s.executeJob(ctx, job, sessionID, &eng)
+	out, runErr := s.executeJobWithRetry(ctx, job, sessionID, &eng)
 	if err := s.Store.FinishRun(ctx, runID, "completed", out, runErr); err != nil {
 		log.Printf("[cron] finish run failed: job=%s run=%s err=%v", job.ID, runID, err)
 	}
@@ -127,7 +134,37 @@ func (s *Scheduler) runJob(ctx context.Context, job store.CronJob) {
 	}
 }
 
+func (s *Scheduler) executeJobWithRetry(ctx context.Context, job store.CronJob, sessionID string, eng *agent.Engine) (string, error) {
+	out, err := s.executeJob(ctx, job, sessionID, eng)
+	if err == nil || job.RetryMax <= 0 {
+		return out, err
+	}
+	delay := time.Duration(job.RetryDelaySec) * time.Second
+	for attempt := 1; attempt <= job.RetryMax; attempt++ {
+		if delay > 0 {
+			select {
+			case <-ctx.Done():
+				return out, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+		retryOut, retryErr := s.executeJob(ctx, job, sessionID, eng)
+		out = strings.TrimSpace(out + "\n\n[retry_attempt=" + fmt.Sprint(attempt) + "]\n" + strings.TrimSpace(retryOut))
+		err = retryErr
+		if retryErr == nil {
+			return out, nil
+		}
+	}
+	return out, err
+}
+
 func (s *Scheduler) executeJob(ctx context.Context, job store.CronJob, sessionID string, eng *agent.Engine) (string, error) {
+	runCtx := ctx
+	cancel := func() {}
+	if job.RunTimeoutSec > 0 {
+		runCtx, cancel = context.WithTimeout(ctx, time.Duration(job.RunTimeoutSec)*time.Second)
+	}
+	defer cancel()
 	if normalizeRunMode(job.RunMode) == "script" {
 		cwd := strings.TrimSpace(job.ScriptCWD)
 		if cwd == "" && s.Engine != nil {
@@ -137,20 +174,51 @@ func (s *Scheduler) executeJob(ctx context.Context, job store.CronJob, sessionID
 		if timeout <= 0 {
 			timeout = 120
 		}
-		out, code, err := tools.RunForeground(ctx, job.ScriptCommand, cwd, timeout)
+		out, code, err := tools.RunForeground(runCtx, job.ScriptCommand, cwd, timeout)
 		if err != nil {
 			return fmt.Sprintf("exit_code=%d\n%s", code, strings.TrimSpace(out)), err
+		}
+		if code != 0 {
+			return fmt.Sprintf("exit_code=%d\n%s", code, strings.TrimSpace(out)), fmt.Errorf("script exited with code %d", code)
 		}
 		return fmt.Sprintf("exit_code=%d\n%s", code, strings.TrimSpace(out)), nil
 	}
 	eng.TodoStore = nil
 	history := loadCronRunHistory(s.Engine, job, sessionID)
-	res, runErr := eng.Run(ctx, sessionID, job.Prompt, agent.DefaultSystemPrompt(), history)
+	res, runErr := eng.Run(runCtx, sessionID, job.Prompt, agent.DefaultSystemPrompt(), history)
 	out := ""
 	if res != nil {
 		out = res.FinalResponse
 	}
 	return out, runErr
+}
+
+func (s *Scheduler) acquireJobSlot(jobID string, max int) bool {
+	if max <= 0 {
+		max = 1
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.byJob == nil {
+		s.byJob = map[string]int{}
+	}
+	if s.byJob[jobID] >= max {
+		return false
+	}
+	s.byJob[jobID]++
+	return true
+}
+
+func (s *Scheduler) releaseJobSlot(jobID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.byJob == nil {
+		return
+	}
+	s.byJob[jobID]--
+	if s.byJob[jobID] <= 0 {
+		delete(s.byJob, jobID)
+	}
 }
 
 func cronRunSessionID(job store.CronJob, runID string) string {
