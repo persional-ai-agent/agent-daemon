@@ -197,3 +197,13 @@ func TestBuildGatewayContinuityPayload(t *testing.T) {
 		t.Fatalf("unexpected continuity payload: %+v", got)
 	}
 }
+
+func TestBuildGatewayIdentityBindPayload(t *testing.T) {
+	got := BuildGatewayIdentityBindPayload("telegram", "u1", "gid-1", "s-old", "s-new")
+	if got["platform"] != "telegram" || got["user_id"] != "u1" || got["global_id"] != "gid-1" || got["updated"] != true {
+		t.Fatalf("unexpected bind payload base fields: %+v", got)
+	}
+	if got["previous_session_id"] != "s-old" || got["session_id"] != "s-new" {
+		t.Fatalf("unexpected bind payload session fields: %+v", got)
+	}
+}

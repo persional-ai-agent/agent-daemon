@@ -176,6 +176,7 @@
 - 已新增 `session list` 共享响应 helper（`BuildSessionListPayload`），并接入 CLI `/sessions` 与 Gateway `/sessions` 元数据，统一 `count/limit/sessions` 字段语义。
 - 已将 Gateway `/stats` 元数据切换为复用 `BuildSessionStatsPayload`，与 CLI `/stats` 统一为 `session_id + stats` 结构。
 - 已新增 `session history/pick` 共享响应 helper（`BuildSessionHistoryPayload` / `BuildSessionPickPayload`），并接入 Gateway `/history` 与 `/pick` 成功元数据，统一会话导航字段语义。
+- 已新增 `BuildGatewayIdentityBindPayload` 并接入 Gateway `/setid`，同时 Gateway `/unsetid` 改为复用 `BuildGatewayIdentityPayload`，统一身份绑定命令成功元数据字段语义。
 
 范围：
 

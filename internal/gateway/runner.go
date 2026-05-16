@@ -537,7 +537,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				GlobalID:   globalID,
 				HomeTarget: tools.ResolveHomeTarget(w.engine.Workdir, w.adapter.Name()),
 			})
-			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, map[string]any{"slash": "/setid", "global_id": globalID, "session_id": targetSession})
+			meta := tools.BuildGatewayIdentityBindPayload(w.adapter.Name(), event.UserID, globalID, prev, targetSession)
+			meta["slash"] = "/setid"
+			_, _ = w.sendText(ctx, event.ChatID, "_Identity bound: "+escapeMarkdown(event.UserID)+" -> "+escapeMarkdown(globalID)+"; session "+escapeMarkdown(prev)+" -> "+escapeMarkdown(targetSession)+"_", event.MessageID, meta)
 			return
 		case "/unsetid":
 			if len(parsed.args) > 0 {
@@ -553,7 +555,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			_ = tools.ClearChannelDirectoryGlobalID(w.engine.Workdir, w.adapter.Name(), event.ChatID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Identity unbound for user: "+escapeMarkdown(event.UserID)+"_", event.MessageID, map[string]any{"slash": "/unsetid", "user_id": event.UserID})
+			meta := tools.BuildGatewayIdentityPayload(w.adapter.Name(), event.UserID, "", false, true)
+			meta["slash"] = "/unsetid"
+			_, _ = w.sendText(ctx, event.ChatID, "_Identity unbound for user: "+escapeMarkdown(event.UserID)+"_", event.MessageID, meta)
 			return
 		case "/history":
 			limit := 10

@@ -491,3 +491,10 @@ func BuildGatewayContinuityPayload(mode string) map[string]any {
 		"continuity_mode": NormalizeContinuityMode(mode),
 	}
 }
+
+func BuildGatewayIdentityBindPayload(platform, userID, globalID, previousSessionID, sessionID string) map[string]any {
+	payload := BuildGatewayIdentityPayload(platform, userID, globalID, true, false)
+	payload["previous_session_id"] = strings.TrimSpace(previousSessionID)
+	payload["session_id"] = strings.TrimSpace(sessionID)
+	return payload
+}
