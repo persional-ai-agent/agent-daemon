@@ -43,3 +43,10 @@ func TestParseSetHomeArgs(t *testing.T) {
 		t.Fatal("expected error for missing chat id")
 	}
 }
+
+func TestBuildSetHomePayload(t *testing.T) {
+	got := BuildSetHomePayload("Telegram", "100")
+	if got["platform"] != "telegram" || got["chat_id"] != "100" || got["target"] != "telegram:100" || got["home_target"] != "100" || got["env"] != "TELEGRAM_HOME_CHANNEL" {
+		t.Fatalf("unexpected payload: %+v", got)
+	}
+}

@@ -381,7 +381,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		env := clitools.HomeTargetEnvVar(p)
 		_ = os.Setenv(env, cid)
 		_ = clitools.SetHomeTarget(eng.Workdir, p, cid)
-		printCLIEnvelope(true, map[string]any{"platform": p, "chat_id": cid, "home_target": p + ":" + cid, "env": env}, "", "")
+		printCLIEnvelope(true, clitools.BuildSetHomePayload(p, cid), "", "")
 		return true, nil
 	case "/targets":
 		filter := ""

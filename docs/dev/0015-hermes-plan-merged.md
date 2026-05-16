@@ -161,6 +161,7 @@
 - 已新增 `BuildGatewayIdentityPayload` 并接入 API `/v1/ui/gateway/identity`（GET/POST/DELETE）与 CLI `setid/unsetid` 输出，统一 identity 成功响应字段风格。
 - 已新增 `BuildGatewayContinuityPayload` 并接入 API/CLI/Gateway `/continuity` 成功输出（含 Gateway 命令元数据），统一 continuity 字段结构为 `continuity_mode`。
 - 已新增 `/model` 成功响应共享 helper（`BuildGatewayModelPayload` / `BuildGatewayModelUpdatePayload`）并接入 CLI/Gateway/API，统一查询与更新字段风格（`provider/model/base_url/updated/note`）。
+- 已新增 `/sethome` 成功响应共享 helper（`BuildSetHomePayload`）并接入 CLI/Gateway/API，统一 `platform/chat_id/target/home_target/env` 字段语义。
 
 范围：
 

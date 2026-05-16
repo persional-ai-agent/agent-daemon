@@ -86,3 +86,15 @@ func ParseSetHomeArgs(args []string) (platform string, chatID string, err error)
 	}
 	return "", "", fmt.Errorf("invalid sethome args")
 }
+
+func BuildSetHomePayload(platform, chatID string) map[string]any {
+	p := strings.ToLower(strings.TrimSpace(platform))
+	c := strings.TrimSpace(chatID)
+	return map[string]any{
+		"platform":    p,
+		"chat_id":     c,
+		"target":      p + ":" + c,
+		"home_target": c,
+		"env":         HomeTargetEnvVar(p),
+	}
+}

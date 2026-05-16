@@ -882,12 +882,14 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				GlobalID:   globalID,
 				HomeTarget: homeChatID,
 			})
+			meta := tools.BuildSetHomePayload(homePlatform, homeChatID)
+			meta["slash"] = "/sethome"
 			_, _ = w.sendText(
 				ctx,
 				event.ChatID,
 				"_Home target updated: "+escapeMarkdown(homePlatform)+":"+escapeMarkdown(homeChatID)+" ("+escapeMarkdown(envKey)+" )_",
 				event.MessageID,
-				map[string]any{"slash": "/sethome", "platform": homePlatform, "chat_id": homeChatID, "env": envKey},
+				meta,
 			)
 			return
 		case "/targets":

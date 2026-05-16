@@ -866,14 +866,8 @@ func (s *Server) handleUITargetsHome(w http.ResponseWriter, r *http.Request) {
 		HomeTarget: chatID,
 	})
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"platform":    platformName,
-			"chat_id":     chatID,
-			"target":      platformName + ":" + chatID,
-			"home_target": chatID,
-			"env":         env,
-		},
+		"ok":     true,
+		"result": tools.BuildSetHomePayload(platformName, chatID),
 	})
 }
 
