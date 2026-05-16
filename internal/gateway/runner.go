@@ -225,6 +225,10 @@ func (w *sessionWorker) sendSlashSubcommandText(ctx context.Context, event Messa
 	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, tools.BuildSlashSubcommandPayload(slash, subcommand))
 }
 
+func (w *sessionWorker) sendApprovalText(ctx context.Context, event MessageEvent, content, slash, approvalID string) {
+	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, tools.BuildApprovalCommandPayload(slash, approvalID))
+}
+
 func (w *sessionWorker) editText(ctx context.Context, chatID, messageID, content string, meta map[string]any) error {
 	err := w.adapter.EditMessage(ctx, chatID, messageID, content)
 	if w.runner != nil && deliveryHooksEnabled() {
@@ -1125,32 +1129,28 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				w.sendSlashText(ctx, event, "Usage: "+GatewayCommandUsage("approve")+" or "+GatewayCommandUsage("deny"), parsed.head)
 				return
 			}
-			reply := w.confirmApproval(ctx, approvalID, approve)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload(parsed.head, approvalID))
-			return
-		case "/approvals":
-			reply := w.approvalStatus(ctx)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload(parsed.head, ""))
-			return
-		case "/pending":
-			reply := w.pendingApprovalStatus()
-			if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
-				reply += "\nquick_reply: 批准 / 拒绝"
-			}
-			meta := tools.BuildApprovalCommandPayload("/pending", "")
-			if approvalID := w.resolveApprovalID(nil); strings.TrimSpace(approvalID) != "" {
-				meta["approval_id"] = approvalID
-			}
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
-			return
-		case "/grant":
-			reply := w.grantApproval(ctx, parsed)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload("/grant", ""))
-			return
-		case "/revoke":
-			reply := w.revokeApproval(ctx, parsed)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildApprovalCommandPayload("/revoke", ""))
-			return
+				reply := w.confirmApproval(ctx, approvalID, approve)
+				w.sendApprovalText(ctx, event, escapeMarkdown(reply), parsed.head, approvalID)
+				return
+			case "/approvals":
+				reply := w.approvalStatus(ctx)
+				w.sendApprovalText(ctx, event, escapeMarkdown(reply), parsed.head, "")
+				return
+			case "/pending":
+				reply := w.pendingApprovalStatus()
+				if w.adapter.Name() == "yuanbao" && !strings.Contains(reply, "No pending approval.") {
+					reply += "\nquick_reply: 批准 / 拒绝"
+				}
+				w.sendApprovalText(ctx, event, escapeMarkdown(reply), "/pending", w.resolveApprovalID(nil))
+				return
+			case "/grant":
+				reply := w.grantApproval(ctx, parsed)
+				w.sendApprovalText(ctx, event, escapeMarkdown(reply), "/grant", "")
+				return
+			case "/revoke":
+				reply := w.revokeApproval(ctx, parsed)
+				w.sendApprovalText(ctx, event, escapeMarkdown(reply), "/revoke", "")
+				return
 		case "/help":
 			helpText := GatewayHelpText(w.adapter.Name() == "yuanbao")
 			w.sendSlashText(ctx, event, helpText, "/help")

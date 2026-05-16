@@ -193,6 +193,7 @@
 - 已在 Gateway `runner` 新增 `sendSlashText`，并批量替换 slash 命令 usage/error/help 等 70+ 处分支的 `sendText + BuildSlashPayload` 重复调用，统一命令回包发送样板。
 - 已在 Gateway `runner` 新增 `sendSlashModeText` 与 `sendSlashSubcommandText`，并批量接入 `/personality`、`/skills`、`/tools` 的通用回包分支，继续收敛 `sendText + BuildSlashMode/SubcommandPayload` 重复调用。
 - 已新增 `BuildSlashModePayloadWithExtra` 与 `BuildSlashSubcommandPayloadWithExtra`，并批量接入 `/skills show` 与 `/tools show`（成功/未找到）分支，清理 `mode/subcommand payload` 后续手工 `name/tool` 字段拼装。
+- 已在 Gateway `runner` 新增 `sendApprovalText`，并批量接入审批命令回包分支（`/approve` `/deny` `/approvals` `/pending` `/grant` `/revoke`），统一 `sendText + BuildApprovalCommandPayload` 发送样板。
 
 范围：
 
