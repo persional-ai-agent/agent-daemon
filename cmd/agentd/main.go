@@ -965,6 +965,14 @@ func runSetup(cfg config.Config, args []string) {
 		runSetupWizard(cfg, args[1:])
 		return
 	}
+	if len(args) > 0 && strings.TrimSpace(args[0]) == "migrate" {
+		runSetupMigrate(cfg, args[1:])
+		return
+	}
+	if len(args) > 0 && strings.TrimSpace(args[0]) == "completion" {
+		runSetupCompletion(args[1:])
+		return
+	}
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	path := fs.String("file", "", "config file path")
 	provider := fs.String("provider", "", "model provider (openai/anthropic/codex or provider plugin name)")

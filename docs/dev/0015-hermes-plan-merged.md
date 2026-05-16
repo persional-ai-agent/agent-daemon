@@ -84,7 +84,7 @@
 | `TODO-012` | `done` | 已补 `no_agent`(script) 动作、失败自动重试（retry_max/retry_delay_sec）、run timeout、单任务并发上限（max_concurrency）、run replay 审计回放与 API 透传字段，CLI/Web/cronjob 工具语义一致。 | `internal/tools/cronjob.go`、`internal/store/cron_store.go`、`internal/cronrunner/scheduler.go`、`internal/api/server.go` |
 | `TODO-013` | `done` | 已补 ACP capability declaration、session create/list/get/delete、message send/stream/cancel/resume、ACP 鉴权边界（Bearer/X-ACP-Token）与事件细分映射（tool/model/approval/result/error/cancelled）。 | `internal/api/server.go`、`internal/api/server_test.go`、`internal/store/session_store.go` |
 | `TODO-014` | `done` | 已补 batch runner 并发与失败策略、trajectory reward/outcome schema、stats/export 过滤与 RL/Atropos 兼容 JSONL 导出，形成 run/compress/stats/export 闭环。 | `internal/research/batch.go`、`cmd/agentd/main.go`、`internal/research/batch_test.go` |
-| `TODO-015` | `partial` | setup/install/update 等有进展，迁移与可回滚备份恢复未闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 054`~`# 058` 及后续安装相关总结） |
+| `TODO-015` | `done` | 已补 setup migration（dry-run/preset/overwrite）与 checkpoint rollback，补 shell completion install/status/uninstall，结合既有 update bundle backup/snapshot/rollback 完成 install/setup/update/migration 运维闭环。 | `cmd/agentd/setup_ops.go`、`cmd/agentd/main.go` |
 | `TODO-016` | `partial` | Web 管理面已补 dashboard/cron/model-provider，距“日常可完全替代 CLI”仍有缺口。 | `docs/dev/0036-summary-summary-merged.md`（`# 277`~`# 279`） |
 
 ## 下一迭代优先级（先做功能）
@@ -620,6 +620,13 @@
 - 新用户可通过一个 setup wizard 完成模型、网关、工作区配置。
 - 迁移支持 dry-run、preset、overwrite。
 - update/backup 操作可回滚。
+
+最新进展（2026-05-16）：
+
+- 已新增 `agentd setup migrate apply`：支持 `-dry-run`、`-preset minimal|full`、`-overwrite`，并支持 `-from hermes|openclaw|path`。
+- 迁移 apply 自动为将被覆盖的目标文件创建 checkpoint（`migration-backups/*.tar.gz`），可通过 `agentd setup migrate rollback -checkpoint <file>` 回滚。
+- 已新增 shell completion 管理：`agentd setup completion install|status|uninstall`（bash/zsh）。
+- 已与既有 `update bundle` 的 backup/snapshot/rollback 体系形成可回滚运维闭环。
 
 ### TODO-016：Web Dashboard 完整化
 
