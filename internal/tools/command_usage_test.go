@@ -1,6 +1,9 @@
 package tools
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestUsageHelpersZH(t *testing.T) {
 	if got := UsageZHOptionalN("/history"); got != "用法: /history [n]" {
@@ -60,7 +63,16 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := FailedWithEscapedErrorEN("Resolve", "bad request"); got != "_Resolve failed: bad request_" {
 		t.Fatalf("unexpected failed-with-error text: %s", got)
 	}
+	if got := FailedEN("Pair"); got != "_Pair failed._" {
+		t.Fatalf("unexpected failed text: %s", got)
+	}
 	if got := FailedFromSlashWithEscapedErrorEN("/next", "oops"); got != "_next failed: oops_" {
 		t.Fatalf("unexpected failed-from-slash text: %s", got)
+	}
+	if got := MarshalFailedEN("Schema", nil); got != "Schema marshal failed" {
+		t.Fatalf("unexpected marshal failed without error: %s", got)
+	}
+	if got := MarshalFailedEN("Schema", fmt.Errorf("boom")); got != "Schema marshal failed: boom" {
+		t.Fatalf("unexpected marshal failed with error: %s", got)
 	}
 }

@@ -424,7 +424,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if w.runner.tryPair(w.adapter.Name(), event.UserID, code) {
 				_, _ = w.adapter.Send(ctx, event.ChatID, "_Paired successfully._", event.MessageID)
 			} else {
-				_, _ = w.adapter.Send(ctx, event.ChatID, "_Pair failed._", event.MessageID)
+				_, _ = w.adapter.Send(ctx, event.ChatID, tools.FailedEN("Pair"), event.MessageID)
 			}
 			return
 		case "/unpair":
@@ -1831,7 +1831,7 @@ func renderGatewayTargets(items []map[string]any, platformFilter string) string 
 func renderGatewayToolSchema(schema core.ToolSchema) string {
 	bs, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
-		return "Schema marshal failed: " + err.Error()
+		return tools.MarshalFailedEN("Schema", err)
 	}
 	return "Tool schema:\n" + string(bs)
 }
@@ -1839,7 +1839,7 @@ func renderGatewayToolSchema(schema core.ToolSchema) string {
 func renderGatewayToolSchemas(schemas []core.ToolSchema) string {
 	bs, err := json.MarshalIndent(schemas, "", "  ")
 	if err != nil {
-		return "Schemas marshal failed: " + err.Error()
+		return tools.MarshalFailedEN("Schemas", err)
 	}
 	return "Tool schemas (" + itoa(len(schemas)) + "):\n" + string(bs)
 }

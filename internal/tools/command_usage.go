@@ -124,8 +124,19 @@ func FailedWithEscapedErrorEN(subject, escapedErr string) string {
 	return "_" + subject + " failed: " + escapedErr + "_"
 }
 
+func FailedEN(subject string) string {
+	return "_" + subject + " failed._"
+}
+
 func FailedFromSlashWithEscapedErrorEN(slash, escapedErr string) string {
 	return FailedWithEscapedErrorEN(strings.TrimPrefix(strings.TrimSpace(slash), "/"), escapedErr)
+}
+
+func MarshalFailedEN(subject string, err error) string {
+	if err == nil {
+		return subject + " marshal failed"
+	}
+	return subject + " marshal failed: " + err.Error()
 }
 
 func UsageZHOptionalN(prefix string) string {
