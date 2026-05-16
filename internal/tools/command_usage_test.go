@@ -19,3 +19,12 @@ func TestUsageHelpersZH(t *testing.T) {
 		t.Fatalf("unexpected action range usage: %s", got)
 	}
 }
+
+func TestUsageHelpersEN(t *testing.T) {
+	if got := UsageENEither("/approve <approval_id>", "/deny <approval_id>"); got != "Usage: /approve <approval_id> or /deny <approval_id>" {
+		t.Fatalf("unexpected either usage: %s", got)
+	}
+	if got := NotSupportedBySessionStoreEN("Show"); got != "_Show not supported by session store._" {
+		t.Fatalf("unexpected not supported text: %s", got)
+	}
+}

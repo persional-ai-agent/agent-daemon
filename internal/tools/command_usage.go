@@ -65,6 +65,14 @@ const (
 func UsageEN(usage string) string { return "Usage: " + usage }
 func UsageZH(usage string) string { return "用法: " + usage }
 
+func UsageENEither(left, right string) string {
+	return UsageEN(left + " or " + right)
+}
+
+func NotSupportedBySessionStoreEN(feature string) string {
+	return "_" + feature + " not supported by session store._"
+}
+
 func CLIWelcomeHintZH() string {
 	return "输入 /help 查看可用命令，/quit 退出。"
 }

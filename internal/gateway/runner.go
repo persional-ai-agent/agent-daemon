@@ -606,7 +606,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
 			if !ok || detailStore == nil {
-				w.sendSlashText(ctx, event, "_Show not supported by session store._", "/show")
+				w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Show"), "/show")
 				return
 			}
 			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
@@ -640,7 +640,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			detailStore, ok := w.engine.SessionStore.(gatewaySessionDetailStore)
 			if !ok || detailStore == nil {
-				w.sendSlashText(ctx, event, "_Show pagination not supported by session store._", parsed.head)
+				w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Show pagination"), parsed.head)
 				return
 			}
 			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
@@ -669,7 +669,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			lister, ok := w.engine.SessionStore.(gatewaySessionLister)
 			if !ok || lister == nil {
-				w.sendSlashText(ctx, event, "_Sessions not supported by session store._", "/sessions")
+				w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Sessions"), "/sessions")
 				return
 			}
 			items, err := lister.ListRecentSessions(limit)
@@ -725,7 +725,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
 			if !ok || statsStore == nil {
-				w.sendSlashText(ctx, event, "_Stats not supported by session store._", "/stats")
+				w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Stats"), "/stats")
 				return
 			}
 			stats, err := statsStore.SessionStats(target)
@@ -1038,7 +1038,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				w.sendMetaText(ctx, event, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", meta)
 				return
 			}
-			w.sendSlashText(ctx, event, "_Compress not supported by session store._", "/compress")
+			w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Compress"), "/compress")
 			return
 		case "/usage":
 			if len(parsed.args) > 1 {
@@ -1047,7 +1047,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			statsStore, ok := w.engine.SessionStore.(gatewaySessionStatsStore)
 			if !ok || statsStore == nil {
-				w.sendSlashText(ctx, event, "_Usage not supported by session store._", "/usage")
+				w.sendSlashText(ctx, event, tools.NotSupportedBySessionStoreEN("Usage"), "/usage")
 				return
 			}
 			target := w.currentSessionID()
@@ -1134,7 +1134,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			approve := parsed.head == "/approve"
 			approvalID := w.resolveApprovalID(parsed.args)
 			if approvalID == "" {
-				w.sendSlashText(ctx, event, "Usage: "+GatewayCommandUsage("approve")+" or "+GatewayCommandUsage("deny"), parsed.head)
+				w.sendSlashText(ctx, event, tools.UsageENEither(GatewayCommandUsage("approve"), GatewayCommandUsage("deny")), parsed.head)
 				return
 			}
 			reply := w.confirmApproval(ctx, approvalID, approve)
