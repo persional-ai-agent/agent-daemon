@@ -392,11 +392,11 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if len(fields) == 2 {
 			filter = strings.ToLower(strings.TrimSpace(fields[1]))
 		}
-		_, out, err := clitools.BuildDeliveryTargets(eng.Workdir, filter)
+		platforms, out, err := clitools.BuildDeliveryTargets(eng.Workdir, filter)
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"count": len(out), "platform": filter, "targets": out}, "", "")
+		printCLIEnvelope(true, clitools.BuildTargetsPayload(filter, platforms, out), "", "")
 		return true, nil
 	case "/continuity":
 		if len(fields) > 2 {

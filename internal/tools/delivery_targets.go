@@ -72,3 +72,12 @@ func BuildDeliveryTargets(workdir, filterPlatform string) (platforms []string, t
 	}
 	return outPlatforms, items, nil
 }
+
+func BuildTargetsPayload(filterPlatform string, platforms []string, targets []map[string]any) map[string]any {
+	return map[string]any{
+		"platform":  strings.ToLower(strings.TrimSpace(filterPlatform)),
+		"count":     len(targets),
+		"platforms": platforms,
+		"targets":   targets,
+	}
+}

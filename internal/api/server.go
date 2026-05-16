@@ -823,13 +823,9 @@ func (s *Server) handleUITargets(w http.ResponseWriter, r *http.Request) {
 		writeUIError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok":        true,
-		"platform":  filter,
-		"count":     len(targets),
-		"platforms": platforms,
-		"targets":   targets,
-	})
+	payload := tools.BuildTargetsPayload(filter, platforms, targets)
+	payload["ok"] = true
+	writeUIJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleUITargetsHome(w http.ResponseWriter, r *http.Request) {

@@ -162,6 +162,7 @@
 - 已新增 `BuildGatewayContinuityPayload` 并接入 API/CLI/Gateway `/continuity` 成功输出（含 Gateway 命令元数据），统一 continuity 字段结构为 `continuity_mode`。
 - 已新增 `/model` 成功响应共享 helper（`BuildGatewayModelPayload` / `BuildGatewayModelUpdatePayload`）并接入 CLI/Gateway/API，统一查询与更新字段风格（`provider/model/base_url/updated/note`）。
 - 已新增 `/sethome` 成功响应共享 helper（`BuildSetHomePayload`）并接入 CLI/Gateway/API，统一 `platform/chat_id/target/home_target/env` 字段语义。
+- 已新增 `/targets` 成功响应共享 helper（`BuildTargetsPayload`）并接入 CLI/Gateway/API，统一 `platform/count/platforms/targets` 字段集合与语义。
 
 范围：
 

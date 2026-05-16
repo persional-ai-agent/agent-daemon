@@ -52,3 +52,10 @@ func TestBuildDeliveryTargetsFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildTargetsPayload(t *testing.T) {
+	payload := BuildTargetsPayload("Telegram", []string{"telegram"}, []map[string]any{{"platform": "telegram"}})
+	if payload["platform"] != "telegram" || payload["count"] != 1 {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+}

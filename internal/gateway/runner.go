@@ -901,13 +901,15 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if len(parsed.args) == 1 {
 				filter = strings.ToLower(strings.TrimSpace(parsed.args[0]))
 			}
-			_, items, err := tools.BuildDeliveryTargets(w.engine.Workdir, filter)
+			platforms, items, err := tools.BuildDeliveryTargets(w.engine.Workdir, filter)
 			if err != nil {
 				_, _ = w.sendText(ctx, event.ChatID, "_Targets failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/targets"})
 				return
 			}
 			reply := renderGatewayTargets(items, filter)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/targets", "platform": filter})
+			meta := tools.BuildTargetsPayload(filter, platforms, items)
+			meta["slash"] = "/targets"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/skills":
 			root := filepath.Join(w.engine.Workdir, "skills")
