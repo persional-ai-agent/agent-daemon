@@ -16,6 +16,7 @@ import (
 	_ "image/png"
 	"io"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -183,7 +184,7 @@ func (b *BuiltinTools) visionAnalyze(ctx context.Context, args map[string]any, t
 			}
 			return backendErr
 		}(),
-		"note":     "Fallback implementation: returns image metadata only (set OPENAI_API_KEY to enable vision).",
+		"note": "Fallback implementation: returns image metadata only (set OPENAI_API_KEY to enable vision).",
 	}, nil
 }
 
@@ -460,6 +461,155 @@ func (b *BuiltinTools) textToSpeech(ctx context.Context, args map[string]any, tc
 	out := map[string]any{"success": true, "path": path, "media": "MEDIA: " + path, "format": "wav", "backend": "placeholder", "backend_error": backendErr, "note": "Placeholder WAV (simple sine beep; no TTS backend)."}
 	out = maybeDeliverMedia(ctx, out, tc, deliver, path, "")
 	return out, nil
+}
+
+func (b *BuiltinTools) transcription(ctx context.Context, args map[string]any, tc ToolContext) (map[string]any, error) {
+	inputPath, err := resolvePathWithinWorkdir(tc.Workdir, strArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	if err := rejectSymlinkEscape(tc.Workdir, inputPath); err != nil {
+		return nil, err
+	}
+	if err := rejectNonRegularFile(inputPath); err != nil {
+		return nil, err
+	}
+	outputPath := strings.TrimSpace(strArg(args, "output_path"))
+	if outputPath == "" {
+		outputPath = "transcript.txt"
+	}
+	out, err := resolvePathWithinWorkdir(tc.Workdir, outputPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := rejectSymlinkEscape(tc.Workdir, out); err != nil {
+		return nil, err
+	}
+	if err := rejectNonRegularFile(out); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return nil, err
+	}
+
+	model := strings.TrimSpace(strArg(args, "model"))
+	if model == "" {
+		model = strings.TrimSpace(os.Getenv("OPENAI_TRANSCRIBE_MODEL"))
+	}
+	if model == "" {
+		model = "gpt-4o-mini-transcribe"
+	}
+	language := strings.TrimSpace(strArg(args, "language"))
+	prompt := strings.TrimSpace(strArg(args, "prompt"))
+	strictBackend := boolArg(args, "strict_backend", false)
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+
+	if apiKey == "" {
+		if strictBackend {
+			return map[string]any{"success": false, "backend": "openai", "error": "transcription backend not configured (set OPENAI_API_KEY)"}, nil
+		}
+		placeholder := "transcription backend unavailable; set OPENAI_API_KEY to enable real transcription"
+		if err := os.WriteFile(out, []byte(placeholder), 0o644); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"success":       true,
+			"path":          inputPath,
+			"text":          placeholder,
+			"output_path":   out,
+			"backend":       "placeholder",
+			"backend_error": "OPENAI_API_KEY not set",
+			"note":          "Fallback placeholder output (no real transcription backend configured).",
+		}, nil
+	}
+
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")), "/")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	audioBytes, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, err
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", model)
+	if language != "" {
+		_ = writer.WriteField("language", language)
+	}
+	if prompt != "" {
+		_ = writer.WriteField("prompt", prompt)
+	}
+	_ = writer.WriteField("response_format", "json")
+	part, err := writer.CreateFormFile("file", filepath.Base(inputPath))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := part.Write(audioBytes); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/audio/transcriptions", &body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	client := &http.Client{Timeout: 90 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		if strictBackend {
+			return map[string]any{"success": false, "backend": "openai", "error": err.Error()}, nil
+		}
+		placeholder := "transcription failed: " + err.Error()
+		if wErr := os.WriteFile(out, []byte(placeholder), 0o644); wErr != nil {
+			return nil, wErr
+		}
+		return map[string]any{"success": true, "path": inputPath, "text": placeholder, "output_path": out, "backend": "placeholder", "backend_error": err.Error()}, nil
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := fmt.Sprintf("openai transcription http %d: %s", resp.StatusCode, truncateMediaText(string(respBody), 240))
+		if strictBackend {
+			return map[string]any{"success": false, "backend": "openai", "error": msg}, nil
+		}
+		placeholder := "transcription failed: " + msg
+		if wErr := os.WriteFile(out, []byte(placeholder), 0o644); wErr != nil {
+			return nil, wErr
+		}
+		return map[string]any{"success": true, "path": inputPath, "text": placeholder, "output_path": out, "backend": "placeholder", "backend_error": msg}, nil
+	}
+	var parsed struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		if strictBackend {
+			return map[string]any{"success": false, "backend": "openai", "error": "invalid transcription response: " + err.Error()}, nil
+		}
+		placeholder := "transcription failed: invalid response"
+		if wErr := os.WriteFile(out, []byte(placeholder), 0o644); wErr != nil {
+			return nil, wErr
+		}
+		return map[string]any{"success": true, "path": inputPath, "text": placeholder, "output_path": out, "backend": "placeholder", "backend_error": err.Error()}, nil
+	}
+	if strings.TrimSpace(parsed.Text) == "" {
+		parsed.Text = strings.TrimSpace(string(respBody))
+	}
+	if err := os.WriteFile(out, []byte(parsed.Text), 0o644); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"success":     true,
+		"path":        inputPath,
+		"text":        parsed.Text,
+		"output_path": out,
+		"backend":     "openai",
+		"model":       model,
+		"language":    language,
+	}, nil
 }
 
 func maybeDeliverMedia(ctx context.Context, out map[string]any, tc ToolContext, deliver bool, path, caption string) map[string]any {

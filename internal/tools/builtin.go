@@ -137,6 +137,7 @@ func RegisterBuiltins(r *Registry, proc *ProcessRegistry) {
 	r.Register(toolDef{name: "vision_analyze", desc: "Vision analysis (minimal: image metadata)", params: visionAnalyzeParams(), call: b.visionAnalyze})
 	r.Register(toolDef{name: "image_generate", desc: "Image generation (minimal implementation with backend fallback)", params: imageGenerateParams(), call: b.imageGenerate})
 	r.Register(toolDef{name: "text_to_speech", desc: "Text-to-speech (minimal implementation with backend fallback)", params: textToSpeechParams(), call: b.textToSpeech})
+	r.Register(toolDef{name: "transcription", desc: "Audio transcription (OpenAI backend with optional fallback)", params: transcriptionParams(), call: b.transcription})
 	r.Register(toolDef{name: "mixture_of_agents", desc: "Mixture-of-agents: run multiple subagents and synthesize results", params: mixtureOfAgentsParams(), call: b.mixtureOfAgents})
 	// Browser automation (lightweight HTTP fetch + snapshot)
 	r.Register(toolDef{name: "browser_navigate", desc: "Browser navigate (lightweight HTTP fetch; no JS)", params: browserNavigateParams(), call: b.browserNavigate})
@@ -2152,6 +2153,35 @@ func textToSpeechParams() map[string]any {
 			"strict_backend": map[string]any{"type": "boolean", "description": "If true, return backend error instead of placeholder WAV output."},
 		},
 		"required": []string{"text"},
+	}
+}
+func transcriptionParams() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path": map[string]any{"type": "string", "description": "Local audio file path (within workdir)."},
+			"model": map[string]any{
+				"type":        "string",
+				"description": "Optional transcription model override (default OPENAI_TRANSCRIBE_MODEL or gpt-4o-mini-transcribe).",
+			},
+			"language": map[string]any{
+				"type":        "string",
+				"description": "Optional language hint (ISO-639-1, e.g. en/zh).",
+			},
+			"prompt": map[string]any{
+				"type":        "string",
+				"description": "Optional prompt/context for better transcription quality.",
+			},
+			"output_path": map[string]any{
+				"type":        "string",
+				"description": "Optional path to write transcript text file.",
+			},
+			"strict_backend": map[string]any{
+				"type":        "boolean",
+				"description": "If true, fail when backend is unavailable or request fails.",
+			},
+		},
+		"required": []string{"path"},
 	}
 }
 func browserNavigateParams() map[string]any {

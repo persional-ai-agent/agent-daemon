@@ -76,7 +76,7 @@
 | `TODO-004` | `done` | `signal`、`email`、`webhook`、`homeassistant` 已具备最小 inbound/outbound 闭环，并接入 gateway setup/status/platforms 与运行时适配器装配。 | `internal/gateway/platforms/signal.go`、`internal/gateway/platforms/email.go`、`internal/gateway/platforms/webhook.go`、`internal/gateway/platforms/homeassistant_adapter.go`、`cmd/agentd/main.go` |
 | `TODO-005` | `done` | 已补 `matrix` + `feishu` + `dingtalk` + `wecom` + `mattermost` + `sms` + `bluebubbles` 网关适配器（inbound/outbound 最小闭环），并接入 gateway setup/status/platforms、运行时装配与 webhook API 路由。 | `internal/gateway/platforms/matrix.go`、`internal/gateway/platforms/feishu.go`、`internal/gateway/platforms/dingtalk.go`、`internal/gateway/platforms/wecom.go`、`internal/gateway/platforms/mattermost.go`、`internal/gateway/platforms/sms.go`、`internal/gateway/platforms/bluebubbles.go`、`internal/api/server.go`、`cmd/agentd/main.go` |
 | `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
-| `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
+| `TODO-007` | `done` | 已完成 browser/vision/tts/image_generate/transcription 能力级闭环：支持可用后端调用、strict/fallback 错误分层、输出文件与进度结果结构、并补齐测试。 | `internal/tools/media_tools.go`、`internal/tools/browser_*`、`internal/tools/video_analyze.go` |
 | `TODO-008` | `done` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；并补齐 TUI/Web 启停管理闭环（list + enable/disable/set/clear）。 | `internal/tools/toolsets.go`、`internal/api/server.go`、`internal/cli/chat.go` |
 | `TODO-009` | `done` | 已补主流 provider profile（OpenRouter/Nous/NVIDIA NIM/MiMo/GLM/Kimi/MiniMax/HuggingFace/custom_openai）接入、`model providers` 能力与配置状态输出，且 TUI/Web 通过既有 `/model providers` + `/model set` 路径可查看并切换 profile。 | `cmd/agentd/main.go`、`cmd/agentd/main_test.go`、`internal/api/server.go`、`ui-tui/command_logic.go` |
 | `TODO-010` | `done` | 已补 skills provenance（source/version/trigger task）、usage 计数、审计日志、历史快照与 rollback；并在长任务摘要中输出 skill draft 建议，覆盖 create/edit/patch/delete/sync/rollback 闭环。 | `internal/tools/builtin.go`、`internal/tools/skills_meta.go`、`internal/api/server.go` |
@@ -385,6 +385,12 @@
 - 每个工具有 schema、配置项、错误分类、测试。
 - Web/TUI/Gateway 能显示工具进度与结果文件。
 - 工具失败不会破坏 Agent Loop。
+
+最新进展（2026-05-16）：
+
+- 已新增 `transcription` 工具：支持本地音频转写、OpenAI `/audio/transcriptions` 后端、`strict_backend` 失败策略与可选 `output_path` 文本导出。
+- `tts` toolset 已纳入 `transcription`，与 `text_to_speech` 形成语音输入/输出闭环。
+- 已补 `internal/tools/media_tools_test.go` 覆盖 `transcription` 的 schema、strict backend 行为与 OpenAI 后端成功路径。
 
 ### TODO-008：Toolsets 动态行为
 

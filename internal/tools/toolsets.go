@@ -152,7 +152,7 @@ var Toolsets = map[string]Toolset{
 	},
 	"tts": {
 		Description: "Text-to-speech tools (minimal implementation)",
-		Tools:       []string{"text_to_speech"},
+		Tools:       []string{"text_to_speech", "transcription"},
 	},
 	"delegation": {
 		Description: "Spawn subagent(s) for subtasks",
