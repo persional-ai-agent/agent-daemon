@@ -418,7 +418,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/session":
 			if len(parsed.args) == 0 {
 				active := w.currentSessionID()
-				_, _ = w.sendText(ctx, event.ChatID, "_Route session: "+escapeMarkdown(w.key)+"\\nActive session: "+escapeMarkdown(active)+"_", event.MessageID, map[string]any{"slash": "/session", "active_session": active, "route_session": w.key})
+				meta := tools.BuildSessionOverviewPayload(active, w.key, -1, -1)
+				meta["slash"] = "/session"
+				_, _ = w.sendText(ctx, event.ChatID, "_Route session: "+escapeMarkdown(w.key)+"\\nActive session: "+escapeMarkdown(active)+"_", event.MessageID, meta)
 				return
 			}
 			if len(parsed.args) != 1 || strings.TrimSpace(parsed.args[0]) == "" {
@@ -428,7 +430,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			target := strings.TrimSpace(parsed.args[0])
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/session", "session_id": target})
+			meta := tools.BuildSessionSwitchPayload(prev, target, false, -1)
+			meta["slash"] = "/session"
+			_, _ = w.sendText(ctx, event.ChatID, "_Session switched: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/whoami":
 			globalID := ""

@@ -152,7 +152,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		printSlashHelp()
 		return true, nil
 	case "/session", "/status":
-		printCLIEnvelope(true, map[string]any{"session_id": state.SessionID, "messages_in_context": len(state.History), "tools": len(eng.Registry.Names())}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionOverviewPayload(state.SessionID, "", len(state.History), len(eng.Registry.Names())), "", "")
 		return true, nil
 	case "/new", "/reset":
 		prev := state.SessionID

@@ -171,6 +171,7 @@
 - 已新增 `session clear` 共享响应 helper（`BuildSessionClearPayload`），并接入 CLI `/clear` 与 Gateway `/clear` 元数据，统一 `previous_session_id/session_id/cleared` 字段语义（行为保持各入口原语义）。
 - 已新增 `session recover` 共享响应 helper（`BuildSessionRecoverPayload`），并接入 CLI `/recover context` 与 Gateway `/recover context` 元数据，统一 `recovered/previous_session_id/session_id` 字段语义（Gateway 额外标记 `replay=true`）。
 - 已新增 `session switch` 共享响应 helper（`BuildSessionSwitchPayload`），并接入 CLI `/new` `/reset` `/resume` 与 Gateway 对应命令元数据，统一 `previous_session_id/session_id/reset/loaded_messages` 字段语义。
+- 已新增 `session overview` 共享响应 helper（`BuildSessionOverviewPayload`），并接入 CLI `/session` `/status` 与 Gateway `/session` 查询元数据，统一 `session_id/route_session/messages_in_context/tools` 字段语义。
 
 范围：
 
