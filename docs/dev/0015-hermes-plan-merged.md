@@ -191,6 +191,7 @@
 - 已新增 `BuildSlashSubcommandPayload` 并批量接入 Gateway `/skills`、`/tools` 成功元数据路径，清理 `meta["subcommand"]=...` 手写赋值分支，统一 `slash+subcommand` 构造入口。
 - 已在 Gateway `runner` 内新增通用 `mergePayloadMeta`，并批量替换 delivery hook 与 `/status` 命令中的手写 map 合并循环，统一元数据合并路径、减少分发逻辑重复分支。
 - 已在 Gateway `runner` 新增 `sendSlashText`，并批量替换 slash 命令 usage/error/help 等 70+ 处分支的 `sendText + BuildSlashPayload` 重复调用，统一命令回包发送样板。
+- 已在 Gateway `runner` 新增 `sendSlashModeText` 与 `sendSlashSubcommandText`，并批量接入 `/personality`、`/skills`、`/tools` 的通用回包分支，继续收敛 `sendText + BuildSlashMode/SubcommandPayload` 重复调用。
 
 范围：
 

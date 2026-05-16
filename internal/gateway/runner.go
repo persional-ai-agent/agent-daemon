@@ -217,6 +217,14 @@ func (w *sessionWorker) sendSlashText(ctx context.Context, event MessageEvent, c
 	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, tools.BuildSlashPayload(slash))
 }
 
+func (w *sessionWorker) sendSlashModeText(ctx context.Context, event MessageEvent, content, slash, mode string) {
+	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, tools.BuildSlashModePayload(slash, mode))
+}
+
+func (w *sessionWorker) sendSlashSubcommandText(ctx context.Context, event MessageEvent, content, slash, subcommand string) {
+	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, tools.BuildSlashSubcommandPayload(slash, subcommand))
+}
+
 func (w *sessionWorker) editText(ctx context.Context, chatID, messageID, content string, meta map[string]any) error {
 	err := w.adapter.EditMessage(ctx, chatID, messageID, content)
 	if w.runner != nil && deliveryHooksEnabled() {
@@ -933,9 +941,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					w.sendSlashText(ctx, event, "_Skills failed: "+escapeMarkdown(err.Error())+"_", "/skills")
 					return
 				}
-					meta := tools.BuildSlashSubcommandPayload("/skills", "list")
-					_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
-				return
+					w.sendSlashSubcommandText(ctx, event, escapeMarkdown(reply), "/skills", "list")
+					return
 			}
 			if len(parsed.args) == 1 {
 				name := strings.TrimSpace(parsed.args[0])
@@ -965,8 +972,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolsList(w.engine.Registry.Names())
-				meta := tools.BuildSlashSubcommandPayload("/tools", "list")
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
+				w.sendSlashSubcommandText(ctx, event, escapeMarkdown(reply), "/tools", "list")
 				return
 			case "show":
 				if len(parsed.args) != 2 {
@@ -993,9 +999,8 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolSchemas(w.engine.Registry.Schemas())
-					meta := tools.BuildSlashSubcommandPayload("/tools", "schemas")
-					_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
-				return
+					w.sendSlashSubcommandText(ctx, event, escapeMarkdown(reply), "/tools", "schemas")
+					return
 			default:
 				w.sendSlashText(ctx, event, "Usage: /tools [list|show <name>|schemas]", "/tools")
 				return
@@ -1091,12 +1096,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/personality":
 			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {
 				reply := "System prompt:\n" + w.currentSystemPrompt()
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildSlashModePayload("/personality", "show"))
+				w.sendSlashModeText(ctx, event, escapeMarkdown(reply), "/personality", "show")
 				return
 			}
 			if len(parsed.args) == 1 && strings.EqualFold(strings.TrimSpace(parsed.args[0]), "reset") {
 				w.setSystemPrompt(agent.DefaultSystemPrompt())
-				_, _ = w.sendText(ctx, event.ChatID, "_Personality reset to default._", event.MessageID, tools.BuildSlashModePayload("/personality", "reset"))
+				w.sendSlashModeText(ctx, event, "_Personality reset to default._", "/personality", "reset")
 				return
 			}
 			next := strings.TrimSpace(strings.TrimPrefix(parsed.raw, parsed.head))
@@ -1105,7 +1110,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			w.setSystemPrompt(next)
-			_, _ = w.sendText(ctx, event.ChatID, "_Personality updated._", event.MessageID, tools.BuildSlashModePayload("/personality", "set"))
+			w.sendSlashModeText(ctx, event, "_Personality updated._", "/personality", "set")
 			return
 		case "/queue":
 			qLen := len(w.queue)
