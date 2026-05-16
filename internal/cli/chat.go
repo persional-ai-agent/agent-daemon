@@ -355,7 +355,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		}
 		next, meta := compactHistory(state.History, tail)
 		state.History = next
-		printCLIEnvelope(true, meta, "", "")
+		before, _ := meta["before"].(int)
+		after, _ := meta["after"].(int)
+		compacted, _ := meta["compacted"].(bool)
+		summarized, _ := meta["summarized_messages"].(int)
+		reason, _ := meta["reason"].(string)
+		printCLIEnvelope(true, clitools.BuildSessionCompressPayload(state.SessionID, before, after, tail, summarized, compacted, reason), "", "")
 		return true, nil
 	case "/save":
 		path := ""

@@ -996,7 +996,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Compress failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/compress"})
 					return
 				}
-				_, _ = w.sendText(ctx, event.ChatID, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", event.MessageID, map[string]any{"slash": "/compress"})
+				meta := tools.BuildSessionCompressPayload(activeSessionID, before, after, keepLastN, before-after, true, "")
+				meta["slash"] = "/compress"
+				_, _ = w.sendText(ctx, event.ChatID, "_Compressed: before="+itoa(before)+", after="+itoa(after)+", dropped="+itoa(before-after)+"_", event.MessageID, meta)
 				return
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "_Compress not supported by session store._", event.MessageID, map[string]any{"slash": "/compress"})
