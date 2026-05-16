@@ -124,6 +124,27 @@ func TestSessionStoreApprovalGrantAndCheck(t *testing.T) {
 	}
 }
 
+func TestSessionStoreDeleteSession(t *testing.T) {
+	s, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.AppendMessage("s-del", core.Message{Role: "user", Content: "to be deleted"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSession("s-del"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.LoadMessages("s-del", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected empty session after delete, got %+v", msgs)
+	}
+}
+
 func TestSessionStoreApprovalPatternGrant(t *testing.T) {
 	s, err := NewSessionStore(filepath.Join(t.TempDir(), "approvals-pattern.db"))
 	if err != nil {

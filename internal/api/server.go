@@ -67,6 +67,10 @@ type acpSessionCreateRequest struct {
 	SessionID string `json:"session_id,omitempty"`
 }
 
+type acpSessionDeleteStore interface {
+	DeleteSession(sessionID string) error
+}
+
 type acpMessageRequest struct {
 	SessionID string `json:"session_id"`
 	Input     string `json:"input"`
@@ -112,6 +116,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/gateway/whatsapp/webhook", s.handleGatewayWhatsAppWebhook)
 	mux.HandleFunc("/v1/gateway/webhook/inbound", s.handleGatewayWebhookInbound)
 	mux.HandleFunc("/v1/acp/sessions", s.handleACPSessions)
+	mux.HandleFunc("/v1/acp/sessions/", s.handleACPSessionDetail)
+	mux.HandleFunc("/v1/acp/capabilities", s.handleACPCapabilities)
 	mux.HandleFunc("/v1/acp/message", s.handleACPMessage)
 	mux.HandleFunc("/v1/acp/message/stream", s.handleACPMessageStream)
 	mux.HandleFunc("/v1/acp/cancel", s.handleACPCancel)
@@ -355,7 +361,15 @@ func (s *Server) handleGatewayWebhookInbound(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleACPSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.handleACPSessionsList(w, r)
+		return
+	case http.MethodPost:
+	default:
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
@@ -376,7 +390,109 @@ func (s *Server) handleACPSessions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleACPSessionDetail(w http.ResponseWriter, r *http.Request) {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
+	sessionID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/acp/sessions/"))
+	if sessionID == "" || strings.Contains(sessionID, "/") {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "session_id is required")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		msgs, err := s.loadHistory(sessionID)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"session_id": sessionID,
+				"messages":   msgs,
+			},
+		})
+	case http.MethodDelete:
+		if s.Engine == nil || s.Engine.SessionStore == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "session_store_unavailable", "session store unavailable")
+			return
+		}
+		deleter, ok := s.Engine.SessionStore.(acpSessionDeleteStore)
+		if !ok {
+			writeAPIError(w, http.StatusNotImplemented, "not_supported", "session delete not supported")
+			return
+		}
+		if err := deleter.DeleteSession(sessionID); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "internal_error", err.Error())
+			return
+		}
+		writeUIJSON(w, http.StatusOK, map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"session_id": sessionID,
+				"deleted":    true,
+			},
+		})
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+	}
+}
+
+func (s *Server) handleACPSessionsList(w http.ResponseWriter, _ *http.Request) {
+	rows := []map[string]any{}
+	if s.Engine != nil && s.Engine.SessionStore != nil {
+		if lister, ok := s.Engine.SessionStore.(recentSessionsStore); ok {
+			if listed, err := lister.ListRecentSessions(100); err == nil {
+				rows = listed
+			}
+		}
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"sessions": rows,
+			"count":    len(rows),
+		},
+	})
+}
+
+func (s *Server) handleACPCapabilities(w http.ResponseWriter, r *http.Request) {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	writeUIJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"result": map[string]any{
+			"transport": []string{"http+sse"},
+			"auth": map[string]any{
+				"required": strings.TrimSpace(os.Getenv("AGENT_ACP_TOKEN")) != "",
+				"scheme":   "Bearer or X-ACP-Token",
+			},
+			"sessions": []string{"create", "list", "get", "delete"},
+			"message":  []string{"send", "stream", "cancel", "resume"},
+			"events": []string{
+				"session", "resumed", "user_message", "turn_started",
+				"tool_event", "model_event", "approval_event",
+				"completed", "cancelled", "error", "result",
+			},
+			"event_mapping": map[string]any{
+				"tool_started/tool_finished/mcp_stream_event": "tool_event",
+				"model_stream_event/assistant_message":         "model_event",
+				"approval*":                                   "approval_event",
+			},
+		},
+	})
+}
+
 func (s *Server) handleACPMessage(w http.ResponseWriter, r *http.Request) {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -396,6 +512,9 @@ func (s *Server) handleACPMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleACPMessageStream(w http.ResponseWriter, r *http.Request) {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -411,10 +530,13 @@ func (s *Server) handleACPMessageStream(w http.ResponseWriter, r *http.Request) 
 		TurnID:    req.TurnID,
 		Resume:    req.Resume,
 	}
-	s.handleChatStream(w, cloneRequestWithJSONBody(r, chatReq))
+	s.handleChatStreamMapped(w, cloneRequestWithJSONBody(r, chatReq), true)
 }
 
 func (s *Server) handleACPCancel(w http.ResponseWriter, r *http.Request) {
+	if !s.requireACPAuth(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -425,6 +547,25 @@ func (s *Server) handleACPCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleCancel(w, cloneRequestWithJSONBody(r, req))
+}
+
+func (s *Server) requireACPAuth(w http.ResponseWriter, r *http.Request) bool {
+	required := strings.TrimSpace(os.Getenv("AGENT_ACP_TOKEN"))
+	if required == "" {
+		return true
+	}
+	token := strings.TrimSpace(r.Header.Get("X-ACP-Token"))
+	if token == "" {
+		auth := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+			token = strings.TrimSpace(auth[7:])
+		}
+	}
+	if token != required {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "invalid acp token")
+		return false
+	}
+	return true
 }
 
 func cloneRequestWithJSONBody(r *http.Request, v any) *http.Request {
@@ -2796,6 +2937,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
+	s.handleChatStreamMapped(w, r, false)
+}
+
+func (s *Server) handleChatStreamMapped(w http.ResponseWriter, r *http.Request, acpMode bool) {
 	if s.Engine == nil {
 		writeAPIError(w, http.StatusInternalServerError, "engine_unavailable", "engine unavailable")
 		return
@@ -2883,7 +3028,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 					if event.Type == "error" {
 						errorSeen = true
 					}
-					if err := writeSSE(w, event.Type, event); err != nil {
+					if err := writeSSEEvent(w, event.Type, mapStreamEventPayload(event, acpMode), acpMode); err != nil {
 						return
 					}
 					flusher.Flush()
@@ -2909,7 +3054,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			if event.Type == "error" {
 				errorSeen = true
 			}
-			if err := writeSSE(w, event.Type, event); err != nil {
+			if err := writeSSEEvent(w, event.Type, mapStreamEventPayload(event, acpMode), acpMode); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -2924,7 +3069,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 						if event.Type == "error" {
 							errorSeen = true
 						}
-						if err := writeSSE(w, event.Type, event); err != nil {
+						if err := writeSSEEvent(w, event.Type, mapStreamEventPayload(event, acpMode), acpMode); err != nil {
 							return
 						}
 						flusher.Flush()
@@ -2953,12 +3098,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 					if event.Type == "error" {
 						errorSeen = true
 					}
-					if err := writeSSE(w, event.Type, event); err != nil {
+					if err := writeSSEEvent(w, event.Type, mapStreamEventPayload(event, acpMode), acpMode); err != nil {
 						return
 					}
 					flusher.Flush()
 				default:
-					if err := writeSSE(w, "result", res.Result); err != nil {
+					if err := writeSSEEvent(w, "result", mapResultPayload(res.Result, acpMode), acpMode); err != nil {
 						return
 					}
 					flusher.Flush()
@@ -2966,6 +3111,66 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+}
+
+func writeSSEEvent(w http.ResponseWriter, event string, payload any, acpMode bool) error {
+	if !acpMode {
+		return writeSSE(w, event, payload)
+	}
+	mapped := mapACPEventType(event)
+	return writeSSE(w, mapped, payload)
+}
+
+func mapACPEventType(event string) string {
+	switch event {
+	case "tool_started", "tool_finished", "mcp_stream_event":
+		return "tool_event"
+	case "model_stream_event", "assistant_message":
+		return "model_event"
+	}
+	if strings.HasPrefix(event, "approval") {
+		return "approval_event"
+	}
+	return event
+}
+
+func mapStreamEventPayload(event core.AgentEvent, acpMode bool) any {
+	if !acpMode {
+		return event
+	}
+	payload := map[string]any{
+		"type":       event.Type,
+		"acp_event":  mapACPEventType(event.Type),
+		"session_id": event.SessionID,
+	}
+	if event.Turn > 0 {
+		payload["turn"] = event.Turn
+	}
+	if event.ToolName != "" {
+		payload["tool_name"] = event.ToolName
+	}
+	if event.Content != "" {
+		payload["content"] = event.Content
+	}
+	if len(event.Data) > 0 {
+		payload["data"] = event.Data
+	}
+	return payload
+}
+
+func mapResultPayload(res *core.RunResult, acpMode bool) any {
+	if !acpMode {
+		return res
+	}
+	return map[string]any{
+		"type":               "result",
+		"acp_event":          "result",
+		"session_id":         res.SessionID,
+		"final_response":     res.FinalResponse,
+		"turns_used":         res.TurnsUsed,
+		"finished_naturally": res.FinishedNaturally,
+		"summary":            summarizeRunResult(res),
 	}
 }
 

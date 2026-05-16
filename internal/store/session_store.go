@@ -323,6 +323,24 @@ WHERE session_id = ?`, sessionID).Scan(&messageCount, &toolCallCount, &firstSeen
 	}, nil
 }
 
+// DeleteSession removes all persisted records for a session.
+func (s *SessionStore) DeleteSession(sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("session_id required")
+	}
+	if _, err := s.db.Exec(`DELETE FROM messages WHERE session_id = ?`, sessionID); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`DELETE FROM approvals WHERE session_id = ?`, sessionID); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`DELETE FROM session_summaries WHERE session_id = ?`, sessionID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *SessionStore) Search(query string, limit int, sessionID string) ([]map[string]any, error) {
 	if limit <= 0 {
 		limit = 5

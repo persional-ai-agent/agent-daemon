@@ -82,7 +82,7 @@
 | `TODO-010` | `done` | 已补 skills provenance（source/version/trigger task）、usage 计数、审计日志、历史快照与 rollback；并在长任务摘要中输出 skill draft 建议，覆盖 create/edit/patch/delete/sync/rollback 闭环。 | `internal/tools/builtin.go`、`internal/tools/skills_meta.go`、`internal/api/server.go` |
 | `TODO-011` | `done` | 已补 memory 来源追踪与可信度、外部 provider 状态开关（status/off/on）、记忆 reset/list/revoke/insights 与周期性记忆洞察入口，支持用户查看、撤销、禁用并保留 session/turn provenance。 | `internal/memory/store.go`、`internal/tools/builtin.go`、`internal/cli/chat.go` |
 | `TODO-012` | `done` | 已补 `no_agent`(script) 动作、失败自动重试（retry_max/retry_delay_sec）、run timeout、单任务并发上限（max_concurrency）、run replay 审计回放与 API 透传字段，CLI/Web/cronjob 工具语义一致。 | `internal/tools/cronjob.go`、`internal/store/cron_store.go`、`internal/cronrunner/scheduler.go`、`internal/api/server.go` |
-| `TODO-013` | `partial` | ACP/IDE 最小适配已完成，完整协议层能力未齐。 | `docs/dev/0036-summary-summary-merged.md`（`# 258`） |
+| `TODO-013` | `done` | 已补 ACP capability declaration、session create/list/get/delete、message send/stream/cancel/resume、ACP 鉴权边界（Bearer/X-ACP-Token）与事件细分映射（tool/model/approval/result/error/cancelled）。 | `internal/api/server.go`、`internal/api/server_test.go`、`internal/store/session_store.go` |
 | `TODO-014` | `partial` | research/trajectory 最小运行闭环已完成，策略评估与导出体系需增强。 | `docs/dev/0036-summary-summary-merged.md`（`# 259`） |
 | `TODO-015` | `partial` | setup/install/update 等有进展，迁移与可回滚备份恢复未闭环。 | `docs/dev/0036-summary-summary-merged.md`（`# 054`~`# 058` 及后续安装相关总结） |
 | `TODO-016` | `partial` | Web 管理面已补 dashboard/cron/model-provider，距“日常可完全替代 CLI”仍有缺口。 | `docs/dev/0036-summary-summary-merged.md`（`# 277`~`# 279`） |
@@ -554,6 +554,14 @@
 
 - IDE 客户端可稳定创建 session、发送消息、流式接收、取消、恢复。
 - ACP 事件与内部 `AgentEvent` 可追踪映射。
+
+最新进展（2026-05-16）：
+
+- 已新增 `/v1/acp/capabilities` 能力声明接口，返回 transport、auth、session/message 能力与事件映射清单。
+- 已将 `/v1/acp/sessions` 扩展为 create/list，并新增 `/v1/acp/sessions/{id}` 的 get/delete；`SessionStore` 已补 `DeleteSession` 持久化删除能力。
+- 已新增 ACP 鉴权边界：设置 `AGENT_ACP_TOKEN` 时，ACP 路由要求 `Authorization: Bearer <token>` 或 `X-ACP-Token`。
+- 已将 ACP streaming 事件从内部事件细分映射为 `tool_event`/`model_event`/`approval_event`，并附带 `type + acp_event` 可追踪字段。
+- 已补 `internal/api/server_test.go` 与 `internal/store/session_store_test.go` 覆盖上述能力并通过测试。
 
 ### TODO-014：Research/RL/trajectory 链路
 

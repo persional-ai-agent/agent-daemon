@@ -86,6 +86,11 @@ func (waitOnContextModelClient) ChatCompletion(ctx context.Context, _ []core.Mes
 
 type stubSessionStore struct{}
 
+type stubSessionStoreWithDelete struct {
+	stubSessionStore
+	deleted []string
+}
+
 func (s *stubSessionStore) AppendMessage(string, core.Message) error {
 	return nil
 }
@@ -144,6 +149,11 @@ func (s *stubSessionStore) SessionStats(sessionID string) (map[string]any, error
 		"session_id":    sessionID,
 		"message_count": 2,
 	}, nil
+}
+
+func (s *stubSessionStoreWithDelete) DeleteSession(sessionID string) error {
+	s.deleted = append(s.deleted, sessionID)
+	return nil
 }
 
 func TestHandleChatStream(t *testing.T) {
@@ -1136,6 +1146,78 @@ func TestUIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("acp_capabilities", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/acp/capabilities", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"event_mapping"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("acp_sessions_list", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/acp/sessions", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"sessions"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("acp_session_get_delete", func(t *testing.T) {
+		delStore := &stubSessionStoreWithDelete{}
+		local := *srv
+		local.Engine = &agent.Engine{
+			Client:       fakeModelClient{response: core.Message{Role: "assistant", Content: "ok"}},
+			Registry:     tools.NewRegistry(),
+			SessionStore: delStore,
+			SystemPrompt: agent.DefaultSystemPrompt(),
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/acp/sessions/s-demo", nil)
+		local.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"session_id":"s-demo"`) {
+			t.Fatalf("unexpected body: %s", rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodDelete, "/v1/acp/sessions/s-demo", nil)
+		local.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if len(delStore.deleted) != 1 || delStore.deleted[0] != "s-demo" {
+			t.Fatalf("delete not called: %+v", delStore.deleted)
+		}
+	})
+
+	t.Run("acp_auth", func(t *testing.T) {
+		t.Setenv("AGENT_ACP_TOKEN", "t-1")
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/acp/capabilities", nil)
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodGet, "/v1/acp/capabilities", nil)
+		req.Header.Set("Authorization", "Bearer t-1")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("acp_message", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/v1/acp/message", bytes.NewBufferString(`{"session_id":"acp-1","input":"hello"}`))
@@ -1159,6 +1241,13 @@ func TestUIEndpoints(t *testing.T) {
 		}
 		if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
 			t.Fatalf("expected stream content type, got %q", got)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "event: model_event") {
+			t.Fatalf("expected mapped model_event, body=%s", body)
+		}
+		if !strings.Contains(body, `"acp_event":"model_event"`) {
+			t.Fatalf("expected acp_event field, body=%s", body)
 		}
 	})
 
