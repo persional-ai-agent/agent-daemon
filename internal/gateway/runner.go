@@ -233,6 +233,10 @@ func (w *sessionWorker) sendMetaText(ctx context.Context, event MessageEvent, co
 	_, _ = w.sendText(ctx, event.ChatID, content, event.MessageID, meta)
 }
 
+func (w *sessionWorker) sendAuthText(ctx context.Context, event MessageEvent, content, status string) {
+	w.sendMetaText(ctx, event, content, tools.BuildAuthPayload(status))
+}
+
 func (w *sessionWorker) editText(ctx context.Context, chatID, messageID, content string, meta map[string]any) error {
 	err := w.adapter.EditMessage(ctx, chatID, messageID, content)
 	if w.runner != nil && deliveryHooksEnabled() {
@@ -1168,7 +1172,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		}
 	}
 	if !authorized {
-		_, _ = w.sendText(ctx, event.ChatID, "_Access denied._", event.MessageID, map[string]any{"auth": "denied"})
+		w.sendAuthText(ctx, event, "_Access denied._", "denied")
 		return
 	}
 	w.setLastUserInput(event.UserID, event.Text)

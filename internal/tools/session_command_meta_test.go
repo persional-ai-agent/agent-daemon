@@ -46,3 +46,10 @@ func TestAttachSlashPayload(t *testing.T) {
 		t.Fatalf("unexpected payload: %+v", got)
 	}
 }
+
+func TestBuildAuthPayload(t *testing.T) {
+	got := BuildAuthPayload(" denied ")
+	if got["auth"] != "denied" {
+		t.Fatalf("unexpected auth payload: %+v", got)
+	}
+}

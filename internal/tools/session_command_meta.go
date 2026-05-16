@@ -40,6 +40,12 @@ func AttachSlashPayload(payload map[string]any, slash string) map[string]any {
 	return out
 }
 
+func BuildAuthPayload(status string) map[string]any {
+	return map[string]any{
+		"auth": strings.TrimSpace(status),
+	}
+}
+
 func mergeSlashExtra(base map[string]any, extra map[string]any) map[string]any {
 	for k, v := range extra {
 		base[k] = v
