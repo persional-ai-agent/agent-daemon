@@ -313,7 +313,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 	case "/undo":
 		next, removed := removeLastTurn(state.History)
 		state.History = next
-		printCLIEnvelope(true, map[string]any{"removed_messages": removed, "messages_in_context": len(state.History)}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionUndoPayload(state.SessionID, removed, len(state.History)), "", "")
 		return true, nil
 	case "/retry":
 		idx := lastUserMessageIndex(state.History)

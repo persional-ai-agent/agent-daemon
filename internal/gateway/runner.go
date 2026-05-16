@@ -812,7 +812,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				}
 			}
 			w.activateSession(nextSession, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, map[string]any{"slash": "/undo", "removed_messages": removed, "session_id": nextSession})
+			meta := tools.BuildSessionUndoPayload(nextSession, removed, len(nextMsgs))
+			meta["slash"] = "/undo"
+			_, _ = w.sendText(ctx, event.ChatID, "_Undo complete: removed="+itoa(removed)+", session switched to "+escapeMarkdown(nextSession)+"_", event.MessageID, meta)
 			return
 		case "/clear":
 			if len(parsed.args) > 0 {
