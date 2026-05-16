@@ -576,7 +576,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			reply := renderGatewayHistory(msgs, limit)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/history", "session_id": active})
+			meta := tools.BuildSessionHistoryPayload(active, len(msgs), limit)
+			meta["slash"] = "/history"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/show":
 			target, offset, limit, parseErr := parseGatewayShowArgs(parsed.args, w.currentSessionID())
@@ -694,7 +696,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			target := list[idx-1]
 			prev := w.currentSessionID()
 			w.activateSession(target, event.UserID)
-			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, map[string]any{"slash": "/pick", "session_id": target, "index": idx})
+			meta := tools.BuildSessionPickPayload(prev, target, idx)
+			meta["slash"] = "/pick"
+			_, _ = w.sendText(ctx, event.ChatID, "_Session picked: "+escapeMarkdown(prev)+" -> "+escapeMarkdown(target)+"_", event.MessageID, meta)
 			return
 		case "/stats":
 			target := w.currentSessionID()
