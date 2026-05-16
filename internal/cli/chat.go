@@ -371,7 +371,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"path": saved, "messages": len(state.History)}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionSavePayload(state.SessionID, saved, len(state.History)), "", "")
 		return true, nil
 	case "/sethome":
 		if len(fields) == 1 || len(fields) > 3 {

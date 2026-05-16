@@ -858,7 +858,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				_, _ = w.sendText(ctx, event.ChatID, "_Save failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/save"})
 				return
 			}
-			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, map[string]any{"slash": "/save", "session_id": active, "path": path, "messages": len(msgs)})
+			meta := tools.BuildSessionSavePayload(active, path, len(msgs))
+			meta["slash"] = "/save"
+			_, _ = w.sendText(ctx, event.ChatID, "_Saved session: "+escapeMarkdown(active)+" -> "+escapeMarkdown(path)+"_", event.MessageID, meta)
 			return
 		case "/sethome":
 			if len(parsed.args) == 0 || len(parsed.args) > 2 {
