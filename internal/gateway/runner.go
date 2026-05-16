@@ -179,6 +179,13 @@ func deliveryHooksEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_GATEWAY_HOOK_DELIVERY")), "true")
 }
 
+func mergePayloadMeta(base map[string]any, extra map[string]any) map[string]any {
+	for k, v := range extra {
+		base[k] = v
+	}
+	return base
+}
+
 func (w *sessionWorker) sendText(ctx context.Context, chatID, content, replyTo string, meta map[string]any) (SendResult, error) {
 	var (
 		res SendResult
@@ -200,11 +207,9 @@ func (w *sessionWorker) sendText(ctx context.Context, chatID, content, replyTo s
 			"kind":       "text",
 			"at":         time.Now().Format(time.RFC3339Nano),
 		}
-		for k, v := range meta {
-			data[k] = v
+			mergePayloadMeta(data, meta)
+			w.runner.emitHook("gateway.delivery.send", data)
 		}
-		w.runner.emitHook("gateway.delivery.send", data)
-	}
 	return res, err
 }
 
@@ -223,11 +228,9 @@ func (w *sessionWorker) editText(ctx context.Context, chatID, messageID, content
 		if err != nil {
 			data["error"] = err.Error()
 		}
-		for k, v := range meta {
-			data[k] = v
+			mergePayloadMeta(data, meta)
+			w.runner.emitHook("gateway.delivery.edit", data)
 		}
-		w.runner.emitHook("gateway.delivery.edit", data)
-	}
 	return err
 }
 
@@ -245,11 +248,9 @@ func (w *sessionWorker) sendMedia(ctx context.Context, chatID, path, caption, re
 				"path":     path,
 				"at":       time.Now().Format(time.RFC3339Nano),
 			}
-			for k, v := range meta {
-				data[k] = v
+				mergePayloadMeta(data, meta)
+				w.runner.emitHook("gateway.delivery.media", data)
 			}
-			w.runner.emitHook("gateway.delivery.media", data)
-		}
 		return res, nil
 	}
 	res, err := ms.SendMedia(ctx, chatID, path, caption, replyTo)
@@ -264,12 +265,10 @@ func (w *sessionWorker) sendMedia(ctx context.Context, chatID, path, caption, re
 			"path":       path,
 			"at":         time.Now().Format(time.RFC3339Nano),
 		}
-		for k, v := range meta {
-			data[k] = v
-		}
-		if err != nil && data["error"] == "" {
-			data["error"] = err.Error()
-		}
+			mergePayloadMeta(data, meta)
+			if err != nil && data["error"] == "" {
+				data["error"] = err.Error()
+			}
 		w.runner.emitHook("gateway.delivery.media", data)
 	}
 	return res, err
@@ -1111,10 +1110,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/status":
 			snapshot := w.gatewayStatusSnapshot()
 			reply := tools.RenderGatewayStatusText(snapshot)
-			meta := tools.BuildSlashPayload("/status")
-			for k, v := range tools.BuildGatewayStatusPayload(snapshot) {
-				meta[k] = v
-			}
+			meta := mergePayloadMeta(tools.BuildSlashPayload("/status"), tools.BuildGatewayStatusPayload(snapshot))
 			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/approve", "/deny":

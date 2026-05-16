@@ -189,6 +189,7 @@
 - 已将 Gateway 命令分发中最后两处手写 `slash` 元数据 map（`/skills show` 与 `/tools show` 的 not-found 分支）改为复用 `BuildSlashModePayload`，进一步消除命令元数据构造漂移点。
 - 已新增 `AttachSlashPayload` 并批量接入 Gateway `runner` 成功元数据构造路径（session/whoami/resolve/continuity/setid/unsetid/history/show/sessions/pick/stats/new/reset/resume/recover/undo/clear/reload/save/sethome/targets/compress/usage/model），清理全部 `meta["slash"]=...` 手写赋值分支，进一步收敛 command dispatcher 元数据语义。
 - 已新增 `BuildSlashSubcommandPayload` 并批量接入 Gateway `/skills`、`/tools` 成功元数据路径，清理 `meta["subcommand"]=...` 手写赋值分支，统一 `slash+subcommand` 构造入口。
+- 已在 Gateway `runner` 内新增通用 `mergePayloadMeta`，并批量替换 delivery hook 与 `/status` 命令中的手写 map 合并循环，统一元数据合并路径、减少分发逻辑重复分支。
 
 范围：
 
