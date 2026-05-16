@@ -953,7 +953,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Skills failed: "+escapeMarkdown(err.Error())+"_", event.MessageID, map[string]any{"slash": "/skills"})
 					return
 				}
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/skills", "subcommand": "list"})
+				meta := tools.BuildSlashPayload("/skills")
+				meta["subcommand"] = "list"
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			}
 			if len(parsed.args) == 1 {
@@ -963,7 +965,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					_, _ = w.sendText(ctx, event.ChatID, "_Skill not found: "+escapeMarkdown(name)+"_", event.MessageID, map[string]any{"slash": "/skills", "subcommand": "show", "name": name})
 					return
 				}
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/skills", "subcommand": "show", "name": name})
+				meta := tools.BuildSlashPayload("/skills")
+				meta["subcommand"] = "show"
+				meta["name"] = name
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			}
 			_, _ = w.sendText(ctx, event.ChatID, "Usage: /skills [name]", event.MessageID, map[string]any{"slash": "/skills"})
@@ -980,7 +985,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolsList(w.engine.Registry.Names())
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "list"})
+				meta := tools.BuildSlashPayload("/tools")
+				meta["subcommand"] = "list"
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			case "show":
 				if len(parsed.args) != 2 {
@@ -991,7 +998,10 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				for _, schema := range w.engine.Registry.Schemas() {
 					if schema.Function.Name == name {
 						reply := renderGatewayToolSchema(schema)
-						_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "show", "tool": name})
+						meta := tools.BuildSlashPayload("/tools")
+						meta["subcommand"] = "show"
+						meta["tool"] = name
+						_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 						return
 					}
 				}
@@ -1003,7 +1013,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				reply := renderGatewayToolSchemas(w.engine.Registry.Schemas())
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/tools", "subcommand": "schemas"})
+				meta := tools.BuildSlashPayload("/tools")
+				meta["subcommand"] = "schemas"
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 				return
 			default:
 				_, _ = w.sendText(ctx, event.ChatID, "Usage: /tools [list|show <name>|schemas]", event.MessageID, map[string]any{"slash": "/tools"})
@@ -1104,12 +1116,12 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 		case "/personality":
 			if len(parsed.args) == 0 || strings.EqualFold(strings.TrimSpace(parsed.args[0]), "show") {
 				reply := "System prompt:\n" + w.currentSystemPrompt()
-				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/personality", "mode": "show"})
+				_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, tools.BuildSlashModePayload("/personality", "show"))
 				return
 			}
 			if len(parsed.args) == 1 && strings.EqualFold(strings.TrimSpace(parsed.args[0]), "reset") {
 				w.setSystemPrompt(agent.DefaultSystemPrompt())
-				_, _ = w.sendText(ctx, event.ChatID, "_Personality reset to default._", event.MessageID, map[string]any{"slash": "/personality", "mode": "reset"})
+				_, _ = w.sendText(ctx, event.ChatID, "_Personality reset to default._", event.MessageID, tools.BuildSlashModePayload("/personality", "reset"))
 				return
 			}
 			next := strings.TrimSpace(strings.TrimPrefix(parsed.raw, parsed.head))
@@ -1118,11 +1130,11 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			w.setSystemPrompt(next)
-			_, _ = w.sendText(ctx, event.ChatID, "_Personality updated._", event.MessageID, map[string]any{"slash": "/personality", "mode": "set"})
+			_, _ = w.sendText(ctx, event.ChatID, "_Personality updated._", event.MessageID, tools.BuildSlashModePayload("/personality", "set"))
 			return
 		case "/queue":
 			qLen := len(w.queue)
-			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, map[string]any{"slash": "/queue"})
+			_, _ = w.sendText(ctx, event.ChatID, "_Queue length: "+itoa(qLen)+"_", event.MessageID, tools.BuildSlashPayload("/queue"))
 			return
 		case "/status":
 			snapshot := w.gatewayStatusSnapshot()
@@ -1168,7 +1180,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			return
 		case "/help":
 			helpText := GatewayHelpText(w.adapter.Name() == "yuanbao")
-			_, _ = w.sendText(ctx, event.ChatID, helpText, event.MessageID, map[string]any{"slash": "/help"})
+			_, _ = w.sendText(ctx, event.ChatID, helpText, event.MessageID, tools.BuildSlashPayload("/help"))
 			return
 		}
 	}

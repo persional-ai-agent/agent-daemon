@@ -178,6 +178,7 @@
 - 已新增 `session history/pick` 共享响应 helper（`BuildSessionHistoryPayload` / `BuildSessionPickPayload`），并接入 Gateway `/history` 与 `/pick` 成功元数据，统一会话导航字段语义。
 - 已新增 `BuildGatewayIdentityBindPayload` 并接入 Gateway `/setid`，同时 Gateway `/unsetid` 改为复用 `BuildGatewayIdentityPayload`，统一身份绑定命令成功元数据字段语义。
 - 已新增 `BuildApprovalCommandPayload` 并批量接入 Gateway 审批命令元数据（`/approve` `/deny` `/approvals` `/pending` `/grant` `/revoke`），统一审批命令返回字段语义。
+- 已新增通用命令元数据 helper（`BuildSlashPayload` / `BuildSlashModePayload`），并批量接入 Gateway 管理命令成功路径（`/skills` `/tools` `/personality` `/queue` `/help`），统一 `slash/mode/subcommand` 字段构造方式。
 
 范围：
 
