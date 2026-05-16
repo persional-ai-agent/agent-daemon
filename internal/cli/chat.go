@@ -170,7 +170,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			return true, nil
 		}
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		loaded, err := eng.SessionStore.LoadMessages(fields[1], 500)
@@ -209,12 +209,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			limit = v
 		}
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		lister, ok := eng.SessionStore.(sessionLister)
 		if !ok {
-			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持会话列表。")
+			printCLIEnvelope(false, nil, "not_supported", clitools.SessionStoreNotSupportedZH("会话列表"))
 			return true, nil
 		}
 		rows, err := lister.ListRecentSessions(limit)
@@ -229,12 +229,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			target = strings.TrimSpace(fields[1])
 		}
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		detailer, ok := eng.SessionStore.(sessionDetailer)
 		if !ok {
-			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持统计信息。")
+			printCLIEnvelope(false, nil, "not_supported", clitools.SessionStoreNotSupportedZH("统计信息"))
 			return true, nil
 		}
 		stats, err := detailer.SessionStats(target)
@@ -249,12 +249,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			target = strings.TrimSpace(fields[1])
 		}
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		detailer, ok := eng.SessionStore.(sessionDetailer)
 		if !ok {
-			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持统计信息。")
+			printCLIEnvelope(false, nil, "not_supported", clitools.SessionStoreNotSupportedZH("统计信息"))
 			return true, nil
 		}
 		stats, err := detailer.SessionStats(target)
@@ -281,12 +281,12 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 			}
 		}
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		detailer, ok := eng.SessionStore.(sessionDetailer)
 		if !ok {
-			printCLIEnvelope(false, nil, "not_supported", "当前会话存储不支持消息分页查看。")
+			printCLIEnvelope(false, nil, "not_supported", clitools.SessionStoreNotSupportedZH("消息分页查看"))
 			return true, nil
 		}
 		msgs, err := detailer.LoadMessagesPage(target, offset, limit)
@@ -297,7 +297,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/reload":
 		if eng.SessionStore == nil {
-			printCLIEnvelope(false, nil, "session_store_unavailable", "session store unavailable")
+			printCLIEnvelope(false, nil, "session_store_unavailable", clitools.SessionStoreUnavailableEN())
 			return true, nil
 		}
 		loaded, err := eng.SessionStore.LoadMessages(state.SessionID, 500)
@@ -544,7 +544,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		return true, nil
 	case "/cancel", "/stop":
 		// Interactive CLI currently has no async running task handle to cancel.
-		printCLIEnvelope(false, nil, "not_supported", "当前 CLI 模式不支持 /cancel；请使用 Ctrl+C 中断当前轮。")
+		printCLIEnvelope(false, nil, "not_supported", clitools.CLICancelNotSupportedZH())
 		return true, nil
 	case "/tui":
 		printTUIStatus(eng)

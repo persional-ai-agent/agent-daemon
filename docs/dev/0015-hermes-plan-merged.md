@@ -202,6 +202,7 @@
 - 已进一步批量替换 TUI 命令分发中的固定 `用法:` 提示（覆盖 panel/view/fullscreen/diag/reconnect/rerun/bookmark/workbench/workflow/gateway/config 及审批提示），统一接入 `internal/tools/command_usage.go` 常量与 `UsageZH`；保留仅少量依赖动态参数占位的提示为运行时格式化。
 - 已新增动态 usage helper（`UsageZHOptionalN` / `UsageZHOptionalNPositive` / `UsageZHRequiredIndex` / `UsageZHRequiredIndexPositive` / `UsageZHActionIndexRange`）并接入 TUI 剩余动态提示分支（`/actions` 与通用数字参数解析函数），进一步收敛命令提示来源到 `internal/tools/command_usage.go`。
 - 已新增英文侧共享提示 helper（`UsageENEither` / `NotSupportedBySessionStoreEN`），并批量接入 Gateway `runner` 的会话能力不支持提示与 `approve|deny` usage 拼装分支，减少命令错误提示重复拼接。
+- 已新增 CLI 错误提示共享 helper（`SessionStoreUnavailableEN` / `SessionStoreNotSupportedZH` / `CLICancelNotSupportedZH`），并批量替换 CLI slash 命令中会话存储不可用/能力不支持/`/cancel` 不支持等硬编码文案，继续降低 CLI/TUI/Gateway 提示语义漂移。
 
 范围：
 

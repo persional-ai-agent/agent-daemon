@@ -85,6 +85,18 @@ func UnknownCommandMessageZH(cmd string) string {
 	return "未知命令: " + cmd + "（" + UnknownCommandHintZH() + "）"
 }
 
+func SessionStoreUnavailableEN() string {
+	return "session store unavailable"
+}
+
+func SessionStoreNotSupportedZH(feature string) string {
+	return "当前会话存储不支持" + feature + "。"
+}
+
+func CLICancelNotSupportedZH() string {
+	return "当前 CLI 模式不支持 /cancel；请使用 Ctrl+C 中断当前轮。"
+}
+
 func UsageZHOptionalN(prefix string) string {
 	return UsageZH(prefix + " [n]")
 }

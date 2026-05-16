@@ -28,3 +28,15 @@ func TestUsageHelpersEN(t *testing.T) {
 		t.Fatalf("unexpected not supported text: %s", got)
 	}
 }
+
+func TestCLIMessageHelpers(t *testing.T) {
+	if got := SessionStoreUnavailableEN(); got != "session store unavailable" {
+		t.Fatalf("unexpected session store message: %s", got)
+	}
+	if got := SessionStoreNotSupportedZH("会话列表"); got != "当前会话存储不支持会话列表。" {
+		t.Fatalf("unexpected not supported zh: %s", got)
+	}
+	if got := CLICancelNotSupportedZH(); got != "当前 CLI 模式不支持 /cancel；请使用 Ctrl+C 中断当前轮。" {
+		t.Fatalf("unexpected cancel not supported zh: %s", got)
+	}
+}
