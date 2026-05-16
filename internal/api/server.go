@@ -1000,12 +1000,8 @@ func (s *Server) handleUISessionBranch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"source_session_id": req.SessionID,
-			"new_session_id":    req.NewSessionID,
-			"copied_messages":   len(msgs),
-		},
+		"ok":     true,
+		"result": tools.BuildUISessionBranchPayload(req.SessionID, req.NewSessionID, len(msgs)),
 	})
 }
 
@@ -1035,13 +1031,8 @@ func (s *Server) handleUISessionResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"session_id": req.SessionID,
-			"turn_id":    req.TurnID,
-			"resumed":    true,
-			"transport":  "http",
-		},
+		"ok":     true,
+		"result": tools.BuildUISessionResumePayload(req.SessionID, req.TurnID, "http"),
 	})
 }
 
@@ -1075,15 +1066,8 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"session_id":       req.SessionID,
-				"compressed":       true,
-				"before_messages":  before,
-				"after_messages":   after,
-				"dropped_messages": before - after,
-				"keep_last_n":      keep,
-			},
+			"ok":     true,
+			"result": tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep),
 		})
 		return
 	}
@@ -1098,15 +1082,8 @@ func (s *Server) handleUISessionCompress(w http.ResponseWriter, r *http.Request)
 		after = keep
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"session_id":       req.SessionID,
-			"compressed":       true,
-			"before_messages":  before,
-			"after_messages":   after,
-			"dropped_messages": before - after,
-			"keep_last_n":      keep,
-		},
+		"ok":     true,
+		"result": tools.BuildUISessionCompressPayload(req.SessionID, before, after, keep),
 	})
 }
 
@@ -1156,15 +1133,8 @@ func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
 	}
 	if idx < 0 {
 		writeUIJSON(w, http.StatusOK, map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"source_session_id": req.SessionID,
-				"new_session_id":    req.NewSessionID,
-				"copied_messages":   len(msgs),
-				"removed_messages":  0,
-				"undone":            false,
-				"reason":            "no_user_message",
-			},
+			"ok":     true,
+			"result": tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(msgs), 0, false, "no_user_message"),
 		})
 		return
 	}
@@ -1176,14 +1146,8 @@ func (s *Server) handleUISessionUndo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"source_session_id": req.SessionID,
-			"new_session_id":    req.NewSessionID,
-			"copied_messages":   len(next),
-			"removed_messages":  len(msgs) - len(next),
-			"undone":            true,
-		},
+		"ok":     true,
+		"result": tools.BuildUISessionUndoPayload(req.SessionID, req.NewSessionID, len(next), len(msgs)-len(next), true, ""),
 	})
 }
 
@@ -1225,15 +1189,8 @@ func (s *Server) handleUISessionReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeUIJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"result": map[string]any{
-			"session_id": req.SessionID,
-			"offset":     offset,
-			"limit":      limit,
-			"count":      len(msgs),
-			"messages":   msgs,
-			"replayed":   true,
-		},
+		"ok":     true,
+		"result": tools.BuildUISessionReplayPayload(req.SessionID, offset, limit, msgs),
 	})
 }
 
