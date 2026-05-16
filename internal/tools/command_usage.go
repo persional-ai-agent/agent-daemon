@@ -25,6 +25,13 @@ const (
 	CommandToolsetsShowUsage    = "/toolsets show <name>"
 	CommandToolsetsResolveUsage = "/toolsets resolve <name[,name]>"
 	CommandToolsetsUsage        = "/toolsets [list|show <name>|resolve <name[,name]>]"
+	CommandResetUsage           = "/reset [session_id]"
+	CommandSaveFileUsage        = "/save <file>"
+	CommandSessionsPickUsage    = "/sessions [limit] [pick <index>]"
+	CommandShowPickUsage        = "/show [session] [offset>=0] [limit>0] [pick <index>]"
+	CommandStatsSessionUsage    = "/stats [session]"
+	CommandPendingUsage         = "/pending [limit] [approve|deny|a|d <index>]"
+	CommandOpenUsage            = "/open <index> [a|d|approve|deny]"
 )
 
 func UsageEN(usage string) string { return "Usage: " + usage }

@@ -352,7 +352,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			s.setStatus(true, "ok", "rerun selected")
 		case current == "/recover" || strings.HasPrefix(strings.ToLower(current), "/recover "):
 			if !strings.EqualFold(strings.TrimSpace(current), "/recover context") {
-				return lines, fmt.Errorf("用法: /recover context"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandRecoverUsage)), false
 			}
 			lastUserMsg := latestUserMessageFromChatLog(s.chatLog)
 			if strings.TrimSpace(lastUserMsg) == "" {
@@ -465,7 +465,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if action != "" {
 				if action != "approve" && action != "deny" && action != "a" && action != "d" {
-					return lines, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandPendingUsage)), false
 				}
 				if actionIndex <= 0 || actionIndex > len(items) {
 					return lines, fmt.Errorf("待处理审批索引越界，最大值=%d", len(items)), false
@@ -701,12 +701,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			nextID := uuid.NewString()
 			if len(parts) > 2 {
-				return lines, fmt.Errorf("用法: /reset [session_id]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandResetUsage)), false
 			}
 			if len(parts) == 2 {
 				nextID = strings.TrimSpace(parts[1])
 				if nextID == "" {
-					return lines, fmt.Errorf("用法: /reset [session_id]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandResetUsage)), false
 				}
 			}
 			s.session = nextID
@@ -761,7 +761,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/save" || strings.HasPrefix(current, "/save "):
 			path := strings.TrimSpace(strings.TrimPrefix(current, "/save"))
 			if path == "" {
-				return lines, fmt.Errorf("用法: /save <file>"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandSaveFileUsage)), false
 			}
 			if s.lastJSON == nil {
 				return lines, fmt.Errorf("no last json payload"), false
@@ -843,7 +843,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emit("session switched: " + s.session)
 			}
 		case current == "/pick":
-			return lines, fmt.Errorf("用法: /pick <index>"), false
+			return lines, errors.New(tools.UsageZH(tools.CommandPickUsage)), false
 		case strings.HasPrefix(current, "/pick "):
 			idx, pErr := parseRequiredPositiveIntArg(current, "/pick")
 			if pErr != nil {
@@ -974,7 +974,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/usage" || strings.HasPrefix(current, "/usage "):
 			sid, pErr := parseStatsArgs(strings.Replace(current, "/usage", "/stats", 1), s.session)
 			if pErr != nil {
-				return lines, fmt.Errorf("用法: /usage [session]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandUsageUsage)), false
 			}
 			out, hErr := httpJSON(http.MethodGet, fmt.Sprintf("%s/v1/ui/sessions/%s?offset=0&limit=1", s.httpBase, url.PathEscape(sid)), nil)
 			if hErr != nil {
@@ -1004,12 +1004,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			keepLastN := 20
 			if len(parts) > 2 {
-				return lines, fmt.Errorf("用法: /compress [tail_messages]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandCompressUsage)), false
 			}
 			if len(parts) == 2 {
 				n, cErr := strconv.Atoi(strings.TrimSpace(parts[1]))
 				if cErr != nil || n <= 0 {
-					return lines, fmt.Errorf("用法: /compress [tail_messages]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandCompressUsage)), false
 				}
 				keepLastN = n
 			}
@@ -1053,12 +1053,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			parts := strings.Fields(current)
 			apiPath := s.httpBase + "/v1/ui/targets"
 			if len(parts) > 2 {
-				return lines, fmt.Errorf("用法: /targets [platform]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandTargetsUsage)), false
 			}
 			if len(parts) == 2 {
 				platform := strings.ToLower(strings.TrimSpace(parts[1]))
 				if platform == "" {
-					return lines, fmt.Errorf("用法: /targets [platform]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandTargetsUsage)), false
 				}
 				apiPath = apiPath + "?platform=" + url.QueryEscape(platform)
 			}
@@ -1485,7 +1485,7 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	parts := strings.Fields(strings.TrimSpace(input))
 	limit = 1
 	if len(parts) > 4 {
-		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, errors.New(tools.UsageZH(tools.CommandPendingUsage))
 	}
 	if len(parts) == 1 {
 		return limit, "", 0, nil
@@ -1493,7 +1493,7 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	pos := 1
 	if v, convErr := strconv.Atoi(parts[pos]); convErr == nil {
 		if v <= 0 {
-			return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
+			return 0, "", 0, errors.New(tools.UsageZH(tools.CommandPendingUsage))
 		}
 		limit = v
 		pos++
@@ -1503,15 +1503,15 @@ func parsePendingArgs(input string) (limit int, action string, actionIndex int, 
 	}
 	action = strings.ToLower(strings.TrimSpace(parts[pos]))
 	if action != "approve" && action != "deny" && action != "a" && action != "d" {
-		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, errors.New(tools.UsageZH(tools.CommandPendingUsage))
 	}
 	pos++
 	if pos >= len(parts) {
-		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, errors.New(tools.UsageZH(tools.CommandPendingUsage))
 	}
 	actionIndex, err = strconv.Atoi(parts[pos])
 	if err != nil || actionIndex <= 0 {
-		return 0, "", 0, fmt.Errorf("用法: /pending [limit] [approve|deny|a|d <index>]")
+		return 0, "", 0, errors.New(tools.UsageZH(tools.CommandPendingUsage))
 	}
 	return limit, action, actionIndex, nil
 }
@@ -1525,36 +1525,36 @@ func parseSessionsArgs(input string) (limit int, pick int, err error) {
 	}
 	if len(parts) == 2 {
 		if strings.EqualFold(parts[1], "pick") {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		v, convErr := strconv.Atoi(parts[1])
 		if convErr != nil || v <= 0 {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		return v, 0, nil
 	}
 	if len(parts) == 3 {
 		if !strings.EqualFold(parts[1], "pick") {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		idx, convErr := strconv.Atoi(parts[2])
 		if convErr != nil || idx <= 0 {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		return limit, idx, nil
 	}
 	if len(parts) == 4 {
 		v, convErr := strconv.Atoi(parts[1])
 		if convErr != nil || v <= 0 || !strings.EqualFold(parts[2], "pick") {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		idx, idxErr := strconv.Atoi(parts[3])
 		if idxErr != nil || idx <= 0 {
-			return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+			return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 		}
 		return v, idx, nil
 	}
-	return 0, 0, fmt.Errorf("用法: /sessions [limit] [pick <index>]")
+	return 0, 0, errors.New(tools.UsageZH(tools.CommandSessionsPickUsage))
 }
 
 func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pick int, err error) {
@@ -1563,7 +1563,7 @@ func parseShowArgs(input, defaultSession string) (sid string, offset, limit, pic
 	offset = 0
 	limit = 20
 	pick = 0
-	usageErr := fmt.Errorf("用法: /show [session] [offset>=0] [limit>0] [pick <index>]")
+	usageErr := errors.New(tools.UsageZH(tools.CommandShowPickUsage))
 	if len(parts) == 1 {
 		return sid, offset, limit, pick, nil
 	}
@@ -1611,28 +1611,28 @@ func parseStatsArgs(input, defaultSession string) (string, error) {
 	if len(parts) == 2 {
 		sid := strings.TrimSpace(parts[1])
 		if sid == "" {
-			return "", fmt.Errorf("用法: /stats [session]")
+			return "", errors.New(tools.UsageZH(tools.CommandStatsSessionUsage))
 		}
 		return sid, nil
 	}
-	return "", fmt.Errorf("用法: /stats [session]")
+	return "", errors.New(tools.UsageZH(tools.CommandStatsSessionUsage))
 }
 
 func parseOpenArgs(input string) (index int, action string, err error) {
 	parts := strings.Fields(strings.TrimSpace(input))
 	if len(parts) < 2 || len(parts) > 3 {
-		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
+		return 0, "", errors.New(tools.UsageZH(tools.CommandOpenUsage))
 	}
 	idx, convErr := strconv.Atoi(parts[1])
 	if convErr != nil || idx <= 0 {
-		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
+		return 0, "", errors.New(tools.UsageZH(tools.CommandOpenUsage))
 	}
 	if len(parts) == 2 {
 		return idx, "", nil
 	}
 	action = strings.ToLower(strings.TrimSpace(parts[2]))
 	if action != "a" && action != "d" && action != "approve" && action != "deny" {
-		return 0, "", fmt.Errorf("用法: /open <index> [a|d|approve|deny]")
+		return 0, "", errors.New(tools.UsageZH(tools.CommandOpenUsage))
 	}
 	return idx, action, nil
 }

@@ -198,6 +198,7 @@
 - 已新增 `BuildAuthPayload`（tools）与 `sendAuthText`（gateway runner），并替换未授权回包的手写 `auth` 元数据 map，继续统一命令回包元数据构造入口。
 - 已新增共享命令用法常量与 `UsageEN/UsageZH`（`internal/tools/command_usage.go`），并批量替换 CLI/Gateway 中 session/tools/toolsets/personality/targets/compress/usage 等命令的硬编码 usage 文案来源，进一步降低多入口命令提示漂移。
 - 已补齐共享提示文案 helper（`CLIWelcomeHintZH`/`UnknownCommandMessageZH`）并接入 CLI，同时将 TUI 中 `/new`、`/resume`、`/personality` 的用法错误提示切到共享 usage 常量，继续收敛 CLI/TUI/Gateway 命令提示来源。
+- 已补齐 TUI 侧 session/approval/show 命令的共享 usage 常量接入（`/recover` `/reset` `/save` `/pick` `/usage` `/compress` `/targets` `/pending` `/sessions` `/show` `/stats` `/open`），并同步替换 Gateway `/compress` 的残留 usage 硬编码，进一步减少多入口命令提示漂移。
 
 范围：
 
