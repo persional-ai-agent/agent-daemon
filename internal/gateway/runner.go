@@ -668,7 +668,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			w.setLastSessionIDs(event.UserID, ids)
 			reply := renderGatewaySessions(w.currentSessionID(), items)
-			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, map[string]any{"slash": "/sessions", "count": len(items), "limit": limit})
+			meta := tools.BuildSessionListPayload(limit, items)
+			meta["slash"] = "/sessions"
+			_, _ = w.sendText(ctx, event.ChatID, escapeMarkdown(reply), event.MessageID, meta)
 			return
 		case "/pick":
 			if len(parsed.args) != 1 {
