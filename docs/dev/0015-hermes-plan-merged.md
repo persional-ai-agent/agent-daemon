@@ -179,6 +179,7 @@
 - 已新增 `BuildGatewayIdentityBindPayload` 并接入 Gateway `/setid`，同时 Gateway `/unsetid` 改为复用 `BuildGatewayIdentityPayload`，统一身份绑定命令成功元数据字段语义。
 - 已新增 `BuildApprovalCommandPayload` 并批量接入 Gateway 审批命令元数据（`/approve` `/deny` `/approvals` `/pending` `/grant` `/revoke`），统一审批命令返回字段语义。
 - 已新增通用命令元数据 helper（`BuildSlashPayload` / `BuildSlashModePayload`），并批量接入 Gateway 管理命令成功路径（`/skills` `/tools` `/personality` `/queue` `/help`），统一 `slash/mode/subcommand` 字段构造方式。
+- 已将 Gateway 命令分发中大量仅含 `slash` 的手写元数据 map（覆盖会话、投递、模型、审批、导航等 usage/error 分支）批量替换为 `BuildSlashPayload(...)`，进一步减少命令元数据构造漂移面。
 
 范围：
 
