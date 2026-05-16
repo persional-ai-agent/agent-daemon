@@ -302,7 +302,7 @@ func handleSlashCommandState(ctx context.Context, line string, state *chatState,
 		if err != nil {
 			return true, err
 		}
-		printCLIEnvelope(true, map[string]any{"count": len(loaded), "messages": loaded}, "", "")
+		printCLIEnvelope(true, clitools.BuildSessionReloadPayload(state.SessionID, loaded), "", "")
 		state.History = loaded
 		return true, nil
 	case "/clear":

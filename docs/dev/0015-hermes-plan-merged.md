@@ -166,6 +166,7 @@
 - 已新增 `session usage/stats` 共享响应 helper（`BuildSessionUsagePayload` / `BuildSessionStatsPayload`），并接入 CLI `/usage`、CLI `/stats`、Gateway `/usage` 元数据，统一 `session_id + usage/stats` 结构。
 - 已新增 `session compress` 共享响应 helper（`BuildSessionCompressPayload`），并接入 CLI `/compress` 与 Gateway `/compress` 元数据，统一 `session_id/compacted/before/after/dropped/tail_messages` 字段语义。
 - 已新增 `session save` 共享响应 helper（`BuildSessionSavePayload`），并接入 CLI `/save` 与 Gateway `/save` 元数据，统一 `session_id/path/messages` 字段语义。
+- 已新增 `session reload` 共享响应 helper（`BuildSessionReloadPayload`），并接入 CLI `/reload` 与 Gateway `/reload` 元数据，统一 `session_id/count/messages` 字段语义。
 
 范围：
 

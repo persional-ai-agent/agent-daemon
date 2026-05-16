@@ -836,7 +836,9 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			w.setLastUserInput(event.UserID, latestUserInputFromMessages(msgs))
-			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, map[string]any{"slash": "/reload", "session_id": active, "messages": len(msgs)})
+			meta := tools.BuildSessionReloadPayload(active, msgs)
+			meta["slash"] = "/reload"
+			_, _ = w.sendText(ctx, event.ChatID, "_Reloaded session: "+escapeMarkdown(active)+" (messages="+itoa(len(msgs))+")_", event.MessageID, meta)
 			return
 		case "/save":
 			if len(parsed.args) > 1 {
