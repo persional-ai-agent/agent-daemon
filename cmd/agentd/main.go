@@ -964,7 +964,7 @@ func runSetup(cfg config.Config, args []string) {
 	jsonOutput := fs.Bool("json", false, "output JSON")
 	_ = fs.Parse(args)
 	if fs.NArg() != 0 {
-		log.Fatal("usage: agentd setup [-file path] -provider <openai|anthropic|codex|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+		log.Fatal("usage: agentd setup [-file path] -provider <openai|anthropic|codex|openrouter|nous|nvidia_nim|mimo|glm|kimi|minimax|huggingface|custom_openai|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 	}
 	selectedProvider := strings.ToLower(strings.TrimSpace(*provider))
 	if selectedProvider == "" {
@@ -3904,7 +3904,7 @@ func printConfigUsage() {
 
 func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
+	fmt.Fprintln(os.Stderr, "  agentd setup [-file path] -provider <openai|anthropic|codex|openrouter|nous|nvidia_nim|mimo|glm|kimi|minimax|huggingface|custom_openai|plugin> -model <name> [-base-url url] [-api-key key] [-fallback-provider name] [-gateway-platform name] [gateway flags] [-json]")
 	fmt.Fprintln(os.Stderr, "  agentd setup wizard [-file path]")
 }
 
@@ -3944,8 +3944,30 @@ func runModel(cfg config.Config, args []string) {
 		fmt.Printf("model=%s\n", modelName)
 		fmt.Printf("base_url=%s\n", baseURL)
 	case "providers":
-		for _, provider := range availableModelProviders(cfg) {
-			fmt.Println(provider)
+		fs := flag.NewFlagSet("model providers", flag.ExitOnError)
+		jsonOut := fs.Bool("json", false, "output detailed JSON rows")
+		_ = fs.Parse(args[1:])
+		if fs.NArg() != 0 {
+			log.Fatal("usage: agentd model providers [-json]")
+		}
+		if *jsonOut {
+			printJSON(map[string]any{
+				"providers": providerStatusRows(cfg),
+				"names":     availableModelProviders(cfg),
+			})
+			break
+		}
+		for _, row := range providerStatusRows(cfg) {
+			name := fmt.Sprint(row["name"])
+			kind := fmt.Sprint(row["kind"])
+			configured, _ := row["configured"].(bool)
+			state := "not_configured"
+			if configured {
+				state = "configured"
+			}
+			caps, _ := row["capabilities"].(providerCapabilities)
+			fmt.Printf("%s\tkind=%s\tstatus=%s\tstreaming=%v\ttool_calling=%v\tvision=%v\timage=%v\ttts=%v\tmax_context=%d\n",
+				name, kind, state, caps.Streaming, caps.ToolCalling, caps.Vision, caps.Image, caps.TTS, caps.MaxContext)
 		}
 	case "set":
 		fs := flag.NewFlagSet("model set", flag.ExitOnError)
@@ -4543,6 +4565,8 @@ func selectedProviderKey(cfg config.Config, provider string) (string, string) {
 		return "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey
 	case "codex":
 		return "CODEX_API_KEY", cfg.CodexAPIKey
+	case "openai", "openrouter", "nous", "nvidia_nim", "mimo", "glm", "kimi", "minimax", "huggingface", "custom_openai":
+		return "OPENAI_API_KEY", cfg.ModelAPIKey
 	default:
 		return "OPENAI_API_KEY", cfg.ModelAPIKey
 	}
@@ -7147,8 +7171,56 @@ func supportedModelProviders() []string {
 	return []string{"openai", "anthropic", "codex"}
 }
 
+type providerCapabilities struct {
+	ToolCalling bool `json:"tool_calling"`
+	Streaming   bool `json:"streaming"`
+	Vision      bool `json:"vision"`
+	Image       bool `json:"image"`
+	TTS         bool `json:"tts"`
+	MaxContext  int  `json:"max_context"`
+}
+
+type providerProfile struct {
+	Name         string
+	Kind         string
+	BaseProvider string
+	DefaultURL   string
+	Caps         providerCapabilities
+	ConfigKeys   []string
+}
+
+func builtinProviderProfiles() []providerProfile {
+	return []providerProfile{
+		{Name: "openai", Kind: "builtin", BaseProvider: "openai", DefaultURL: "https://api.openai.com/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: true, TTS: true, MaxContext: 200000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "anthropic", Kind: "builtin", BaseProvider: "anthropic", DefaultURL: "https://api.anthropic.com/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 200000}, ConfigKeys: []string{"ANTHROPIC_API_KEY", "api.anthropic.api_key"}},
+		{Name: "codex", Kind: "builtin", BaseProvider: "codex", DefaultURL: "https://api.openai.com/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 200000}, ConfigKeys: []string{"CODEX_API_KEY", "api.codex.api_key"}},
+		{Name: "openrouter", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://openrouter.ai/api/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: true, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "nous", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://inference-api.nousresearch.com/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "nvidia_nim", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://integrate.api.nvidia.com/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "mimo", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://api.moonshot.cn/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "glm", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://open.bigmodel.cn/api/paas/v4", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: true, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "kimi", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://api.moonshot.cn/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "minimax", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://api.minimax.chat/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: true, TTS: true, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "huggingface", Kind: "profile", BaseProvider: "openai", DefaultURL: "https://router.huggingface.co/v1", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: false, TTS: false, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+		{Name: "custom_openai", Kind: "profile", BaseProvider: "openai", DefaultURL: "", Caps: providerCapabilities{ToolCalling: true, Streaming: true, Vision: true, Image: true, TTS: true, MaxContext: 128000}, ConfigKeys: []string{"OPENAI_API_KEY", "api.api_key"}},
+	}
+}
+
+func providerProfileByName(name string) (providerProfile, bool) {
+	target := strings.ToLower(strings.TrimSpace(name))
+	for _, p := range builtinProviderProfiles() {
+		if p.Name == target {
+			return p, true
+		}
+	}
+	return providerProfile{}, false
+}
+
 func availableModelProviders(cfg config.Config) []string {
-	out := append([]string{}, supportedModelProviders()...)
+	out := make([]string, 0, 16)
+	for _, p := range builtinProviderProfiles() {
+		out = append(out, p.Name)
+	}
 	items, err := loadConfiguredPlugins(cfg)
 	if err != nil {
 		return out
@@ -7170,6 +7242,51 @@ func currentModelConfig(cfg config.Config, provider string) (string, string) {
 	default:
 		return cfg.ModelName, cfg.ModelBaseURL
 	}
+}
+
+func providerConfigStatus(cfg config.Config, profile providerProfile) (bool, []string) {
+	var miss []string
+	switch profile.Name {
+	case "anthropic":
+		if strings.TrimSpace(cfg.AnthropicAPIKey) == "" {
+			miss = append(miss, "api.anthropic.api_key")
+		}
+	case "codex":
+		if strings.TrimSpace(cfg.CodexAPIKey) == "" {
+			miss = append(miss, "api.codex.api_key")
+		}
+	default:
+		if strings.TrimSpace(cfg.ModelAPIKey) == "" {
+			miss = append(miss, "api.api_key")
+		}
+	}
+	return len(miss) == 0, miss
+}
+
+func providerStatusRows(cfg config.Config) []map[string]any {
+	out := make([]map[string]any, 0, 16)
+	for _, p := range builtinProviderProfiles() {
+		modelName, baseURL := currentModelConfig(cfg, p.Name)
+		if strings.TrimSpace(baseURL) == "" {
+			baseURL = p.DefaultURL
+		}
+		configured, missing := providerConfigStatus(cfg, p)
+		out = append(out, map[string]any{
+			"name":             p.Name,
+			"kind":             p.Kind,
+			"base_provider":    p.BaseProvider,
+			"default_base_url": p.DefaultURL,
+			"model":            modelName,
+			"base_url":         baseURL,
+			"capabilities":     p.Caps,
+			"configured":       configured,
+			"missing":          missing,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return fmt.Sprint(out[i]["name"]) < fmt.Sprint(out[j]["name"])
+	})
+	return out
 }
 
 func parseModelSetArgs(args []string) (string, string, error) {
@@ -7860,6 +7977,10 @@ func buildProviderClient(cfg config.Config, provider string) model.Client {
 		client.UseStreaming = cfg.ModelUseStreaming
 		return client
 	case "openai", "":
+		client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
+		client.UseStreaming = cfg.ModelUseStreaming
+		return client
+	case "openrouter", "nous", "nvidia_nim", "mimo", "glm", "kimi", "minimax", "huggingface", "custom_openai":
 		client := model.NewOpenAIClient(cfg.ModelBaseURL, cfg.ModelAPIKey, cfg.ModelName)
 		client.UseStreaming = cfg.ModelUseStreaming
 		return client

@@ -503,6 +503,45 @@ func TestAvailableModelProvidersIncludesPluginProvider(t *testing.T) {
 	}
 }
 
+func TestAvailableModelProvidersIncludesBuiltinProfiles(t *testing.T) {
+	names := availableModelProviders(config.Config{})
+	for _, want := range []string{"openrouter", "nous", "nvidia_nim", "mimo", "glm", "kimi", "minimax", "huggingface", "custom_openai"} {
+		if !containsName(names, want) {
+			t.Fatalf("providers=%#v missing=%s", names, want)
+		}
+	}
+}
+
+func TestProviderStatusRowsIncludesCapabilitiesAndConfigState(t *testing.T) {
+	cfg := config.Config{
+		ModelAPIKey:     "",
+		AnthropicAPIKey: "anthropic-key",
+		CodexAPIKey:     "codex-key",
+	}
+	rows := providerStatusRows(cfg)
+	if len(rows) == 0 {
+		t.Fatal("expected provider rows")
+	}
+	var openaiRow map[string]any
+	for _, row := range rows {
+		if row["name"] == "openai" {
+			openaiRow = row
+			break
+		}
+	}
+	if openaiRow == nil {
+		t.Fatalf("openai row missing: %#v", rows)
+	}
+	configured, _ := openaiRow["configured"].(bool)
+	if configured {
+		t.Fatalf("expected openai configured=false when api key is empty: %#v", openaiRow)
+	}
+	caps, _ := openaiRow["capabilities"].(providerCapabilities)
+	if !caps.Streaming || !caps.ToolCalling {
+		t.Fatalf("unexpected capabilities: %#v", caps)
+	}
+}
+
 func TestBuildProviderClientFromPlugin(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell provider plugin test not supported on windows")

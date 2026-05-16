@@ -78,7 +78,7 @@
 | `TODO-006` | `done` | 已补齐跨平台审批命令一致性、原生审批交互承载、mention/free-response/ignored/group-dm 策略与原生命令安装信息输出。 | `internal/gateway/runner.go`、`internal/gateway/platforms/{telegram,discord,slack,yuanbao}.go`、`internal/tools/gateway_policy.go`、`cmd/agentd/main.go` |
 | `TODO-007` | `partial` | 多个工具从 stub 升级到最小可用，但与能力级实现仍有差距。 | `docs/dev/0036-summary-summary-merged.md`（`# 090`~`# 110`） |
 | `TODO-008` | `partial` | 已完成 toolset 动态可用性检查、includes/excludes/conflicts、不可用原因与来源解释、运行时凭证环境过滤；TUI/Web 启停管理仍待补齐。 | `internal/tools/toolsets.go`、`cmd/agentd/main.go`、`internal/cli/chat.go` |
-| `TODO-009` | `partial` | provider 运行时与插件闭环有进展，profile/能力矩阵未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 255`、`# 279`） |
+| `TODO-009` | `partial` | 已补主流 provider profile（OpenRouter/Nous/NVIDIA NIM/MiMo/GLM/Kimi/MiniMax/HuggingFace/custom_openai）接入、`model providers` 能力与配置状态输出；密钥池与 profile 管理界面仍待补齐。 | `cmd/agentd/main.go`、`cmd/agentd/main_test.go` |
 | `TODO-010` | `partial` | skills 多源与管理能力已补，自动学习与审计回滚未完整。 | `docs/dev/0036-summary-summary-merged.md`（`# 051`、`# 052`、`# 275`） |
 | `TODO-011` | `partial` | memory 学习闭环有阶段成果，insights/外部 provider 仍待补。 | `docs/dev/0036-summary-summary-merged.md`（`# 275`） |
 | `TODO-012` | `partial` | cron 表达式、投递、链式、脚本已补，重试/并发/审计还需补完。 | `docs/dev/0036-summary-summary-merged.md`（`# 280`~`# 283`） |
