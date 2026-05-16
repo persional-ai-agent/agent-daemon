@@ -494,7 +494,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			resolved, err := tools.ResolveGatewaySessionMapping(w.engine.Workdir, resolveArgs.Platform, resolveArgs.ChatType, resolveArgs.ChatID, resolveArgs.UserID, resolveArgs.UserName)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Resolve failed: "+escapeMarkdown(err.Error())+"_", "/resolve")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Resolve", escapeMarkdown(err.Error())), "/resolve")
 				return
 			}
 			reply := tools.RenderGatewaySessionResolveText(resolved)
@@ -522,7 +522,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			updatedMode, uErr := tools.UpdateGatewayContinuityMode(w.engine.Workdir, mode)
 			if uErr != nil {
-				w.sendSlashText(ctx, event, "_Continuity update failed: "+escapeMarkdown(uErr.Error())+"_", "/continuity")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Continuity update", escapeMarkdown(uErr.Error())), "/continuity")
 				return
 			}
 			meta := tools.AttachSlashPayload(tools.BuildGatewayContinuityPayload(updatedMode), "/continuity")
@@ -539,7 +539,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			if err := w.runner.identityStore.bind(w.adapter.Name(), event.UserID, globalID); err != nil {
-				w.sendSlashText(ctx, event, "_Setid failed: "+escapeMarkdown(err.Error())+"_", "/setid")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Setid", escapeMarkdown(err.Error())), "/setid")
 				return
 			}
 			targetSession := BuildSessionKey("global", "user", globalID)
@@ -567,7 +567,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 				return
 			}
 			if err := w.runner.identityStore.unbind(w.adapter.Name(), event.UserID); err != nil {
-				w.sendSlashText(ctx, event, "_Unsetid failed: "+escapeMarkdown(err.Error())+"_", "/unsetid")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Unsetid", escapeMarkdown(err.Error())), "/unsetid")
 				return
 			}
 			_ = tools.ClearChannelDirectoryGlobalID(w.engine.Workdir, w.adapter.Name(), event.ChatID)
@@ -591,7 +591,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			active := w.currentSessionID()
 			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_History failed: "+escapeMarkdown(err.Error())+"_", "/history")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("History", escapeMarkdown(err.Error())), "/history")
 				return
 			}
 			reply := renderGatewayHistory(msgs, limit)
@@ -611,7 +611,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Show failed: "+escapeMarkdown(err.Error())+"_", "/show")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Show", escapeMarkdown(err.Error())), "/show")
 				return
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
@@ -645,7 +645,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			msgs, err := detailStore.LoadMessagesPage(target, offset, limit)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_"+strings.TrimPrefix(parsed.head, "/")+" failed: "+escapeMarkdown(err.Error())+"_", parsed.head)
+				w.sendSlashText(ctx, event, tools.FailedFromSlashWithEscapedErrorEN(parsed.head, escapeMarkdown(err.Error())), parsed.head)
 				return
 			}
 			w.setShowCursor(event.UserID, target, offset, limit)
@@ -674,7 +674,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			items, err := lister.ListRecentSessions(limit)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Sessions failed: "+escapeMarkdown(err.Error())+"_", "/sessions")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Sessions", escapeMarkdown(err.Error())), "/sessions")
 				return
 			}
 			ids := make([]string, 0, len(items))
@@ -730,7 +730,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			stats, err := statsStore.SessionStats(target)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Stats failed: "+escapeMarkdown(err.Error())+"_", "/stats")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Stats", escapeMarkdown(err.Error())), "/stats")
 				return
 			}
 			reply := renderGatewayStats(target, stats)
@@ -772,7 +772,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			target := strings.TrimSpace(parsed.args[0])
 			if _, err := w.engine.SessionStore.LoadMessages(target, 1); err != nil {
-				w.sendSlashText(ctx, event, "_Resume failed: "+escapeMarkdown(err.Error())+"_", "/resume")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Resume", escapeMarkdown(err.Error())), "/resume")
 				return
 			}
 			prev := w.currentSessionID()
@@ -828,7 +828,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			active := w.currentSessionID()
 			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Undo failed: "+escapeMarkdown(err.Error())+"_", "/undo")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Undo", escapeMarkdown(err.Error())), "/undo")
 				return
 			}
 			nextMsgs, removed := removeLastTurnFromMessages(msgs)
@@ -839,7 +839,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			nextSession := uuid.NewString()
 			for _, m := range nextMsgs {
 				if err := w.engine.SessionStore.AppendMessage(nextSession, m); err != nil {
-					w.sendSlashText(ctx, event, "_Undo failed: "+escapeMarkdown(err.Error())+"_", "/undo")
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Undo", escapeMarkdown(err.Error())), "/undo")
 					return
 				}
 			}
@@ -866,7 +866,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			active := w.currentSessionID()
 			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Reload failed: "+escapeMarkdown(err.Error())+"_", "/reload")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Reload", escapeMarkdown(err.Error())), "/reload")
 				return
 			}
 			w.setLastUserInput(event.UserID, latestUserInputFromMessages(msgs))
@@ -881,7 +881,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			active := w.currentSessionID()
 			msgs, err := w.engine.SessionStore.LoadMessages(active, 500)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Save failed: "+escapeMarkdown(err.Error())+"_", "/save")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Save", escapeMarkdown(err.Error())), "/save")
 				return
 			}
 			requested := ""
@@ -890,7 +890,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			path, err := saveGatewayHistory(w.engine.Workdir, active, msgs, requested)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Save failed: "+escapeMarkdown(err.Error())+"_", "/save")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Save", escapeMarkdown(err.Error())), "/save")
 				return
 			}
 			meta := tools.AttachSlashPayload(tools.BuildSessionSavePayload(active, path, len(msgs)), "/save")
@@ -938,7 +938,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			platforms, items, err := tools.BuildDeliveryTargets(w.engine.Workdir, filter)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Targets failed: "+escapeMarkdown(err.Error())+"_", "/targets")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Targets", escapeMarkdown(err.Error())), "/targets")
 				return
 			}
 			reply := renderGatewayTargets(items, filter)
@@ -950,7 +950,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if len(parsed.args) == 0 {
 				reply, err := renderGatewaySkillsList(root)
 				if err != nil {
-					w.sendSlashText(ctx, event, "_Skills failed: "+escapeMarkdown(err.Error())+"_", "/skills")
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Skills", escapeMarkdown(err.Error())), "/skills")
 					return
 				}
 				w.sendSlashSubcommandText(ctx, event, escapeMarkdown(reply), "/skills", "list")
@@ -1031,7 +1031,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			if compactor, ok := w.engine.SessionStore.(gatewaySessionCompactor); ok && compactor != nil {
 				before, after, err := compactor.CompactSession(activeSessionID, keepLastN)
 				if err != nil {
-					w.sendSlashText(ctx, event, "_Compress failed: "+escapeMarkdown(err.Error())+"_", "/compress")
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Compress", escapeMarkdown(err.Error())), "/compress")
 					return
 				}
 				meta := tools.AttachSlashPayload(tools.BuildSessionCompressPayload(activeSessionID, before, after, keepLastN, before-after, true, ""), "/compress")
@@ -1056,7 +1056,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			stats, err := statsStore.SessionStats(target)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Usage failed: "+escapeMarkdown(err.Error())+"_", "/usage")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Usage", escapeMarkdown(err.Error())), "/usage")
 				return
 			}
 			reply := renderGatewayStats(target, stats)
@@ -1070,7 +1070,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 			}
 			modelPref, err := tools.ResolveGatewayModelPreference(w.engine.Workdir)
 			if err != nil {
-				w.sendSlashText(ctx, event, "_Model query failed: "+escapeMarkdown(err.Error())+"_", "/model")
+				w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Model query", escapeMarkdown(err.Error())), "/model")
 				return
 			}
 			provider := modelPref.Provider
@@ -1083,7 +1083,7 @@ func (w *sessionWorker) handleEvent(ctx context.Context, event MessageEvent) {
 					return
 				}
 				if err := tools.UpdateGatewayModelPreference(w.engine.Workdir, next); err != nil {
-					w.sendSlashText(ctx, event, "_Model update failed: "+escapeMarkdown(err.Error())+"_", "/model")
+					w.sendSlashText(ctx, event, tools.FailedWithEscapedErrorEN("Model update", escapeMarkdown(err.Error())), "/model")
 					return
 				}
 				provider = next.Provider

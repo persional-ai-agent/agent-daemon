@@ -57,4 +57,10 @@ func TestNotFoundHelpers(t *testing.T) {
 	if got := WorkflowCommandsEmptyEN(); got != "workflow commands empty" {
 		t.Fatalf("unexpected workflow commands empty: %s", got)
 	}
+	if got := FailedWithEscapedErrorEN("Resolve", "bad request"); got != "_Resolve failed: bad request_" {
+		t.Fatalf("unexpected failed-with-error text: %s", got)
+	}
+	if got := FailedFromSlashWithEscapedErrorEN("/next", "oops"); got != "_next failed: oops_" {
+		t.Fatalf("unexpected failed-from-slash text: %s", got)
+	}
 }

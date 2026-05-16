@@ -1,6 +1,9 @@
 package tools
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	CommandSessionUsage          = "/session [session_id]"
@@ -115,6 +118,14 @@ func InvalidActionIndexZH() string {
 
 func WorkflowCommandsEmptyEN() string {
 	return "workflow commands empty"
+}
+
+func FailedWithEscapedErrorEN(subject, escapedErr string) string {
+	return "_" + subject + " failed: " + escapedErr + "_"
+}
+
+func FailedFromSlashWithEscapedErrorEN(slash, escapedErr string) string {
+	return FailedWithEscapedErrorEN(strings.TrimPrefix(strings.TrimSpace(slash), "/"), escapedErr)
 }
 
 func UsageZHOptionalN(prefix string) string {
