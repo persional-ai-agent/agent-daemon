@@ -111,7 +111,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if target == "auto" {
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("用法: /panel auto on|off"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandPanelAutoUsage)), false
 				}
 				switch strings.ToLower(strings.TrimSpace(parts[2])) {
 				case "on":
@@ -119,7 +119,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				case "off":
 					s.panelAutoRefresh = false
 				default:
-					return lines, fmt.Errorf("用法: /panel auto on|off"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandPanelAutoUsage)), false
 				}
 				_ = s.saveRuntimeState()
 				emit(fmt.Sprintf("panel auto refresh: %v", s.panelAutoRefresh))
@@ -128,7 +128,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			if target == "interval" {
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("用法: /panel interval <sec>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandPanelIntervalUsage)), false
 				}
 				sec, cErr := strconv.Atoi(strings.TrimSpace(parts[2]))
 				if cErr != nil || sec < 1 || sec > 300 {
@@ -159,7 +159,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 					}
 				}
 				if !valid {
-					return lines, fmt.Errorf("用法: /panel [overview|dashboard|sessions|tools|approvals|gateway|diag|next|prev]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandPanelUsage)), false
 				}
 				s.fullscreenPanel = target
 			}
@@ -181,7 +181,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case strings.HasPrefix(current, "/view "):
 			mode := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(current, "/view ")))
 			if mode != "human" && mode != "json" {
-				return lines, fmt.Errorf("用法: /view human|json"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandViewUsage)), false
 			}
 			s.viewMode = mode
 			emit("view mode: " + mode)
@@ -220,7 +220,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emit("fullscreen: off")
 				s.setStatus(true, "ok", "fullscreen disabled")
 			default:
-				return lines, fmt.Errorf("用法: /fullscreen [on|off]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandFullscreenUsage)), false
 			}
 		case strings.EqualFold(current, "/reconnect status"):
 			emitData(map[string]any{
@@ -240,7 +240,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			const diagExportPrefix = "/diag export"
 			path := strings.TrimSpace(current[len(diagExportPrefix):])
 			if path == "" {
-				return lines, fmt.Errorf("用法: /diag export <file>"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandDiagExportUsage)), false
 			}
 			if dErr := s.exportDiagnostics(path); dErr != nil {
 				s.setErrStatus(dErr)
@@ -271,13 +271,13 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			const reconnectTimeoutPrefix = "/reconnect timeout "
 			mode := strings.ToLower(strings.TrimSpace(current[len(reconnectTimeoutPrefix):]))
 			if mode != "wait" && mode != "reconnect" && mode != "cancel" {
-				return lines, fmt.Errorf("用法: /reconnect timeout wait|reconnect|cancel"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandReconnectTimeoutUsage)), false
 			}
 			s.timeoutAction = mode
 			emit("reconnect timeout action: " + mode)
 			s.setStatus(true, "ok", "reconnect timeout action updated")
 		case current == "/reconnect":
-			return lines, fmt.Errorf("用法: /reconnect status|on|off|now|timeout ..."), false
+			return lines, errors.New(tools.UsageZH(tools.CommandReconnectUsage)), false
 		case current == "/health":
 			out, hErr := httpJSON(http.MethodGet, s.httpBase+"/health", nil)
 			if hErr != nil {
@@ -327,7 +327,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			}
 			s.setStatus(true, "ok", "timeline listed")
 		case current == "/rerun":
-			return lines, fmt.Errorf("用法: /rerun <index>"), false
+			return lines, errors.New(tools.UsageZH(tools.CommandRerunUsage)), false
 		case strings.HasPrefix(current, "/rerun "):
 			idx, pErr := parseRequiredPositiveIntArg(current, "/rerun")
 			if pErr != nil {
@@ -405,7 +405,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, fmt.Errorf("未找到待处理审批；用法: /approve <approval_id>"), false
+					return lines, errors.New("未找到待处理审批；" + tools.UsageZH(tools.CommandApproveUsage)), false
 				}
 				id = lastID
 			}
@@ -429,7 +429,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				msgs, _ := out["messages"].([]any)
 				lastID, _ := findLatestPendingApproval(msgs)
 				if lastID == "" {
-					return lines, fmt.Errorf("未找到待处理审批；用法: /deny <approval_id>"), false
+					return lines, errors.New("未找到待处理审批；" + tools.UsageZH(tools.CommandDenyUsage)), false
 				}
 				id = lastID
 			}
@@ -518,11 +518,11 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "bookmark loaded")
 				continue
 			}
-			return lines, fmt.Errorf("用法: /bookmark add <name> | /bookmark list | /bookmark use <name>"), false
+			return lines, errors.New(tools.UsageZH(tools.CommandBookmarkUsage)), false
 		case current == "/workbench" || strings.HasPrefix(current, "/workbench "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {
-				return lines, fmt.Errorf("用法: /workbench save|list|load|delete ..."), false
+				return lines, errors.New(tools.UsageZH(tools.CommandWorkbenchUsage)), false
 			}
 			sub := strings.ToLower(strings.TrimSpace(parts[1]))
 			name := ""
@@ -540,7 +540,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench listed")
 			case "save":
 				if name == "" {
-					return lines, fmt.Errorf("用法: /workbench save <name>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkbenchSaveUsage)), false
 				}
 				if wErr := s.saveWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -551,7 +551,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench saved")
 			case "load":
 				if name == "" {
-					return lines, fmt.Errorf("用法: /workbench load <name>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkbenchLoadUsage)), false
 				}
 				if wErr := s.loadWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -564,7 +564,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workbench loaded")
 			case "delete":
 				if name == "" {
-					return lines, fmt.Errorf("用法: /workbench delete <name>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkbenchDeleteUsage)), false
 				}
 				if wErr := s.deleteWorkbench(name); wErr != nil {
 					s.setErrStatus(wErr)
@@ -574,12 +574,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.audit("workbench_delete", "name="+name)
 				s.setStatus(true, "ok", "workbench deleted")
 			default:
-				return lines, fmt.Errorf("用法: /workbench save|list|load|delete ..."), false
+				return lines, errors.New(tools.UsageZH(tools.CommandWorkbenchUsage)), false
 			}
 		case current == "/workflow" || strings.HasPrefix(current, "/workflow "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {
-				return lines, fmt.Errorf("用法: /workflow save|list|run|delete ..."), false
+				return lines, errors.New(tools.UsageZH(tools.CommandWorkflowUsage)), false
 			}
 			sub := strings.ToLower(strings.TrimSpace(parts[1]))
 			switch sub {
@@ -593,7 +593,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow listed")
 			case "save":
 				if len(parts) < 4 {
-					return lines, fmt.Errorf("用法: /workflow save <name> <cmd1;cmd2;...>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkflowSaveUsage)), false
 				}
 				name := strings.TrimSpace(parts[2])
 				raw := strings.TrimSpace(strings.TrimPrefix(current, "/workflow save "+name))
@@ -610,7 +610,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow saved")
 			case "run":
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("用法: /workflow run <name> [dry]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkflowRunUsage)), false
 				}
 				name := strings.TrimSpace(parts[2])
 				wf, ok, wErr := s.getWorkflow(name)
@@ -633,7 +633,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "workflow queued")
 			case "delete":
 				if len(parts) < 3 {
-					return lines, fmt.Errorf("用法: /workflow delete <name>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandWorkflowDeleteUsage)), false
 				}
 				name := strings.TrimSpace(parts[2])
 				if wErr := s.deleteWorkflow(name); wErr != nil {
@@ -644,7 +644,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.audit("workflow_delete", "name="+name)
 				s.setStatus(true, "ok", "workflow deleted")
 			default:
-				return lines, fmt.Errorf("用法: /workflow save|list|run|delete ..."), false
+				return lines, errors.New(tools.UsageZH(tools.CommandWorkflowUsage)), false
 			}
 		case current == "/session":
 			emit("session: " + s.session)
@@ -787,7 +787,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emit("pretty json: off")
 				s.setStatus(true, "ok", "pretty off")
 			} else {
-				return lines, fmt.Errorf("用法: /pretty on|off"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandPrettyUsage)), false
 			}
 		case current == "/tools":
 			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools", nil)
@@ -800,7 +800,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/tool" || strings.HasPrefix(current, "/tool "):
 			name := strings.TrimSpace(strings.TrimPrefix(current, "/tool"))
 			if name == "" {
-				return lines, fmt.Errorf("用法: /tool <name>"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandToolUsage)), false
 			}
 			out, tErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/tools/"+url.PathEscape(name)+"/schema", nil)
 			if tErr != nil {
@@ -1179,12 +1179,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 		case current == "/gateway" || strings.HasPrefix(current, "/gateway "):
 			parts := strings.Fields(current)
 			if len(parts) < 2 {
-				return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandGatewayUsage)), false
 			}
 			action := strings.ToLower(strings.TrimSpace(parts[1]))
 			if action == "status" {
 				if len(parts) != 2 {
-					return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandGatewayUsage)), false
 				}
 				out, hErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/gateway/status", nil)
 				if hErr != nil {
@@ -1195,7 +1195,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "gateway status loaded")
 			} else if action == "enable" || action == "disable" {
 				if len(parts) != 2 {
-					return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandGatewayUsage)), false
 				}
 				out, hErr := httpJSON(http.MethodPost, s.httpBase+"/v1/ui/gateway/action", map[string]any{"action": action})
 				if hErr != nil {
@@ -1207,7 +1207,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 			} else if action == "resolve" {
 				resolvedArgs, pErr := tools.ParseGatewayResolveArgs(parts[2:])
 				if pErr != nil {
-					return lines, fmt.Errorf("用法: /gateway resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandGatewayResolveUsage)), false
 				}
 				apiPath := fmt.Sprintf("%s/v1/ui/gateway/session/resolve?platform=%s&chat_type=%s&chat_id=%s&user_id=%s", s.httpBase, url.QueryEscape(resolvedArgs.Platform), url.QueryEscape(resolvedArgs.ChatType), url.QueryEscape(resolvedArgs.ChatID), url.QueryEscape(resolvedArgs.UserID))
 				if resolvedArgs.UserName != "" {
@@ -1221,12 +1221,12 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				emitData(uiPayload(out, "result"))
 				s.setStatus(true, "ok", "gateway session resolved")
 			} else {
-				return lines, fmt.Errorf("用法: /gateway status|enable|disable|resolve <platform> <chat_type> <chat_id> <user_id> [user_name]"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandGatewayUsage)), false
 			}
 		case strings.HasPrefix(current, "/config"):
 			parts := strings.Fields(current)
 			if len(parts) == 1 {
-				return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
+				return lines, errors.New(tools.UsageZH(tools.CommandConfigUsage)), false
 			}
 			sub := strings.ToLower(strings.TrimSpace(parts[1]))
 			if sub == "get" && len(parts) == 2 {
@@ -1264,7 +1264,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				}
 				parts := strings.SplitN(rest, " ", 2)
 				if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-					return lines, fmt.Errorf("用法: /config set <section.key> <value>"), false
+					return lines, errors.New(tools.UsageZH(tools.CommandConfigSetUsage)), false
 				}
 				key := strings.TrimSpace(parts[0])
 				value := parts[1]
@@ -1278,7 +1278,7 @@ func handleTUICommand(s *appState, text string, onEvent func(map[string]any), on
 				s.setStatus(true, "ok", "config updated")
 				continue
 			}
-			return lines, fmt.Errorf("用法: /config get|set <section.key> <value>|tui"), false
+			return lines, errors.New(tools.UsageZH(tools.CommandConfigUsage)), false
 		case current == "/skills":
 			out, skErr := httpJSON(http.MethodGet, s.httpBase+"/v1/ui/skills", nil)
 			if skErr != nil {
