@@ -181,6 +181,7 @@
 - 已新增通用命令元数据 helper（`BuildSlashPayload` / `BuildSlashModePayload`），并批量接入 Gateway 管理命令成功路径（`/skills` `/tools` `/personality` `/queue` `/help`），统一 `slash/mode/subcommand` 字段构造方式。
 - 已将 Gateway 命令分发中大量仅含 `slash` 的手写元数据 map（覆盖会话、投递、模型、审批、导航等 usage/error 分支）批量替换为 `BuildSlashPayload(...)`，进一步减少命令元数据构造漂移面。
 - 已新增 CLI 管理命令共享 payload helper（`BuildCollectionPayload` / `BuildMemoryContentPayload` / `BuildMemorySnapshotPayload` / `BuildPersonalityPayload`），并批量接入 CLI `/todo` `/memory` `/personality` `/tools` `/toolsets` 等成功路径，减少 CLI 侧手写响应 map 漂移。
+- 已在 Gateway command 分发中进一步批量替换 `slash` 元数据构造（覆盖大量 usage/error 分支）为 `BuildSlashPayload(...)`，将命令元数据入口进一步收敛到 shared helper。
 
 范围：
 
